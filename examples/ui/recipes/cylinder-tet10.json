@@ -1,0 +1,9 @@
+{
+  "route": "primitive",
+  "options": {
+    "kind": "cylinder",
+    "elements": "tet10",
+    "target_size": 0.4,
+    "maximum_chord_error": 0.03
+  }
+}

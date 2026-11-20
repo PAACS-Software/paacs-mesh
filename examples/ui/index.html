@@ -1,0 +1,131 @@
+<!doctype html>
+<!--
+PAACS Mesh
+Project author: Paul LeDewhurst
+Copyright PAACS Software Ltd.
+SPDX-License-Identifier: MPL-2.0
+-->
+
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PAACS · Meshing playground</title>
+<style>
+:root{color-scheme:dark;font:14px system-ui,sans-serif;background:#101721;color:#e9eff8}
+*{box-sizing:border-box}body{margin:0}header{padding:23px 30px;border-bottom:1px solid #303d4e;display:flex;align-items:center;justify-content:space-between}h1{font-size:23px;margin:0;letter-spacing:.02em}header span{color:#9eafc5}main{display:grid;grid-template-columns:340px 1fr;min-height:calc(100vh - 76px)}aside{padding:22px;border-right:1px solid #303d4e;max-height:calc(100vh - 76px);overflow:auto}h2{font-size:14px;margin:0 0 16px;color:#b9c9dc}label{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0;font-size:12px;color:#bdcbdb}input,select,textarea,button{font:inherit;color:inherit;border:1px solid #435167;border-radius:5px;background:#1c2839;padding:8px}input,select{width:132px}input[type=checkbox]{width:18px}textarea{width:100%;height:160px;font:11px ui-monospace,monospace;line-height:1.5}button{cursor:pointer}button:disabled{opacity:.4;cursor:default}button.primary{background:#65d6b3;color:#09281f;border-color:#65d6b3;font-weight:700}.actions{display:flex;gap:8px;margin:20px 0}details{margin:18px 0}summary{cursor:pointer;color:#a9c1dc;font-size:12px}section{padding:25px;min-width:0}.status{display:flex;align-items:center;gap:10px;min-height:35px;color:#b6c8dc}.dot{width:8px;height:8px;background:#65d6b3;border-radius:50%}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0}.stat{background:#192536;border:1px solid #303f53;border-radius:7px;padding:15px}.stat strong{display:block;font-size:23px;margin-bottom:5px}.stat small{color:#94a8c0}.viewport{position:relative;background:radial-gradient(at 50% 40%,#263449,#17212f);border:1px solid #354358;border-radius:8px;overflow:hidden}canvas{display:block;width:100%;height:480px;touch-action:none}.caption{padding:11px 15px;border-top:1px solid #354358;font-size:12px;color:#b2c5db;min-height:41px}.selection{position:absolute;left:18px;top:16px;color:#65d6b3;font-size:12px;pointer-events:none}pre{white-space:pre-wrap;font-size:11px;color:#aabbd0;max-height:130px;overflow:auto}.help{font-size:12px;line-height:1.7;color:#8ea3bc}#route{width:180px}.error{color:#ffab99}@media(max-width:800px){main{grid-template-columns:1fr}aside{max-height:none;border-right:0}.stats{grid-template-columns:repeat(2,1fr)}canvas{height:360px}}
+</style>
+<header><h1>PAACS <span style="font-weight:400">/ Meshing playground</span></h1><span id="version">Loading backend…</span></header>
+<main><aside>
+<h2>Mesh controls</h2><label>Route <select id="route"><option value="primitive">Analytic primitive</option><option value="adaptive_box">Adaptive box</option></select></label>
+<div id="basic"></div><details><summary>All backend controls</summary><div id="advanced"></div></details>
+<details><summary id="recipe-title">Optional profile / axial positions</summary><p class="help" id="recipe-help"></p><textarea id="extra" spellcheck="false">{}</textarea></details>
+<div class="actions"><button class="primary" id="generate">Generate mesh</button><button id="cancel" disabled>Cancel</button></div>
+<button id="save">Save request JSON</button> <button id="load">Load JSON</button><input type="file" id="file" accept=".json,application/json" hidden>
+<p class="help">Uniform sizing is the default. Controls are discovered from the backend. The native C++ job API also supports geometry models, mapped blocks and layered patches.</p>
+</aside><section>
+<div class="status" role="status" aria-live="polite"><span class="dot"></span><span id="status">Ready to generate a mesh.</span></div>
+<div class="stats"><div class="stat"><strong id="nodes">—</strong><small>Nodes</small></div><div class="stat"><strong id="cells">—</strong><small>Volume cells</small></div><div class="stat"><strong id="quality">—</strong><small>Minimum corner quality</small></div><div class="stat"><strong id="memory">—</strong><small>Logical mesh storage</small></div></div>
+<div class="viewport"><div class="selection" id="selection">Surface entity tags are preserved</div><canvas id="canvas" aria-label="Interactive mesh surface preview"></canvas><div class="caption" id="caption">Generate a mesh, then drag to rotate and click a surface face.</div></div>
+<pre id="report">The previous successful preview stays visible if a later job is cancelled or rejected.</pre>
+<p class="help">Reference UI only · Preview limited to 50,000 nodes, 200,000 scanned cells and 4,000 surface faces. Full results remain available through the paged API. Work progress is indeterminate during mesh generation.</p>
+</section></main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id), token='__PAACS_TOKEN__';
+let controls=[], currentJob=null, revision=0, schemaEpoch=0, schemaReady=false, mesh=null, painted=[], yaw=.65, pitch=-.45, selected=null;
+async function api(method,params){const r=await fetch('/api',{method:'POST',headers:{'Content-Type':'application/json','X-PAACS-Token':token},body:JSON.stringify({version:1,method,params})});const v=await r.json();if(!v.ok)throw Error(v.error.message);return v.result;}
+function status(text,error=false){$('status').textContent=text;$('status').classList.toggle('error',error);}
+const labels=s=>s.replaceAll('_',' ');
+async function loadSchema(){
+  const epoch=++schemaEpoch, route=$('route').value; revision++;schemaReady=false;$('generate').disabled=true;
+  try{
+    const s=await api('schema',{route}); if(epoch!==schemaEpoch)return;
+    $('version').textContent=`${s.release} · C++26 backend`; $('basic').replaceChildren();$('advanced').replaceChildren();controls=[];
+    const primary=new Set(['kind','elements','target_size','radius','height','threads','maximum_chord_error']);
+    for(const d of s.options){
+      const label=document.createElement('label'), text=document.createElement('span');text.textContent=labels(d.key);label.append(text);
+      let input;
+      if(d.choices.length){input=document.createElement('select');for(const [i,name] of d.choices.entries()){const o=document.createElement('option');o.value=i;o.textContent=name;input.append(o);}input.value=d.default;}
+      else{input=document.createElement('input');input.type=d.kind==='boolean'?'checkbox':'number';if(input.type==='checkbox')input.checked=!!d.default;else{input.step=d.kind==='integer'?'1':'any';input.min=d.minimum;input.max=d.maximum;input.value=d.default;}}
+      if(d.key==='elements')input.value=1;if(d.key==='target_size')input.value=.4;if(d.key==='maximum_chord_error')input.value=.03;
+      input.title=`${d.key}; default ${d.default}`;input.dataset.key=d.key;input.addEventListener('input',()=>revision++);input.addEventListener('change',()=>revision++);label.append(input);
+      $(primary.has(d.key)?'basic':'advanced').append(label);controls.push({d,input});
+    }
+    $('extra').value='{}';$('recipe-title').textContent=route==='primitive'?'Optional profile / axial positions':'Optional spatial size field';
+    $('recipe-help').textContent=route==='primitive'?'Add profile_controls or axial_positions here. Enable profile_enabled and set the profile length/global size in All backend controls.':'Add a field graph here: distance geometry, thresholds, min/max, scale and clamp. See the included JSON recipes.';
+    schemaReady=true;if(!currentJob)$('generate').disabled=false;
+  }catch(e){status(e.message,true);}
+}
+function spec(){const options={};for(const {d,input} of controls){if(input.type==='checkbox')options[d.key]=input.checked;else{if(!input.value.trim()||!Number.isFinite(Number(input.value)))throw Error(`Invalid ${d.key}`);options[d.key]=Number(input.value);}}
+  const extra=JSON.parse($('extra').value);if(!extra||Array.isArray(extra)||typeof extra!=='object')throw Error('Extra settings must be an object');
+  for(const key of Object.keys(extra))if(!['profile_controls','axial_positions','field'].includes(key))throw Error(`Unknown extra setting ${key}`);
+  return {route:$('route').value,options,...extra};}
+async function generate(){
+  let job=null; const rev=revision;
+  try{
+    const request=spec();$('generate').disabled=true;status('Submitting…');
+    job=(await api('submit',{spec:request})).job;currentJob=job;$('cancel').disabled=false;
+    for(;;){
+      const s=await api('status',{job});status(`${s.state.replaceAll('_',' ')} · ${s.stage} · ${s.elapsed_seconds.toFixed(2)} s`);
+      if(['succeeded','failed','cancelled'].includes(s.state)){
+        if(s.state==='succeeded'){
+          const summary=await api('summary',{job});$('report').textContent=JSON.stringify({job,hash:summary.hash,...s},null,2);
+          if(rev!==revision){status('Completed for earlier settings. Generate again to update the preview.');break;}
+          const preview=await api('preview',{job});
+          if(rev!==revision){status('Settings changed. Generate again to update the preview.');break;}
+          $('nodes').textContent=Number(summary.nodes).toLocaleString();$('cells').textContent=summary.cell_types.slice(5).reduce((a,b)=>a+Number(b),0).toLocaleString();
+          $('quality').textContent=summary.minimum_quality.toFixed(3);$('memory').textContent=(Number(summary.logical_bytes)/1048576).toFixed(2)+' MiB';
+          mesh=preview;selected=null;$('selection').textContent='Click a face to inspect its classification';$('caption').textContent=preview.message;draw();
+          status(summary.quality_warning?'Complete with a quality warning; inspect the mesh.':'Mesh complete · all engine checks passed.');
+        }else{status(s.diagnostic,s.state==='failed');$('report').textContent=JSON.stringify(s,null,2);}
+        break;
+      }
+      await new Promise(resolve=>setTimeout(resolve,80));
+    }
+  }catch(e){status(e.message,true);}
+  finally{
+    if(job){try{const s=await api('status',{job});if(['succeeded','failed','cancelled'].includes(s.state))await api('release',{job});else{await api('cancel',{job});status('Cancellation requested; restart the demo if the connection was interrupted.',true);}}catch{}}
+    currentJob=null;$('cancel').disabled=true;$('generate').disabled=!schemaReady;
+  }
+}
+$('generate').onclick=generate;$('cancel').onclick=async()=>{if(currentJob){try{const r=await api('cancel',{job:currentJob});status(r.accepted?'Cancellation requested…':'Job already finished.');}catch(e){status(e.message,true);}}};
+$('route').onchange=loadSchema;$('extra').oninput=()=>revision++;
+$('save').onclick=()=>{try{const blob=new Blob([JSON.stringify(spec(),null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='paacs-request.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}catch(e){status(e.message,true);}};
+$('load').onclick=()=>$('file').click();
+$('file').onchange=async()=>{try{
+  const file=$('file').files[0];if(!file)return;if(file.size>1048576)throw Error('Recipe exceeds 1 MiB');
+  const request=JSON.parse(await file.text());if(!request||Array.isArray(request)||typeof request!=='object')throw Error('Recipe must be an object');
+  for(const key of Object.keys(request))if(!['route','options','profile_controls','axial_positions','field'].includes(key))throw Error(`Unknown recipe setting ${key}`);
+  if(!['primitive','adaptive_box'].includes(request.route))throw Error('Unknown recipe route');
+  $('route').value=request.route;await loadSchema();if(!schemaReady)throw Error('Backend schema unavailable');
+  const options=request.options||{};if(Array.isArray(options)||typeof options!=='object')throw Error('Options must be an object');
+  for(const [key,raw] of Object.entries(options)){
+    const c=controls.find(x=>x.d.key===key);if(!c)throw Error(`Unknown option ${key}`);
+    if(c.input.type==='checkbox'){if(![true,false,0,1].includes(raw))throw Error(`Invalid boolean ${key}`);c.input.checked=!!raw;}
+    else{const value=typeof raw==='string'&&c.d.choices.length?c.d.choices.indexOf(raw):raw;if(typeof value!=='number'||!Number.isFinite(value)||value<c.d.minimum||value>c.d.maximum||(c.d.kind!=='number'&&!Number.isInteger(value)))throw Error(`Invalid ${key}`);c.input.value=value;}
+  }
+  const additional={};for(const key of ['profile_controls','axial_positions','field'])if(key in request)additional[key]=request[key];
+  if('profile_controls' in request&&!('profile_enabled' in options)){const c=controls.find(x=>x.d.key==='profile_enabled');if(c)c.input.checked=true;}
+  $('extra').value=JSON.stringify(additional,null,2);revision++;status('Recipe loaded. Generate to apply these settings.');
+}catch(e){status(e.message,true);}finally{$('file').value='';}};
+const canvas=$('canvas'),ctx=canvas.getContext('2d');
+function draw(){
+  const w=canvas.clientWidth,h=canvas.clientHeight,dpr=window.devicePixelRatio||1;canvas.width=w*dpr;canvas.height=h*dpr;ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);painted=[];
+  if(!mesh||!mesh.positions.length)return;
+  const lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];for(const p of mesh.positions)for(let k=0;k<3;k++){lo[k]=Math.min(lo[k],p[k]);hi[k]=Math.max(hi[k],p[k]);}
+  const center=lo.map((x,k)=>(x+hi[k])/2),scale=Math.min(w,h)*.64/Math.max(...hi.map((x,k)=>x-lo[k]),1e-20);
+  const points=mesh.positions.map(p=>{const x=p[0]-center[0],y=p[1]-center[1],z=p[2]-center[2];const a=x*Math.cos(yaw)-y*Math.sin(yaw),b=x*Math.sin(yaw)+y*Math.cos(yaw);return [w/2+a*scale,h/2-(z*Math.cos(pitch)-b*Math.sin(pitch))*scale,b*Math.cos(pitch)+z*Math.sin(pitch)];});
+  painted=mesh.faces.map(f=>({...f,points:f.nodes.map(i=>points[i])})).sort((a,b)=>a.points.reduce((s,p)=>s+p[2],0)/a.points.length-b.points.reduce((s,p)=>s+p[2],0)/b.points.length);
+  for(const f of painted){ctx.beginPath();for(const [i,p] of f.points.entries())i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]);ctx.closePath();const highlighted=selected&&f.tag===selected.tag&&f.dimension===selected.dimension;ctx.fillStyle=highlighted?'#5aa58f':`hsl(${192+(f.tag%7)*8} 24% ${35+(f.tag%4)*4}%)`;ctx.fill();ctx.strokeStyle='#152b3b';ctx.lineWidth=.55;ctx.stroke();}
+}
+let drag=null;
+canvas.onpointerdown=e=>{drag={x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY};canvas.setPointerCapture(e.pointerId);};
+canvas.onpointermove=e=>{if(drag){yaw+=(e.clientX-drag.x)*.008;pitch+=(e.clientY-drag.y)*.008;drag.x=e.clientX;drag.y=e.clientY;draw();}};
+canvas.onpointerup=e=>{
+  if(drag&&Math.hypot(e.clientX-drag.startX,e.clientY-drag.startY)<4){const rect=canvas.getBoundingClientRect(),x=e.clientX-rect.left,y=e.clientY-rect.top;selected=null;
+    for(let i=painted.length-1;i>=0;i--){const f=painted[i];let inside=false;for(let a=0,b=f.points.length-1;a<f.points.length;b=a++){const p=f.points[a],q=f.points[b];if((p[1]>y)!==(q[1]>y)&&x<(q[0]-p[0])*(y-p[1])/(q[1]-p[1])+p[0])inside=!inside;}if(inside){selected=f;break;}}
+    $('selection').textContent=selected?`Surface tag ${selected.tag} · dimension ${selected.dimension} · mesh cell ${selected.cell}`:'No face selected';draw();
+  }drag=null;
+};canvas.onpointercancel=()=>drag=null;window.addEventListener('resize',draw);loadSchema();
+</script>
+</html>

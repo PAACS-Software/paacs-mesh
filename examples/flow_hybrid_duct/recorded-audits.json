@@ -1,0 +1,306 @@
+{
+  "schema": "paacs-hybrid-duct-independent-audit-v1",
+  "audit_sha256": "5798c29fbcbafcef5f3a429310e174294525b888001035b626ff406832d9e8bd",
+  "meshes": [
+    {
+      "label": "level-1",
+      "archive_sha256": "1c61388d428cce4af6b79e620d06e814b71bdf803b696a495dd265be59e4a732",
+      "nodes": 1089,
+      "prism6": 1152,
+      "tet4": 1728,
+      "prism_minimum_jacobian_mm3": 4.130250463999999,
+      "tet_minimum_jacobian_mm3": 4.278001667555553,
+      "prism_volume_mm3": 2767.935519744,
+      "tet_volume_mm3": 1232.0644802560003,
+      "first_layer_height_mm": 0.6,
+      "layer_growth": 1.22,
+      "wall_normal_widths_mm": [
+        0.6,
+        0.732,
+        0.89304
+      ],
+      "first_layer_height_by_wall_mm": {
+        "x-": 0.5999999999999996,
+        "x+": 0.5999999999999996,
+        "y-": 0.5999999999999996,
+        "y+": 0.5999999999999996
+      },
+      "prism_cells_by_wall_and_layer": {
+        "x-": [
+          96,
+          96,
+          96
+        ],
+        "x+": [
+          96,
+          96,
+          96
+        ],
+        "y-": [
+          96,
+          96,
+          96
+        ],
+        "y+": [
+          96,
+          96,
+          96
+        ]
+      },
+      "interface_triangles": 384,
+      "interface_triangles_by_wall": {
+        "x-": 96,
+        "x+": 96,
+        "y-": 96,
+        "y+": 96
+      },
+      "interface_areas_mm2": {
+        "x-": 221.99679999999992,
+        "x+": 221.99679999999992,
+        "y-": 221.99679999999992,
+        "y+": 221.99679999999992
+      },
+      "corner_shared_quad_faces": 96,
+      "corner_shared_quad_faces_each": 24,
+      "exterior_faces_by_side": {
+        "x-": 96,
+        "x+": 96,
+        "y-": 96,
+        "y+": 96,
+        "inlet": 144,
+        "outlet": 144
+      },
+      "exterior_area_by_side_mm2": {
+        "x-": 400.00000000000045,
+        "x+": 400.00000000000045,
+        "y-": 400.00000000000045,
+        "y+": 400.00000000000045,
+        "inlet": 99.99999999999996,
+        "outlet": 99.99999999999999
+      },
+      "exterior_tags": {
+        "x-": 1,
+        "x+": 2,
+        "y-": 3,
+        "y+": 4,
+        "inlet": 5,
+        "outlet": 6
+      },
+      "exact_tet_core": {
+        "source_faces": 528,
+        "tetrahedra": 1728,
+        "source_contact_tests": 4440,
+        "tet_contact_tests": 100512,
+        "illegal_source_pairs": 0,
+        "illegal_tet_pairs": 0,
+        "nonpositive": 0,
+        "seconds": 3.23265
+      }
+    },
+    {
+      "label": "level-2",
+      "archive_sha256": "5bda90f668c578c97a9a64ec193117486ef3afd2ea2399863d90db654be6a2e6",
+      "nodes": 3172,
+      "prism6": 3456,
+      "tet4": 5832,
+      "prism_minimum_jacobian_mm3": 1.0444444444444423,
+      "tet_minimum_jacobian_mm3": 1.8393110184189867,
+      "prism_volume_mm3": 2212.189690096742,
+      "tet_volume_mm3": 1787.8103099032578,
+      "first_layer_height_mm": 0.3,
+      "layer_growth": 1.22,
+      "wall_normal_widths_mm": [
+        0.3,
+        0.366,
+        0.44652,
+        0.5447544
+      ],
+      "first_layer_height_by_wall_mm": {
+        "x-": 0.2999999999999998,
+        "x+": 0.2999999999999998,
+        "y-": 0.2999999999999998,
+        "y+": 0.2999999999999998
+      },
+      "prism_cells_by_wall_and_layer": {
+        "x-": [
+          216,
+          216,
+          216,
+          216
+        ],
+        "x+": [
+          216,
+          216,
+          216,
+          216
+        ],
+        "y-": [
+          216,
+          216,
+          216,
+          216
+        ],
+        "y+": [
+          216,
+          216,
+          216,
+          216
+        ]
+      },
+      "interface_triangles": 864,
+      "interface_triangles_by_wall": {
+        "x-": 216,
+        "x+": 216,
+        "y-": 216,
+        "y+": 216
+      },
+      "interface_areas_mm2": {
+        "x-": 267.41804800000085,
+        "x+": 267.41804800000085,
+        "y-": 267.41804800000085,
+        "y+": 267.41804800000085
+      },
+      "corner_shared_quad_faces": 192,
+      "corner_shared_quad_faces_each": 48,
+      "exterior_faces_by_side": {
+        "x-": 216,
+        "x+": 216,
+        "y-": 216,
+        "y+": 216,
+        "inlet": 306,
+        "outlet": 306
+      },
+      "exterior_area_by_side_mm2": {
+        "x-": 399.9999999999993,
+        "x+": 399.9999999999993,
+        "y-": 399.9999999999993,
+        "y+": 399.9999999999993,
+        "inlet": 100.00000000000006,
+        "outlet": 100.00000000000006
+      },
+      "exterior_tags": {
+        "x-": 1,
+        "x+": 2,
+        "y-": 3,
+        "y+": 4,
+        "inlet": 5,
+        "outlet": 6
+      },
+      "exact_tet_core": {
+        "source_faces": 1188,
+        "tetrahedra": 5832,
+        "source_contact_tests": 10050,
+        "tet_contact_tests": 379584,
+        "illegal_source_pairs": 0,
+        "illegal_tet_pairs": 0,
+        "nonpositive": 0,
+        "seconds": 12.6905
+      }
+    },
+    {
+      "label": "level-3",
+      "archive_sha256": "af2fc55092b10d1e61a7b68e939f952b6a40a9ef0cf110ef3eaa9cbfe404fb2f",
+      "nodes": 6953,
+      "prism6": 7680,
+      "tet4": 13824,
+      "prism_minimum_jacobian_mm3": 0.3031250000000005,
+      "tet_minimum_jacobian_mm3": 1.0235001228867187,
+      "prism_volume_mm3": 1641.8557168689977,
+      "tet_volume_mm3": 2358.144283131002,
+      "first_layer_height_mm": 0.15,
+      "layer_growth": 1.22,
+      "wall_normal_widths_mm": [
+        0.15,
+        0.183,
+        0.22326,
+        0.2723772,
+        0.33230018399999994
+      ],
+      "first_layer_height_by_wall_mm": {
+        "x-": 0.15000000000000036,
+        "x+": 0.15000000000000036,
+        "y-": 0.15000000000000036,
+        "y+": 0.15000000000000036
+      },
+      "prism_cells_by_wall_and_layer": {
+        "x-": [
+          384,
+          384,
+          384,
+          384,
+          384
+        ],
+        "x+": [
+          384,
+          384,
+          384,
+          384,
+          384
+        ],
+        "y-": [
+          384,
+          384,
+          384,
+          384,
+          384
+        ],
+        "y+": [
+          384,
+          384,
+          384,
+          384,
+          384
+        ]
+      },
+      "interface_triangles": 1536,
+      "interface_triangles_by_wall": {
+        "x-": 384,
+        "x+": 384,
+        "y-": 384,
+        "y+": 384
+      },
+      "interface_areas_mm2": {
+        "x-": 307.1250092799995,
+        "x+": 307.1250092799995,
+        "y-": 307.1250092799995,
+        "y+": 307.1250092799995
+      },
+      "corner_shared_quad_faces": 320,
+      "corner_shared_quad_faces_each": 80,
+      "exterior_faces_by_side": {
+        "x-": 384,
+        "x+": 384,
+        "y-": 384,
+        "y+": 384,
+        "inlet": 528,
+        "outlet": 528
+      },
+      "exterior_area_by_side_mm2": {
+        "x-": 400.0000000000017,
+        "x+": 400.0000000000017,
+        "y-": 400.0000000000017,
+        "y+": 400.0000000000017,
+        "inlet": 99.99999999999952,
+        "outlet": 99.99999999999952
+      },
+      "exterior_tags": {
+        "x-": 1,
+        "x+": 2,
+        "y-": 3,
+        "y+": 4,
+        "inlet": 5,
+        "outlet": 6
+      },
+      "exact_tet_core": {
+        "source_faces": 2112,
+        "tetrahedra": 13824,
+        "source_contact_tests": 17904,
+        "tet_contact_tests": 950256,
+        "illegal_source_pairs": 0,
+        "illegal_tet_pairs": 0,
+        "nonpositive": 0,
+        "seconds": 29.4689
+      }
+    }
+  ]
+}

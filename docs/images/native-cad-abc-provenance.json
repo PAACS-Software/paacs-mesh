@@ -1,0 +1,436 @@
+{
+  "schema": "paacs-mesh-visual-report-v1",
+  "manifest_path": "out/visual-validation-2026-10-03/abc-native-manifest.json",
+  "manifest_sha256": "80dd1ad975dcb602e0f0b40cbfa946f7536756d0ff73c0fd22e112d1fa215a43",
+  "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
+  "numpy": "2.5.3",
+  "matplotlib": "3.10.8",
+  "renderer_sha256": "d4fc53f22a691d13e3863ff379cb3adfde29d350a208fa0d9423da55ec27f11b",
+  "data_module_sha256": "afe6f834a2946bb296b1dff975ca67885dd27ec1326c2fa2f50772da3e345faa",
+  "self_tests": {
+    "passed": true,
+    "checks": [
+      "positive tet volume",
+      "analytic triangular section",
+      "four-edge quadrilateral section",
+      "planar Hex8 volume/section",
+      "native-defined Hex8 SubTetMeanRatio",
+      "shared-face section deduplication",
+      "curved Tet10 refused"
+    ]
+  },
+  "meshes": [
+    {
+      "name": "ABC 7 / imported cylinder",
+      "mesh_path": "evidence/local-2026-10-02/abc-native-screening/runs/0007-00-dc7705ea/mesh.paacsmesh",
+      "mesh_sha256": "15a508726bbc66d0fea77d857ad8349af3f670b61ab19f20630721b20d7407ae",
+      "mesh_bytes": 217896,
+      "units": "mm",
+      "metrics": {
+        "nodes": 868,
+        "cells": 4512,
+        "volume_cells": 3456,
+        "cell_types": {
+          "Tet4": 3456,
+          "Tri3": 1056
+        },
+        "positive_corner_volumes": true,
+        "convex_planar_corner_cells": true,
+        "exterior_volume_faces": 1056,
+        "volume_sum": 659611.7084470621,
+        "volume_cv": 0.03239161500147552,
+        "volume_min": 158.29150130914948,
+        "volume_max": 207.2670622559206,
+        "volume_max_min": 1.3094010767585047,
+        "equivalent_size_definition": "cube root of positive cell volume; not target edge size",
+        "equivalent_size_cv": 0.011060466731977086,
+        "volume_quantiles": [
+          158.29150130914948,
+          185.82324037081182,
+          190.56430187465173,
+          196.2895084670648,
+          207.2670622559206
+        ],
+        "equivalent_size_quantiles": [
+          5.409442798021608,
+          5.706458672251399,
+          5.754582589672463,
+          5.811644348073188,
+          5.9180245708396075
+        ],
+        "tet_mean_ratio_samples": 3456,
+        "tet_mean_ratio_min": 0.6854076947774048,
+        "tet_mean_ratio_quantiles": [
+          0.6854076947774048,
+          0.7352961226187826,
+          0.7822267166579462,
+          0.8363752240728977,
+          0.8466601772095612
+        ],
+        "quality_metric": "Tet corner mean ratio; linear mixed cells use native fixed minimum SubTetMeanRatio diagnostic",
+        "subtet_mean_ratio_min": 0.6854076947774048,
+        "subtet_mean_ratio_quantiles": [
+          0.6854076947774048,
+          0.7352961226187826,
+          0.7822267166579462,
+          0.8363752240728977,
+          0.8466601772095612
+        ],
+        "high_order_scope": "Tet10 sections/quality use corners only; straight midsides verified; faceted geometry",
+        "audit_scope": "Independent corner geometry and face multiplicity checks, not replacement for native full audit"
+      },
+      "section": {
+        "axis": "y",
+        "value": 0.0,
+        "polygon_count": 96,
+        "intersected_cells_before_shared_face_dedup": 192,
+        "coplanar_shared_polygons_removed": 96,
+        "section_area": 4625.2645366,
+        "maximum_plane_residual": 0.0,
+        "method": "Actual convex cell-edge/plane intersections; shared coplanar faces drawn once"
+      },
+      "case_metadata": {
+        "corpus_case": "00000007/00000007_b33a147f86da49879455d286_step_000.step",
+        "native_screening_result": {
+          "schema": "paacs-native-cad-report-v1",
+          "status": "succeeded",
+          "reason": "none",
+          "mesh_published": true,
+          "archive_published": true,
+          "solids": 1,
+          "faces": 3,
+          "curved_faces": 1,
+          "edges": 3,
+          "vertices": 2,
+          "nodes": 868,
+          "cells": 4512,
+          "cad_volume": 661499.1923056485,
+          "mesh_volume": 659611.7084470614,
+          "minimum_quality": 0.6854076947774054,
+          "import_seconds": 0.0122282,
+          "quality_warning": false,
+          "preparation_seconds": 0.010599800000000001,
+          "generation_seconds": 0.0023869,
+          "validation_seconds": 0.0698436,
+          "audit_seconds": 0.0016865,
+          "quality_seconds": 0.0006819,
+          "validation_work": 8505,
+          "millimetres_per_model_unit": 1,
+          "total_seconds": 0.0992555,
+          "bodies": [
+            {
+              "solid_tag": 1,
+              "route": "cylinder",
+              "reason": "none",
+              "start_face_tag": 1,
+              "end_face_tag": 2,
+              "relative_volume_error": 0.002853342650363562,
+              "boundary_node_error": 4.6401794406848667e-08,
+              "boundary_sample_error": 0.17326100112058102,
+              "primitive_reason": "none",
+              "planar_reason": "internal_error",
+              "uniform_cylinder": true,
+              "uniform_circular": false,
+              "profiled_volume": false,
+              "minimum_section_nodes": 0,
+              "maximum_section_nodes": 0,
+              "minimum_axial_spacing": 0,
+              "maximum_axial_spacing": 0,
+              "maximum_axial_growth": 1,
+              "chord_error_bound": 0.19494185855820936
+            }
+          ]
+        },
+        "native_screening_command": [
+          "build/windows-msvc-release/Release/paacs-cad-mesh.exe",
+          "local-data/abc_0000_step_v00/00000007/00000007_b33a147f86da49879455d286_step_000.step",
+          "1",
+          "evidence/local-2026-10-02/abc-native-screening/runs/0007-00-dc7705ea/mesh.paacsmesh",
+          "--report-json",
+          "--size-factor",
+          "0.15",
+          "--threads",
+          "1",
+          "--max-file-bytes",
+          "67108864",
+          "--max-work",
+          "2000000",
+          "--max-nodes",
+          "200000",
+          "--max-cells",
+          "1000000",
+          "--max-bytes",
+          "134217728",
+          "--max-audit-bytes",
+          "134217728",
+          "--native-cad",
+          "--planar-recovery",
+          "--general-recovery"
+        ],
+        "native_screening_executable_sha256": "a8454472d3a2508711a6aa19cb2231ed83110351c3e0a489d064d5dd0a4d32e1",
+        "screen_manifest_sha256": "ccdc5e234e181b8ae3cd15adf63328be4c270bcd0b98acf83b80e08d891ef92e",
+        "screen_results_sha256": "ab3da6c2ce8eed7ad7ad90ae6947e30e6f05abb6f0308a06bfdf2b285bd43b12",
+        "archive_sha256_matches_screen_receipt": true,
+        "source_sha256_matches_screen_receipt": true,
+        "classification_tags_in_native_entity_ranges": true,
+        "node_classification_counts": {
+          "0": {
+            "1": 1,
+            "2": 1
+          },
+          "1": {
+            "1": 47,
+            "2": 47,
+            "3": 2
+          },
+          "2": {
+            "1": 169,
+            "2": 169,
+            "3": 94
+          },
+          "3": {
+            "1": 338
+          }
+        },
+        "cell_classification_counts": {
+          "3:1": 3456,
+          "2:1": 384,
+          "2:2": 384,
+          "2:3": 288
+        },
+        "bounds_min": [
+          -91.0485145,
+          -91.0485145,
+          0.0
+        ],
+        "bounds_max": [
+          91.0485145,
+          91.0485145,
+          25.4
+        ],
+        "geometry_error_scope": "Native volume and sampled node/facet error; not a whole-face Hausdorff certificate",
+        "screen_scope": "Actual retained native corpus archive from the screening executable; controlled fixtures are separate."
+      },
+      "native_verification": {
+        "verified": true,
+        "mesh_volume": 659611.7084470614,
+        "minimum_quality": 0.6854076947774054
+      },
+      "independent_volume_relative_delta_from_native": 1.0589441060803545e-15,
+      "independent_quality_delta_from_native": 5.551115123125783e-16,
+      "source_path": "local-data/abc_0000_step_v00/00000007/00000007_b33a147f86da49879455d286_step_000.step",
+      "source_sha256": "02616fa80edaf4d8a1aa03619e3488fa42158da3874ccca3289b9af700fe07cf"
+    },
+    {
+      "name": "ABC 8126 / imported torus",
+      "mesh_path": "evidence/local-2026-10-02/abc-native-screening/runs/0047-00-42b5caf8/mesh.paacsmesh",
+      "mesh_sha256": "0b47be604dc2b86a5f6e7148473f9c6d47f2c69cc84ed70f9ff28494053b9990",
+      "mesh_bytes": 23274568,
+      "units": "mm",
+      "metrics": {
+        "nodes": 82677,
+        "cells": 475488,
+        "volume_cells": 438912,
+        "cell_types": {
+          "Tet4": 438912,
+          "Tri3": 36576
+        },
+        "positive_corner_volumes": true,
+        "convex_planar_corner_cells": true,
+        "exterior_volume_faces": 36576,
+        "volume_sum": 798.6584094770091,
+        "volume_cv": 0.07382773382021568,
+        "volume_min": 0.0014842149046984691,
+        "volume_max": 0.002084462018501538,
+        "volume_max_min": 1.4044206212341024,
+        "equivalent_size_definition": "cube root of positive cell volume; not target edge size",
+        "equivalent_size_cv": 0.024735616530387382,
+        "volume_quantiles": [
+          0.0014842149046984691,
+          0.0016444768849663153,
+          0.0018176057641402102,
+          0.0019981289120793544,
+          0.002084462018501538
+        ],
+        "equivalent_size_quantiles": [
+          0.11406846468867593,
+          0.11803457966169692,
+          0.12203935313222244,
+          0.12595280234619743,
+          0.12774129915736915
+        ],
+        "tet_mean_ratio_samples": 438912,
+        "tet_mean_ratio_min": 0.6950941330862368,
+        "tet_mean_ratio_quantiles": [
+          0.6950941330862368,
+          0.7548275018505683,
+          0.8012801842152226,
+          0.8628865952994612,
+          0.8755099061449124
+        ],
+        "quality_metric": "Tet corner mean ratio; linear mixed cells use native fixed minimum SubTetMeanRatio diagnostic",
+        "subtet_mean_ratio_min": 0.6950941330862368,
+        "subtet_mean_ratio_quantiles": [
+          0.6950941330862368,
+          0.7548275018505683,
+          0.8012801842152226,
+          0.8628865952994612,
+          0.8755099061449124
+        ],
+        "high_order_scope": "Tet10 sections/quality use corners only; straight midsides verified; faceted geometry",
+        "audit_scope": "Independent corner geometry and face multiplicity checks, not replacement for native full audit"
+      },
+      "section": {
+        "axis": "y",
+        "value": 0.0,
+        "polygon_count": 12192,
+        "intersected_cells_before_shared_face_dedup": 24384,
+        "coplanar_shared_polygons_removed": 12192,
+        "section_area": 291.3695112481501,
+        "maximum_plane_residual": 0.0,
+        "method": "Actual convex cell-edge/plane intersections; shared coplanar faces drawn once"
+      },
+      "case_metadata": {
+        "corpus_case": "00008126/00008126_5d720e0ec69f4a628d58af42_step_001.step",
+        "native_screening_result": {
+          "schema": "paacs-native-cad-report-v1",
+          "status": "succeeded",
+          "reason": "none",
+          "mesh_published": true,
+          "archive_published": true,
+          "solids": 1,
+          "faces": 1,
+          "curved_faces": 1,
+          "edges": 2,
+          "vertices": 1,
+          "nodes": 82677,
+          "cells": 475488,
+          "cad_volume": 800.9800821759081,
+          "mesh_volume": 798.6584094772873,
+          "minimum_quality": 0.6950941330862367,
+          "import_seconds": 0.0186218,
+          "quality_warning": false,
+          "preparation_seconds": 0.0022687,
+          "generation_seconds": 0.2696208,
+          "validation_seconds": 2.9467665,
+          "audit_seconds": 0.307966,
+          "quality_seconds": 0.1299872,
+          "validation_work": 584742,
+          "millimetres_per_model_unit": 1,
+          "total_seconds": 3.7209019,
+          "bodies": [
+            {
+              "solid_tag": 1,
+              "route": "torus",
+              "reason": "none",
+              "start_face_tag": -1,
+              "end_face_tag": -1,
+              "relative_volume_error": 0.0028985398645522318,
+              "boundary_node_error": 1.3880896084195435e-14,
+              "boundary_sample_error": 0.00378292880440514,
+              "primitive_reason": "none",
+              "planar_reason": "internal_error",
+              "uniform_cylinder": false,
+              "uniform_circular": true,
+              "profiled_volume": false,
+              "minimum_section_nodes": 0,
+              "maximum_section_nodes": 0,
+              "minimum_axial_spacing": 0,
+              "maximum_axial_spacing": 0,
+              "maximum_axial_growth": 1,
+              "chord_error_bound": 0.004256812024247547
+            }
+          ]
+        },
+        "native_screening_command": [
+          "build/windows-msvc-release/Release/paacs-cad-mesh.exe",
+          "local-data/abc_0000_step_v00/00008126/00008126_5d720e0ec69f4a628d58af42_step_001.step",
+          "1",
+          "evidence/local-2026-10-02/abc-native-screening/runs/0047-00-42b5caf8/mesh.paacsmesh",
+          "--report-json",
+          "--size-factor",
+          "0.15",
+          "--threads",
+          "1",
+          "--max-file-bytes",
+          "67108864",
+          "--max-work",
+          "2000000",
+          "--max-nodes",
+          "200000",
+          "--max-cells",
+          "1000000",
+          "--max-bytes",
+          "134217728",
+          "--max-audit-bytes",
+          "134217728",
+          "--native-cad",
+          "--planar-recovery",
+          "--general-recovery"
+        ],
+        "native_screening_executable_sha256": "a8454472d3a2508711a6aa19cb2231ed83110351c3e0a489d064d5dd0a4d32e1",
+        "screen_manifest_sha256": "ccdc5e234e181b8ae3cd15adf63328be4c270bcd0b98acf83b80e08d891ef92e",
+        "screen_results_sha256": "ab3da6c2ce8eed7ad7ad90ae6947e30e6f05abb6f0308a06bfdf2b285bd43b12",
+        "archive_sha256_matches_screen_receipt": true,
+        "source_sha256_matches_screen_receipt": true,
+        "classification_tags_in_native_entity_ranges": true,
+        "node_classification_counts": {
+          "0": {
+            "1": 1
+          },
+          "1": {
+            "1": 47,
+            "2": 380
+          },
+          "2": {
+            "1": 17860
+          },
+          "3": {
+            "1": 64389
+          }
+        },
+        "cell_classification_counts": {
+          "3:1": 438912,
+          "2:1": 36576
+        },
+        "bounds_min": [
+          -14.99987251753543,
+          -1.75,
+          -15.0
+        ],
+        "bounds_max": [
+          14.99987251753543,
+          1.75,
+          14.999490072308623
+        ],
+        "geometry_error_scope": "Native volume and sampled node/facet error; not a whole-face Hausdorff certificate",
+        "screen_scope": "Actual retained native corpus archive from the screening executable; controlled fixtures are separate."
+      },
+      "native_verification": {
+        "verified": true,
+        "mesh_volume": 798.6584094772873,
+        "minimum_quality": 0.6950941330862367
+      },
+      "independent_volume_relative_delta_from_native": 3.483237496827557e-13,
+      "independent_quality_delta_from_native": 1.1102230246251565e-16,
+      "source_path": "local-data/abc_0000_step_v00/00008126/00008126_5d720e0ec69f4a628d58af42_step_001.step",
+      "source_sha256": "cd69577ed35467a4f758bef713cfd85d8d6735e6698fd9480e245fbfa77f65a8"
+    }
+  ],
+  "geometry_cases": [],
+  "figures": [
+    {
+      "path": "out/visual-validation-2026-10-03/abc-native/abc-7-imported-cylinder.png",
+      "sha256": "cbe6f01b8e3578f084d1c1ea1be15d4e6d2e9759176a3864f56ef6e5db895d99"
+    },
+    {
+      "path": "out/visual-validation-2026-10-03/abc-native/abc-8126-imported-torus.png",
+      "sha256": "a88bf5fa5e4a3950b8c5ef2e4f38c447313df79fb137f7aa2c628db7beba858c"
+    },
+    {
+      "path": "out/visual-validation-2026-10-03/abc-native/gallery.png",
+      "sha256": "9e8090e09c9f352e42fbf85060bfb065732eeb0834a6b1f625c9c7b7b3537fc9"
+    }
+  ],
+  "scope": "Rendered actual retained cells and their convex planar intersections; Tet10 verified straight-sided. Native audits/geometry verification are separate receipts."
+}

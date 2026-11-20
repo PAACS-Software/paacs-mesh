@@ -1,0 +1,5511 @@
+{
+  "schema": "paacs-complete-native-cli-failure-taxonomy-v1",
+  "screen": "evidence/local-2026-10-03/coverage-25/final-complete-screen",
+  "executable_sha256": "161d0dc0a4eb228df1fa58bd341f46b9d22e885bac4d1decad151f9a8abae686",
+  "settings": {
+    "limit": 0,
+    "smallest": 0,
+    "spread": 0,
+    "include": [
+      "00000000/00000000_290a9120f9f249a7a05cfe9c_step_000.step",
+      "00000001/00000001_1ffb81a71e5b402e966b9341_step_000.step",
+      "00000002/00000002_1ffb81a71e5b402e966b9341_step_001.step",
+      "00000003/00000003_1ffb81a71e5b402e966b9341_step_002.step",
+      "00000004/00000004_1ffb81a71e5b402e966b9341_step_003.step",
+      "00000005/00000005_d4fe04f0f5f84b52bd4f10e4_step_000.step",
+      "00000006/00000006_d4fe04f0f5f84b52bd4f10e4_step_001.step",
+      "00000007/00000007_b33a147f86da49879455d286_step_000.step",
+      "00000008/00000008_9b3d6a97e8de4aa193b81000_step_000.step",
+      "00000009/00000009_9b3d6a97e8de4aa193b81000_step_001.step",
+      "00000010/00000010_b4b99d35e04b4277931f9a9c_step_000.step",
+      "00000011/00000011_e909f412cda24521865fac0f_step_000.step",
+      "00000012/00000012_f16882934f314832b639ffc0_step_000.step",
+      "00000013/00000013_c2f4d27f35ed4c138caf5c18_step_000.step",
+      "00000014/00000014_5b1c2f8a8c6f40fdaae1e69d_step_000.step",
+      "00000015/00000015_b08aa818955948c690fd9b6d_step_000.step",
+      "00000016/00000016_b08aa818955948c690fd9b6d_step_001.step",
+      "00000017/00000017_e8e79d1385fd4c78be414f6c_step_000.step",
+      "00000018/00000018_e8e79d1385fd4c78be414f6c_step_001.step",
+      "00000019/00000019_e8e79d1385fd4c78be414f6c_step_002.step",
+      "00000020/00000020_ad34a3f60c4a4caa99646600_step_000.step",
+      "00000021/00000021_ad34a3f60c4a4caa99646600_step_001.step",
+      "00000022/00000022_ad34a3f60c4a4caa99646600_step_002.step",
+      "00000023/00000023_ad34a3f60c4a4caa99646600_step_003.step",
+      "00000024/00000024_ad34a3f60c4a4caa99646600_step_004.step",
+      "00000025/00000025_ad34a3f60c4a4caa99646600_step_005.step",
+      "00000026/00000026_ad34a3f60c4a4caa99646600_step_006.step",
+      "00000027/00000027_ad34a3f60c4a4caa99646600_step_007.step",
+      "00000028/00000028_ad34a3f60c4a4caa99646600_step_008.step",
+      "00000029/00000029_ad34a3f60c4a4caa99646600_step_009.step",
+      "00000383/00000383_239bbf0e92974a32bd214366_step_004.step",
+      "00000469/00000469_11951e51b89249dba38ded3e_step_004.step",
+      "00000638/00000638_5ae45a997c76423aba2fcc11_step_003.step",
+      "00000691/00000691_b9f3563b403143dbb86ab2b8_step_004.step",
+      "00000850/00000850_2c1efcc32d094e9fb9e1a88e_step_010.step",
+      "00000909/00000909_c9400dcd7ae9428caffe2204_step_002.step",
+      "00001818/00001818_9eb3d5245a8b448bb6aecbae_step_001.step",
+      "00002727/00002727_98d8f78b1bb5495f9a193852_step_013.step",
+      "00003636/00003636_3b2ec9d56c264f4b8b7f9c84_step_000.step",
+      "00004149/00004149_25c63692f99a42f6bee0033d_step_004.step",
+      "00004545/00004545_a9de53e862dd4ad197873cc0_step_007.step",
+      "00005454/00005454_2ccd2dfb9ffc4cf29e94e0cf_step_008.step",
+      "00005956/00005956_ec7b2e7cb95d42368f778c9d_step_006.step",
+      "00006363/00006363_f91e32a0ca0848dab541db70_step_002.step",
+      "00006566/00006566_635c4f0f74b642a29580ecf9_step_018.step",
+      "00006807/00006807_ca2313fee2d0437db8572b26_step_017.step",
+      "00007272/00007272_adfc323e64d54b67a5c4aca6_step_009.step",
+      "00008126/00008126_5d720e0ec69f4a628d58af42_step_001.step",
+      "00008181/00008181_d0a04676bb3b46dfaba09434_step_020.step",
+      "00009090/00009090_798fb3ffbb0745d7a3c0e863_step_007.step",
+      "00009999/00009999_003df34c1a7b4dc2bd43c5f4_step_000.step"
+    ],
+    "repeats": 1,
+    "timeout": 240.0,
+    "size_factor": 0.15,
+    "threads": 1,
+    "max_file_bytes": 67108864,
+    "max_work": 20000000,
+    "max_nodes": 200000,
+    "max_cells": 1000000,
+    "max_bytes": 134217728,
+    "max_audit_bytes": 134217728,
+    "native_cad": true,
+    "planar_recovery": true,
+    "general_recovery": true,
+    "separate_contact_bodies": true,
+    "separate_matched_box_faces": true,
+    "warning_quality": 0.25
+  },
+  "whole_source_cases": 51,
+  "top_level_outcome_counts": {
+    "unsupported": 7,
+    "timeout": 5,
+    "succeeded": 25,
+    "resource-limit": 11,
+    "invalid-geometry": 3
+  },
+  "nonsuccess_cases": 26,
+  "source_file_hashes_rechecked": 51,
+  "failed_outputs_absent": true,
+  "diagnostic_groups": {
+    "other_interface_unqualified": {
+      "label": "Other unresolved original-body interfaces",
+      "count": 3,
+      "cases": [
+        "00000000",
+        "00000001",
+        "00000028"
+      ]
+    },
+    "timeout_unresolved": {
+      "label": "Timeout; no final native phase/mechanism receipt",
+      "count": 5,
+      "cases": [
+        "00000002",
+        "00000003",
+        "00000011",
+        "00000012",
+        "00000021"
+      ]
+    },
+    "proven_material_overlap": {
+      "label": "Proven original-body material overlap",
+      "count": 1,
+      "cases": [
+        "00000010"
+      ]
+    },
+    "split_conservation_guard": {
+      "label": "Derived native split fails volume conservation",
+      "count": 4,
+      "cases": [
+        "00000013",
+        "00000026",
+        "00000027",
+        "00009090"
+      ]
+    },
+    "mixed_contact_unqualified": {
+      "label": "Mixed curved-body contacts; exact interface type unqualified",
+      "count": 3,
+      "cases": [
+        "00000014",
+        "00000015",
+        "00000016"
+      ]
+    },
+    "surface_and_split_guards": {
+      "label": "Surface stitching and derived split guards",
+      "count": 1,
+      "cases": [
+        "00000023"
+      ]
+    },
+    "bounded_kernel_search": {
+      "label": "No strict split-star kernel found by bounded search",
+      "count": 6,
+      "cases": [
+        "00000024",
+        "00002727",
+        "00004545",
+        "00006363",
+        "00008181",
+        "00009999"
+      ]
+    },
+    "invalid_brep": {
+      "label": "Original BRep fails OCCT validity",
+      "count": 1,
+      "cases": [
+        "00000025"
+      ]
+    },
+    "free_faces_outside_solids": {
+      "label": "Raw-valid original BRep includes faces outside solids",
+      "count": 2,
+      "cases": [
+        "00000909",
+        "00003636"
+      ]
+    }
+  },
+  "cases": [
+    {
+      "case_id": "00000000",
+      "source_path": "00000000/00000000_290a9120f9f249a7a05cfe9c_step_000.step",
+      "input_sha256": "73411ebbcc0afa5fa742b331ce1be4450b34c9b367b75aedccc47e21798fb6dc",
+      "top_level_outcome": "unsupported",
+      "top_level_native_reason": "unresolved_body_interface",
+      "returncode": 4,
+      "timed_out": false,
+      "wall_seconds": 0.7348918999996386,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 29163520,
+      "mesh_published": false,
+      "archive_published": false,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "other_interface_unqualified",
+      "observed_mechanisms": [
+        "Current interface gate refuses the assembly; independent topology/distance survey has 2 near-zero-distance body pairs."
+      ],
+      "uncertainty": [
+        "Empty solid Common/zero distance alone does not establish point, edge or face contact. No completed permitted full interface was certified."
+      ],
+      "all_native_body_receipts": [],
+      "original_topology_context": {
+        "input_sha256": "73411ebbcc0afa5fa742b331ce1be4450b34c9b367b75aedccc47e21798fb6dc",
+        "native_imported": true,
+        "native_import_reason": "none",
+        "native_validation": null,
+        "solid_count": 6,
+        "face_count": 25,
+        "face_kinds": {
+          "bspline": 2,
+          "cone": 5,
+          "plane": 8,
+          "sphere": 7,
+          "torus": 3
+        },
+        "free_face_tags": [],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "sphere": 2,
+              "torus": 1
+            }
+          },
+          {
+            "tag": 2,
+            "face_kinds": {
+              "sphere": 2,
+              "torus": 1
+            }
+          },
+          {
+            "tag": 3,
+            "face_kinds": {
+              "sphere": 2,
+              "torus": 1
+            }
+          },
+          {
+            "tag": 4,
+            "face_kinds": {
+              "bspline": 2,
+              "cone": 4,
+              "plane": 5
+            }
+          },
+          {
+            "tag": 5,
+            "face_kinds": {
+              "cone": 1,
+              "plane": 2
+            }
+          },
+          {
+            "tag": 6,
+            "face_kinds": {
+              "plane": 1,
+              "sphere": 1
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [
+          {
+            "body_a": 1,
+            "body_b": 2,
+            "distance_done": true,
+            "minimum_distance": 47.71484822873551,
+            "inner_solution": false,
+            "solutions": 1
+          },
+          {
+            "body_a": 2,
+            "body_b": 3,
+            "distance_done": true,
+            "minimum_distance": 22.25124389596543,
+            "inner_solution": false,
+            "solutions": 1
+          },
+          {
+            "body_a": 1,
+            "body_b": 4,
+            "distance_done": true,
+            "minimum_distance": 19.714434947169202,
+            "inner_solution": false,
+            "solutions": 1
+          },
+          {
+            "body_a": 2,
+            "body_b": 4,
+            "distance_done": true,
+            "minimum_distance": 7.200218157847214,
+            "inner_solution": false,
+            "solutions": 1
+          },
+          {
+            "body_a": 3,
+            "body_b": 4,
+            "distance_done": true,
+            "minimum_distance": 18.925543555053807,
+            "inner_solution": false,
+            "solutions": 1
+          },
+          {
+            "body_a": 4,
+            "body_b": 5,
+            "distance_done": true,
+            "minimum_distance": 7.888609052210118e-31,
+            "inner_solution": false,
+            "solutions": 5,
+            "common_done": true,
+            "common_volume": 0,
+            "common_area": 0,
+            "common_solids": 0,
+            "common_faces": 0,
+            "common_edges": 0,
+            "common_vertices": 0
+          },
+          {
+            "body_a": 4,
+            "body_b": 6,
+            "distance_done": true,
+            "minimum_distance": 9.20332872504808e-15,
+            "inner_solution": false,
+            "solutions": 4,
+            "common_done": true,
+            "common_volume": 0,
+            "common_area": 0,
+            "common_solids": 0,
+            "common_faces": 0,
+            "common_edges": 0,
+            "common_vertices": 0
+          }
+        ],
+        "survey_returncode": 0,
+        "survey_wall_seconds": 0.8559209000013652
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00000000/00000000_290a9120f9f249a7a05cfe9c_step_000.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0000-00-3aef64ba/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0000-00-3aef64ba",
+      "stdout": null,
+      "stderr": "Native CAD mesh: unresolved_body_interface\r\n"
+    },
+    {
+      "case_id": "00000001",
+      "source_path": "00000001/00000001_1ffb81a71e5b402e966b9341_step_000.step",
+      "input_sha256": "8f27522538b086ecc9bfb6e458207bea0f8f9715b2d76bb8dbd93a5083e8a018",
+      "top_level_outcome": "unsupported",
+      "top_level_native_reason": "unresolved_body_interface",
+      "returncode": 4,
+      "timed_out": false,
+      "wall_seconds": 7.41916769999807,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 54206464,
+      "mesh_published": false,
+      "archive_published": false,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "other_interface_unqualified",
+      "observed_mechanisms": [
+        "Current interface gate refuses the assembly; independent topology/distance survey has 1 near-zero-distance body pairs."
+      ],
+      "uncertainty": [
+        "Empty solid Common/zero distance alone does not establish point, edge or face contact. No completed permitted full interface was certified."
+      ],
+      "all_native_body_receipts": [],
+      "original_topology_context": {
+        "input_sha256": "8f27522538b086ecc9bfb6e458207bea0f8f9715b2d76bb8dbd93a5083e8a018",
+        "native_imported": true,
+        "native_import_reason": "none",
+        "native_validation": null,
+        "solid_count": 2,
+        "face_count": 103,
+        "face_kinds": {
+          "bspline": 43,
+          "cone": 7,
+          "cylinder": 14,
+          "plane": 29,
+          "torus": 10
+        },
+        "free_face_tags": [],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "bspline": 34,
+              "cone": 3,
+              "cylinder": 11,
+              "plane": 17,
+              "torus": 4
+            }
+          },
+          {
+            "tag": 2,
+            "face_kinds": {
+              "bspline": 9,
+              "cone": 4,
+              "cylinder": 3,
+              "plane": 12,
+              "torus": 6
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [
+          {
+            "body_a": 1,
+            "body_b": 2,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 40,
+            "common_done": true,
+            "common_volume": 0,
+            "common_area": 0,
+            "common_solids": 0,
+            "common_faces": 0,
+            "common_edges": 0,
+            "common_vertices": 0
+          }
+        ],
+        "survey_returncode": 0,
+        "survey_wall_seconds": 6.707052900004783
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00000001/00000001_1ffb81a71e5b402e966b9341_step_000.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0001-00-f582b9cb/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0001-00-f582b9cb",
+      "stdout": null,
+      "stderr": "Native CAD mesh: unresolved_body_interface\r\n"
+    },
+    {
+      "case_id": "00000002",
+      "source_path": "00000002/00000002_1ffb81a71e5b402e966b9341_step_001.step",
+      "input_sha256": "c190144c83c811a48c1a7892c299fc60a85332ee21535c630518637d9f325688",
+      "top_level_outcome": "timeout",
+      "top_level_native_reason": null,
+      "returncode": 1,
+      "timed_out": true,
+      "wall_seconds": 240.01580689999537,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 69349376,
+      "mesh_published": null,
+      "archive_published": null,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "timeout_unresolved",
+      "observed_mechanisms": [
+        "Runner stopped the process after 240s; no final native JSON diagnostic returned."
+      ],
+      "uncertainty": [
+        "Failure phase and cause are unresolved; earlier private evidence does not identify the phase of this timed-out invocation."
+      ],
+      "all_native_body_receipts": [],
+      "original_topology_context": {
+        "input_sha256": "c190144c83c811a48c1a7892c299fc60a85332ee21535c630518637d9f325688",
+        "native_imported": true,
+        "native_import_reason": "none",
+        "native_validation": null,
+        "solid_count": 1,
+        "face_count": 44,
+        "face_kinds": {
+          "cone": 2,
+          "cylinder": 7,
+          "plane": 5,
+          "sphere": 19,
+          "torus": 11
+        },
+        "free_face_tags": [],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "cone": 2,
+              "cylinder": 7,
+              "plane": 5,
+              "sphere": 19,
+              "torus": 11
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [],
+        "survey_returncode": 0,
+        "survey_wall_seconds": 0.8793501000036485
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00000002/00000002_1ffb81a71e5b402e966b9341_step_001.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0002-00-fd9b50e1/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0002-00-fd9b50e1",
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case_id": "00000003",
+      "source_path": "00000003/00000003_1ffb81a71e5b402e966b9341_step_002.step",
+      "input_sha256": "532f0f0687407346f43f9a28e7934c9927df0d269dd4d097864be1e060368734",
+      "top_level_outcome": "timeout",
+      "top_level_native_reason": null,
+      "returncode": 1,
+      "timed_out": true,
+      "wall_seconds": 240.01616519999516,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 579653632,
+      "mesh_published": null,
+      "archive_published": null,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "timeout_unresolved",
+      "observed_mechanisms": [
+        "Runner stopped the process after 240s; no final native JSON diagnostic returned."
+      ],
+      "uncertainty": [
+        "Failure phase and cause are unresolved; earlier private evidence does not identify the phase of this timed-out invocation."
+      ],
+      "all_native_body_receipts": [],
+      "original_topology_context": {
+        "input_sha256": "532f0f0687407346f43f9a28e7934c9927df0d269dd4d097864be1e060368734",
+        "native_imported": true,
+        "native_import_reason": "none",
+        "native_validation": null,
+        "solid_count": 1,
+        "face_count": 25,
+        "face_kinds": {
+          "bspline": 8,
+          "cone": 1,
+          "cylinder": 8,
+          "plane": 7,
+          "torus": 1
+        },
+        "free_face_tags": [],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "bspline": 8,
+              "cone": 1,
+              "cylinder": 8,
+              "plane": 7,
+              "torus": 1
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [],
+        "survey_returncode": 0,
+        "survey_wall_seconds": 1.6131443999984185
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00000003/00000003_1ffb81a71e5b402e966b9341_step_002.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0003-00-2680308c/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0003-00-2680308c",
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case_id": "00000010",
+      "source_path": "00000010/00000010_b4b99d35e04b4277931f9a9c_step_000.step",
+      "input_sha256": "79a1916b709d95e5aa5b79694f9d988bcd97c1c1c2e9abb9eaa428f2a22026b6",
+      "top_level_outcome": "unsupported",
+      "top_level_native_reason": "unresolved_body_interface",
+      "returncode": 4,
+      "timed_out": false,
+      "wall_seconds": 5.333387299993774,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 59506688,
+      "mesh_published": false,
+      "archive_published": false,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "proven_material_overlap",
+      "observed_mechanisms": [
+        "Independent native Common proves positive-volume original-body overlap: 1/3=646.235695713 mm³, 2/3=33.3979625265 mm³."
+      ],
+      "uncertainty": [
+        "Separate contact meshes cannot admit overlapping material without a different explicit material/Boolean model."
+      ],
+      "all_native_body_receipts": [],
+      "original_topology_context": {
+        "input_sha256": "79a1916b709d95e5aa5b79694f9d988bcd97c1c1c2e9abb9eaa428f2a22026b6",
+        "native_imported": true,
+        "native_import_reason": "none",
+        "native_validation": null,
+        "solid_count": 3,
+        "face_count": 75,
+        "face_kinds": {
+          "bspline": 12,
+          "cone": 2,
+          "cylinder": 24,
+          "plane": 24,
+          "torus": 13
+        },
+        "free_face_tags": [],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "bspline": 6,
+              "cylinder": 16,
+              "plane": 14,
+              "torus": 7
+            }
+          },
+          {
+            "tag": 2,
+            "face_kinds": {
+              "bspline": 4,
+              "cylinder": 8,
+              "plane": 7,
+              "torus": 3
+            }
+          },
+          {
+            "tag": 3,
+            "face_kinds": {
+              "bspline": 2,
+              "cone": 2,
+              "plane": 3,
+              "torus": 3
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [
+          {
+            "body_a": 1,
+            "body_b": 2,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 72,
+            "common_done": true,
+            "common_volume": 0,
+            "common_area": 0,
+            "common_solids": 0,
+            "common_faces": 0,
+            "common_edges": 0,
+            "common_vertices": 0
+          },
+          {
+            "body_a": 1,
+            "body_b": 3,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": true,
+            "solutions": 1,
+            "common_done": true,
+            "common_volume": 646.2356957134416,
+            "common_area": 1896.8361702706452,
+            "common_solids": 1,
+            "common_faces": 8,
+            "common_edges": 18,
+            "common_vertices": 12
+          },
+          {
+            "body_a": 2,
+            "body_b": 3,
+            "distance_done": true,
+            "minimum_distance": 8.881784197001252e-16,
+            "inner_solution": false,
+            "solutions": 8,
+            "common_done": true,
+            "common_volume": 33.397962526471815,
+            "common_area": 102.73808117508511,
+            "common_solids": 1,
+            "common_faces": 6,
+            "common_edges": 12,
+            "common_vertices": 8
+          }
+        ],
+        "survey_returncode": 0,
+        "survey_wall_seconds": 6.158595900000364
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00000010/00000010_b4b99d35e04b4277931f9a9c_step_000.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0010-00-5a82c52f/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0010-00-5a82c52f",
+      "stdout": null,
+      "stderr": "Native CAD mesh: unresolved_body_interface\r\n"
+    },
+    {
+      "case_id": "00000011",
+      "source_path": "00000011/00000011_e909f412cda24521865fac0f_step_000.step",
+      "input_sha256": "490701d7fca1db71dc912bc6e1d7a3a1ef1792aeb030cfb1ead764abcf7e6920",
+      "top_level_outcome": "timeout",
+      "top_level_native_reason": null,
+      "returncode": 1,
+      "timed_out": true,
+      "wall_seconds": 240.02534200000082,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 133197824,
+      "mesh_published": null,
+      "archive_published": null,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "timeout_unresolved",
+      "observed_mechanisms": [
+        "Runner stopped the process after 240s; no final native JSON diagnostic returned."
+      ],
+      "uncertainty": [
+        "Failure phase and cause are unresolved; earlier private evidence does not identify the phase of this timed-out invocation."
+      ],
+      "all_native_body_receipts": [],
+      "original_topology_context": {
+        "input_sha256": "490701d7fca1db71dc912bc6e1d7a3a1ef1792aeb030cfb1ead764abcf7e6920",
+        "native_imported": true,
+        "native_import_reason": "none",
+        "native_validation": null,
+        "solid_count": 1,
+        "face_count": 253,
+        "face_kinds": {
+          "bspline": 207,
+          "cylinder": 21,
+          "extrusion": 2,
+          "plane": 20,
+          "sphere": 2,
+          "torus": 1
+        },
+        "free_face_tags": [],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "bspline": 207,
+              "cylinder": 21,
+              "extrusion": 2,
+              "plane": 20,
+              "sphere": 2,
+              "torus": 1
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [],
+        "survey_returncode": 0,
+        "survey_wall_seconds": 35.135371500000474
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00000011/00000011_e909f412cda24521865fac0f_step_000.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0011-00-2abaedca/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0011-00-2abaedca",
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case_id": "00000012",
+      "source_path": "00000012/00000012_f16882934f314832b639ffc0_step_000.step",
+      "input_sha256": "29da96fd0b52e262036807b162b8c5d02cb74ab640dbef47d373433ad80ca046",
+      "top_level_outcome": "timeout",
+      "top_level_native_reason": null,
+      "returncode": 1,
+      "timed_out": true,
+      "wall_seconds": 240.0221279000034,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 130441216,
+      "mesh_published": null,
+      "archive_published": null,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "timeout_unresolved",
+      "observed_mechanisms": [
+        "Runner stopped the process after 240s; no final native JSON diagnostic returned."
+      ],
+      "uncertainty": [
+        "Failure phase and cause are unresolved; earlier private evidence does not identify the phase of this timed-out invocation."
+      ],
+      "all_native_body_receipts": [],
+      "original_topology_context": {
+        "input_sha256": "29da96fd0b52e262036807b162b8c5d02cb74ab640dbef47d373433ad80ca046",
+        "native_imported": true,
+        "native_import_reason": "none",
+        "native_validation": null,
+        "solid_count": 1,
+        "face_count": 253,
+        "face_kinds": {
+          "bspline": 207,
+          "cylinder": 21,
+          "extrusion": 2,
+          "plane": 20,
+          "sphere": 2,
+          "torus": 1
+        },
+        "free_face_tags": [],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "bspline": 207,
+              "cylinder": 21,
+              "extrusion": 2,
+              "plane": 20,
+              "sphere": 2,
+              "torus": 1
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [],
+        "survey_returncode": 0,
+        "survey_wall_seconds": 38.43791460000648
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00000012/00000012_f16882934f314832b639ffc0_step_000.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0012-00-e3b80ad0/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0012-00-e3b80ad0",
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case_id": "00000013",
+      "source_path": "00000013/00000013_c2f4d27f35ed4c138caf5c18_step_000.step",
+      "input_sha256": "0af8f4f012b3355dd0f2232b9f04df45cdd2ee13c5d36368176b0a50e5c5a5e6",
+      "top_level_outcome": "resource-limit",
+      "top_level_native_reason": "budget_exceeded",
+      "returncode": 4,
+      "timed_out": false,
+      "wall_seconds": 36.12029419999453,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 169390080,
+      "mesh_published": false,
+      "archive_published": false,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "split_conservation_guard",
+      "observed_mechanisms": [
+        "Final cartesian_fifths native split reports volume_mismatch; measured relative native CAD volume change 4.15758652459e-06 exceeds the native split guard 1e-6.",
+        "Original-body stitched surface diagnostic: nonmanifold."
+      ],
+      "uncertainty": [
+        "Top-level budget_exceeded may aggregate local partition/work admissions alongside later geometric/kernel refusals. It does not by itself prove exhaustion of the global 20M work cap, OS memory, or a valid-source impossibility."
+      ],
+      "all_native_body_receipts": [
+        {
+          "solid_tag": 1,
+          "route": "native_surface_star",
+          "reason": "budget_exceeded",
+          "start_face_tag": -1,
+          "end_face_tag": -1,
+          "relative_volume_error": 0,
+          "boundary_node_error": 2.864289338439558e-14,
+          "boundary_sample_error": 0.08354556600818262,
+          "primitive_reason": "internal-error",
+          "planar_reason": "internal_error",
+          "native_surface_reason": "nonmanifold",
+          "native_volume_reason": "not_attempted",
+          "surface_deflection": 0.05942002137514967,
+          "surface_chord_error_limit": 0.14855005343787417,
+          "surface_triangles": 9825,
+          "surface_attempts": 1,
+          "native_surface_work": 67830,
+          "native_volume_work": 0,
+          "native_surface_seconds": 18.3090632,
+          "native_volume_seconds": 0,
+          "native_partition_seconds": 17.0391376,
+          "native_assembly_seconds": 0,
+          "exact_surface_pairs": 0,
+          "kernel_trials": 0,
+          "partition_reason": "volume_mismatch",
+          "partition_policy": "cartesian_fifths",
+          "partition_attempts": 9,
+          "partition_pieces": 121,
+          "partition_interfaces": 0,
+          "partition_work": 36936,
+          "partition_volume_change": 4.157586524593576e-06,
+          "boundary_embedding_certified": false,
+          "contact_cylinder_reason": "not_attempted",
+          "contact_source_edge_tag": -1,
+          "contact_target_edge_tag": -1,
+          "contact_ring_nodes": 0,
+          "contact_cylinder_work": 0,
+          "box_contact_vertices_evaluated": 0,
+          "box_contact_work": 0,
+          "box_contact_maximum_endpoint_correction": 0,
+          "partition_attempt_reports": [
+            {
+              "policy": "cartesian_midplanes",
+              "diagnostic": "volume_mismatch",
+              "failed_piece_tag": -1,
+              "pieces": 8,
+              "interfaces": 0,
+              "work": 4472,
+              "seconds": 2.1821388,
+              "surface_deflection": 0.05942002137514967
+            },
+            {
+              "policy": "coaxial_angular",
+              "diagnostic": "unsupported_policy",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1,
+              "seconds": 0.8096777,
+              "surface_deflection": 0.05942002137514967
+            },
+            {
+              "policy": "native_feature_axes_4",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1754,
+              "seconds": 0.8228876,
+              "surface_deflection": 0.05942002137514967
+            },
+            {
+              "policy": "native_feature_axes_8",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1935,
+              "seconds": 0.805994,
+              "surface_deflection": 0.05942002137514967
+            },
+            {
+              "policy": "native_circular_feature_axes_4",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1754,
+              "seconds": 0.802452,
+              "surface_deflection": 0.0010398503740651193
+            },
+            {
+              "policy": "native_circular_feature_axes_2",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 5636,
+              "seconds": 0.8038286,
+              "surface_deflection": 0.0010398503740651193
+            },
+            {
+              "policy": "native_feature_axes_2",
+              "diagnostic": "kernel_failure",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 2534,
+              "seconds": 4.3357573,
+              "surface_deflection": 0.05942002137514967
+            },
+            {
+              "policy": "cartesian_thirds",
+              "diagnostic": "volume_mismatch",
+              "failed_piece_tag": -1,
+              "pieces": 32,
+              "interfaces": 0,
+              "work": 7258,
+              "seconds": 2.7043194,
+              "surface_deflection": 0.05942002137514967
+            },
+            {
+              "policy": "cartesian_fifths",
+              "diagnostic": "volume_mismatch",
+              "failed_piece_tag": -1,
+              "pieces": 121,
+              "interfaces": 0,
+              "work": 11592,
+              "seconds": 3.7724304,
+              "surface_deflection": 0.05942002137514967
+            }
+          ],
+          "uniform_cylinder": false,
+          "uniform_circular": false,
+          "profiled_volume": false,
+          "minimum_section_nodes": 0,
+          "maximum_section_nodes": 0,
+          "minimum_axial_spacing": 0,
+          "maximum_axial_spacing": 0,
+          "maximum_axial_growth": 1,
+          "chord_error_bound": 0
+        }
+      ],
+      "original_topology_context": {
+        "input_sha256": "0af8f4f012b3355dd0f2232b9f04df45cdd2ee13c5d36368176b0a50e5c5a5e6",
+        "native_imported": true,
+        "native_import_reason": "none",
+        "native_validation": null,
+        "solid_count": 1,
+        "face_count": 99,
+        "face_kinds": {
+          "bspline": 12,
+          "cone": 1,
+          "cylinder": 41,
+          "plane": 30,
+          "revolution": 15
+        },
+        "free_face_tags": [],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "bspline": 12,
+              "cone": 1,
+              "cylinder": 41,
+              "plane": 30,
+              "revolution": 15
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [],
+        "survey_returncode": 0,
+        "survey_wall_seconds": 1.192535099995439
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00000013/00000013_c2f4d27f35ed4c138caf5c18_step_000.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0013-00-64a00b34/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0013-00-64a00b34",
+      "stdout": null,
+      "stderr": "Native CAD mesh: budget_exceeded\r\n"
+    },
+    {
+      "case_id": "00000014",
+      "source_path": "00000014/00000014_5b1c2f8a8c6f40fdaae1e69d_step_000.step",
+      "input_sha256": "7c7190f868acd93951fd6302313d1f818828f44da6a5716b7434c0059e0802b0",
+      "top_level_outcome": "unsupported",
+      "top_level_native_reason": "unresolved_body_interface",
+      "returncode": 4,
+      "timed_out": false,
+      "wall_seconds": 2.326345300003595,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 41058304,
+      "mesh_published": false,
+      "archive_published": false,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "mixed_contact_unqualified",
+      "observed_mechanisms": [
+        "Mixed native assembly: 7 bodies, 214 faces, 131 curved faces; current interface gate refuses it."
+      ],
+      "uncertainty": [
+        "Neither complete native skin/Common contact dimension nor a conforming permitted interface is established by the retained lightweight topology/distance receipts.",
+        "The earlier 120s pair-Boolean diagnostic timed out; it cannot establish contact dimension or exclude material overlap."
+      ],
+      "all_native_body_receipts": [],
+      "original_topology_context": {
+        "input_sha256": "7c7190f868acd93951fd6302313d1f818828f44da6a5716b7434c0059e0802b0",
+        "native_imported": true,
+        "native_import_reason": "none",
+        "native_validation": null,
+        "solid_count": 7,
+        "face_count": 214,
+        "face_kinds": {
+          "bspline": 18,
+          "cone": 7,
+          "cylinder": 72,
+          "offset": 1,
+          "plane": 83,
+          "revolution": 4,
+          "torus": 29
+        },
+        "free_face_tags": [],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "cylinder": 1,
+              "plane": 2,
+              "torus": 1
+            }
+          },
+          {
+            "tag": 2,
+            "face_kinds": {
+              "cone": 1,
+              "cylinder": 1,
+              "plane": 2
+            }
+          },
+          {
+            "tag": 3,
+            "face_kinds": {
+              "bspline": 1,
+              "cylinder": 1,
+              "plane": 1,
+              "revolution": 4,
+              "torus": 6
+            }
+          },
+          {
+            "tag": 4,
+            "face_kinds": {
+              "cylinder": 4,
+              "plane": 8
+            }
+          },
+          {
+            "tag": 5,
+            "face_kinds": {
+              "bspline": 12,
+              "cylinder": 35,
+              "plane": 26,
+              "torus": 14
+            }
+          },
+          {
+            "tag": 6,
+            "face_kinds": {
+              "bspline": 4,
+              "cylinder": 15,
+              "plane": 16,
+              "torus": 4
+            }
+          },
+          {
+            "tag": 7,
+            "face_kinds": {
+              "bspline": 1,
+              "cone": 6,
+              "cylinder": 15,
+              "offset": 1,
+              "plane": 28,
+              "torus": 4
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [
+          {
+            "body_a": 2,
+            "body_b": 3,
+            "distance_done": true,
+            "minimum_distance": 3.7591999999999905,
+            "inner_solution": false,
+            "solutions": 7
+          },
+          {
+            "body_a": 2,
+            "body_b": 4,
+            "distance_done": true,
+            "minimum_distance": 0.12699999999999145,
+            "inner_solution": false,
+            "solutions": 13
+          },
+          {
+            "body_a": 3,
+            "body_b": 4,
+            "distance_done": true,
+            "minimum_distance": 2.9336999999999973,
+            "inner_solution": false,
+            "solutions": 9
+          },
+          {
+            "body_a": 2,
+            "body_b": 6,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 1
+          },
+          {
+            "body_a": 3,
+            "body_b": 6,
+            "distance_done": true,
+            "minimum_distance": 0.8127999999786084,
+            "inner_solution": false,
+            "solutions": 6
+          },
+          {
+            "body_a": 4,
+            "body_b": 6,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 3
+          },
+          {
+            "body_a": 5,
+            "body_b": 6,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 83
+          },
+          {
+            "body_a": 1,
+            "body_b": 7,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 15
+          },
+          {
+            "body_a": 2,
+            "body_b": 7,
+            "distance_done": true,
+            "minimum_distance": 9.992007221626409e-16,
+            "inner_solution": false,
+            "solutions": 6
+          },
+          {
+            "body_a": 3,
+            "body_b": 7,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 12
+          },
+          {
+            "body_a": 4,
+            "body_b": 7,
+            "distance_done": true,
+            "minimum_distance": 0.02943960079325036,
+            "inner_solution": false,
+            "solutions": 6
+          },
+          {
+            "body_a": 5,
+            "body_b": 7,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": true,
+            "solutions": 1
+          },
+          {
+            "body_a": 6,
+            "body_b": 7,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 8
+          }
+        ],
+        "survey_returncode": null,
+        "survey_wall_seconds": 120.0427703000023
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00000014/00000014_5b1c2f8a8c6f40fdaae1e69d_step_000.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0014-00-b3c04449/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0014-00-b3c04449",
+      "stdout": null,
+      "stderr": "Native CAD mesh: unresolved_body_interface\r\n",
+      "independent_lightweight_mixed_contact_context": {
+        "case": "00000014",
+        "source": "local-data/abc_0000_step_v00/00000014/00000014_5b1c2f8a8c6f40fdaae1e69d_step_000.step",
+        "source_sha256": "7c7190f868acd93951fd6302313d1f818828f44da6a5716b7434c0059e0802b0",
+        "source_unchanged": true,
+        "returncode": 0,
+        "wall_seconds": 1.9059999999954016,
+        "native": {
+          "native_imported": true,
+          "solids": 7,
+          "faces": 214,
+          "curved_faces": 131,
+          "bodies": [
+            {
+              "tag": 1,
+              "faces": 4,
+              "six_planar_box_candidate": false,
+              "face_kinds": {
+                "cylinder": 1,
+                "plane": 2,
+                "torus": 1
+              }
+            },
+            {
+              "tag": 2,
+              "faces": 4,
+              "six_planar_box_candidate": false,
+              "face_kinds": {
+                "cone": 1,
+                "cylinder": 1,
+                "plane": 2
+              }
+            },
+            {
+              "tag": 3,
+              "faces": 13,
+              "six_planar_box_candidate": false,
+              "face_kinds": {
+                "cylinder": 1,
+                "other_native_surface": 5,
+                "plane": 1,
+                "torus": 6
+              }
+            },
+            {
+              "tag": 4,
+              "faces": 12,
+              "six_planar_box_candidate": false,
+              "face_kinds": {
+                "cylinder": 4,
+                "plane": 8
+              }
+            },
+            {
+              "tag": 5,
+              "faces": 87,
+              "six_planar_box_candidate": false,
+              "face_kinds": {
+                "cylinder": 35,
+                "other_native_surface": 12,
+                "plane": 26,
+                "torus": 14
+              }
+            },
+            {
+              "tag": 6,
+              "faces": 39,
+              "six_planar_box_candidate": false,
+              "face_kinds": {
+                "cylinder": 15,
+                "other_native_surface": 4,
+                "plane": 16,
+                "torus": 4
+              }
+            },
+            {
+              "tag": 7,
+              "faces": 55,
+              "six_planar_box_candidate": false,
+              "face_kinds": {
+                "cone": 6,
+                "cylinder": 15,
+                "other_native_surface": 2,
+                "plane": 28,
+                "torus": 4
+              }
+            }
+          ]
+        },
+        "any_six_plane_box": false
+      }
+    },
+    {
+      "case_id": "00000015",
+      "source_path": "00000015/00000015_b08aa818955948c690fd9b6d_step_000.step",
+      "input_sha256": "4460d2d68643db57c164e1ede21817a037fcb9881a974943906348ca31aa7e40",
+      "top_level_outcome": "unsupported",
+      "top_level_native_reason": "unresolved_body_interface",
+      "returncode": 4,
+      "timed_out": false,
+      "wall_seconds": 6.702075699999114,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 65773568,
+      "mesh_published": false,
+      "archive_published": false,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "mixed_contact_unqualified",
+      "observed_mechanisms": [
+        "Mixed native assembly: 3 bodies, 42 faces, 25 curved faces; current interface gate refuses it."
+      ],
+      "uncertainty": [
+        "Neither complete native skin/Common contact dimension nor a conforming permitted interface is established by the retained lightweight topology/distance receipts."
+      ],
+      "all_native_body_receipts": [],
+      "original_topology_context": {
+        "input_sha256": "4460d2d68643db57c164e1ede21817a037fcb9881a974943906348ca31aa7e40",
+        "native_imported": true,
+        "native_import_reason": "none",
+        "native_validation": null,
+        "solid_count": 3,
+        "face_count": 42,
+        "face_kinds": {
+          "bspline": 16,
+          "cylinder": 7,
+          "extrusion": 1,
+          "offset": 1,
+          "plane": 17
+        },
+        "free_face_tags": [],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "bspline": 16,
+              "cylinder": 4,
+              "plane": 6
+            }
+          },
+          {
+            "tag": 2,
+            "face_kinds": {
+              "cylinder": 1,
+              "plane": 2
+            }
+          },
+          {
+            "tag": 3,
+            "face_kinds": {
+              "cylinder": 2,
+              "extrusion": 1,
+              "offset": 1,
+              "plane": 9
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [
+          {
+            "body_a": 1,
+            "body_b": 3,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 4,
+            "common_done": true,
+            "common_volume": 0,
+            "common_area": 0,
+            "common_solids": 0,
+            "common_faces": 0,
+            "common_edges": 0,
+            "common_vertices": 0
+          },
+          {
+            "body_a": 2,
+            "body_b": 3,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 4,
+            "common_done": true,
+            "common_volume": 0,
+            "common_area": 0,
+            "common_solids": 0,
+            "common_faces": 0,
+            "common_edges": 0,
+            "common_vertices": 0
+          }
+        ],
+        "survey_returncode": 0,
+        "survey_wall_seconds": 7.066008400004648
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00000015/00000015_b08aa818955948c690fd9b6d_step_000.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0015-00-888fd6aa/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0015-00-888fd6aa",
+      "stdout": null,
+      "stderr": "Native CAD mesh: unresolved_body_interface\r\n",
+      "independent_lightweight_mixed_contact_context": {
+        "case": "00000015",
+        "source": "local-data/abc_0000_step_v00/00000015/00000015_b08aa818955948c690fd9b6d_step_000.step",
+        "source_sha256": "4460d2d68643db57c164e1ede21817a037fcb9881a974943906348ca31aa7e40",
+        "source_unchanged": true,
+        "returncode": 0,
+        "wall_seconds": 7.718000000000757,
+        "native": {
+          "native_imported": true,
+          "solids": 3,
+          "faces": 42,
+          "curved_faces": 25,
+          "bodies": [
+            {
+              "tag": 1,
+              "faces": 26,
+              "six_planar_box_candidate": false,
+              "face_kinds": {
+                "cylinder": 4,
+                "other_native_surface": 16,
+                "plane": 6
+              }
+            },
+            {
+              "tag": 2,
+              "faces": 3,
+              "six_planar_box_candidate": false,
+              "face_kinds": {
+                "cylinder": 1,
+                "plane": 2
+              }
+            },
+            {
+              "tag": 3,
+              "faces": 13,
+              "six_planar_box_candidate": false,
+              "face_kinds": {
+                "cylinder": 2,
+                "other_native_surface": 2,
+                "plane": 9
+              }
+            }
+          ]
+        },
+        "any_six_plane_box": false
+      }
+    },
+    {
+      "case_id": "00000016",
+      "source_path": "00000016/00000016_b08aa818955948c690fd9b6d_step_001.step",
+      "input_sha256": "767992134bf890032be8ef450710d7ddbd69b1bc49a11904b29e0fae328e286a",
+      "top_level_outcome": "unsupported",
+      "top_level_native_reason": "unresolved_body_interface",
+      "returncode": 4,
+      "timed_out": false,
+      "wall_seconds": 0.3372987999973702,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 28856320,
+      "mesh_published": false,
+      "archive_published": false,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "mixed_contact_unqualified",
+      "observed_mechanisms": [
+        "Mixed native assembly: 3 bodies, 29 faces, 8 curved faces; current interface gate refuses it.",
+        "The six-plane box is body 1; its distance to body 3 is 5.423872 mm. Actual touching pair 2/3 involves curved bodies, so the matched full-box-face extension does not address it."
+      ],
+      "uncertainty": [
+        "Neither complete native skin/Common contact dimension nor a conforming permitted interface is established by the retained lightweight topology/distance receipts."
+      ],
+      "all_native_body_receipts": [],
+      "original_topology_context": {
+        "input_sha256": "767992134bf890032be8ef450710d7ddbd69b1bc49a11904b29e0fae328e286a",
+        "native_imported": true,
+        "native_import_reason": "none",
+        "native_validation": null,
+        "solid_count": 3,
+        "face_count": 29,
+        "face_kinds": {
+          "cylinder": 7,
+          "plane": 21,
+          "torus": 1
+        },
+        "free_face_tags": [],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "plane": 6
+            }
+          },
+          {
+            "tag": 2,
+            "face_kinds": {
+              "cylinder": 4,
+              "plane": 12
+            }
+          },
+          {
+            "tag": 3,
+            "face_kinds": {
+              "cylinder": 3,
+              "plane": 3,
+              "torus": 1
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [
+          {
+            "body_a": 1,
+            "body_b": 3,
+            "distance_done": true,
+            "minimum_distance": 5.4238721728325,
+            "inner_solution": false,
+            "solutions": 4
+          },
+          {
+            "body_a": 2,
+            "body_b": 3,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 6,
+            "common_done": true,
+            "common_volume": 0,
+            "common_area": 0,
+            "common_solids": 0,
+            "common_faces": 0,
+            "common_edges": 0,
+            "common_vertices": 0
+          }
+        ],
+        "survey_returncode": 0,
+        "survey_wall_seconds": 0.3047928000014508
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00000016/00000016_b08aa818955948c690fd9b6d_step_001.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0016-00-3cc32332/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0016-00-3cc32332",
+      "stdout": null,
+      "stderr": "Native CAD mesh: unresolved_body_interface\r\n",
+      "independent_lightweight_mixed_contact_context": {
+        "case": "00000016",
+        "source": "local-data/abc_0000_step_v00/00000016/00000016_b08aa818955948c690fd9b6d_step_001.step",
+        "source_sha256": "767992134bf890032be8ef450710d7ddbd69b1bc49a11904b29e0fae328e286a",
+        "source_unchanged": true,
+        "returncode": 0,
+        "wall_seconds": 0.20300000000133878,
+        "native": {
+          "native_imported": true,
+          "solids": 3,
+          "faces": 29,
+          "curved_faces": 8,
+          "bodies": [
+            {
+              "tag": 1,
+              "faces": 6,
+              "six_planar_box_candidate": true,
+              "face_kinds": {
+                "plane": 6
+              }
+            },
+            {
+              "tag": 2,
+              "faces": 16,
+              "six_planar_box_candidate": false,
+              "face_kinds": {
+                "cylinder": 4,
+                "plane": 12
+              }
+            },
+            {
+              "tag": 3,
+              "faces": 7,
+              "six_planar_box_candidate": false,
+              "face_kinds": {
+                "cylinder": 3,
+                "plane": 3,
+                "torus": 1
+              }
+            }
+          ]
+        },
+        "any_six_plane_box": true
+      }
+    },
+    {
+      "case_id": "00000021",
+      "source_path": "00000021/00000021_ad34a3f60c4a4caa99646600_step_001.step",
+      "input_sha256": "1ec4f3b2d9b1c5cfa9c0fed114d125ed53b85759134657a0f6ffa29078179ba2",
+      "top_level_outcome": "timeout",
+      "top_level_native_reason": null,
+      "returncode": 1,
+      "timed_out": true,
+      "wall_seconds": 240.0171743000028,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 40218624,
+      "mesh_published": null,
+      "archive_published": null,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "timeout_unresolved",
+      "observed_mechanisms": [
+        "Runner stopped the process after 240s; no final native JSON diagnostic returned."
+      ],
+      "uncertainty": [
+        "Failure phase and cause are unresolved; earlier private evidence does not identify the phase of this timed-out invocation."
+      ],
+      "all_native_body_receipts": [],
+      "original_topology_context": {
+        "input_sha256": "1ec4f3b2d9b1c5cfa9c0fed114d125ed53b85759134657a0f6ffa29078179ba2",
+        "native_imported": true,
+        "native_import_reason": "none",
+        "native_validation": null,
+        "solid_count": 1,
+        "face_count": 3,
+        "face_kinds": {
+          "bspline": 2,
+          "extrusion": 1
+        },
+        "free_face_tags": [],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "bspline": 2,
+              "extrusion": 1
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [],
+        "survey_returncode": 0,
+        "survey_wall_seconds": 0.43489660000341246
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00000021/00000021_ad34a3f60c4a4caa99646600_step_001.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0021-00-6f002e9a/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0021-00-6f002e9a",
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case_id": "00000023",
+      "source_path": "00000023/00000023_ad34a3f60c4a4caa99646600_step_003.step",
+      "input_sha256": "df279cd73c5ad232b336a15f08edb217509da81bfd4bf31efcdd6e1fc22774c4",
+      "top_level_outcome": "resource-limit",
+      "top_level_native_reason": "budget_exceeded",
+      "returncode": 4,
+      "timed_out": false,
+      "wall_seconds": 134.4095113000003,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 406155264,
+      "mesh_published": false,
+      "archive_published": false,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "surface_and_split_guards",
+      "observed_mechanisms": [
+        "Original surface guard: nonconforming_edge; final native split guard: invalid_result.",
+        "Original-body stitched surface diagnostic: nonconforming_edge."
+      ],
+      "uncertainty": [
+        "Top-level budget_exceeded may aggregate local partition/work admissions alongside later geometric/kernel refusals. It does not by itself prove exhaustion of the global 20M work cap, OS memory, or a valid-source impossibility."
+      ],
+      "all_native_body_receipts": [
+        {
+          "solid_tag": 1,
+          "route": "native_surface_star",
+          "reason": "budget_exceeded",
+          "start_face_tag": -1,
+          "end_face_tag": -1,
+          "relative_volume_error": 0,
+          "boundary_node_error": 0.49310967719456267,
+          "boundary_sample_error": 0,
+          "primitive_reason": "internal-error",
+          "planar_reason": "internal_error",
+          "native_surface_reason": "nonconforming_edge",
+          "native_volume_reason": "not_attempted",
+          "surface_deflection": 0.233261153022698,
+          "surface_chord_error_limit": 0.583152882556745,
+          "surface_triangles": 0,
+          "surface_attempts": 1,
+          "native_surface_work": 26059,
+          "native_volume_work": 0,
+          "native_surface_seconds": 1.2786373,
+          "native_volume_seconds": 0,
+          "native_partition_seconds": 119.8781821,
+          "native_assembly_seconds": 0,
+          "exact_surface_pairs": 0,
+          "kernel_trials": 0,
+          "partition_reason": "invalid_result",
+          "partition_policy": "cartesian_fifths",
+          "partition_attempts": 9,
+          "partition_pieces": 43,
+          "partition_interfaces": 0,
+          "partition_work": 77940,
+          "partition_volume_change": 0,
+          "boundary_embedding_certified": false,
+          "contact_cylinder_reason": "not_attempted",
+          "contact_source_edge_tag": -1,
+          "contact_target_edge_tag": -1,
+          "contact_ring_nodes": 0,
+          "contact_cylinder_work": 0,
+          "box_contact_vertices_evaluated": 0,
+          "box_contact_work": 0,
+          "box_contact_maximum_endpoint_correction": 0,
+          "partition_attempt_reports": [
+            {
+              "policy": "cartesian_midplanes",
+              "diagnostic": "volume_mismatch",
+              "failed_piece_tag": -1,
+              "pieces": 3,
+              "interfaces": 0,
+              "work": 17425,
+              "seconds": 21.0821688,
+              "surface_deflection": 0.233261153022698
+            },
+            {
+              "policy": "coaxial_angular",
+              "diagnostic": "unsupported_policy",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1,
+              "seconds": 8.9075434,
+              "surface_deflection": 0.233261153022698
+            },
+            {
+              "policy": "native_feature_axes_4",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1462,
+              "seconds": 8.8460529,
+              "surface_deflection": 0.233261153022698
+            },
+            {
+              "policy": "native_feature_axes_8",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1624,
+              "seconds": 9.2036908,
+              "surface_deflection": 0.233261153022698
+            },
+            {
+              "policy": "native_circular_feature_axes_4",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1462,
+              "seconds": 9.691892,
+              "surface_deflection": 0.004082070177897215
+            },
+            {
+              "policy": "native_circular_feature_axes_2",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1782,
+              "seconds": 9.3768513,
+              "surface_deflection": 0.004082070177897215
+            },
+            {
+              "policy": "native_feature_axes_2",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1782,
+              "seconds": 9.0017277,
+              "surface_deflection": 0.233261153022698
+            },
+            {
+              "policy": "cartesian_thirds",
+              "diagnostic": "volume_mismatch",
+              "failed_piece_tag": -1,
+              "pieces": 14,
+              "interfaces": 0,
+              "work": 21951,
+              "seconds": 23.4506941,
+              "surface_deflection": 0.233261153022698
+            },
+            {
+              "policy": "cartesian_fifths",
+              "diagnostic": "invalid_result",
+              "failed_piece_tag": -1,
+              "pieces": 43,
+              "interfaces": 0,
+              "work": 30451,
+              "seconds": 20.3181793,
+              "surface_deflection": 0.233261153022698
+            }
+          ],
+          "uniform_cylinder": false,
+          "uniform_circular": false,
+          "profiled_volume": false,
+          "minimum_section_nodes": 0,
+          "maximum_section_nodes": 0,
+          "minimum_axial_spacing": 0,
+          "maximum_axial_spacing": 0,
+          "maximum_axial_growth": 1,
+          "chord_error_bound": 0
+        }
+      ],
+      "original_topology_context": {
+        "input_sha256": "df279cd73c5ad232b336a15f08edb217509da81bfd4bf31efcdd6e1fc22774c4",
+        "native_imported": true,
+        "native_import_reason": "none",
+        "native_validation": null,
+        "solid_count": 1,
+        "face_count": 454,
+        "face_kinds": {
+          "bspline": 279,
+          "cone": 50,
+          "cylinder": 80,
+          "offset": 1,
+          "plane": 40,
+          "revolution": 4
+        },
+        "free_face_tags": [],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "bspline": 279,
+              "cone": 50,
+              "cylinder": 80,
+              "offset": 1,
+              "plane": 40,
+              "revolution": 4
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [],
+        "survey_returncode": 0,
+        "survey_wall_seconds": 21.606617599994934
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00000023/00000023_ad34a3f60c4a4caa99646600_step_003.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0023-00-12e63c1b/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0023-00-12e63c1b",
+      "stdout": null,
+      "stderr": "Native CAD mesh: budget_exceeded\r\n"
+    },
+    {
+      "case_id": "00000024",
+      "source_path": "00000024/00000024_ad34a3f60c4a4caa99646600_step_004.step",
+      "input_sha256": "426ad96ce4f14561ce048cca1f4aa56226690516b15b75d27650a97d7d4398c9",
+      "top_level_outcome": "resource-limit",
+      "top_level_native_reason": "budget_exceeded",
+      "returncode": 4,
+      "timed_out": false,
+      "wall_seconds": 48.07874919999449,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 870297600,
+      "mesh_published": false,
+      "archive_published": false,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "bounded_kernel_search",
+      "observed_mechanisms": [
+        "Final cartesian_fifths split has 85 pieces; bounded strict-star search refuses piece 1.",
+        "Original-body star-volume diagnostic: boundary-genus-not-zero."
+      ],
+      "uncertainty": [
+        "Top-level budget_exceeded may aggregate local partition/work admissions alongside later geometric/kernel refusals. It does not by itself prove exhaustion of the global 20M work cap, OS memory, or a valid-source impossibility.",
+        "NoKernel is a bounded proposal/search result, not a proof that the exact PLC kernel is empty or that another valid volume construction cannot succeed."
+      ],
+      "all_native_body_receipts": [
+        {
+          "solid_tag": 1,
+          "route": "native_surface_star",
+          "reason": "budget_exceeded",
+          "start_face_tag": -1,
+          "end_face_tag": -1,
+          "relative_volume_error": 0,
+          "boundary_node_error": 0,
+          "boundary_sample_error": 0.5511003913066123,
+          "primitive_reason": "internal-error",
+          "planar_reason": "internal_error",
+          "native_surface_reason": "none",
+          "native_volume_reason": "boundary-genus-not-zero",
+          "surface_deflection": 0.1817107376982986,
+          "surface_chord_error_limit": 0.908553688491493,
+          "surface_triangles": 3390,
+          "surface_attempts": 2,
+          "native_surface_work": 246098,
+          "native_volume_work": 472005,
+          "native_surface_seconds": 7.3829956999999995,
+          "native_volume_seconds": 0.24102219999999996,
+          "native_partition_seconds": 40.0501054,
+          "native_assembly_seconds": 0.0021191,
+          "exact_surface_pairs": 0,
+          "kernel_trials": 0,
+          "partition_reason": "no-strict-star-kernel-found",
+          "partition_policy": "cartesian_fifths",
+          "partition_attempts": 10,
+          "partition_pieces": 85,
+          "partition_interfaces": 165,
+          "partition_work": 116864,
+          "partition_volume_change": 7.129072225016623e-10,
+          "boundary_embedding_certified": false,
+          "contact_cylinder_reason": "not_attempted",
+          "contact_source_edge_tag": -1,
+          "contact_target_edge_tag": -1,
+          "contact_ring_nodes": 0,
+          "contact_cylinder_work": 0,
+          "box_contact_vertices_evaluated": 0,
+          "box_contact_work": 0,
+          "box_contact_maximum_endpoint_correction": 0,
+          "partition_attempt_reports": [
+            {
+              "policy": "cartesian_midplanes",
+              "diagnostic": "boundary-genus-not-zero",
+              "failed_piece_tag": 1,
+              "pieces": 11,
+              "interfaces": 14,
+              "work": 71489,
+              "seconds": 2.3192175,
+              "surface_deflection": 0.1817107376982986
+            },
+            {
+              "policy": "coaxial_angular",
+              "diagnostic": "unsupported_policy",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1,
+              "seconds": 0.3707913,
+              "surface_deflection": 0.1817107376982986
+            },
+            {
+              "policy": "native_feature_axes_4",
+              "diagnostic": "no-strict-star-kernel-found",
+              "failed_piece_tag": 23,
+              "pieces": 294,
+              "interfaces": 584,
+              "work": 126719,
+              "seconds": 6.8437314,
+              "surface_deflection": 0.1817107376982986
+            },
+            {
+              "policy": "native_feature_axes_4_extended",
+              "diagnostic": "no-strict-star-kernel-found",
+              "failed_piece_tag": 23,
+              "pieces": 294,
+              "interfaces": 584,
+              "work": 234719,
+              "seconds": 6.7751083,
+              "surface_deflection": 0.1817107376982986
+            },
+            {
+              "policy": "native_feature_axes_8",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 594,
+              "interfaces": 0,
+              "work": 2505,
+              "seconds": 5.1557041,
+              "surface_deflection": 0.1817107376982986
+            },
+            {
+              "policy": "native_circular_feature_axes_4",
+              "diagnostic": "volume_mismatch",
+              "failed_piece_tag": -1,
+              "pieces": 1,
+              "interfaces": 0,
+              "work": 29744,
+              "seconds": 11.2651086,
+              "surface_deflection": 0.006359875819440451
+            },
+            {
+              "policy": "native_circular_feature_axes_2",
+              "diagnostic": "volume_mismatch",
+              "failed_piece_tag": -1,
+              "pieces": 1,
+              "interfaces": 0,
+              "work": 11214,
+              "seconds": 3.119898,
+              "surface_deflection": 0.006359875819440451
+            },
+            {
+              "policy": "native_feature_axes_2",
+              "diagnostic": "no-strict-star-kernel-found",
+              "failed_piece_tag": 7,
+              "pieces": 123,
+              "interfaces": 235,
+              "work": 102360,
+              "seconds": 3.939644,
+              "surface_deflection": 0.1817107376982986
+            },
+            {
+              "policy": "cartesian_thirds",
+              "diagnostic": "no-strict-star-kernel-found",
+              "failed_piece_tag": 1,
+              "pieces": 21,
+              "interfaces": 33,
+              "work": 63204,
+              "seconds": 1.8542003,
+              "surface_deflection": 0.1817107376982986
+            },
+            {
+              "policy": "cartesian_fifths",
+              "diagnostic": "no-strict-star-kernel-found",
+              "failed_piece_tag": 1,
+              "pieces": 85,
+              "interfaces": 165,
+              "work": 58097,
+              "seconds": 3.174917,
+              "surface_deflection": 0.1817107376982986
+            }
+          ],
+          "uniform_cylinder": false,
+          "uniform_circular": false,
+          "profiled_volume": false,
+          "minimum_section_nodes": 0,
+          "maximum_section_nodes": 0,
+          "minimum_axial_spacing": 0,
+          "maximum_axial_spacing": 0,
+          "maximum_axial_growth": 1,
+          "chord_error_bound": 0
+        }
+      ],
+      "original_topology_context": {
+        "input_sha256": "426ad96ce4f14561ce048cca1f4aa56226690516b15b75d27650a97d7d4398c9",
+        "native_imported": true,
+        "native_import_reason": "none",
+        "native_validation": null,
+        "solid_count": 1,
+        "face_count": 30,
+        "face_kinds": {
+          "bspline": 1,
+          "cone": 1,
+          "cylinder": 12,
+          "plane": 11,
+          "torus": 5
+        },
+        "free_face_tags": [],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "bspline": 1,
+              "cone": 1,
+              "cylinder": 12,
+              "plane": 11,
+              "torus": 5
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [],
+        "survey_returncode": 0,
+        "survey_wall_seconds": 0.4252363999985391
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00000024/00000024_ad34a3f60c4a4caa99646600_step_004.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0024-00-aa5b290d/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0024-00-aa5b290d",
+      "stdout": null,
+      "stderr": "Native CAD mesh: budget_exceeded\r\n"
+    },
+    {
+      "case_id": "00000025",
+      "source_path": "00000025/00000025_ad34a3f60c4a4caa99646600_step_005.step",
+      "input_sha256": "c2a5fe9c2dd5876567aaf1683480cc25c47bbe5ce9b8efefd6af49ae6d6ee969",
+      "top_level_outcome": "invalid-geometry",
+      "top_level_native_reason": "invalid-shape",
+      "returncode": 3,
+      "timed_out": false,
+      "wall_seconds": 0.2870096000042395,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 28405760,
+      "mesh_published": false,
+      "archive_published": false,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "invalid_brep",
+      "observed_mechanisms": [
+        "Native import returned invalid-shape.",
+        "Independent original BRep validity issues: SelfIntersectingWire, UnorientableShape."
+      ],
+      "uncertainty": [],
+      "all_native_body_receipts": [],
+      "original_topology_context": {
+        "input_sha256": "c2a5fe9c2dd5876567aaf1683480cc25c47bbe5ce9b8efefd6af49ae6d6ee969",
+        "native_imported": false,
+        "native_import_reason": "invalid-shape",
+        "native_validation": {
+          "valid": false,
+          "issues": [
+            {
+              "shape_type": "face",
+              "shape_index": 367,
+              "status": "UnorientableShape",
+              "status_code": 27
+            },
+            {
+              "shape_type": "wire",
+              "shape_index": 368,
+              "status": "SelfIntersectingWire",
+              "status_code": 18
+            },
+            {
+              "shape_type": "wire",
+              "shape_index": 368,
+              "status": "SelfIntersectingWire",
+              "status_code": 18,
+              "context_type": "face",
+              "context_index": 367
+            }
+          ]
+        },
+        "solid_count": 3,
+        "face_count": 81,
+        "face_kinds": {
+          "bspline": 1,
+          "cone": 1,
+          "cylinder": 34,
+          "plane": 40,
+          "torus": 5
+        },
+        "free_face_tags": [],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "cylinder": 2,
+              "plane": 4
+            }
+          },
+          {
+            "tag": 2,
+            "face_kinds": {
+              "cylinder": 2,
+              "plane": 4
+            }
+          },
+          {
+            "tag": 3,
+            "face_kinds": {
+              "bspline": 1,
+              "cone": 1,
+              "cylinder": 30,
+              "plane": 32,
+              "torus": 5
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [],
+        "survey_returncode": 0,
+        "survey_wall_seconds": 0.6936195000016596
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00000025/00000025_ad34a3f60c4a4caa99646600_step_005.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0025-00-8d5f4b35/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0025-00-8d5f4b35",
+      "stdout": null,
+      "stderr": "CAD import: invalid-shape\r\n"
+    },
+    {
+      "case_id": "00000026",
+      "source_path": "00000026/00000026_ad34a3f60c4a4caa99646600_step_006.step",
+      "input_sha256": "a3a1ed78e2afd0b19e2c92146c200ee1beaa9c02b131621a14d9e7f61367cd6a",
+      "top_level_outcome": "resource-limit",
+      "top_level_native_reason": "budget_exceeded",
+      "returncode": 4,
+      "timed_out": false,
+      "wall_seconds": 141.1494412999964,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 168685568,
+      "mesh_published": false,
+      "archive_published": false,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "split_conservation_guard",
+      "observed_mechanisms": [
+        "Final cartesian_fifths native split reports volume_mismatch; measured relative native CAD volume change 2.39255843375e-06 exceeds the native split guard 1e-6.",
+        "Original-body star-volume diagnostic: boundary-genus-not-zero."
+      ],
+      "uncertainty": [
+        "Top-level budget_exceeded may aggregate local partition/work admissions alongside later geometric/kernel refusals. It does not by itself prove exhaustion of the global 20M work cap, OS memory, or a valid-source impossibility."
+      ],
+      "all_native_body_receipts": [
+        {
+          "solid_tag": 1,
+          "route": "native_surface_star",
+          "reason": "budget_exceeded",
+          "start_face_tag": -1,
+          "end_face_tag": -1,
+          "relative_volume_error": 0,
+          "boundary_node_error": 2.844945146671123e-14,
+          "boundary_sample_error": 0.05424462401655689,
+          "primitive_reason": "internal-error",
+          "planar_reason": "internal_error",
+          "native_surface_reason": "none",
+          "native_volume_reason": "boundary-genus-not-zero",
+          "surface_deflection": 0.09566848976117172,
+          "surface_chord_error_limit": 0.2391712244029293,
+          "surface_triangles": 27760,
+          "surface_attempts": 1,
+          "native_surface_work": 769909,
+          "native_volume_work": 560872,
+          "native_surface_seconds": 83.6035334,
+          "native_volume_seconds": 0.2005422,
+          "native_partition_seconds": 54.5140547,
+          "native_assembly_seconds": 0,
+          "exact_surface_pairs": 0,
+          "kernel_trials": 0,
+          "partition_reason": "volume_mismatch",
+          "partition_policy": "cartesian_fifths",
+          "partition_attempts": 9,
+          "partition_pieces": 130,
+          "partition_interfaces": 0,
+          "partition_work": 76880,
+          "partition_volume_change": 2.3925584337465774e-06,
+          "boundary_embedding_certified": false,
+          "contact_cylinder_reason": "not_attempted",
+          "contact_source_edge_tag": -1,
+          "contact_target_edge_tag": -1,
+          "contact_ring_nodes": 0,
+          "contact_cylinder_work": 0,
+          "box_contact_vertices_evaluated": 0,
+          "box_contact_work": 0,
+          "box_contact_maximum_endpoint_correction": 0,
+          "partition_attempt_reports": [
+            {
+              "policy": "cartesian_midplanes",
+              "diagnostic": "volume_mismatch",
+              "failed_piece_tag": -1,
+              "pieces": 8,
+              "interfaces": 0,
+              "work": 11547,
+              "seconds": 7.6050118,
+              "surface_deflection": 0.09566848976117172
+            },
+            {
+              "policy": "coaxial_angular",
+              "diagnostic": "unsupported_policy",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1,
+              "seconds": 2.6996702,
+              "surface_deflection": 0.09566848976117172
+            },
+            {
+              "policy": "native_feature_axes_4",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 5221,
+              "seconds": 2.7039612,
+              "surface_deflection": 0.09566848976117172
+            },
+            {
+              "policy": "native_feature_axes_8",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 2192,
+              "seconds": 2.7076234,
+              "surface_deflection": 0.09566848976117172
+            },
+            {
+              "policy": "native_circular_feature_axes_4",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 5221,
+              "seconds": 2.6878027,
+              "surface_deflection": 0.001674198570820505
+            },
+            {
+              "policy": "native_circular_feature_axes_2",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 3382,
+              "seconds": 2.6681904,
+              "surface_deflection": 0.001674198570820505
+            },
+            {
+              "policy": "native_feature_axes_2",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 3382,
+              "seconds": 2.665981,
+              "surface_deflection": 0.09566848976117172
+            },
+            {
+              "policy": "cartesian_thirds",
+              "diagnostic": "work-budget",
+              "failed_piece_tag": 1,
+              "pieces": 90,
+              "interfaces": 166,
+              "work": 258881,
+              "seconds": 22.5319929,
+              "surface_deflection": 0.09566848976117172
+            },
+            {
+              "policy": "cartesian_fifths",
+              "diagnostic": "volume_mismatch",
+              "failed_piece_tag": -1,
+              "pieces": 130,
+              "interfaces": 0,
+              "work": 17706,
+              "seconds": 11.3901994,
+              "surface_deflection": 0.09566848976117172
+            }
+          ],
+          "uniform_cylinder": false,
+          "uniform_circular": false,
+          "profiled_volume": false,
+          "minimum_section_nodes": 0,
+          "maximum_section_nodes": 0,
+          "minimum_axial_spacing": 0,
+          "maximum_axial_spacing": 0,
+          "maximum_axial_growth": 1,
+          "chord_error_bound": 0
+        }
+      ],
+      "original_topology_context": {
+        "input_sha256": "a3a1ed78e2afd0b19e2c92146c200ee1beaa9c02b131621a14d9e7f61367cd6a",
+        "native_imported": true,
+        "native_import_reason": "none",
+        "native_validation": null,
+        "solid_count": 1,
+        "face_count": 202,
+        "face_kinds": {
+          "bspline": 64,
+          "cone": 5,
+          "cylinder": 88,
+          "plane": 45
+        },
+        "free_face_tags": [],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "bspline": 64,
+              "cone": 5,
+              "cylinder": 88,
+              "plane": 45
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [],
+        "survey_returncode": 0,
+        "survey_wall_seconds": 4.5141411000004155
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00000026/00000026_ad34a3f60c4a4caa99646600_step_006.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0026-00-e8012413/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0026-00-e8012413",
+      "stdout": null,
+      "stderr": "Native CAD mesh: budget_exceeded\r\n"
+    },
+    {
+      "case_id": "00000027",
+      "source_path": "00000027/00000027_ad34a3f60c4a4caa99646600_step_007.step",
+      "input_sha256": "f5aa1abefabb3b42c7ccee50992e159429f0c711cc7072d9ff36a7a833a4cf60",
+      "top_level_outcome": "resource-limit",
+      "top_level_native_reason": "budget_exceeded",
+      "returncode": 4,
+      "timed_out": false,
+      "wall_seconds": 21.30267289999756,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 553107456,
+      "mesh_published": false,
+      "archive_published": false,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "split_conservation_guard",
+      "observed_mechanisms": [
+        "Final cartesian_fifths native split reports volume_mismatch; measured relative native CAD volume change 4.53375871547e-06 exceeds the native split guard 1e-6.",
+        "Original-body star-volume diagnostic: boundary-genus-not-zero."
+      ],
+      "uncertainty": [
+        "Top-level budget_exceeded may aggregate local partition/work admissions alongside later geometric/kernel refusals. It does not by itself prove exhaustion of the global 20M work cap, OS memory, or a valid-source impossibility."
+      ],
+      "all_native_body_receipts": [
+        {
+          "solid_tag": 1,
+          "route": "native_surface_star",
+          "reason": "budget_exceeded",
+          "start_face_tag": -1,
+          "end_face_tag": -1,
+          "relative_volume_error": 0,
+          "boundary_node_error": 7.105427357601002e-15,
+          "boundary_sample_error": 0.054582901644622664,
+          "primitive_reason": "internal-error",
+          "planar_reason": "internal_error",
+          "native_surface_reason": "none",
+          "native_volume_reason": "boundary-genus-not-zero",
+          "surface_deflection": 0.055974629463357066,
+          "surface_chord_error_limit": 0.13993657365839265,
+          "surface_triangles": 3274,
+          "surface_attempts": 1,
+          "native_surface_work": 90151,
+          "native_volume_work": 42556,
+          "native_surface_seconds": 3.7286285,
+          "native_volume_seconds": 0.0119613,
+          "native_partition_seconds": 17.037994,
+          "native_assembly_seconds": 0,
+          "exact_surface_pairs": 0,
+          "kernel_trials": 0,
+          "partition_reason": "volume_mismatch",
+          "partition_policy": "cartesian_fifths",
+          "partition_attempts": 9,
+          "partition_pieces": 81,
+          "partition_interfaces": 0,
+          "partition_work": 107416,
+          "partition_volume_change": 4.533758715468652e-06,
+          "boundary_embedding_certified": false,
+          "contact_cylinder_reason": "not_attempted",
+          "contact_source_edge_tag": -1,
+          "contact_target_edge_tag": -1,
+          "contact_ring_nodes": 0,
+          "contact_cylinder_work": 0,
+          "box_contact_vertices_evaluated": 0,
+          "box_contact_work": 0,
+          "box_contact_maximum_endpoint_correction": 0,
+          "partition_attempt_reports": [
+            {
+              "policy": "cartesian_midplanes",
+              "diagnostic": "volume_mismatch",
+              "failed_piece_tag": -1,
+              "pieces": 8,
+              "interfaces": 0,
+              "work": 4106,
+              "seconds": 0.4598383,
+              "surface_deflection": 0.055974629463357066
+            },
+            {
+              "policy": "coaxial_angular",
+              "diagnostic": "unsupported_policy",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1,
+              "seconds": 0.1555188,
+              "surface_deflection": 0.055974629463357066
+            },
+            {
+              "policy": "native_feature_axes_4",
+              "diagnostic": "provenance_lost",
+              "failed_piece_tag": -1,
+              "pieces": 4,
+              "interfaces": 3,
+              "work": 21475,
+              "seconds": 3.5508987,
+              "surface_deflection": 0.055974629463357066
+            },
+            {
+              "policy": "native_feature_axes_8",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 3288,
+              "seconds": 0.1577701,
+              "surface_deflection": 0.055974629463357066
+            },
+            {
+              "policy": "native_circular_feature_axes_4",
+              "diagnostic": "provenance_lost",
+              "failed_piece_tag": -1,
+              "pieces": 4,
+              "interfaces": 3,
+              "work": 31424,
+              "seconds": 5.9707858,
+              "surface_deflection": 0.0009795560156087486
+            },
+            {
+              "policy": "native_circular_feature_axes_2",
+              "diagnostic": "volume_mismatch",
+              "failed_piece_tag": -1,
+              "pieces": 3,
+              "interfaces": 0,
+              "work": 18216,
+              "seconds": 2.7006005,
+              "surface_deflection": 0.0009795560156087486
+            },
+            {
+              "policy": "native_feature_axes_2",
+              "diagnostic": "volume_mismatch",
+              "failed_piece_tag": -1,
+              "pieces": 3,
+              "interfaces": 0,
+              "work": 14729,
+              "seconds": 2.2574161,
+              "surface_deflection": 0.055974629463357066
+            },
+            {
+              "policy": "cartesian_thirds",
+              "diagnostic": "volume_mismatch",
+              "failed_piece_tag": -1,
+              "pieces": 27,
+              "interfaces": 0,
+              "work": 5422,
+              "seconds": 0.675847,
+              "surface_deflection": 0.055974629463357066
+            },
+            {
+              "policy": "cartesian_fifths",
+              "diagnostic": "volume_mismatch",
+              "failed_piece_tag": -1,
+              "pieces": 81,
+              "interfaces": 0,
+              "work": 8755,
+              "seconds": 1.109644,
+              "surface_deflection": 0.055974629463357066
+            }
+          ],
+          "uniform_cylinder": false,
+          "uniform_circular": false,
+          "profiled_volume": false,
+          "minimum_section_nodes": 0,
+          "maximum_section_nodes": 0,
+          "minimum_axial_spacing": 0,
+          "maximum_axial_spacing": 0,
+          "maximum_axial_growth": 1,
+          "chord_error_bound": 0
+        }
+      ],
+      "original_topology_context": {
+        "input_sha256": "f5aa1abefabb3b42c7ccee50992e159429f0c711cc7072d9ff36a7a833a4cf60",
+        "native_imported": true,
+        "native_import_reason": "none",
+        "native_validation": null,
+        "solid_count": 1,
+        "face_count": 74,
+        "face_kinds": {
+          "bspline": 17,
+          "cone": 1,
+          "cylinder": 11,
+          "extrusion": 1,
+          "plane": 44
+        },
+        "free_face_tags": [],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "bspline": 17,
+              "cone": 1,
+              "cylinder": 11,
+              "extrusion": 1,
+              "plane": 44
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [],
+        "survey_returncode": 0,
+        "survey_wall_seconds": 0.7769292000011774
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00000027/00000027_ad34a3f60c4a4caa99646600_step_007.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0027-00-36146fad/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0027-00-36146fad",
+      "stdout": null,
+      "stderr": "Native CAD mesh: budget_exceeded\r\n"
+    },
+    {
+      "case_id": "00000028",
+      "source_path": "00000028/00000028_ad34a3f60c4a4caa99646600_step_008.step",
+      "input_sha256": "c371205191a34eb90c867d280607bb4ae0948b5082e1e483a0a5430667280205",
+      "top_level_outcome": "unsupported",
+      "top_level_native_reason": "unresolved_body_interface",
+      "returncode": 4,
+      "timed_out": false,
+      "wall_seconds": 0.8280712999985553,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 39444480,
+      "mesh_published": false,
+      "archive_published": false,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "other_interface_unqualified",
+      "observed_mechanisms": [
+        "Current interface gate refuses the assembly; independent topology/distance survey has 2 near-zero-distance body pairs."
+      ],
+      "uncertainty": [
+        "Empty solid Common/zero distance alone does not establish point, edge or face contact. No completed permitted full interface was certified."
+      ],
+      "all_native_body_receipts": [],
+      "original_topology_context": {
+        "input_sha256": "c371205191a34eb90c867d280607bb4ae0948b5082e1e483a0a5430667280205",
+        "native_imported": true,
+        "native_import_reason": "none",
+        "native_validation": null,
+        "solid_count": 3,
+        "face_count": 99,
+        "face_kinds": {
+          "bspline": 18,
+          "cone": 3,
+          "cylinder": 17,
+          "plane": 61
+        },
+        "free_face_tags": [],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "bspline": 18,
+              "cone": 1,
+              "cylinder": 7,
+              "plane": 36
+            }
+          },
+          {
+            "tag": 2,
+            "face_kinds": {
+              "cylinder": 2,
+              "plane": 11
+            }
+          },
+          {
+            "tag": 3,
+            "face_kinds": {
+              "cone": 2,
+              "cylinder": 8,
+              "plane": 14
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [
+          {
+            "body_a": 1,
+            "body_b": 2,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 20,
+            "common_done": true,
+            "common_volume": 0,
+            "common_area": 0,
+            "common_solids": 0,
+            "common_faces": 0,
+            "common_edges": 0,
+            "common_vertices": 0
+          },
+          {
+            "body_a": 1,
+            "body_b": 3,
+            "distance_done": true,
+            "minimum_distance": 1.4999999999999714,
+            "inner_solution": false,
+            "solutions": 7
+          },
+          {
+            "body_a": 2,
+            "body_b": 3,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 8,
+            "common_done": true,
+            "common_volume": 0,
+            "common_area": 0,
+            "common_solids": 0,
+            "common_faces": 0,
+            "common_edges": 0,
+            "common_vertices": 0
+          }
+        ],
+        "survey_returncode": 0,
+        "survey_wall_seconds": 1.7405040000012377
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00000028/00000028_ad34a3f60c4a4caa99646600_step_008.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0028-00-4bdf0da4/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0028-00-4bdf0da4",
+      "stdout": null,
+      "stderr": "Native CAD mesh: unresolved_body_interface\r\n"
+    },
+    {
+      "case_id": "00000909",
+      "source_path": "00000909/00000909_c9400dcd7ae9428caffe2204_step_002.step",
+      "input_sha256": "7239d8051c5492460af3373f5b290cb34c5ea8b73657f7477ed7dc4d564b8124",
+      "top_level_outcome": "invalid-geometry",
+      "top_level_native_reason": "invalid-shape",
+      "returncode": 3,
+      "timed_out": false,
+      "wall_seconds": 0.12982439999905182,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 22376448,
+      "mesh_published": false,
+      "archive_published": false,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "free_faces_outside_solids",
+      "observed_mechanisms": [
+        "Native import returned invalid-shape.",
+        "Independent raw BRep validity passes, but 3 original faces are outside every solid; solid-only import refuses them."
+      ],
+      "uncertainty": [
+        "This is a source-representation/import contract limitation, not evidence that the raw BRep fails OCCT validity."
+      ],
+      "all_native_body_receipts": [],
+      "original_topology_context": {
+        "input_sha256": "7239d8051c5492460af3373f5b290cb34c5ea8b73657f7477ed7dc4d564b8124",
+        "native_imported": false,
+        "native_import_reason": "invalid-shape",
+        "native_validation": {
+          "valid": true,
+          "issues": []
+        },
+        "solid_count": 2,
+        "face_count": 17,
+        "face_kinds": {
+          "plane": 17
+        },
+        "free_face_tags": [
+          15,
+          16,
+          17
+        ],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "plane": 6
+            }
+          },
+          {
+            "tag": 2,
+            "face_kinds": {
+              "plane": 8
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [
+          {
+            "body_a": 1,
+            "body_b": 2,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 4,
+            "common_done": true,
+            "common_volume": 0,
+            "common_area": 0,
+            "common_solids": 0,
+            "common_faces": 0,
+            "common_edges": 0,
+            "common_vertices": 0
+          }
+        ],
+        "survey_returncode": 0,
+        "survey_wall_seconds": 0.15149769999698037
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00000909/00000909_c9400dcd7ae9428caffe2204_step_002.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0035-00-ef140a28/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0035-00-ef140a28",
+      "stdout": null,
+      "stderr": "CAD import: invalid-shape\r\n"
+    },
+    {
+      "case_id": "00002727",
+      "source_path": "00002727/00002727_98d8f78b1bb5495f9a193852_step_013.step",
+      "input_sha256": "6c27b3a305fc980550aadb26023d1cc7c3dc884a487a3fbde730a64d7e5d4b16",
+      "top_level_outcome": "resource-limit",
+      "top_level_native_reason": "budget_exceeded",
+      "returncode": 4,
+      "timed_out": false,
+      "wall_seconds": 15.838368900003843,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 168521728,
+      "mesh_published": false,
+      "archive_published": false,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "bounded_kernel_search",
+      "observed_mechanisms": [
+        "Final cartesian_fifths split has 136 pieces; bounded strict-star search refuses piece 35.",
+        "Original-body star-volume diagnostic: boundary-genus-not-zero."
+      ],
+      "uncertainty": [
+        "Top-level budget_exceeded may aggregate local partition/work admissions alongside later geometric/kernel refusals. It does not by itself prove exhaustion of the global 20M work cap, OS memory, or a valid-source impossibility.",
+        "NoKernel is a bounded proposal/search result, not a proof that the exact PLC kernel is empty or that another valid volume construction cannot succeed."
+      ],
+      "all_native_body_receipts": [
+        {
+          "solid_tag": 1,
+          "route": "native_surface_star",
+          "reason": "budget_exceeded",
+          "start_face_tag": -1,
+          "end_face_tag": -1,
+          "relative_volume_error": 0,
+          "boundary_node_error": 1.464821375527116e-14,
+          "boundary_sample_error": 0.10121453396869824,
+          "primitive_reason": "internal-error",
+          "planar_reason": "internal_error",
+          "native_surface_reason": "none",
+          "native_volume_reason": "boundary-genus-not-zero",
+          "surface_deflection": 0.07712832451357933,
+          "surface_chord_error_limit": 0.19282081128394832,
+          "surface_triangles": 5896,
+          "surface_attempts": 1,
+          "native_surface_work": 391741,
+          "native_volume_work": 908850,
+          "native_surface_seconds": 3.0618065,
+          "native_volume_seconds": 0.5525531000000001,
+          "native_partition_seconds": 11.7546136,
+          "native_assembly_seconds": 0.004822400000000001,
+          "exact_surface_pairs": 0,
+          "kernel_trials": 0,
+          "partition_reason": "no-strict-star-kernel-found",
+          "partition_policy": "cartesian_fifths",
+          "partition_attempts": 9,
+          "partition_pieces": 136,
+          "partition_interfaces": 292,
+          "partition_work": 57468,
+          "partition_volume_change": 1.2807435378358338e-09,
+          "boundary_embedding_certified": false,
+          "contact_cylinder_reason": "not_attempted",
+          "contact_source_edge_tag": -1,
+          "contact_target_edge_tag": -1,
+          "contact_ring_nodes": 0,
+          "contact_cylinder_work": 0,
+          "box_contact_vertices_evaluated": 0,
+          "box_contact_work": 0,
+          "box_contact_maximum_endpoint_correction": 0,
+          "partition_attempt_reports": [
+            {
+              "policy": "cartesian_midplanes",
+              "diagnostic": "work-budget",
+              "failed_piece_tag": 1,
+              "pieces": 8,
+              "interfaces": 14,
+              "work": 236218,
+              "seconds": 0.8170863,
+              "surface_deflection": 0.07712832451357933
+            },
+            {
+              "policy": "coaxial_angular",
+              "diagnostic": "unsupported_policy",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1,
+              "seconds": 0.0285711,
+              "surface_deflection": 0.07712832451357933
+            },
+            {
+              "policy": "native_feature_axes_4",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1615,
+              "seconds": 0.0280469,
+              "surface_deflection": 0.07712832451357933
+            },
+            {
+              "policy": "native_feature_axes_8",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1345,
+              "seconds": 0.0278152,
+              "surface_deflection": 0.07712832451357933
+            },
+            {
+              "policy": "native_circular_feature_axes_4",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1615,
+              "seconds": 0.0282633,
+              "surface_deflection": 0.0013497456789876383
+            },
+            {
+              "policy": "native_circular_feature_axes_2",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 776,
+              "interfaces": 0,
+              "work": 3212,
+              "seconds": 2.9274181,
+              "surface_deflection": 0.0013497456789876383
+            },
+            {
+              "policy": "native_feature_axes_2",
+              "diagnostic": "no-strict-star-kernel-found",
+              "failed_piece_tag": 8,
+              "pieces": 440,
+              "interfaces": 1034,
+              "work": 118705,
+              "seconds": 5.3531951,
+              "surface_deflection": 0.07712832451357933
+            },
+            {
+              "policy": "cartesian_thirds",
+              "diagnostic": "no-strict-star-kernel-found",
+              "failed_piece_tag": 2,
+              "pieces": 29,
+              "interfaces": 57,
+              "work": 248671,
+              "seconds": 1.7181219,
+              "surface_deflection": 0.07712832451357933
+            },
+            {
+              "policy": "cartesian_fifths",
+              "diagnostic": "no-strict-star-kernel-found",
+              "failed_piece_tag": 35,
+              "pieces": 136,
+              "interfaces": 292,
+              "work": 530273,
+              "seconds": 3.7624335,
+              "surface_deflection": 0.07712832451357933
+            }
+          ],
+          "uniform_cylinder": false,
+          "uniform_circular": false,
+          "profiled_volume": false,
+          "minimum_section_nodes": 0,
+          "maximum_section_nodes": 0,
+          "minimum_axial_spacing": 0,
+          "maximum_axial_spacing": 0,
+          "maximum_axial_growth": 1,
+          "chord_error_bound": 0
+        }
+      ],
+      "original_topology_context": {
+        "input_sha256": "6c27b3a305fc980550aadb26023d1cc7c3dc884a487a3fbde730a64d7e5d4b16",
+        "native_imported": true,
+        "native_import_reason": "none",
+        "native_validation": null,
+        "solid_count": 1,
+        "face_count": 49,
+        "face_kinds": {
+          "cylinder": 23,
+          "plane": 10,
+          "torus": 16
+        },
+        "free_face_tags": [],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "cylinder": 23,
+              "plane": 10,
+              "torus": 16
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [],
+        "survey_returncode": 0,
+        "survey_wall_seconds": 0.4270632000043406
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00002727/00002727_98d8f78b1bb5495f9a193852_step_013.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0037-00-35ab25c2/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0037-00-35ab25c2",
+      "stdout": null,
+      "stderr": "Native CAD mesh: budget_exceeded\r\n"
+    },
+    {
+      "case_id": "00003636",
+      "source_path": "00003636/00003636_3b2ec9d56c264f4b8b7f9c84_step_000.step",
+      "input_sha256": "14a377f24493cb3f490e050c2581eeff006cbe864179efdc7806255bdc89873d",
+      "top_level_outcome": "invalid-geometry",
+      "top_level_native_reason": "invalid-shape",
+      "returncode": 3,
+      "timed_out": false,
+      "wall_seconds": 0.45546140000078594,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 35930112,
+      "mesh_published": false,
+      "archive_published": false,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "free_faces_outside_solids",
+      "observed_mechanisms": [
+        "Native import returned invalid-shape.",
+        "Independent raw BRep validity passes, but 4 original faces are outside every solid; solid-only import refuses them."
+      ],
+      "uncertainty": [
+        "This is a source-representation/import contract limitation, not evidence that the raw BRep fails OCCT validity."
+      ],
+      "all_native_body_receipts": [],
+      "original_topology_context": {
+        "input_sha256": "14a377f24493cb3f490e050c2581eeff006cbe864179efdc7806255bdc89873d",
+        "native_imported": false,
+        "native_import_reason": "invalid-shape",
+        "native_validation": {
+          "valid": true,
+          "issues": []
+        },
+        "solid_count": 14,
+        "face_count": 200,
+        "face_kinds": {
+          "bspline": 12,
+          "cone": 13,
+          "cylinder": 44,
+          "extrusion": 11,
+          "offset": 1,
+          "plane": 108,
+          "revolution": 1,
+          "torus": 10
+        },
+        "free_face_tags": [
+          46,
+          93,
+          94,
+          95
+        ],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "cylinder": 6,
+              "extrusion": 2,
+              "plane": 28
+            }
+          },
+          {
+            "tag": 2,
+            "face_kinds": {
+              "extrusion": 2
+            }
+          },
+          {
+            "tag": 3,
+            "face_kinds": {
+              "cylinder": 3,
+              "plane": 3,
+              "torus": 1
+            }
+          },
+          {
+            "tag": 4,
+            "face_kinds": {
+              "cone": 9,
+              "cylinder": 9,
+              "plane": 7
+            }
+          },
+          {
+            "tag": 5,
+            "face_kinds": {
+              "bspline": 4,
+              "offset": 1,
+              "plane": 2
+            }
+          },
+          {
+            "tag": 6,
+            "face_kinds": {
+              "cylinder": 2,
+              "plane": 4,
+              "torus": 1
+            }
+          },
+          {
+            "tag": 7,
+            "face_kinds": {
+              "cone": 1,
+              "cylinder": 2,
+              "plane": 4
+            }
+          },
+          {
+            "tag": 8,
+            "face_kinds": {
+              "bspline": 1,
+              "cylinder": 8,
+              "extrusion": 4,
+              "plane": 35
+            }
+          },
+          {
+            "tag": 9,
+            "face_kinds": {
+              "extrusion": 2
+            }
+          },
+          {
+            "tag": 10,
+            "face_kinds": {
+              "bspline": 1,
+              "extrusion": 1,
+              "plane": 7
+            }
+          },
+          {
+            "tag": 11,
+            "face_kinds": {
+              "cone": 2,
+              "cylinder": 3,
+              "plane": 2
+            }
+          },
+          {
+            "tag": 12,
+            "face_kinds": {
+              "bspline": 3,
+              "cone": 1,
+              "cylinder": 9,
+              "plane": 10,
+              "torus": 6
+            }
+          },
+          {
+            "tag": 13,
+            "face_kinds": {
+              "cylinder": 1,
+              "plane": 3,
+              "torus": 1
+            }
+          },
+          {
+            "tag": 14,
+            "face_kinds": {
+              "cylinder": 1,
+              "plane": 3,
+              "torus": 1
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [
+          {
+            "body_a": 1,
+            "body_b": 2,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 2,
+            "common_done": true,
+            "common_volume": 0,
+            "common_area": 0,
+            "common_solids": 0,
+            "common_faces": 0,
+            "common_edges": 0,
+            "common_vertices": 0
+          },
+          {
+            "body_a": 3,
+            "body_b": 4,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 14,
+            "common_done": true,
+            "common_volume": 0,
+            "common_area": 0,
+            "common_solids": 0,
+            "common_faces": 0,
+            "common_edges": 0,
+            "common_vertices": 0
+          },
+          {
+            "body_a": 1,
+            "body_b": 5,
+            "distance_done": true,
+            "minimum_distance": 3.607496196309696,
+            "inner_solution": false,
+            "solutions": 1
+          },
+          {
+            "body_a": 4,
+            "body_b": 5,
+            "distance_done": true,
+            "minimum_distance": 18.795088436780592,
+            "inner_solution": false,
+            "solutions": 1
+          },
+          {
+            "body_a": 4,
+            "body_b": 6,
+            "distance_done": true,
+            "minimum_distance": 9.698054378769504,
+            "inner_solution": false,
+            "solutions": 2
+          },
+          {
+            "body_a": 5,
+            "body_b": 6,
+            "distance_done": true,
+            "minimum_distance": 0.5557981895453824,
+            "inner_solution": false,
+            "solutions": 3
+          },
+          {
+            "body_a": 1,
+            "body_b": 7,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": true,
+            "solutions": 1,
+            "common_done": true,
+            "common_volume": 140.99417581006435,
+            "common_area": 185.5202213802738,
+            "common_solids": 1,
+            "common_faces": 10,
+            "common_edges": 24,
+            "common_vertices": 16
+          },
+          {
+            "body_a": 4,
+            "body_b": 7,
+            "distance_done": true,
+            "minimum_distance": 9.69645753049916,
+            "inner_solution": false,
+            "solutions": 3
+          },
+          {
+            "body_a": 5,
+            "body_b": 7,
+            "distance_done": true,
+            "minimum_distance": 0.39300866879774277,
+            "inner_solution": false,
+            "solutions": 1
+          },
+          {
+            "body_a": 6,
+            "body_b": 7,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 4,
+            "common_done": true,
+            "common_volume": 0,
+            "common_area": 0,
+            "common_solids": 0,
+            "common_faces": 0,
+            "common_edges": 0,
+            "common_vertices": 0
+          },
+          {
+            "body_a": 1,
+            "body_b": 8,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 72,
+            "common_done": true,
+            "common_volume": 0,
+            "common_area": 0,
+            "common_solids": 0,
+            "common_faces": 0,
+            "common_edges": 0,
+            "common_vertices": 0
+          },
+          {
+            "body_a": 2,
+            "body_b": 8,
+            "distance_done": true,
+            "minimum_distance": 1.2560739669470201e-15,
+            "inner_solution": false,
+            "solutions": 5,
+            "common_done": true,
+            "common_volume": 0,
+            "common_area": 0,
+            "common_solids": 0,
+            "common_faces": 0,
+            "common_edges": 0,
+            "common_vertices": 0
+          },
+          {
+            "body_a": 4,
+            "body_b": 8,
+            "distance_done": true,
+            "minimum_distance": 3.574022324755783,
+            "inner_solution": false,
+            "solutions": 6
+          },
+          {
+            "body_a": 5,
+            "body_b": 8,
+            "distance_done": true,
+            "minimum_distance": 0.654149746792856,
+            "inner_solution": false,
+            "solutions": 1
+          },
+          {
+            "body_a": 6,
+            "body_b": 8,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 26,
+            "common_done": true,
+            "common_volume": 0,
+            "common_area": 0,
+            "common_solids": 0,
+            "common_faces": 0,
+            "common_edges": 0,
+            "common_vertices": 0
+          },
+          {
+            "body_a": 7,
+            "body_b": 8,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 50,
+            "common_done": true,
+            "common_volume": 1011.5438311985284,
+            "common_area": 970.5939446242262,
+            "common_solids": 2,
+            "common_faces": 21,
+            "common_edges": 51,
+            "common_vertices": 34
+          },
+          {
+            "body_a": 1,
+            "body_b": 9,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 4,
+            "common_done": true,
+            "common_volume": 0,
+            "common_area": 0,
+            "common_solids": 0,
+            "common_faces": 0,
+            "common_edges": 0,
+            "common_vertices": 0
+          },
+          {
+            "body_a": 8,
+            "body_b": 9,
+            "distance_done": true,
+            "minimum_distance": 1.2560739669470201e-15,
+            "inner_solution": false,
+            "solutions": 4,
+            "common_done": true,
+            "common_volume": 0,
+            "common_area": 0,
+            "common_solids": 0,
+            "common_faces": 0,
+            "common_edges": 0,
+            "common_vertices": 0
+          },
+          {
+            "body_a": 1,
+            "body_b": 10,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": true,
+            "solutions": 1,
+            "common_done": true,
+            "common_volume": 547.6476268712165,
+            "common_area": 689.8511751097989,
+            "common_solids": 1,
+            "common_faces": 12,
+            "common_edges": 30,
+            "common_vertices": 20
+          },
+          {
+            "body_a": 4,
+            "body_b": 10,
+            "distance_done": true,
+            "minimum_distance": 3.57402232475579,
+            "inner_solution": false,
+            "solutions": 7
+          },
+          {
+            "body_a": 5,
+            "body_b": 10,
+            "distance_done": true,
+            "minimum_distance": 1.1451042016157567,
+            "inner_solution": false,
+            "solutions": 1
+          },
+          {
+            "body_a": 6,
+            "body_b": 10,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 9,
+            "common_done": true,
+            "common_volume": 0,
+            "common_area": 0,
+            "common_solids": 0,
+            "common_faces": 0,
+            "common_edges": 0,
+            "common_vertices": 0
+          },
+          {
+            "body_a": 7,
+            "body_b": 10,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 19,
+            "common_done": true,
+            "common_volume": 221.50581860372873,
+            "common_area": 231.0217499274851,
+            "common_solids": 1,
+            "common_faces": 8,
+            "common_edges": 18,
+            "common_vertices": 12
+          },
+          {
+            "body_a": 8,
+            "body_b": 10,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": true,
+            "solutions": 1,
+            "common_done": true,
+            "common_volume": 507.07631071751484,
+            "common_area": 712.5253644248008,
+            "common_solids": 1,
+            "common_faces": 10,
+            "common_edges": 25,
+            "common_vertices": 17
+          },
+          {
+            "body_a": 1,
+            "body_b": 12,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": true,
+            "solutions": 1,
+            "common_done": true,
+            "common_volume": 1796.7739684982976,
+            "common_area": 2074.4683291251754,
+            "common_solids": 1,
+            "common_faces": 30,
+            "common_edges": 81,
+            "common_vertices": 53
+          },
+          {
+            "body_a": 2,
+            "body_b": 12,
+            "distance_done": true,
+            "minimum_distance": 2.9184347056502835,
+            "inner_solution": false,
+            "solutions": 1
+          },
+          {
+            "body_a": 4,
+            "body_b": 12,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 15,
+            "common_done": true,
+            "common_volume": 0,
+            "common_area": 0,
+            "common_solids": 0,
+            "common_faces": 0,
+            "common_edges": 0,
+            "common_vertices": 0
+          },
+          {
+            "body_a": 5,
+            "body_b": 12,
+            "distance_done": true,
+            "minimum_distance": 14.375892961360826,
+            "inner_solution": false,
+            "solutions": 1
+          },
+          {
+            "body_a": 6,
+            "body_b": 12,
+            "distance_done": true,
+            "minimum_distance": 5.820589947365668,
+            "inner_solution": false,
+            "solutions": 1
+          },
+          {
+            "body_a": 7,
+            "body_b": 12,
+            "distance_done": true,
+            "minimum_distance": 4.616457530499159,
+            "inner_solution": false,
+            "solutions": 1
+          },
+          {
+            "body_a": 8,
+            "body_b": 12,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": true,
+            "solutions": 1,
+            "common_done": true,
+            "common_volume": 2942.3028149448346,
+            "common_area": 2654.696862572068,
+            "common_solids": 1,
+            "common_faces": 8,
+            "common_edges": 15,
+            "common_vertices": 10
+          },
+          {
+            "body_a": 9,
+            "body_b": 12,
+            "distance_done": true,
+            "minimum_distance": 2.178886410580401,
+            "inner_solution": false,
+            "solutions": 1
+          },
+          {
+            "body_a": 10,
+            "body_b": 12,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": true,
+            "solutions": 1,
+            "common_done": true,
+            "common_volume": 311.52480522266563,
+            "common_area": 433.30963816954,
+            "common_solids": 1,
+            "common_faces": 7,
+            "common_edges": 16,
+            "common_vertices": 11
+          },
+          {
+            "body_a": 11,
+            "body_b": 12,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": true,
+            "solutions": 1,
+            "common_done": true,
+            "common_volume": 2496.936683507072,
+            "common_area": 1778.4820281417428,
+            "common_solids": 1,
+            "common_faces": 13,
+            "common_edges": 32,
+            "common_vertices": 21
+          },
+          {
+            "body_a": 4,
+            "body_b": 13,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 4,
+            "common_done": true,
+            "common_volume": 0,
+            "common_area": 0,
+            "common_solids": 0,
+            "common_faces": 0,
+            "common_edges": 0,
+            "common_vertices": 0
+          },
+          {
+            "body_a": 11,
+            "body_b": 13,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": true,
+            "solutions": 1,
+            "common_done": true,
+            "common_volume": 702.6513264263326,
+            "common_area": 584.2174010272305,
+            "common_solids": 1,
+            "common_faces": 7,
+            "common_edges": 15,
+            "common_vertices": 10
+          },
+          {
+            "body_a": 12,
+            "body_b": 13,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 17,
+            "common_done": true,
+            "common_volume": 0,
+            "common_area": 0,
+            "common_solids": 0,
+            "common_faces": 0,
+            "common_edges": 0,
+            "common_vertices": 0
+          },
+          {
+            "body_a": 1,
+            "body_b": 14,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 6,
+            "common_done": true,
+            "common_volume": 380.50255517065295,
+            "common_area": 452.8523874104791,
+            "common_solids": 1,
+            "common_faces": 5,
+            "common_edges": 9,
+            "common_vertices": 6
+          },
+          {
+            "body_a": 4,
+            "body_b": 14,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 4,
+            "common_done": true,
+            "common_volume": 0,
+            "common_area": 0,
+            "common_solids": 0,
+            "common_faces": 0,
+            "common_edges": 0,
+            "common_vertices": 0
+          },
+          {
+            "body_a": 5,
+            "body_b": 14,
+            "distance_done": true,
+            "minimum_distance": 15.410724237671047,
+            "inner_solution": false,
+            "solutions": 3
+          },
+          {
+            "body_a": 6,
+            "body_b": 14,
+            "distance_done": true,
+            "minimum_distance": 9.771206965941994,
+            "inner_solution": false,
+            "solutions": 2
+          },
+          {
+            "body_a": 7,
+            "body_b": 14,
+            "distance_done": true,
+            "minimum_distance": 8.518364859614765,
+            "inner_solution": false,
+            "solutions": 2
+          },
+          {
+            "body_a": 8,
+            "body_b": 14,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 9,
+            "common_done": true,
+            "common_volume": 0,
+            "common_area": 0,
+            "common_solids": 0,
+            "common_faces": 0,
+            "common_edges": 0,
+            "common_vertices": 0
+          },
+          {
+            "body_a": 10,
+            "body_b": 14,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 6,
+            "common_done": true,
+            "common_volume": 474.5846304921953,
+            "common_area": 526.1294844495296,
+            "common_solids": 1,
+            "common_faces": 5,
+            "common_edges": 9,
+            "common_vertices": 6
+          },
+          {
+            "body_a": 12,
+            "body_b": 14,
+            "distance_done": true,
+            "minimum_distance": 0,
+            "inner_solution": false,
+            "solutions": 13,
+            "common_done": true,
+            "common_volume": 2.736743855591856,
+            "common_area": 22.737726795160217,
+            "common_solids": 1,
+            "common_faces": 4,
+            "common_edges": 7,
+            "common_vertices": 5
+          }
+        ],
+        "survey_returncode": 0,
+        "survey_wall_seconds": 50.84413930000301
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00003636/00003636_3b2ec9d56c264f4b8b7f9c84_step_000.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0038-00-9b6bd42d/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0038-00-9b6bd42d",
+      "stdout": null,
+      "stderr": "CAD import: invalid-shape\r\n"
+    },
+    {
+      "case_id": "00004545",
+      "source_path": "00004545/00004545_a9de53e862dd4ad197873cc0_step_007.step",
+      "input_sha256": "afda23c46dc1250535b6f5bbb467f5e982c999a15705f0fc55a1d0ab9c6f530d",
+      "top_level_outcome": "resource-limit",
+      "top_level_native_reason": "budget_exceeded",
+      "returncode": 4,
+      "timed_out": false,
+      "wall_seconds": 6.024960000002466,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 75968512,
+      "mesh_published": false,
+      "archive_published": false,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "bounded_kernel_search",
+      "observed_mechanisms": [
+        "Final cartesian_fifths split has 150 pieces; bounded strict-star search refuses piece 119.",
+        "Original-body star-volume diagnostic: no-strict-star-kernel-found."
+      ],
+      "uncertainty": [
+        "Top-level budget_exceeded may aggregate local partition/work admissions alongside later geometric/kernel refusals. It does not by itself prove exhaustion of the global 20M work cap, OS memory, or a valid-source impossibility.",
+        "NoKernel is a bounded proposal/search result, not a proof that the exact PLC kernel is empty or that another valid volume construction cannot succeed."
+      ],
+      "all_native_body_receipts": [
+        {
+          "solid_tag": 1,
+          "route": "native_surface_star",
+          "reason": "budget_exceeded",
+          "start_face_tag": -1,
+          "end_face_tag": -1,
+          "relative_volume_error": 0,
+          "boundary_node_error": 1.776573666601473e-15,
+          "boundary_sample_error": 0.019173557118422488,
+          "primitive_reason": "internal-error",
+          "planar_reason": "internal_error",
+          "native_surface_reason": "none",
+          "native_volume_reason": "no-strict-star-kernel-found",
+          "surface_deflection": 0.03844801685392894,
+          "surface_chord_error_limit": 0.09612004213482235,
+          "surface_triangles": 2686,
+          "surface_attempts": 1,
+          "native_surface_work": 330615,
+          "native_volume_work": 1193135,
+          "native_surface_seconds": 2.33727,
+          "native_volume_seconds": 0.7406794000000001,
+          "native_partition_seconds": 2.6755106,
+          "native_assembly_seconds": 0.008253400000000003,
+          "exact_surface_pairs": 21860,
+          "kernel_trials": 51,
+          "partition_reason": "no-strict-star-kernel-found",
+          "partition_policy": "cartesian_fifths",
+          "partition_attempts": 9,
+          "partition_pieces": 150,
+          "partition_interfaces": 320,
+          "partition_work": 40944,
+          "partition_volume_change": 4.067924053417657e-09,
+          "boundary_embedding_certified": false,
+          "contact_cylinder_reason": "not_attempted",
+          "contact_source_edge_tag": -1,
+          "contact_target_edge_tag": -1,
+          "contact_ring_nodes": 0,
+          "contact_cylinder_work": 0,
+          "box_contact_vertices_evaluated": 0,
+          "box_contact_work": 0,
+          "box_contact_maximum_endpoint_correction": 0,
+          "partition_attempt_reports": [
+            {
+              "policy": "cartesian_midplanes",
+              "diagnostic": "no-strict-star-kernel-found",
+              "failed_piece_tag": 1,
+              "pieces": 10,
+              "interfaces": 13,
+              "work": 148480,
+              "seconds": 0.6381064,
+              "surface_deflection": 0.03844801685392894
+            },
+            {
+              "policy": "coaxial_angular",
+              "diagnostic": "unsupported_policy",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1,
+              "seconds": 0.0578631,
+              "surface_deflection": 0.03844801685392894
+            },
+            {
+              "policy": "native_feature_axes_4",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1271,
+              "seconds": 0.0574331,
+              "surface_deflection": 0.03844801685392894
+            },
+            {
+              "policy": "native_feature_axes_8",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1275,
+              "seconds": 0.0582326,
+              "surface_deflection": 0.03844801685392894
+            },
+            {
+              "policy": "native_circular_feature_axes_4",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1271,
+              "seconds": 0.0587554,
+              "surface_deflection": 0.0006728402949437564
+            },
+            {
+              "policy": "native_circular_feature_axes_2",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1285,
+              "seconds": 0.0595835,
+              "surface_deflection": 0.0006728402949437564
+            },
+            {
+              "policy": "native_feature_axes_2",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1285,
+              "seconds": 0.0590943,
+              "surface_deflection": 0.03844801685392894
+            },
+            {
+              "policy": "cartesian_thirds",
+              "diagnostic": "no-strict-star-kernel-found",
+              "failed_piece_tag": 5,
+              "pieces": 38,
+              "interfaces": 68,
+              "work": 129144,
+              "seconds": 0.9277853,
+              "surface_deflection": 0.03844801685392894
+            },
+            {
+              "policy": "cartesian_fifths",
+              "diagnostic": "no-strict-star-kernel-found",
+              "failed_piece_tag": 119,
+              "pieces": 150,
+              "interfaces": 320,
+              "work": 590331,
+              "seconds": 2.8022026,
+              "surface_deflection": 0.03844801685392894
+            }
+          ],
+          "uniform_cylinder": false,
+          "uniform_circular": false,
+          "profiled_volume": false,
+          "minimum_section_nodes": 0,
+          "maximum_section_nodes": 0,
+          "minimum_axial_spacing": 0,
+          "maximum_axial_spacing": 0,
+          "maximum_axial_growth": 1,
+          "chord_error_bound": 0
+        }
+      ],
+      "original_topology_context": {
+        "input_sha256": "afda23c46dc1250535b6f5bbb467f5e982c999a15705f0fc55a1d0ab9c6f530d",
+        "native_imported": true,
+        "native_import_reason": "none",
+        "native_validation": null,
+        "solid_count": 1,
+        "face_count": 110,
+        "face_kinds": {
+          "bspline": 2,
+          "cone": 38,
+          "cylinder": 19,
+          "plane": 51
+        },
+        "free_face_tags": [],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "bspline": 2,
+              "cone": 38,
+              "cylinder": 19,
+              "plane": 51
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [],
+        "survey_returncode": 0,
+        "survey_wall_seconds": 0.3430170999999973
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00004545/00004545_a9de53e862dd4ad197873cc0_step_007.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0040-00-d3875417/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0040-00-d3875417",
+      "stdout": null,
+      "stderr": "Native CAD mesh: budget_exceeded\r\n"
+    },
+    {
+      "case_id": "00006363",
+      "source_path": "00006363/00006363_f91e32a0ca0848dab541db70_step_002.step",
+      "input_sha256": "927ce8cdd88c4be14810678f3af24f654173ef38b09ce392b42d2c9f6b7ce72e",
+      "top_level_outcome": "resource-limit",
+      "top_level_native_reason": "budget_exceeded",
+      "returncode": 4,
+      "timed_out": false,
+      "wall_seconds": 20.071944499999518,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 86700032,
+      "mesh_published": false,
+      "archive_published": false,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "bounded_kernel_search",
+      "observed_mechanisms": [
+        "Final cartesian_fifths split has 105 pieces; bounded strict-star search refuses piece 1.",
+        "Original-body star-volume diagnostic: boundary-genus-not-zero."
+      ],
+      "uncertainty": [
+        "Top-level budget_exceeded may aggregate local partition/work admissions alongside later geometric/kernel refusals. It does not by itself prove exhaustion of the global 20M work cap, OS memory, or a valid-source impossibility.",
+        "NoKernel is a bounded proposal/search result, not a proof that the exact PLC kernel is empty or that another valid volume construction cannot succeed."
+      ],
+      "all_native_body_receipts": [
+        {
+          "solid_tag": 1,
+          "route": "native_surface_star",
+          "reason": "budget_exceeded",
+          "start_face_tag": -1,
+          "end_face_tag": -1,
+          "relative_volume_error": 0,
+          "boundary_node_error": 0,
+          "boundary_sample_error": 0.05691039392173302,
+          "primitive_reason": "internal-error",
+          "planar_reason": "internal_error",
+          "native_surface_reason": "none",
+          "native_volume_reason": "boundary-genus-not-zero",
+          "surface_deflection": 0.31511902535391295,
+          "surface_chord_error_limit": 0.7877975633847824,
+          "surface_triangles": 3736,
+          "surface_attempts": 1,
+          "native_surface_work": 157993,
+          "native_volume_work": 199773,
+          "native_surface_seconds": 11.362957999999999,
+          "native_volume_seconds": 0.08315249999999999,
+          "native_partition_seconds": 7.8139398,
+          "native_assembly_seconds": 0.0007561,
+          "exact_surface_pairs": 0,
+          "kernel_trials": 0,
+          "partition_reason": "no-strict-star-kernel-found",
+          "partition_policy": "cartesian_fifths",
+          "partition_attempts": 9,
+          "partition_pieces": 105,
+          "partition_interfaces": 224,
+          "partition_work": 67642,
+          "partition_volume_change": 1.164171434281774e-07,
+          "boundary_embedding_certified": false,
+          "contact_cylinder_reason": "not_attempted",
+          "contact_source_edge_tag": -1,
+          "contact_target_edge_tag": -1,
+          "contact_ring_nodes": 0,
+          "contact_cylinder_work": 0,
+          "box_contact_vertices_evaluated": 0,
+          "box_contact_work": 0,
+          "box_contact_maximum_endpoint_correction": 0,
+          "partition_attempt_reports": [
+            {
+              "policy": "cartesian_midplanes",
+              "diagnostic": "boundary-genus-not-zero",
+              "failed_piece_tag": 1,
+              "pieces": 8,
+              "interfaces": 12,
+              "work": 42763,
+              "seconds": 1.8876685,
+              "surface_deflection": 0.31511902535391295
+            },
+            {
+              "policy": "coaxial_angular",
+              "diagnostic": "unsupported_policy",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1,
+              "seconds": 0.3956411,
+              "surface_deflection": 0.31511902535391295
+            },
+            {
+              "policy": "native_feature_axes_4",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1878,
+              "seconds": 0.4109589,
+              "surface_deflection": 0.31511902535391295
+            },
+            {
+              "policy": "native_feature_axes_8",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1494,
+              "seconds": 0.4007497,
+              "surface_deflection": 0.31511902535391295
+            },
+            {
+              "policy": "native_circular_feature_axes_4",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1878,
+              "seconds": 0.4057516,
+              "surface_deflection": 0.005514582943693476
+            },
+            {
+              "policy": "native_circular_feature_axes_2",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 2604,
+              "seconds": 0.4019014,
+              "surface_deflection": 0.005514582943693476
+            },
+            {
+              "policy": "native_feature_axes_2",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 2604,
+              "seconds": 0.3987474,
+              "surface_deflection": 0.31511902535391295
+            },
+            {
+              "policy": "cartesian_thirds",
+              "diagnostic": "no-strict-star-kernel-found",
+              "failed_piece_tag": 4,
+              "pieces": 63,
+              "interfaces": 122,
+              "work": 116810,
+              "seconds": 2.3586418,
+              "surface_deflection": 0.31511902535391295
+            },
+            {
+              "policy": "cartesian_fifths",
+              "diagnostic": "no-strict-star-kernel-found",
+              "failed_piece_tag": 1,
+              "pieces": 105,
+              "interfaces": 224,
+              "work": 104612,
+              "seconds": 2.8416806,
+              "surface_deflection": 0.31511902535391295
+            }
+          ],
+          "uniform_cylinder": false,
+          "uniform_circular": false,
+          "profiled_volume": false,
+          "minimum_section_nodes": 0,
+          "maximum_section_nodes": 0,
+          "minimum_axial_spacing": 0,
+          "maximum_axial_spacing": 0,
+          "maximum_axial_growth": 1,
+          "chord_error_bound": 0
+        }
+      ],
+      "original_topology_context": {
+        "input_sha256": "927ce8cdd88c4be14810678f3af24f654173ef38b09ce392b42d2c9f6b7ce72e",
+        "native_imported": true,
+        "native_import_reason": "none",
+        "native_validation": null,
+        "solid_count": 1,
+        "face_count": 179,
+        "face_kinds": {
+          "cylinder": 93,
+          "plane": 86
+        },
+        "free_face_tags": [],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "cylinder": 93,
+              "plane": 86
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [],
+        "survey_returncode": 0,
+        "survey_wall_seconds": 1.2594972000006237
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00006363/00006363_f91e32a0ca0848dab541db70_step_002.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0043-00-70ed1c94/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0043-00-70ed1c94",
+      "stdout": null,
+      "stderr": "Native CAD mesh: budget_exceeded\r\n"
+    },
+    {
+      "case_id": "00008181",
+      "source_path": "00008181/00008181_d0a04676bb3b46dfaba09434_step_020.step",
+      "input_sha256": "6fb7d9abb6848f811f95a1727849da541ec0a8a74dbe758a7712b64ee281543e",
+      "top_level_outcome": "resource-limit",
+      "top_level_native_reason": "budget_exceeded",
+      "returncode": 4,
+      "timed_out": false,
+      "wall_seconds": 17.673040100002254,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 98111488,
+      "mesh_published": false,
+      "archive_published": false,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "bounded_kernel_search",
+      "observed_mechanisms": [
+        "Final cartesian_fifths split has 116 pieces; bounded strict-star search refuses piece 2.",
+        "Original-body star-volume diagnostic: boundary-genus-not-zero."
+      ],
+      "uncertainty": [
+        "Top-level budget_exceeded may aggregate local partition/work admissions alongside later geometric/kernel refusals. It does not by itself prove exhaustion of the global 20M work cap, OS memory, or a valid-source impossibility.",
+        "NoKernel is a bounded proposal/search result, not a proof that the exact PLC kernel is empty or that another valid volume construction cannot succeed."
+      ],
+      "all_native_body_receipts": [
+        {
+          "solid_tag": 1,
+          "route": "native_surface_star",
+          "reason": "budget_exceeded",
+          "start_face_tag": -1,
+          "end_face_tag": -1,
+          "relative_volume_error": 0,
+          "boundary_node_error": 0,
+          "boundary_sample_error": 0.05593280920445994,
+          "primitive_reason": "internal-error",
+          "planar_reason": "internal_error",
+          "native_surface_reason": "none",
+          "native_volume_reason": "boundary-genus-not-zero",
+          "surface_deflection": 0.113588113334669,
+          "surface_chord_error_limit": 0.2839702833366725,
+          "surface_triangles": 4878,
+          "surface_attempts": 1,
+          "native_surface_work": 209644,
+          "native_volume_work": 489393,
+          "native_surface_seconds": 10.409966899999999,
+          "native_volume_seconds": 0.18524419999999997,
+          "native_partition_seconds": 6.535325,
+          "native_assembly_seconds": 0.0003996,
+          "exact_surface_pairs": 0,
+          "kernel_trials": 0,
+          "partition_reason": "no-strict-star-kernel-found",
+          "partition_policy": "cartesian_fifths",
+          "partition_attempts": 10,
+          "partition_pieces": 116,
+          "partition_interfaces": 268,
+          "partition_work": 103487,
+          "partition_volume_change": 3.4002048659838945e-10,
+          "boundary_embedding_certified": false,
+          "contact_cylinder_reason": "not_attempted",
+          "contact_source_edge_tag": -1,
+          "contact_target_edge_tag": -1,
+          "contact_ring_nodes": 0,
+          "contact_cylinder_work": 0,
+          "box_contact_vertices_evaluated": 0,
+          "box_contact_work": 0,
+          "box_contact_maximum_endpoint_correction": 0,
+          "partition_attempt_reports": [
+            {
+              "policy": "cartesian_midplanes",
+              "diagnostic": "no-strict-star-kernel-found",
+              "failed_piece_tag": 1,
+              "pieces": 8,
+              "interfaces": 20,
+              "work": 200853,
+              "seconds": 0.8980597,
+              "surface_deflection": 0.113588113334669
+            },
+            {
+              "policy": "coaxial_angular",
+              "diagnostic": "unsupported_policy",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1,
+              "seconds": 0.1508345,
+              "surface_deflection": 0.113588113334669
+            },
+            {
+              "policy": "native_feature_axes_4",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1499,
+              "seconds": 0.1488057,
+              "surface_deflection": 0.113588113334669
+            },
+            {
+              "policy": "native_feature_axes_8",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1682,
+              "seconds": 0.1616701,
+              "surface_deflection": 0.113588113334669
+            },
+            {
+              "policy": "native_circular_feature_axes_4",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1499,
+              "seconds": 0.1670688,
+              "surface_deflection": 0.0019877919833567077
+            },
+            {
+              "policy": "native_circular_feature_axes_2",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1294,
+              "seconds": 0.159874,
+              "surface_deflection": 0.0019877919833567077
+            },
+            {
+              "policy": "native_feature_axes_2",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1294,
+              "seconds": 0.1484894,
+              "surface_deflection": 0.113588113334669
+            },
+            {
+              "policy": "cartesian_thirds",
+              "diagnostic": "no-strict-star-kernel-found",
+              "failed_piece_tag": 1,
+              "pieces": 27,
+              "interfaces": 54,
+              "work": 170315,
+              "seconds": 1.3980034,
+              "surface_deflection": 0.113588113334669
+            },
+            {
+              "policy": "cartesian_fifths",
+              "diagnostic": "open_boundary",
+              "failed_piece_tag": 2,
+              "pieces": 116,
+              "interfaces": 268,
+              "work": 75544,
+              "seconds": 2.5976797,
+              "surface_deflection": 0.113588113334669
+            },
+            {
+              "policy": "cartesian_fifths",
+              "diagnostic": "no-strict-star-kernel-found",
+              "failed_piece_tag": 2,
+              "pieces": 116,
+              "interfaces": 268,
+              "work": 153177,
+              "seconds": 2.5704987,
+              "surface_deflection": 0.0567940566673345
+            }
+          ],
+          "uniform_cylinder": false,
+          "uniform_circular": false,
+          "profiled_volume": false,
+          "minimum_section_nodes": 0,
+          "maximum_section_nodes": 0,
+          "minimum_axial_spacing": 0,
+          "maximum_axial_spacing": 0,
+          "maximum_axial_growth": 1,
+          "chord_error_bound": 0
+        }
+      ],
+      "original_topology_context": {
+        "input_sha256": "6fb7d9abb6848f811f95a1727849da541ec0a8a74dbe758a7712b64ee281543e",
+        "native_imported": true,
+        "native_import_reason": "none",
+        "native_validation": null,
+        "solid_count": 1,
+        "face_count": 229,
+        "face_kinds": {
+          "cone": 4,
+          "cylinder": 113,
+          "plane": 112
+        },
+        "free_face_tags": [],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "cone": 4,
+              "cylinder": 113,
+              "plane": 112
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [],
+        "survey_returncode": 0,
+        "survey_wall_seconds": 0.8144012000047951
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00008181/00008181_d0a04676bb3b46dfaba09434_step_020.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0048-00-f154eb30/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0048-00-f154eb30",
+      "stdout": null,
+      "stderr": "Native CAD mesh: budget_exceeded\r\n"
+    },
+    {
+      "case_id": "00009090",
+      "source_path": "00009090/00009090_798fb3ffbb0745d7a3c0e863_step_007.step",
+      "input_sha256": "607cd81b12b93fdf28fcd3d71d2b6d54d92cc99ca004a00b8447fe0ba78d2bb0",
+      "top_level_outcome": "resource-limit",
+      "top_level_native_reason": "budget_exceeded",
+      "returncode": 4,
+      "timed_out": false,
+      "wall_seconds": 10.990451300000132,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 123428864,
+      "mesh_published": false,
+      "archive_published": false,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "split_conservation_guard",
+      "observed_mechanisms": [
+        "Final cartesian_fifths native split reports volume_mismatch; measured relative native CAD volume change 4.37915832124e-05 exceeds the native split guard 1e-6.",
+        "Original-body star-volume diagnostic: boundary-genus-not-zero."
+      ],
+      "uncertainty": [
+        "Top-level budget_exceeded may aggregate local partition/work admissions alongside later geometric/kernel refusals. It does not by itself prove exhaustion of the global 20M work cap, OS memory, or a valid-source impossibility."
+      ],
+      "all_native_body_receipts": [
+        {
+          "solid_tag": 1,
+          "route": "native_surface_star",
+          "reason": "budget_exceeded",
+          "start_face_tag": -1,
+          "end_face_tag": -1,
+          "relative_volume_error": 0,
+          "boundary_node_error": 3.552713678800501e-15,
+          "boundary_sample_error": 0.14217246518721338,
+          "primitive_reason": "internal-error",
+          "planar_reason": "internal_error",
+          "native_surface_reason": "none",
+          "native_volume_reason": "boundary-genus-not-zero",
+          "surface_deflection": 0.30275918364158233,
+          "surface_chord_error_limit": 0.7568979591039557,
+          "surface_triangles": 1320,
+          "surface_attempts": 1,
+          "native_surface_work": 36807,
+          "native_volume_work": 17140,
+          "native_surface_seconds": 1.8444455,
+          "native_volume_seconds": 0.0048049,
+          "native_partition_seconds": 8.8623662,
+          "native_assembly_seconds": 0,
+          "exact_surface_pairs": 0,
+          "kernel_trials": 0,
+          "partition_reason": "volume_mismatch",
+          "partition_policy": "cartesian_fifths",
+          "partition_attempts": 9,
+          "partition_pieces": 150,
+          "partition_interfaces": 0,
+          "partition_work": 68655,
+          "partition_volume_change": 4.379158321235193e-05,
+          "boundary_embedding_certified": false,
+          "contact_cylinder_reason": "not_attempted",
+          "contact_source_edge_tag": -1,
+          "contact_target_edge_tag": -1,
+          "contact_ring_nodes": 0,
+          "contact_cylinder_work": 0,
+          "box_contact_vertices_evaluated": 0,
+          "box_contact_work": 0,
+          "box_contact_maximum_endpoint_correction": 0,
+          "partition_attempt_reports": [
+            {
+              "policy": "cartesian_midplanes",
+              "diagnostic": "invalid_result",
+              "failed_piece_tag": -1,
+              "pieces": 9,
+              "interfaces": 0,
+              "work": 3264,
+              "seconds": 0.3888694,
+              "surface_deflection": 0.30275918364158233
+            },
+            {
+              "policy": "coaxial_angular",
+              "diagnostic": "unsupported_policy",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1,
+              "seconds": 0.043524,
+              "surface_deflection": 0.30275918364158233
+            },
+            {
+              "policy": "native_feature_axes_4",
+              "diagnostic": "invalid_result",
+              "failed_piece_tag": -1,
+              "pieces": 321,
+              "interfaces": 0,
+              "work": 14635,
+              "seconds": 1.7258621,
+              "surface_deflection": 0.30275918364158233
+            },
+            {
+              "policy": "native_feature_axes_8",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1700,
+              "seconds": 0.0485804,
+              "surface_deflection": 0.30275918364158233
+            },
+            {
+              "policy": "native_circular_feature_axes_4",
+              "diagnostic": "invalid_result",
+              "failed_piece_tag": -1,
+              "pieces": 321,
+              "interfaces": 0,
+              "work": 15602,
+              "seconds": 1.7193291,
+              "surface_deflection": 0.0052982857137276905
+            },
+            {
+              "policy": "native_circular_feature_axes_2",
+              "diagnostic": "invalid_result",
+              "failed_piece_tag": -1,
+              "pieces": 145,
+              "interfaces": 0,
+              "work": 8975,
+              "seconds": 0.9501317,
+              "surface_deflection": 0.0052982857137276905
+            },
+            {
+              "policy": "native_feature_axes_2",
+              "diagnostic": "invalid_result",
+              "failed_piece_tag": -1,
+              "pieces": 145,
+              "interfaces": 0,
+              "work": 8610,
+              "seconds": 0.9407564,
+              "surface_deflection": 0.30275918364158233
+            },
+            {
+              "policy": "cartesian_thirds",
+              "diagnostic": "volume_mismatch",
+              "failed_piece_tag": -1,
+              "pieces": 39,
+              "interfaces": 0,
+              "work": 5831,
+              "seconds": 0.9350424,
+              "surface_deflection": 0.30275918364158233
+            },
+            {
+              "policy": "cartesian_fifths",
+              "diagnostic": "volume_mismatch",
+              "failed_piece_tag": -1,
+              "pieces": 150,
+              "interfaces": 0,
+              "work": 10037,
+              "seconds": 2.1106456,
+              "surface_deflection": 0.30275918364158233
+            }
+          ],
+          "uniform_cylinder": false,
+          "uniform_circular": false,
+          "profiled_volume": false,
+          "minimum_section_nodes": 0,
+          "maximum_section_nodes": 0,
+          "minimum_axial_spacing": 0,
+          "maximum_axial_spacing": 0,
+          "maximum_axial_growth": 1,
+          "chord_error_bound": 0
+        }
+      ],
+      "original_topology_context": {
+        "input_sha256": "607cd81b12b93fdf28fcd3d71d2b6d54d92cc99ca004a00b8447fe0ba78d2bb0",
+        "native_imported": true,
+        "native_import_reason": "none",
+        "native_validation": null,
+        "solid_count": 1,
+        "face_count": 45,
+        "face_kinds": {
+          "cylinder": 9,
+          "extrusion": 8,
+          "plane": 28
+        },
+        "free_face_tags": [],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "cylinder": 9,
+              "extrusion": 8,
+              "plane": 28
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [],
+        "survey_returncode": 0,
+        "survey_wall_seconds": 0.3550963000016054
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00009090/00009090_798fb3ffbb0745d7a3c0e863_step_007.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0049-00-983c5e6f/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0049-00-983c5e6f",
+      "stdout": null,
+      "stderr": "Native CAD mesh: budget_exceeded\r\n"
+    },
+    {
+      "case_id": "00009999",
+      "source_path": "00009999/00009999_003df34c1a7b4dc2bd43c5f4_step_000.step",
+      "input_sha256": "18a77d5a24139a203ba4fa2e003d376d2797814485a41b284e5cb12f6c47fa18",
+      "top_level_outcome": "resource-limit",
+      "top_level_native_reason": "budget_exceeded",
+      "returncode": 4,
+      "timed_out": false,
+      "wall_seconds": 41.18177580000338,
+      "timeout_seconds": 240.0,
+      "peak_process_working_set_bytes": 237916160,
+      "mesh_published": false,
+      "archive_published": false,
+      "output_exists": false,
+      "unexpected_output": false,
+      "diagnostic_group": "bounded_kernel_search",
+      "observed_mechanisms": [
+        "Final cartesian_fifths split has 102 pieces; bounded strict-star search refuses piece 56.",
+        "Original-body star-volume diagnostic: no-strict-star-kernel-found."
+      ],
+      "uncertainty": [
+        "Top-level budget_exceeded may aggregate local partition/work admissions alongside later geometric/kernel refusals. It does not by itself prove exhaustion of the global 20M work cap, OS memory, or a valid-source impossibility.",
+        "NoKernel is a bounded proposal/search result, not a proof that the exact PLC kernel is empty or that another valid volume construction cannot succeed."
+      ],
+      "all_native_body_receipts": [
+        {
+          "solid_tag": 1,
+          "route": "native_surface_star",
+          "reason": "budget_exceeded",
+          "start_face_tag": -1,
+          "end_face_tag": -1,
+          "relative_volume_error": 0,
+          "boundary_node_error": 1.0048591735576161e-14,
+          "boundary_sample_error": 0.1314009706734562,
+          "primitive_reason": "internal-error",
+          "planar_reason": "internal_error",
+          "native_surface_reason": "none",
+          "native_volume_reason": "no-strict-star-kernel-found",
+          "surface_deflection": 0.0576281184527137,
+          "surface_chord_error_limit": 0.14407029613178424,
+          "surface_triangles": 4662,
+          "surface_attempts": 1,
+          "native_surface_work": 758701,
+          "native_volume_work": 3217408,
+          "native_surface_seconds": 11.171209,
+          "native_volume_seconds": 1.7208174,
+          "native_partition_seconds": 27.929488999999997,
+          "native_assembly_seconds": 0.009115300000000002,
+          "exact_surface_pairs": 38132,
+          "kernel_trials": 51,
+          "partition_reason": "no-strict-star-kernel-found",
+          "partition_policy": "cartesian_fifths",
+          "partition_attempts": 10,
+          "partition_pieces": 102,
+          "partition_interfaces": 189,
+          "partition_work": 85440,
+          "partition_volume_change": 1.594230133082251e-09,
+          "boundary_embedding_certified": false,
+          "contact_cylinder_reason": "not_attempted",
+          "contact_source_edge_tag": -1,
+          "contact_target_edge_tag": -1,
+          "contact_ring_nodes": 0,
+          "contact_cylinder_work": 0,
+          "box_contact_vertices_evaluated": 0,
+          "box_contact_work": 0,
+          "box_contact_maximum_endpoint_correction": 0,
+          "partition_attempt_reports": [
+            {
+              "policy": "cartesian_midplanes",
+              "diagnostic": "no-strict-star-kernel-found",
+              "failed_piece_tag": 1,
+              "pieces": 14,
+              "interfaces": 22,
+              "work": 126105,
+              "seconds": 0.649496,
+              "surface_deflection": 0.0576281184527137
+            },
+            {
+              "policy": "coaxial_angular",
+              "diagnostic": "unsupported_policy",
+              "failed_piece_tag": -1,
+              "pieces": 0,
+              "interfaces": 0,
+              "work": 1,
+              "seconds": 0.0094761,
+              "surface_deflection": 0.0576281184527137
+            },
+            {
+              "policy": "native_feature_axes_4",
+              "diagnostic": "no-strict-star-kernel-found",
+              "failed_piece_tag": 3,
+              "pieces": 251,
+              "interfaces": 483,
+              "work": 72347,
+              "seconds": 5.6039085,
+              "surface_deflection": 0.0576281184527137
+            },
+            {
+              "policy": "native_feature_axes_4_extended",
+              "diagnostic": "no-strict-star-kernel-found",
+              "failed_piece_tag": 3,
+              "pieces": 251,
+              "interfaces": 483,
+              "work": 214907,
+              "seconds": 5.2485373,
+              "surface_deflection": 0.0576281184527137
+            },
+            {
+              "policy": "native_feature_axes_8",
+              "diagnostic": "partition-budget",
+              "failed_piece_tag": -1,
+              "pieces": 612,
+              "interfaces": 0,
+              "work": 554,
+              "seconds": 2.6258776,
+              "surface_deflection": 0.0576281184527137
+            },
+            {
+              "policy": "native_circular_feature_axes_4",
+              "diagnostic": "work-budget",
+              "failed_piece_tag": 3,
+              "pieces": 315,
+              "interfaces": 611,
+              "work": 741562,
+              "seconds": 8.9508953,
+              "surface_deflection": 0.0010084920729224896
+            },
+            {
+              "policy": "native_circular_feature_axes_2",
+              "diagnostic": "work-budget",
+              "failed_piece_tag": 3,
+              "pieces": 144,
+              "interfaces": 280,
+              "work": 818364,
+              "seconds": 7.0741181,
+              "surface_deflection": 0.0010084920729224896
+            },
+            {
+              "policy": "native_feature_axes_2",
+              "diagnostic": "no-strict-star-kernel-found",
+              "failed_piece_tag": 3,
+              "pieces": 112,
+              "interfaces": 216,
+              "work": 91678,
+              "seconds": 2.7874044,
+              "surface_deflection": 0.0576281184527137
+            },
+            {
+              "policy": "cartesian_thirds",
+              "diagnostic": "no-strict-star-kernel-found",
+              "failed_piece_tag": 1,
+              "pieces": 30,
+              "interfaces": 49,
+              "work": 58445,
+              "seconds": 1.2966003,
+              "surface_deflection": 0.0576281184527137
+            },
+            {
+              "policy": "cartesian_fifths",
+              "diagnostic": "no-strict-star-kernel-found",
+              "failed_piece_tag": 56,
+              "pieces": 102,
+              "interfaces": 189,
+              "work": 702981,
+              "seconds": 5.8703065,
+              "surface_deflection": 0.0576281184527137
+            }
+          ],
+          "uniform_cylinder": false,
+          "uniform_circular": false,
+          "profiled_volume": false,
+          "minimum_section_nodes": 0,
+          "maximum_section_nodes": 0,
+          "minimum_axial_spacing": 0,
+          "maximum_axial_spacing": 0,
+          "maximum_axial_growth": 1,
+          "chord_error_bound": 0
+        }
+      ],
+      "original_topology_context": {
+        "input_sha256": "18a77d5a24139a203ba4fa2e003d376d2797814485a41b284e5cb12f6c47fa18",
+        "native_imported": true,
+        "native_import_reason": "none",
+        "native_validation": null,
+        "solid_count": 1,
+        "face_count": 13,
+        "face_kinds": {
+          "cylinder": 5,
+          "plane": 5,
+          "torus": 3
+        },
+        "free_face_tags": [],
+        "body_face_kinds": [
+          {
+            "tag": 1,
+            "face_kinds": {
+              "cylinder": 5,
+              "plane": 5,
+              "torus": 3
+            }
+          }
+        ],
+        "bbox_overlapping_body_pairs": [],
+        "survey_returncode": 0,
+        "survey_wall_seconds": 0.1559830999976839
+      },
+      "command": [
+        "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+        "local-data/abc_0000_step_v00/00009999/00009999_003df34c1a7b4dc2bd43c5f4_step_000.step",
+        "1",
+        "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0050-00-2205251b/mesh.paacsmesh",
+        "--report-json",
+        "--size-factor",
+        "0.15",
+        "--threads",
+        "1",
+        "--max-file-bytes",
+        "67108864",
+        "--max-work",
+        "20000000",
+        "--max-nodes",
+        "200000",
+        "--max-cells",
+        "1000000",
+        "--max-bytes",
+        "134217728",
+        "--max-audit-bytes",
+        "134217728",
+        "--native-cad",
+        "--planar-recovery",
+        "--general-recovery",
+        "--separate-contact-bodies",
+        "--separate-matched-box-faces",
+        "--warning-quality",
+        "0.25"
+      ],
+      "run_directory": "runs\\0050-00-2205251b",
+      "stdout": null,
+      "stderr": "Native CAD mesh: budget_exceeded\r\n"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "evidence/local-2026-10-03/coverage-25/final-complete-screen/manifest.json",
+      "sha256": "2c8d4c37a1589e350ef7da789227e53bf6e82487f072513ca36bb8e076014419",
+      "bytes": 14558
+    },
+    {
+      "path": "evidence/local-2026-10-03/coverage-25/final-complete-screen/results.jsonl",
+      "sha256": "8252018beef210e064895bad724f79a45973caf2bfad35b97469364751693a0a",
+      "bytes": 360591
+    },
+    {
+      "path": "evidence/local-2026-10-03/coverage-25/taxonomy-complete.jsonl",
+      "sha256": "2d22746d5a1ae853d57aeeb3decb1e38604eaae944419a213993f3a1dc83d301",
+      "bytes": 5284419
+    },
+    {
+      "path": "evidence/local-2026-10-03/coverage-25/separate-box-contact-private/extra-candidate-topology/summary.json",
+      "sha256": "77ee2774e79f965575a863f6000e4195c9adc2247ff408da26e928ba7edc7959",
+      "bytes": 5306
+    },
+    {
+      "path": "evidence/local-2026-10-03/coverage-25/taxonomy-summary.md",
+      "sha256": "4121c88610b730ce6311dbaf77a4297aa2ed79ff7e42e6e7b1461e9c712dbd5e",
+      "bytes": 7369
+    },
+    {
+      "path": "evidence/local-2026-10-03/coverage-25/adaptive-24-9999-whole-summary.json",
+      "sha256": "fea46596413c04b84a546c2ec5e355c6912325d458964f9100dd7e6d173a6c48",
+      "bytes": 16428
+    },
+    {
+      "path": "evidence/local-2026-10-03/coverage-25/private-grid7-9-candidates/00004545-grid9-1024-v2-sweeps256/receipt.json",
+      "sha256": "8c48ec8adf946468343e4dbdec89a068523e449d9be6873e504795b62462ad79",
+      "bytes": 2288
+    },
+    {
+      "path": "evidence/local-2026-10-03/coverage-25/fixed-core-whole9999-torus2-ymid1-20m/receipt.json",
+      "sha256": "68eab53f2d594d235994472820540fb4cbe53e178a9f18c125c1f762d0084819",
+      "bytes": 2580
+    },
+    {
+      "path": "evidence/local-2026-10-03/coverage-25/final-baseline-comparison.json",
+      "sha256": "a331c9f5f72214bd5d0ac544129aa678d6bc2340a76e9675296fe803f08da79e",
+      "bytes": 56229
+    }
+  ],
+  "scope": "Observed diagnostic groups are distinct from top-level runner outcomes and are not single-cause proofs. This screen alone is not the union of successes under additional explicit profiles. No production edits or new CAD runs.",
+  "research_context": [
+    "ABC10 original Common volumes prove overlap; contact-only extensions cannot qualify that assembly.",
+    "ABC14/15/16 lightweight topology establishes mixed curved bodies, not definitive interface dimension; the old ABC14 Boolean timeout remains unresolved.",
+    "ABC25 has native SelfIntersectingWire/UnorientableShape. ABC909/3636 raw BReps are valid but have 3/4 free faces outside solids; distinguish representation refusal from invalid BRep.",
+    "Native split volume_mismatch/invalid_result refer to derived Boolean partitions, not a claim that the unchanged source CAD is invalid.",
+    "Retained private ABC24/9999 adaptive whole trials and ABC4545 Grid9 profiles still contain rejected pieces and no whole archive; individual piece/fan gains do not qualify whole-file coverage.",
+    "The private ABC9999 core-phase-work-budget receipt is an alternative constrained-construction admission refusal, not a successful mesh or proof of geometric impossibility.",
+    "The 12 original successful archives remain byte-identical per the separately retained baseline comparison. Quality acceptance uses warning .25, not a strict quality floor."
+  ]
+}

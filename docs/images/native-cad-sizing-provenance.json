@@ -1,0 +1,527 @@
+{
+  "schema": "paacs-mesh-visual-report-v1",
+  "manifest_path": "out/visual-validation-2026-10-03/native-final-sizing-manifest.json",
+  "manifest_sha256": "550896a93b5791c9c602a6628bb06bbb0f4406da4e671dd9d4f23ccf4fb46a42",
+  "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
+  "numpy": "2.5.3",
+  "matplotlib": "3.10.8",
+  "renderer_sha256": "d4fc53f22a691d13e3863ff379cb3adfde29d350a208fa0d9423da55ec27f11b",
+  "data_module_sha256": "afe6f834a2946bb296b1dff975ca67885dd27ec1326c2fa2f50772da3e345faa",
+  "self_tests": {
+    "passed": true,
+    "checks": [
+      "positive tet volume",
+      "analytic triangular section",
+      "four-edge quadrilateral section",
+      "planar Hex8 volume/section",
+      "native-defined Hex8 SubTetMeanRatio",
+      "shared-face section deduplication",
+      "curved Tet10 refused"
+    ]
+  },
+  "meshes": [
+    {
+      "name": "Imported cylinder",
+      "mesh_path": "out/visual-validation-2026-10-03/native-final/cylinder.paacsmesh",
+      "mesh_sha256": "aee268d8ed1490fe61f86d3d57e12b7f06f2e8ff2593e4b50b03c25355d2da3c",
+      "mesh_bytes": 1012040,
+      "units": "mm",
+      "metrics": {
+        "nodes": 3689,
+        "cells": 20736,
+        "volume_cells": 18432,
+        "cell_types": {
+          "Tet4": 18432,
+          "Tri3": 2304
+        },
+        "positive_corner_volumes": true,
+        "convex_planar_corner_cells": true,
+        "exterior_volume_faces": 2304,
+        "volume_sum": 6.265257226562476,
+        "volume_cv": 0.03239161500147551,
+        "volume_min": 0.0002819093111277469,
+        "volume_max": 0.0003691323555389198,
+        "volume_max_min": 1.3094010767585036,
+        "equivalent_size_definition": "cube root of positive cell volume; not target edge size",
+        "equivalent_size_cv": 0.011060466731977095,
+        "volume_quantiles": [
+          0.0002819093111277469,
+          0.0003309419725709136,
+          0.0003393855679093104,
+          0.00034958187682787345,
+          0.0003691323555389198
+        ],
+        "equivalent_size_quantiles": [
+          0.065569691463853,
+          0.06916992164656915,
+          0.06975324797705279,
+          0.0704449129104705,
+          0.07173438368317209
+        ],
+        "tet_mean_ratio_samples": 18432,
+        "tet_mean_ratio_min": 0.70055747840639,
+        "tet_mean_ratio_quantiles": [
+          0.70055747840639,
+          0.7600860425834048,
+          0.8007339519515722,
+          0.8645025100848452,
+          0.873361589133963
+        ],
+        "quality_metric": "Tet corner mean ratio; linear mixed cells use native fixed minimum SubTetMeanRatio diagnostic",
+        "subtet_mean_ratio_min": 0.70055747840639,
+        "subtet_mean_ratio_quantiles": [
+          0.70055747840639,
+          0.7600860425834048,
+          0.8007339519515722,
+          0.8645025100848452,
+          0.873361589133963
+        ],
+        "high_order_scope": "Tet10 sections/quality use corners only; straight midsides verified; faceted geometry",
+        "audit_scope": "Independent corner geometry and face multiplicity checks, not replacement for native full audit"
+      },
+      "section": {
+        "axis": "y",
+        "value": 0.0,
+        "polygon_count": 512,
+        "intersected_cells_before_shared_face_dedup": 1024,
+        "coplanar_shared_polygons_removed": 512,
+        "section_area": 4.0,
+        "maximum_plane_residual": 0.0,
+        "method": "Actual convex cell-edge/plane intersections; shared coplanar faces drawn once"
+      },
+      "case_metadata": {
+        "native_result": {
+          "schema": "paacs-native-cad-report-v1",
+          "status": "succeeded",
+          "reason": "none",
+          "mesh_published": true,
+          "archive_published": true,
+          "solids": 1,
+          "faces": 3,
+          "curved_faces": 1,
+          "edges": 3,
+          "vertices": 2,
+          "nodes": 3689,
+          "cells": 20736,
+          "cad_volume": 6.283185307179585,
+          "mesh_volume": 6.265257226562355,
+          "minimum_quality": 0.7005574784063905,
+          "import_seconds": 0.008529,
+          "quality_warning": false,
+          "preparation_seconds": 0.0050939,
+          "generation_seconds": 0.0109416,
+          "validation_seconds": 0.0714998,
+          "audit_seconds": 0.008228,
+          "quality_seconds": 0.0038141,
+          "validation_work": 29740,
+          "millimetres_per_model_unit": 1,
+          "total_seconds": 0.1124478,
+          "bodies": [
+            {
+              "solid_tag": 1,
+              "route": "cylinder",
+              "reason": "none",
+              "start_face_tag": 3,
+              "end_face_tag": 2,
+              "relative_volume_error": 0.0028533426503609054,
+              "boundary_node_error": 4.002966042486721e-16,
+              "boundary_sample_error": 0.0019029525310989678,
+              "primitive_reason": "none",
+              "planar_reason": "internal_error",
+              "uniform_cylinder": true,
+              "uniform_circular": false,
+              "profiled_volume": false,
+              "minimum_section_nodes": 0,
+              "maximum_section_nodes": 0,
+              "minimum_axial_spacing": 0,
+              "maximum_axial_spacing": 0,
+              "maximum_axial_growth": 1,
+              "chord_error_bound": 0.002141076761453336
+            }
+          ]
+        },
+        "command": [
+          "out/visual-validation-2026-10-03/native-final-receipts/bin/paacs-cad-mesh.exe",
+          "out/visual-validation-2026-10-03/native-final/cylinder.step",
+          ".3",
+          "out/visual-validation-2026-10-03/native-final-receipts/cylinder.paacsmesh",
+          "--native-cad",
+          "--report-json",
+          "--threads",
+          "1"
+        ],
+        "cli_snapshot": {
+          "source": "build/windows-msvc-release/Release/paacs-cad-mesh.exe",
+          "snapshot": "out/visual-validation-2026-10-03/native-final-receipts/bin/paacs-cad-mesh.exe",
+          "sha256": "a8454472d3a2508711a6aa19cb2231ed83110351c3e0a489d064d5dd0a4d32e1"
+        },
+        "cli_archive_sha256": "aee268d8ed1490fe61f86d3d57e12b7f06f2e8ff2593e4b50b03c25355d2da3c",
+        "retained_archive_matches_cli": true,
+        "global_size": 0.3,
+        "face_sizes": [],
+        "minimum_size": 0,
+        "optimize_profile_interior": false,
+        "warning_quality": 0,
+        "geometry_scope": "Native volume and boundary node/linear-facet samples; not a whole-face Hausdorff certificate",
+        "previous_fixture_sha256_matches": true
+      },
+      "native_verification": {
+        "verified": true,
+        "mesh_volume": 6.265257226562355,
+        "minimum_quality": 0.7005574784063905
+      },
+      "independent_volume_relative_delta_from_native": 1.942146014101982e-14,
+      "independent_quality_delta_from_native": 4.440892098500626e-16,
+      "source_path": "out/visual-validation-2026-10-03/native-final/cylinder.step",
+      "source_sha256": "f7eb3c964b7ee4ca7633385840b8ca4aeb34634aecec8e73ed050e8140ad2fa4"
+    },
+    {
+      "name": "Selected cap 0.15 / global 0.30",
+      "mesh_path": "out/visual-validation-2026-10-03/native-final/cylinder_refined_cap.paacsmesh",
+      "mesh_sha256": "310dcbc0be43dbc93b666bc9f4e17bc1bd4776e1558f0df695214a2737a8ae9b",
+      "mesh_bytes": 256428,
+      "units": "mm",
+      "metrics": {
+        "nodes": 1019,
+        "cells": 5319,
+        "volume_cells": 4037,
+        "cell_types": {
+          "Tet4": 4037,
+          "Tri3": 1282
+        },
+        "positive_corner_volumes": true,
+        "convex_planar_corner_cells": true,
+        "exterior_volume_faces": 1282,
+        "volume_sum": 6.265257226562476,
+        "volume_cv": 0.591645697667056,
+        "volume_min": 4.663725820709398e-05,
+        "volume_max": 0.0041458607634519045,
+        "volume_max_min": 88.89589403052169,
+        "equivalent_size_definition": "cube root of positive cell volume; not target edge size",
+        "equivalent_size_cv": 0.21300118501286328,
+        "volume_quantiles": [
+          4.663725820709398e-05,
+          0.0004994287481007543,
+          0.0012546272093148679,
+          0.0027929463851725962,
+          0.0041458607634519045
+        ],
+        "equivalent_size_quantiles": [
+          0.03599517893441288,
+          0.0793398124803533,
+          0.10785449109496677,
+          0.1408275205205045,
+          0.16064661200130648
+        ],
+        "tet_mean_ratio_samples": 4037,
+        "tet_mean_ratio_min": 0.11486350048387187,
+        "tet_mean_ratio_quantiles": [
+          0.11486350048387187,
+          0.613847590278337,
+          0.7722779433172241,
+          0.8943845042771336,
+          0.9901005191443788
+        ],
+        "quality_metric": "Tet corner mean ratio; linear mixed cells use native fixed minimum SubTetMeanRatio diagnostic",
+        "subtet_mean_ratio_min": 0.11486350048387187,
+        "subtet_mean_ratio_quantiles": [
+          0.11486350048387187,
+          0.613847590278337,
+          0.7722779433172241,
+          0.8943845042771336,
+          0.9901005191443788
+        ],
+        "high_order_scope": "Tet10 sections/quality use corners only; straight midsides verified; faceted geometry",
+        "audit_scope": "Independent corner geometry and face multiplicity checks, not replacement for native full audit"
+      },
+      "section": {
+        "axis": "y",
+        "value": 0.0,
+        "polygon_count": 489,
+        "intersected_cells_before_shared_face_dedup": 489,
+        "coplanar_shared_polygons_removed": 0,
+        "section_area": 4.0,
+        "maximum_plane_residual": 0.0,
+        "method": "Actual convex cell-edge/plane intersections; shared coplanar faces drawn once"
+      },
+      "case_metadata": {
+        "native_result": {
+          "schema": "paacs-native-cad-report-v1",
+          "status": "succeeded",
+          "reason": "none",
+          "mesh_published": true,
+          "archive_published": true,
+          "solids": 1,
+          "faces": 3,
+          "curved_faces": 1,
+          "edges": 3,
+          "vertices": 2,
+          "nodes": 1019,
+          "cells": 5319,
+          "cad_volume": 6.283185307179585,
+          "mesh_volume": 6.265257226562496,
+          "minimum_quality": 0.11486350048387196,
+          "import_seconds": 0.0092359,
+          "quality_warning": false,
+          "preparation_seconds": 0.0059571,
+          "generation_seconds": 0.0251754,
+          "validation_seconds": 0.0381971,
+          "audit_seconds": 0.00235,
+          "quality_seconds": 0.0008459,
+          "validation_work": 10249,
+          "millimetres_per_model_unit": 1,
+          "total_seconds": 0.0835907,
+          "bodies": [
+            {
+              "solid_tag": 1,
+              "route": "cylinder",
+              "reason": "none",
+              "start_face_tag": 3,
+              "end_face_tag": 2,
+              "relative_volume_error": 0.0028533426503640153,
+              "boundary_node_error": 4.710277376051325e-16,
+              "boundary_sample_error": 0.001902952531098999,
+              "primitive_reason": "none",
+              "planar_reason": "internal_error",
+              "uniform_cylinder": false,
+              "uniform_circular": false,
+              "profiled_volume": true,
+              "minimum_section_nodes": 85,
+              "maximum_section_nodes": 174,
+              "minimum_axial_spacing": 0.13770497402575058,
+              "maximum_axial_spacing": 0.2469021397382154,
+              "maximum_axial_growth": 1.2394869113491316,
+              "chord_error_bound": 0.002141076761453336
+            }
+          ]
+        },
+        "command": [
+          "out/visual-validation-2026-10-03/native-final-receipts/bin/paacs-cad-mesh.exe",
+          "out/visual-validation-2026-10-03/native-final/cylinder.step",
+          ".3",
+          "out/visual-validation-2026-10-03/native-final-receipts/cylinder_refined_cap.paacsmesh",
+          "--native-cad",
+          "--report-json",
+          "--threads",
+          "1",
+          "--face-size",
+          "3",
+          ".15",
+          "--min-size",
+          ".12"
+        ],
+        "cli_snapshot": {
+          "source": "build/windows-msvc-release/Release/paacs-cad-mesh.exe",
+          "snapshot": "out/visual-validation-2026-10-03/native-final-receipts/bin/paacs-cad-mesh.exe",
+          "sha256": "a8454472d3a2508711a6aa19cb2231ed83110351c3e0a489d064d5dd0a4d32e1"
+        },
+        "cli_archive_sha256": "310dcbc0be43dbc93b666bc9f4e17bc1bd4776e1558f0df695214a2737a8ae9b",
+        "retained_archive_matches_cli": true,
+        "global_size": 0.3,
+        "face_sizes": [
+          {
+            "face_tag": 3,
+            "size": 0.15
+          }
+        ],
+        "minimum_size": 0.12,
+        "optimize_profile_interior": false,
+        "warning_quality": 0,
+        "geometry_scope": "Native volume and boundary node/linear-facet samples; not a whole-face Hausdorff certificate",
+        "previous_fixture_sha256_matches": true
+      },
+      "native_verification": {
+        "verified": true,
+        "mesh_volume": 6.265257226562496,
+        "minimum_quality": 0.11486350048387196
+      },
+      "independent_volume_relative_delta_from_native": 3.1187746211855944e-15,
+      "independent_quality_delta_from_native": 9.71445146547012e-17,
+      "source_path": "out/visual-validation-2026-10-03/native-final/cylinder.step",
+      "source_sha256": "f7eb3c964b7ee4ca7633385840b8ca4aeb34634aecec8e73ed050e8140ad2fa4"
+    },
+    {
+      "name": "Selected cap / interior improvement",
+      "mesh_path": "out/visual-validation-2026-10-03/native-final/cylinder_refined_cap_optimized.paacsmesh",
+      "mesh_sha256": "d6c5ec37bf54fea6fcf6380734abdecca89429c29ccc8b32ce27133048bf45f0",
+      "mesh_bytes": 256428,
+      "units": "mm",
+      "metrics": {
+        "nodes": 1019,
+        "cells": 5319,
+        "volume_cells": 4037,
+        "cell_types": {
+          "Tet4": 4037,
+          "Tri3": 1282
+        },
+        "positive_corner_volumes": true,
+        "convex_planar_corner_cells": true,
+        "exterior_volume_faces": 1282,
+        "volume_sum": 6.265257226562476,
+        "volume_cv": 0.6198537358943946,
+        "volume_min": 4.610099737401679e-05,
+        "volume_max": 0.004405683525201206,
+        "volume_max_min": 95.56590477767656,
+        "equivalent_size_definition": "cube root of positive cell volume; not target edge size",
+        "equivalent_size_cv": 0.21962692364319505,
+        "volume_quantiles": [
+          4.610099737401679e-05,
+          0.000492914779335178,
+          0.0012085036102556538,
+          0.002969035029733441,
+          0.004405683525201206
+        ],
+        "equivalent_size_quantiles": [
+          0.03585668261612794,
+          0.07899336457947388,
+          0.1065162783865152,
+          0.14372702519993827,
+          0.1639347788098261
+        ],
+        "tet_mean_ratio_samples": 4037,
+        "tet_mean_ratio_min": 0.16731931399456293,
+        "tet_mean_ratio_quantiles": [
+          0.16731931399456293,
+          0.6393192091708362,
+          0.7920611411548825,
+          0.9140907523466176,
+          0.9948416657174095
+        ],
+        "quality_metric": "Tet corner mean ratio; linear mixed cells use native fixed minimum SubTetMeanRatio diagnostic",
+        "subtet_mean_ratio_min": 0.16731931399456293,
+        "subtet_mean_ratio_quantiles": [
+          0.16731931399456293,
+          0.6393192091708362,
+          0.7920611411548825,
+          0.9140907523466176,
+          0.9948416657174095
+        ],
+        "high_order_scope": "Tet10 sections/quality use corners only; straight midsides verified; faceted geometry",
+        "audit_scope": "Independent corner geometry and face multiplicity checks, not replacement for native full audit"
+      },
+      "section": {
+        "axis": "y",
+        "value": 0.0,
+        "polygon_count": 467,
+        "intersected_cells_before_shared_face_dedup": 467,
+        "coplanar_shared_polygons_removed": 0,
+        "section_area": 4.0,
+        "maximum_plane_residual": 0.0,
+        "method": "Actual convex cell-edge/plane intersections; shared coplanar faces drawn once"
+      },
+      "case_metadata": {
+        "native_result": {
+          "schema": "paacs-native-cad-report-v1",
+          "status": "succeeded",
+          "reason": "none",
+          "mesh_published": true,
+          "archive_published": true,
+          "solids": 1,
+          "faces": 3,
+          "curved_faces": 1,
+          "edges": 3,
+          "vertices": 2,
+          "nodes": 1019,
+          "cells": 5319,
+          "cad_volume": 6.283185307179585,
+          "mesh_volume": 6.265257226562481,
+          "minimum_quality": 0.1673193139945629,
+          "import_seconds": 0.0126488,
+          "quality_warning": true,
+          "preparation_seconds": 0.0036390999999999997,
+          "generation_seconds": 0.0253791,
+          "validation_seconds": 0.0365312,
+          "audit_seconds": 0.0021048,
+          "quality_seconds": 0.0309057,
+          "validation_work": 12129,
+          "millimetres_per_model_unit": 1,
+          "total_seconds": 0.1130992,
+          "bodies": [
+            {
+              "solid_tag": 1,
+              "route": "cylinder",
+              "reason": "none",
+              "start_face_tag": 3,
+              "end_face_tag": 2,
+              "relative_volume_error": 0.0028533426503621778,
+              "boundary_node_error": 4.710277376051325e-16,
+              "boundary_sample_error": 0.001902952531098999,
+              "primitive_reason": "none",
+              "planar_reason": "internal_error",
+              "uniform_cylinder": false,
+              "uniform_circular": false,
+              "profiled_volume": true,
+              "minimum_section_nodes": 85,
+              "maximum_section_nodes": 174,
+              "minimum_axial_spacing": 0.13770497402575058,
+              "maximum_axial_spacing": 0.2469021397382154,
+              "maximum_axial_growth": 1.2394869113491316,
+              "chord_error_bound": 0.002141076761453336,
+              "optimization_trials": 1504,
+              "optimization_moves": 667,
+              "quality_before_optimization": 0.11486350048387196,
+              "quality_after_optimization": 0.1673193139945629
+            }
+          ]
+        },
+        "command": [
+          "out/visual-validation-2026-10-03/native-final-receipts/bin/paacs-cad-mesh.exe",
+          "out/visual-validation-2026-10-03/native-final/cylinder.step",
+          ".3",
+          "out/visual-validation-2026-10-03/native-final-receipts/cylinder_refined_cap_optimized.paacsmesh",
+          "--native-cad",
+          "--report-json",
+          "--threads",
+          "1",
+          "--face-size",
+          "3",
+          ".15",
+          "--min-size",
+          ".12",
+          "--optimize-profile",
+          "--warning-quality",
+          ".25"
+        ],
+        "cli_snapshot": {
+          "source": "build/windows-msvc-release/Release/paacs-cad-mesh.exe",
+          "snapshot": "out/visual-validation-2026-10-03/native-final-receipts/bin/paacs-cad-mesh.exe",
+          "sha256": "a8454472d3a2508711a6aa19cb2231ed83110351c3e0a489d064d5dd0a4d32e1"
+        },
+        "cli_archive_sha256": "d6c5ec37bf54fea6fcf6380734abdecca89429c29ccc8b32ce27133048bf45f0",
+        "retained_archive_matches_cli": true,
+        "global_size": 0.3,
+        "face_sizes": [
+          {
+            "face_tag": 3,
+            "size": 0.15
+          }
+        ],
+        "minimum_size": 0.12,
+        "optimize_profile_interior": true,
+        "warning_quality": 0.25,
+        "geometry_scope": "Native volume and boundary node/linear-facet samples; not a whole-face Hausdorff certificate"
+      },
+      "native_verification": {
+        "verified": true,
+        "mesh_volume": 6.265257226562481,
+        "minimum_quality": 0.1673193139945629
+      },
+      "independent_volume_relative_delta_from_native": 7.088124139058186e-16,
+      "independent_quality_delta_from_native": 2.7755575615628914e-17,
+      "source_path": "out/visual-validation-2026-10-03/native-final/cylinder.step",
+      "source_sha256": "f7eb3c964b7ee4ca7633385840b8ca4aeb34634aecec8e73ed050e8140ad2fa4"
+    }
+  ],
+  "geometry_cases": [],
+  "figures": [
+    {
+      "path": "out/visual-validation-2026-10-03/native-final-sizing/gallery.png",
+      "sha256": "32c1b770733731cc113fa8c57e7eba4e25c52ee68dc15263aa5163d53b12253f"
+    },
+    {
+      "path": "out/visual-validation-2026-10-03/native-final-sizing/distributions.png",
+      "sha256": "b11c159b0fc2d9b539d6963898205d4162e9f28be1095f569567ae08589f699f"
+    }
+  ],
+  "scope": "Rendered actual retained cells and their convex planar intersections; Tet10 verified straight-sided. Native audits/geometry verification are separate receipts."
+}

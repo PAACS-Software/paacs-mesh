@@ -1,0 +1,10 @@
+# PAACS Mesh
+# Project author: Paul LeDewhurst
+# Copyright PAACS Software Ltd.
+# SPDX-License-Identifier: MPL-2.0
+
+@PACKAGE_INIT@
+include(CMakeFindDependencyMacro)
+find_dependency(Threads)
+include("${CMAKE_CURRENT_LIST_DIR}/PAACSMeshV09Targets.cmake")
+check_required_components(PAACSMeshV09)

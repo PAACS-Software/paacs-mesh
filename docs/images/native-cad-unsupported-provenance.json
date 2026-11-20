@@ -1,0 +1,310 @@
+{
+  "schema": "paacs-mesh-visual-report-v1",
+  "manifest_path": "out/visual-validation-2026-10-03/native-final-geometry-manifest.json",
+  "manifest_sha256": "5b72b043531a1a15b5b08b96fe8417d6fc32c2be85815c9f553144ad196b19e0",
+  "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
+  "numpy": "2.5.3",
+  "matplotlib": "3.10.8",
+  "renderer_sha256": "d4fc53f22a691d13e3863ff379cb3adfde29d350a208fa0d9423da55ec27f11b",
+  "data_module_sha256": "afe6f834a2946bb296b1dff975ca67885dd27ec1326c2fa2f50772da3e345faa",
+  "self_tests": {
+    "passed": true,
+    "checks": [
+      "positive tet volume",
+      "analytic triangular section",
+      "four-edge quadrilateral section",
+      "planar Hex8 volume/section",
+      "native-defined Hex8 SubTetMeanRatio",
+      "shared-face section deduplication",
+      "curved Tet10 refused"
+    ]
+  },
+  "meshes": [],
+  "geometry_cases": [
+    {
+      "name": "Imported sphere",
+      "geometry_path": "out/visual-validation-2026-10-03/native-final-receipts/sphere-display.json",
+      "geometry_sha256": "0d54e87118265a47f09f66f0af16a98119dc2c99ff1afff8e0190cab7600cea8",
+      "tessellation_faces": 528,
+      "status": "Native meshing refused",
+      "reason": "unsupported_body",
+      "metadata": {
+        "native_result": {
+          "schema": "paacs-native-cad-report-v1",
+          "status": "refused",
+          "reason": "unsupported_body",
+          "mesh_published": false,
+          "archive_published": false,
+          "solids": 1,
+          "faces": 1,
+          "curved_faces": 1,
+          "edges": 3,
+          "vertices": 2,
+          "nodes": 0,
+          "cells": 0,
+          "cad_volume": 4.188790204786391,
+          "mesh_volume": 0,
+          "minimum_quality": 0,
+          "import_seconds": 0.0125489,
+          "quality_warning": false,
+          "preparation_seconds": 0.0003278,
+          "generation_seconds": 0,
+          "validation_seconds": 0,
+          "audit_seconds": 0,
+          "quality_seconds": 0,
+          "validation_work": 2,
+          "millimetres_per_model_unit": 1,
+          "total_seconds": 0.0130505,
+          "bodies": [
+            {
+              "solid_tag": 1,
+              "route": "unsupported",
+              "reason": "unsupported_body",
+              "start_face_tag": -1,
+              "end_face_tag": -1,
+              "relative_volume_error": 0,
+              "boundary_node_error": 0,
+              "boundary_sample_error": 0,
+              "primitive_reason": "internal-error",
+              "planar_reason": "internal_error",
+              "uniform_cylinder": false,
+              "uniform_circular": false,
+              "profiled_volume": false,
+              "minimum_section_nodes": 0,
+              "maximum_section_nodes": 0,
+              "minimum_axial_spacing": 0,
+              "maximum_axial_spacing": 0,
+              "maximum_axial_growth": 1,
+              "chord_error_bound": 0
+            }
+          ]
+        },
+        "native_cli_snapshot": {
+          "source": "build/windows-msvc-release/Release/paacs-cad-mesh.exe",
+          "snapshot": "out/visual-validation-2026-10-03/native-final-receipts/bin/paacs-cad-mesh.exe",
+          "sha256": "a8454472d3a2508711a6aa19cb2231ed83110351c3e0a489d064d5dd0a4d32e1"
+        },
+        "preview_snapshot": {
+          "source": "build/windows-msvc-release/Release/paacs-native-cad-preview.exe",
+          "snapshot": "out/visual-validation-2026-10-03/native-final-receipts/bin/paacs-native-cad-preview.exe",
+          "sha256": "4da105c46eb9c94d85ec2e5c3b9e40ce87ed45975d675ce96eae6a205d4e5af4"
+        },
+        "linear_deflection": 0.02,
+        "linear_deflection_units": "mm",
+        "source_sha256": "354014ca44357e55635058193a331149e579b7390a262b16c29f8dc4de72fee5"
+      },
+      "source_path": "out/visual-validation-2026-10-03/native-final/sphere.step",
+      "source_sha256": "354014ca44357e55635058193a331149e579b7390a262b16c29f8dc4de72fee5"
+    },
+    {
+      "name": "Partial cylinder",
+      "geometry_path": "out/visual-validation-2026-10-03/native-final-receipts/partial_cylinder-display.json",
+      "geometry_sha256": "e09b8c5eb6442668553013d69e677c700f6f6045b0043af5497b5edff62c2f56",
+      "tessellation_faces": 68,
+      "status": "Native meshing refused",
+      "reason": "unsupported_body",
+      "metadata": {
+        "native_result": {
+          "schema": "paacs-native-cad-report-v1",
+          "status": "refused",
+          "reason": "unsupported_body",
+          "mesh_published": false,
+          "archive_published": false,
+          "solids": 1,
+          "faces": 5,
+          "curved_faces": 1,
+          "edges": 9,
+          "vertices": 6,
+          "nodes": 0,
+          "cells": 0,
+          "cad_volume": 3.1415926535899317,
+          "mesh_volume": 0,
+          "minimum_quality": 0,
+          "import_seconds": 0.0123278,
+          "quality_warning": false,
+          "preparation_seconds": 8.489999999999999e-05,
+          "generation_seconds": 0,
+          "validation_seconds": 0,
+          "audit_seconds": 0,
+          "quality_seconds": 0,
+          "validation_work": 2,
+          "millimetres_per_model_unit": 1,
+          "total_seconds": 0.0124863,
+          "bodies": [
+            {
+              "solid_tag": 1,
+              "route": "unsupported",
+              "reason": "unsupported_body",
+              "start_face_tag": -1,
+              "end_face_tag": -1,
+              "relative_volume_error": 0,
+              "boundary_node_error": 0,
+              "boundary_sample_error": 0,
+              "primitive_reason": "internal-error",
+              "planar_reason": "internal_error",
+              "uniform_cylinder": false,
+              "uniform_circular": false,
+              "profiled_volume": false,
+              "minimum_section_nodes": 0,
+              "maximum_section_nodes": 0,
+              "minimum_axial_spacing": 0,
+              "maximum_axial_spacing": 0,
+              "maximum_axial_growth": 1,
+              "chord_error_bound": 0
+            }
+          ]
+        },
+        "native_cli_snapshot": {
+          "source": "build/windows-msvc-release/Release/paacs-cad-mesh.exe",
+          "snapshot": "out/visual-validation-2026-10-03/native-final-receipts/bin/paacs-cad-mesh.exe",
+          "sha256": "a8454472d3a2508711a6aa19cb2231ed83110351c3e0a489d064d5dd0a4d32e1"
+        },
+        "preview_snapshot": {
+          "source": "build/windows-msvc-release/Release/paacs-native-cad-preview.exe",
+          "snapshot": "out/visual-validation-2026-10-03/native-final-receipts/bin/paacs-native-cad-preview.exe",
+          "sha256": "4da105c46eb9c94d85ec2e5c3b9e40ce87ed45975d675ce96eae6a205d4e5af4"
+        },
+        "linear_deflection": 0.02,
+        "linear_deflection_units": "mm",
+        "source_sha256": "e97206aff1ed5a5b42a0798611c3bc9cda62ccae6cff3a1023d146a88d61a0c6"
+      },
+      "source_path": "out/visual-validation-2026-10-03/native-final/partial_cylinder.step",
+      "source_sha256": "e97206aff1ed5a5b42a0798611c3bc9cda62ccae6cff3a1023d146a88d61a0c6"
+    },
+    {
+      "name": "Touching boxes",
+      "geometry_path": "out/visual-validation-2026-10-03/native-final-receipts/touching_bodies-display.json",
+      "geometry_sha256": "521955f959980bd3d5cd0c7a441be9211e3dab228fb594f23221721e83cb666c",
+      "tessellation_faces": 24,
+      "status": "Native meshing refused",
+      "reason": "unresolved_body_interface",
+      "metadata": {
+        "native_result": {
+          "schema": "paacs-native-cad-report-v1",
+          "status": "refused",
+          "reason": "unresolved_body_interface",
+          "mesh_published": false,
+          "archive_published": false,
+          "solids": 2,
+          "faces": 12,
+          "curved_faces": 0,
+          "edges": 24,
+          "vertices": 16,
+          "nodes": 0,
+          "cells": 0,
+          "cad_volume": 1.9999999999999996,
+          "mesh_volume": 0,
+          "minimum_quality": 0,
+          "import_seconds": 0.0235352,
+          "quality_warning": false,
+          "preparation_seconds": 0.0068424,
+          "generation_seconds": 0,
+          "validation_seconds": 0,
+          "audit_seconds": 0,
+          "quality_seconds": 0,
+          "validation_work": 2,
+          "millimetres_per_model_unit": 1,
+          "total_seconds": 0.0304429,
+          "bodies": []
+        },
+        "native_cli_snapshot": {
+          "source": "build/windows-msvc-release/Release/paacs-cad-mesh.exe",
+          "snapshot": "out/visual-validation-2026-10-03/native-final-receipts/bin/paacs-cad-mesh.exe",
+          "sha256": "a8454472d3a2508711a6aa19cb2231ed83110351c3e0a489d064d5dd0a4d32e1"
+        },
+        "preview_snapshot": {
+          "source": "build/windows-msvc-release/Release/paacs-native-cad-preview.exe",
+          "snapshot": "out/visual-validation-2026-10-03/native-final-receipts/bin/paacs-native-cad-preview.exe",
+          "sha256": "4da105c46eb9c94d85ec2e5c3b9e40ce87ed45975d675ce96eae6a205d4e5af4"
+        },
+        "linear_deflection": 0.03,
+        "linear_deflection_units": "mm",
+        "source_sha256": "c22ddc222ecc3001624a598b61d078b7c536bbbb5802d1b121fde672ad9f4f44"
+      },
+      "source_path": "out/visual-validation-2026-10-03/native-final/touching_bodies.step",
+      "source_sha256": "c22ddc222ecc3001624a598b61d078b7c536bbbb5802d1b121fde672ad9f4f44"
+    },
+    {
+      "name": "ABC 11 / curved part",
+      "geometry_path": "out/visual-validation-2026-10-03/native-final-receipts/abc11-display.json",
+      "geometry_sha256": "1a4a3dc465cb9afffa3f3d1ee81cc01c6313dcb0469e986f8eb4261ab1e0ce29",
+      "tessellation_faces": 28635,
+      "status": "Native meshing refused",
+      "reason": "unsupported_body",
+      "metadata": {
+        "native_result": {
+          "schema": "paacs-native-cad-report-v1",
+          "status": "refused",
+          "reason": "unsupported_body",
+          "mesh_published": false,
+          "archive_published": false,
+          "solids": 1,
+          "faces": 253,
+          "curved_faces": 233,
+          "edges": 666,
+          "vertices": 394,
+          "nodes": 0,
+          "cells": 0,
+          "cad_volume": 379724.96317126957,
+          "mesh_volume": 0,
+          "minimum_quality": 0,
+          "import_seconds": 27.3615597,
+          "quality_warning": false,
+          "preparation_seconds": 0.0006633,
+          "generation_seconds": 0,
+          "validation_seconds": 0,
+          "audit_seconds": 0,
+          "quality_seconds": 0,
+          "validation_work": 2,
+          "millimetres_per_model_unit": 1,
+          "total_seconds": 27.3623619,
+          "bodies": [
+            {
+              "solid_tag": 1,
+              "route": "unsupported",
+              "reason": "unsupported_body",
+              "start_face_tag": -1,
+              "end_face_tag": -1,
+              "relative_volume_error": 0,
+              "boundary_node_error": 0,
+              "boundary_sample_error": 0,
+              "primitive_reason": "internal-error",
+              "planar_reason": "internal_error",
+              "uniform_cylinder": false,
+              "uniform_circular": false,
+              "profiled_volume": false,
+              "minimum_section_nodes": 0,
+              "maximum_section_nodes": 0,
+              "minimum_axial_spacing": 0,
+              "maximum_axial_spacing": 0,
+              "maximum_axial_growth": 1,
+              "chord_error_bound": 0
+            }
+          ]
+        },
+        "native_cli_snapshot": {
+          "source": "build/windows-msvc-release/Release/paacs-cad-mesh.exe",
+          "snapshot": "out/visual-validation-2026-10-03/native-final-receipts/bin/paacs-cad-mesh.exe",
+          "sha256": "a8454472d3a2508711a6aa19cb2231ed83110351c3e0a489d064d5dd0a4d32e1"
+        },
+        "preview_snapshot": {
+          "source": "build/windows-msvc-release/Release/paacs-native-cad-preview.exe",
+          "snapshot": "out/visual-validation-2026-10-03/native-final-receipts/bin/paacs-native-cad-preview.exe",
+          "sha256": "4da105c46eb9c94d85ec2e5c3b9e40ce87ed45975d675ce96eae6a205d4e5af4"
+        },
+        "linear_deflection": 0.3,
+        "linear_deflection_units": "mm",
+        "source_sha256": "490701d7fca1db71dc912bc6e1d7a3a1ef1792aeb030cfb1ead764abcf7e6920"
+      },
+      "source_path": "local-data/abc_0000_step_v00/00000011/00000011_e909f412cda24521865fac0f_step_000.step",
+      "source_sha256": "490701d7fca1db71dc912bc6e1d7a3a1ef1792aeb030cfb1ead764abcf7e6920"
+    }
+  ],
+  "figures": [
+    {
+      "path": "out/visual-validation-2026-10-03/native-final-geometry/geometry-overview.png",
+      "sha256": "a03a144de6b022e9b2c67f358c7633b18fad7cecd49ec288ba079c77f08b5c2b"
+    }
+  ],
+  "scope": "Rendered actual retained cells and their convex planar intersections; Tet10 verified straight-sided. Native audits/geometry verification are separate receipts."
+}

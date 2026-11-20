@@ -1,0 +1,3631 @@
+{
+  "schema": "paacs-source-docs-figure-publication-v1",
+  "archived_figures": {
+    "docs/images/paacs-cad-coverage-25-gallery.png": {
+      "original_rendered_filename": "gallery.png",
+      "sha256": "69a4cd9f62c21fff558f61c21302476338341dec59864ba6103c81a10a1533ba",
+      "bytes": 728725
+    },
+    "docs/images/paacs-cad-coverage-25-distributions.png": {
+      "original_rendered_filename": "distributions-unique.png",
+      "sha256": "5e3cdb5ad0be20c90cb3fe9ee3d720c8acef663c30316671cd7ecf1e4f18a633",
+      "bytes": 180958
+    },
+    "docs/images/paacs-cad-coverage-25-abc4.png": {
+      "original_rendered_filename": "abc4-curved-hole-bracket.png",
+      "sha256": "653b57e1c09a6a5a6b20b6f3a61bec9f5106eb4041b0b59f56a09eba47e43ae3",
+      "bytes": 268869
+    },
+    "docs/images/paacs-cad-coverage-25-abc5.png": {
+      "original_rendered_filename": "abc5-ten-separate-bodies.png",
+      "sha256": "b5c03df6019245af87c99dee15c4fc1d43f09382e921e918796d9b904efb2077",
+      "bytes": 265285
+    },
+    "docs/images/paacs-cad-coverage-25-abc8.png": {
+      "original_rendered_filename": "abc8-curved-solid.png",
+      "sha256": "687bf58ba3ae1927e75e4801d08d9996b7aab89c949c158bfacff7941697872e",
+      "bytes": 274071
+    },
+    "docs/images/paacs-cad-coverage-25-abc9.png": {
+      "original_rendered_filename": "abc9-hollow-revolved-part.png",
+      "sha256": "34ee6bea03011aaf60cee53e9fb650fe434bc3ab4e98b6abf6c53b733b9ee196",
+      "bytes": 341082
+    },
+    "docs/images/paacs-cad-coverage-25-abc20.png": {
+      "original_rendered_filename": "abc20-two-curved-bodies.png",
+      "sha256": "5cf389540d8a11ed31e47e32e646474c25324d0dc3c838eb08495f91a54e40cf",
+      "bytes": 269238
+    },
+    "docs/images/paacs-cad-coverage-25-abc29.png": {
+      "original_rendered_filename": "abc29-circular-contact.png",
+      "sha256": "bba61ccdc2ee5bea3ff02fd99d6cad4af16e73265c1627b364be8305caaea920",
+      "bytes": 265197
+    },
+    "docs/images/paacs-cad-coverage-25-abc5454.png": {
+      "original_rendered_filename": "abc5454-through-holes.png",
+      "sha256": "d37c77dbefd0cc1d89dc979a4efdaa014c703991e5911a516d837d2c18e9cb92",
+      "bytes": 258280
+    },
+    "docs/images/paacs-cad-coverage-25-abc7272.png": {
+      "original_rendered_filename": "abc7272-through-holes.png",
+      "sha256": "9bd7a8092c0c7360579b4adf71cdbf364d192d64349f861962f8eba92ddc13aa",
+      "bytes": 264620
+    },
+    "docs/images/paacs-cad-coverage-25-abc17.png": {
+      "original_rendered_filename": "abc17-64-touching-blocks.png",
+      "sha256": "1ec6dc892e615a41f387c02646bdc4c0a8eef98b2ba2c86b6867733599d0b2fb",
+      "bytes": 327196
+    }
+  },
+  "recipe_manifest": {
+    "title": "PAACS / Published native CAD meshes",
+    "subtitle": "Nine actual archives from one final CLI/profile · Cyan exterior / gold section · Quality warning 0.25",
+    "gallery_mode": "cutaways",
+    "columns": 3,
+    "distributions": true,
+    "footer": "Exact retained-cell sections. Source/archive/executable hashes are recorded; low element quality remains a warning.",
+    "scope": "Nine actual full normal-CLI meshes from a complete 51-source screen with one binary and profile. Coverage/test/install qualification is recorded separately; rendering adds no continuous CAD error certificate.",
+    "cases": [
+      {
+        "name": "ABC4 / Curved hole bracket",
+        "mesh": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0004-00-f2ae50f7/mesh.paacsmesh",
+        "source": "local-data/abc_0000_step_v00/00000004/00000004_1ffb81a71e5b402e966b9341_step_003.step",
+        "units": "mm",
+        "section": {
+          "axis": "y",
+          "fraction": 0.51,
+          "keep": -1
+        },
+        "quality_warning_target": 0.25,
+        "verification": {
+          "verified": true,
+          "mesh_volume": 9282.089906856294,
+          "minimum_quality": 4.106322681376314e-11
+        },
+        "stats_note": "CAD volume error 0.3924%",
+        "metadata": {
+          "case_id": 4,
+          "normal_cli_receipt": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0004-00-f2ae50f7/stdout.log",
+          "normal_cli_receipt_sha256": "669a252dd1b1e2c409f0932a51e074951399ce2fb87cb1f3b95e9d0aa9791bb9",
+          "selected_records": "out/visual-validation-2026-10-03/coverage-25-final/selected-native-records.json",
+          "source_sha256": "a7be17878aea45cc9a1aa0b68901756a8ad70d6988a9c42fb2ee6c8525a32195",
+          "mesh_sha256": "4780c042354dc8be50d30ac9062c475a79161649b8d3437424e28ef4e388cec2",
+          "executable": "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+          "executable_sha256": "161d0dc0a4eb228df1fa58bd341f46b9d22e885bac4d1decad151f9a8abae686",
+          "profile": {
+            "limit": 0,
+            "smallest": 0,
+            "spread": 0,
+            "include": [
+              "00000000/00000000_290a9120f9f249a7a05cfe9c_step_000.step",
+              "00000001/00000001_1ffb81a71e5b402e966b9341_step_000.step",
+              "00000002/00000002_1ffb81a71e5b402e966b9341_step_001.step",
+              "00000003/00000003_1ffb81a71e5b402e966b9341_step_002.step",
+              "00000004/00000004_1ffb81a71e5b402e966b9341_step_003.step",
+              "00000005/00000005_d4fe04f0f5f84b52bd4f10e4_step_000.step",
+              "00000006/00000006_d4fe04f0f5f84b52bd4f10e4_step_001.step",
+              "00000007/00000007_b33a147f86da49879455d286_step_000.step",
+              "00000008/00000008_9b3d6a97e8de4aa193b81000_step_000.step",
+              "00000009/00000009_9b3d6a97e8de4aa193b81000_step_001.step",
+              "00000010/00000010_b4b99d35e04b4277931f9a9c_step_000.step",
+              "00000011/00000011_e909f412cda24521865fac0f_step_000.step",
+              "00000012/00000012_f16882934f314832b639ffc0_step_000.step",
+              "00000013/00000013_c2f4d27f35ed4c138caf5c18_step_000.step",
+              "00000014/00000014_5b1c2f8a8c6f40fdaae1e69d_step_000.step",
+              "00000015/00000015_b08aa818955948c690fd9b6d_step_000.step",
+              "00000016/00000016_b08aa818955948c690fd9b6d_step_001.step",
+              "00000017/00000017_e8e79d1385fd4c78be414f6c_step_000.step",
+              "00000018/00000018_e8e79d1385fd4c78be414f6c_step_001.step",
+              "00000019/00000019_e8e79d1385fd4c78be414f6c_step_002.step",
+              "00000020/00000020_ad34a3f60c4a4caa99646600_step_000.step",
+              "00000021/00000021_ad34a3f60c4a4caa99646600_step_001.step",
+              "00000022/00000022_ad34a3f60c4a4caa99646600_step_002.step",
+              "00000023/00000023_ad34a3f60c4a4caa99646600_step_003.step",
+              "00000024/00000024_ad34a3f60c4a4caa99646600_step_004.step",
+              "00000025/00000025_ad34a3f60c4a4caa99646600_step_005.step",
+              "00000026/00000026_ad34a3f60c4a4caa99646600_step_006.step",
+              "00000027/00000027_ad34a3f60c4a4caa99646600_step_007.step",
+              "00000028/00000028_ad34a3f60c4a4caa99646600_step_008.step",
+              "00000029/00000029_ad34a3f60c4a4caa99646600_step_009.step",
+              "00000383/00000383_239bbf0e92974a32bd214366_step_004.step",
+              "00000469/00000469_11951e51b89249dba38ded3e_step_004.step",
+              "00000638/00000638_5ae45a997c76423aba2fcc11_step_003.step",
+              "00000691/00000691_b9f3563b403143dbb86ab2b8_step_004.step",
+              "00000850/00000850_2c1efcc32d094e9fb9e1a88e_step_010.step",
+              "00000909/00000909_c9400dcd7ae9428caffe2204_step_002.step",
+              "00001818/00001818_9eb3d5245a8b448bb6aecbae_step_001.step",
+              "00002727/00002727_98d8f78b1bb5495f9a193852_step_013.step",
+              "00003636/00003636_3b2ec9d56c264f4b8b7f9c84_step_000.step",
+              "00004149/00004149_25c63692f99a42f6bee0033d_step_004.step",
+              "00004545/00004545_a9de53e862dd4ad197873cc0_step_007.step",
+              "00005454/00005454_2ccd2dfb9ffc4cf29e94e0cf_step_008.step",
+              "00005956/00005956_ec7b2e7cb95d42368f778c9d_step_006.step",
+              "00006363/00006363_f91e32a0ca0848dab541db70_step_002.step",
+              "00006566/00006566_635c4f0f74b642a29580ecf9_step_018.step",
+              "00006807/00006807_ca2313fee2d0437db8572b26_step_017.step",
+              "00007272/00007272_adfc323e64d54b67a5c4aca6_step_009.step",
+              "00008126/00008126_5d720e0ec69f4a628d58af42_step_001.step",
+              "00008181/00008181_d0a04676bb3b46dfaba09434_step_020.step",
+              "00009090/00009090_798fb3ffbb0745d7a3c0e863_step_007.step",
+              "00009999/00009999_003df34c1a7b4dc2bd43c5f4_step_000.step"
+            ],
+            "repeats": 1,
+            "timeout": 240.0,
+            "size_factor": 0.15,
+            "threads": 1,
+            "max_file_bytes": 67108864,
+            "max_work": 20000000,
+            "max_nodes": 200000,
+            "max_cells": 1000000,
+            "max_bytes": 134217728,
+            "max_audit_bytes": 134217728,
+            "native_cad": true,
+            "planar_recovery": true,
+            "general_recovery": true,
+            "separate_contact_bodies": true,
+            "separate_matched_box_faces": true,
+            "warning_quality": 0.25
+          },
+          "audit_valid": true,
+          "cad_volume": 9318.659509090929,
+          "native_aggregate_volume_relative_error": 0.003924341499864733,
+          "native_quality_warning": true,
+          "body_routes": [
+            {
+              "solid_tag": 1,
+              "route": "native_partition_star"
+            }
+          ]
+        },
+        "camera": {
+          "elevation": 55,
+          "azimuth": 58
+        }
+      },
+      {
+        "name": "ABC5 / Ten separate bodies",
+        "mesh": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0005-00-fb9e6cc9/mesh.paacsmesh",
+        "source": "local-data/abc_0000_step_v00/00000005/00000005_d4fe04f0f5f84b52bd4f10e4_step_000.step",
+        "units": "mm",
+        "section": {
+          "axis": "y",
+          "fraction": 0.51
+        },
+        "quality_warning_target": 0.25,
+        "verification": {
+          "verified": true,
+          "mesh_volume": 4812995.1604978945,
+          "minimum_quality": 1.0721780995666237e-06
+        },
+        "stats_note": "CAD volume error 8.226e-08%",
+        "metadata": {
+          "case_id": 5,
+          "normal_cli_receipt": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0005-00-fb9e6cc9/stdout.log",
+          "normal_cli_receipt_sha256": "d9841a332e65252f9c1b3150973398cbfb54f3f6712a076cd1845c250d514de8",
+          "selected_records": "out/visual-validation-2026-10-03/coverage-25-final/selected-native-records.json",
+          "source_sha256": "7a970a7f10b5f7ef783e20a8713358f3a8c9cd005cf4355a586a19e72ca32de5",
+          "mesh_sha256": "af4e339003d487c7da34ef0fd9d7f06b9d56a4dd3ab64c58573ab8772e8e143e",
+          "executable": "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+          "executable_sha256": "161d0dc0a4eb228df1fa58bd341f46b9d22e885bac4d1decad151f9a8abae686",
+          "profile": {
+            "limit": 0,
+            "smallest": 0,
+            "spread": 0,
+            "include": [
+              "00000000/00000000_290a9120f9f249a7a05cfe9c_step_000.step",
+              "00000001/00000001_1ffb81a71e5b402e966b9341_step_000.step",
+              "00000002/00000002_1ffb81a71e5b402e966b9341_step_001.step",
+              "00000003/00000003_1ffb81a71e5b402e966b9341_step_002.step",
+              "00000004/00000004_1ffb81a71e5b402e966b9341_step_003.step",
+              "00000005/00000005_d4fe04f0f5f84b52bd4f10e4_step_000.step",
+              "00000006/00000006_d4fe04f0f5f84b52bd4f10e4_step_001.step",
+              "00000007/00000007_b33a147f86da49879455d286_step_000.step",
+              "00000008/00000008_9b3d6a97e8de4aa193b81000_step_000.step",
+              "00000009/00000009_9b3d6a97e8de4aa193b81000_step_001.step",
+              "00000010/00000010_b4b99d35e04b4277931f9a9c_step_000.step",
+              "00000011/00000011_e909f412cda24521865fac0f_step_000.step",
+              "00000012/00000012_f16882934f314832b639ffc0_step_000.step",
+              "00000013/00000013_c2f4d27f35ed4c138caf5c18_step_000.step",
+              "00000014/00000014_5b1c2f8a8c6f40fdaae1e69d_step_000.step",
+              "00000015/00000015_b08aa818955948c690fd9b6d_step_000.step",
+              "00000016/00000016_b08aa818955948c690fd9b6d_step_001.step",
+              "00000017/00000017_e8e79d1385fd4c78be414f6c_step_000.step",
+              "00000018/00000018_e8e79d1385fd4c78be414f6c_step_001.step",
+              "00000019/00000019_e8e79d1385fd4c78be414f6c_step_002.step",
+              "00000020/00000020_ad34a3f60c4a4caa99646600_step_000.step",
+              "00000021/00000021_ad34a3f60c4a4caa99646600_step_001.step",
+              "00000022/00000022_ad34a3f60c4a4caa99646600_step_002.step",
+              "00000023/00000023_ad34a3f60c4a4caa99646600_step_003.step",
+              "00000024/00000024_ad34a3f60c4a4caa99646600_step_004.step",
+              "00000025/00000025_ad34a3f60c4a4caa99646600_step_005.step",
+              "00000026/00000026_ad34a3f60c4a4caa99646600_step_006.step",
+              "00000027/00000027_ad34a3f60c4a4caa99646600_step_007.step",
+              "00000028/00000028_ad34a3f60c4a4caa99646600_step_008.step",
+              "00000029/00000029_ad34a3f60c4a4caa99646600_step_009.step",
+              "00000383/00000383_239bbf0e92974a32bd214366_step_004.step",
+              "00000469/00000469_11951e51b89249dba38ded3e_step_004.step",
+              "00000638/00000638_5ae45a997c76423aba2fcc11_step_003.step",
+              "00000691/00000691_b9f3563b403143dbb86ab2b8_step_004.step",
+              "00000850/00000850_2c1efcc32d094e9fb9e1a88e_step_010.step",
+              "00000909/00000909_c9400dcd7ae9428caffe2204_step_002.step",
+              "00001818/00001818_9eb3d5245a8b448bb6aecbae_step_001.step",
+              "00002727/00002727_98d8f78b1bb5495f9a193852_step_013.step",
+              "00003636/00003636_3b2ec9d56c264f4b8b7f9c84_step_000.step",
+              "00004149/00004149_25c63692f99a42f6bee0033d_step_004.step",
+              "00004545/00004545_a9de53e862dd4ad197873cc0_step_007.step",
+              "00005454/00005454_2ccd2dfb9ffc4cf29e94e0cf_step_008.step",
+              "00005956/00005956_ec7b2e7cb95d42368f778c9d_step_006.step",
+              "00006363/00006363_f91e32a0ca0848dab541db70_step_002.step",
+              "00006566/00006566_635c4f0f74b642a29580ecf9_step_018.step",
+              "00006807/00006807_ca2313fee2d0437db8572b26_step_017.step",
+              "00007272/00007272_adfc323e64d54b67a5c4aca6_step_009.step",
+              "00008126/00008126_5d720e0ec69f4a628d58af42_step_001.step",
+              "00008181/00008181_d0a04676bb3b46dfaba09434_step_020.step",
+              "00009090/00009090_798fb3ffbb0745d7a3c0e863_step_007.step",
+              "00009999/00009999_003df34c1a7b4dc2bd43c5f4_step_000.step"
+            ],
+            "repeats": 1,
+            "timeout": 240.0,
+            "size_factor": 0.15,
+            "threads": 1,
+            "max_file_bytes": 67108864,
+            "max_work": 20000000,
+            "max_nodes": 200000,
+            "max_cells": 1000000,
+            "max_bytes": 134217728,
+            "max_audit_bytes": 134217728,
+            "native_cad": true,
+            "planar_recovery": true,
+            "general_recovery": true,
+            "separate_contact_bodies": true,
+            "separate_matched_box_faces": true,
+            "warning_quality": 0.25
+          },
+          "audit_valid": true,
+          "cad_volume": 4812995.156538846,
+          "native_aggregate_volume_relative_error": 8.225748023081658e-10,
+          "native_quality_warning": true,
+          "body_routes": [
+            {
+              "solid_tag": 1,
+              "route": "native_partition_star"
+            },
+            {
+              "solid_tag": 2,
+              "route": "native_partition_star"
+            },
+            {
+              "solid_tag": 3,
+              "route": "native_partition_star"
+            },
+            {
+              "solid_tag": 4,
+              "route": "native_partition_star"
+            },
+            {
+              "solid_tag": 5,
+              "route": "native_partition_star"
+            },
+            {
+              "solid_tag": 6,
+              "route": "native_partition_star"
+            },
+            {
+              "solid_tag": 7,
+              "route": "native_partition_star"
+            },
+            {
+              "solid_tag": 8,
+              "route": "native_partition_star"
+            },
+            {
+              "solid_tag": 9,
+              "route": "native_partition_star"
+            },
+            {
+              "solid_tag": 10,
+              "route": "native_partition_star"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ABC8 / Curved solid",
+        "mesh": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0008-00-0d49fc7d/mesh.paacsmesh",
+        "source": "local-data/abc_0000_step_v00/00000008/00000008_9b3d6a97e8de4aa193b81000_step_000.step",
+        "units": "mm",
+        "section": {
+          "axis": "y",
+          "fraction": 0.51
+        },
+        "quality_warning_target": 0.25,
+        "verification": {
+          "verified": true,
+          "mesh_volume": 10523.60201383705,
+          "minimum_quality": 2.9428448279507645e-06
+        },
+        "stats_note": "CAD volume error 0.03997%",
+        "metadata": {
+          "case_id": 8,
+          "normal_cli_receipt": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0008-00-0d49fc7d/stdout.log",
+          "normal_cli_receipt_sha256": "1dbe764182505ec96dcfd0c47a43190956e58820ac614e547ac2cd6e2f692732",
+          "selected_records": "out/visual-validation-2026-10-03/coverage-25-final/selected-native-records.json",
+          "source_sha256": "84c7687d1acf464c406a6648e379893f21f0c9ed358ea0dee92be7e10b882f47",
+          "mesh_sha256": "0efa709067a33861b337928d9306dd4c71a5bf586c30595433fee679ffd32daf",
+          "executable": "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+          "executable_sha256": "161d0dc0a4eb228df1fa58bd341f46b9d22e885bac4d1decad151f9a8abae686",
+          "profile": {
+            "limit": 0,
+            "smallest": 0,
+            "spread": 0,
+            "include": [
+              "00000000/00000000_290a9120f9f249a7a05cfe9c_step_000.step",
+              "00000001/00000001_1ffb81a71e5b402e966b9341_step_000.step",
+              "00000002/00000002_1ffb81a71e5b402e966b9341_step_001.step",
+              "00000003/00000003_1ffb81a71e5b402e966b9341_step_002.step",
+              "00000004/00000004_1ffb81a71e5b402e966b9341_step_003.step",
+              "00000005/00000005_d4fe04f0f5f84b52bd4f10e4_step_000.step",
+              "00000006/00000006_d4fe04f0f5f84b52bd4f10e4_step_001.step",
+              "00000007/00000007_b33a147f86da49879455d286_step_000.step",
+              "00000008/00000008_9b3d6a97e8de4aa193b81000_step_000.step",
+              "00000009/00000009_9b3d6a97e8de4aa193b81000_step_001.step",
+              "00000010/00000010_b4b99d35e04b4277931f9a9c_step_000.step",
+              "00000011/00000011_e909f412cda24521865fac0f_step_000.step",
+              "00000012/00000012_f16882934f314832b639ffc0_step_000.step",
+              "00000013/00000013_c2f4d27f35ed4c138caf5c18_step_000.step",
+              "00000014/00000014_5b1c2f8a8c6f40fdaae1e69d_step_000.step",
+              "00000015/00000015_b08aa818955948c690fd9b6d_step_000.step",
+              "00000016/00000016_b08aa818955948c690fd9b6d_step_001.step",
+              "00000017/00000017_e8e79d1385fd4c78be414f6c_step_000.step",
+              "00000018/00000018_e8e79d1385fd4c78be414f6c_step_001.step",
+              "00000019/00000019_e8e79d1385fd4c78be414f6c_step_002.step",
+              "00000020/00000020_ad34a3f60c4a4caa99646600_step_000.step",
+              "00000021/00000021_ad34a3f60c4a4caa99646600_step_001.step",
+              "00000022/00000022_ad34a3f60c4a4caa99646600_step_002.step",
+              "00000023/00000023_ad34a3f60c4a4caa99646600_step_003.step",
+              "00000024/00000024_ad34a3f60c4a4caa99646600_step_004.step",
+              "00000025/00000025_ad34a3f60c4a4caa99646600_step_005.step",
+              "00000026/00000026_ad34a3f60c4a4caa99646600_step_006.step",
+              "00000027/00000027_ad34a3f60c4a4caa99646600_step_007.step",
+              "00000028/00000028_ad34a3f60c4a4caa99646600_step_008.step",
+              "00000029/00000029_ad34a3f60c4a4caa99646600_step_009.step",
+              "00000383/00000383_239bbf0e92974a32bd214366_step_004.step",
+              "00000469/00000469_11951e51b89249dba38ded3e_step_004.step",
+              "00000638/00000638_5ae45a997c76423aba2fcc11_step_003.step",
+              "00000691/00000691_b9f3563b403143dbb86ab2b8_step_004.step",
+              "00000850/00000850_2c1efcc32d094e9fb9e1a88e_step_010.step",
+              "00000909/00000909_c9400dcd7ae9428caffe2204_step_002.step",
+              "00001818/00001818_9eb3d5245a8b448bb6aecbae_step_001.step",
+              "00002727/00002727_98d8f78b1bb5495f9a193852_step_013.step",
+              "00003636/00003636_3b2ec9d56c264f4b8b7f9c84_step_000.step",
+              "00004149/00004149_25c63692f99a42f6bee0033d_step_004.step",
+              "00004545/00004545_a9de53e862dd4ad197873cc0_step_007.step",
+              "00005454/00005454_2ccd2dfb9ffc4cf29e94e0cf_step_008.step",
+              "00005956/00005956_ec7b2e7cb95d42368f778c9d_step_006.step",
+              "00006363/00006363_f91e32a0ca0848dab541db70_step_002.step",
+              "00006566/00006566_635c4f0f74b642a29580ecf9_step_018.step",
+              "00006807/00006807_ca2313fee2d0437db8572b26_step_017.step",
+              "00007272/00007272_adfc323e64d54b67a5c4aca6_step_009.step",
+              "00008126/00008126_5d720e0ec69f4a628d58af42_step_001.step",
+              "00008181/00008181_d0a04676bb3b46dfaba09434_step_020.step",
+              "00009090/00009090_798fb3ffbb0745d7a3c0e863_step_007.step",
+              "00009999/00009999_003df34c1a7b4dc2bd43c5f4_step_000.step"
+            ],
+            "repeats": 1,
+            "timeout": 240.0,
+            "size_factor": 0.15,
+            "threads": 1,
+            "max_file_bytes": 67108864,
+            "max_work": 20000000,
+            "max_nodes": 200000,
+            "max_cells": 1000000,
+            "max_bytes": 134217728,
+            "max_audit_bytes": 134217728,
+            "native_cad": true,
+            "planar_recovery": true,
+            "general_recovery": true,
+            "separate_contact_bodies": true,
+            "separate_matched_box_faces": true,
+            "warning_quality": 0.25
+          },
+          "audit_valid": true,
+          "cad_volume": 10527.80955115289,
+          "native_aggregate_volume_relative_error": 0.0003996593304045561,
+          "native_quality_warning": true,
+          "body_routes": [
+            {
+              "solid_tag": 1,
+              "route": "native_partition_star"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ABC9 / Hollow revolved part",
+        "mesh": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0009-00-23d1cf37/mesh.paacsmesh",
+        "source": "local-data/abc_0000_step_v00/00000009/00000009_9b3d6a97e8de4aa193b81000_step_001.step",
+        "units": "mm",
+        "section": {
+          "axis": "y",
+          "fraction": 0.51
+        },
+        "quality_warning_target": 0.25,
+        "verification": {
+          "verified": true,
+          "mesh_volume": 57551.60680566021,
+          "minimum_quality": 2.948755810151264e-07
+        },
+        "stats_note": "CAD volume error 0.2757%",
+        "metadata": {
+          "case_id": 9,
+          "normal_cli_receipt": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0009-00-23d1cf37/stdout.log",
+          "normal_cli_receipt_sha256": "7808e38ed1659a2d44e909be60b4e7e57eeb00491b342a6674604f6816477433",
+          "selected_records": "out/visual-validation-2026-10-03/coverage-25-final/selected-native-records.json",
+          "source_sha256": "34a7b399bef7d25ce7b85357d06210ec7c06fe6a39a6b20bc7369dc1abd40b77",
+          "mesh_sha256": "d8945eb44577af2ccf77c897fd82025b1648f19b278409c52574f68725bc37a5",
+          "executable": "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+          "executable_sha256": "161d0dc0a4eb228df1fa58bd341f46b9d22e885bac4d1decad151f9a8abae686",
+          "profile": {
+            "limit": 0,
+            "smallest": 0,
+            "spread": 0,
+            "include": [
+              "00000000/00000000_290a9120f9f249a7a05cfe9c_step_000.step",
+              "00000001/00000001_1ffb81a71e5b402e966b9341_step_000.step",
+              "00000002/00000002_1ffb81a71e5b402e966b9341_step_001.step",
+              "00000003/00000003_1ffb81a71e5b402e966b9341_step_002.step",
+              "00000004/00000004_1ffb81a71e5b402e966b9341_step_003.step",
+              "00000005/00000005_d4fe04f0f5f84b52bd4f10e4_step_000.step",
+              "00000006/00000006_d4fe04f0f5f84b52bd4f10e4_step_001.step",
+              "00000007/00000007_b33a147f86da49879455d286_step_000.step",
+              "00000008/00000008_9b3d6a97e8de4aa193b81000_step_000.step",
+              "00000009/00000009_9b3d6a97e8de4aa193b81000_step_001.step",
+              "00000010/00000010_b4b99d35e04b4277931f9a9c_step_000.step",
+              "00000011/00000011_e909f412cda24521865fac0f_step_000.step",
+              "00000012/00000012_f16882934f314832b639ffc0_step_000.step",
+              "00000013/00000013_c2f4d27f35ed4c138caf5c18_step_000.step",
+              "00000014/00000014_5b1c2f8a8c6f40fdaae1e69d_step_000.step",
+              "00000015/00000015_b08aa818955948c690fd9b6d_step_000.step",
+              "00000016/00000016_b08aa818955948c690fd9b6d_step_001.step",
+              "00000017/00000017_e8e79d1385fd4c78be414f6c_step_000.step",
+              "00000018/00000018_e8e79d1385fd4c78be414f6c_step_001.step",
+              "00000019/00000019_e8e79d1385fd4c78be414f6c_step_002.step",
+              "00000020/00000020_ad34a3f60c4a4caa99646600_step_000.step",
+              "00000021/00000021_ad34a3f60c4a4caa99646600_step_001.step",
+              "00000022/00000022_ad34a3f60c4a4caa99646600_step_002.step",
+              "00000023/00000023_ad34a3f60c4a4caa99646600_step_003.step",
+              "00000024/00000024_ad34a3f60c4a4caa99646600_step_004.step",
+              "00000025/00000025_ad34a3f60c4a4caa99646600_step_005.step",
+              "00000026/00000026_ad34a3f60c4a4caa99646600_step_006.step",
+              "00000027/00000027_ad34a3f60c4a4caa99646600_step_007.step",
+              "00000028/00000028_ad34a3f60c4a4caa99646600_step_008.step",
+              "00000029/00000029_ad34a3f60c4a4caa99646600_step_009.step",
+              "00000383/00000383_239bbf0e92974a32bd214366_step_004.step",
+              "00000469/00000469_11951e51b89249dba38ded3e_step_004.step",
+              "00000638/00000638_5ae45a997c76423aba2fcc11_step_003.step",
+              "00000691/00000691_b9f3563b403143dbb86ab2b8_step_004.step",
+              "00000850/00000850_2c1efcc32d094e9fb9e1a88e_step_010.step",
+              "00000909/00000909_c9400dcd7ae9428caffe2204_step_002.step",
+              "00001818/00001818_9eb3d5245a8b448bb6aecbae_step_001.step",
+              "00002727/00002727_98d8f78b1bb5495f9a193852_step_013.step",
+              "00003636/00003636_3b2ec9d56c264f4b8b7f9c84_step_000.step",
+              "00004149/00004149_25c63692f99a42f6bee0033d_step_004.step",
+              "00004545/00004545_a9de53e862dd4ad197873cc0_step_007.step",
+              "00005454/00005454_2ccd2dfb9ffc4cf29e94e0cf_step_008.step",
+              "00005956/00005956_ec7b2e7cb95d42368f778c9d_step_006.step",
+              "00006363/00006363_f91e32a0ca0848dab541db70_step_002.step",
+              "00006566/00006566_635c4f0f74b642a29580ecf9_step_018.step",
+              "00006807/00006807_ca2313fee2d0437db8572b26_step_017.step",
+              "00007272/00007272_adfc323e64d54b67a5c4aca6_step_009.step",
+              "00008126/00008126_5d720e0ec69f4a628d58af42_step_001.step",
+              "00008181/00008181_d0a04676bb3b46dfaba09434_step_020.step",
+              "00009090/00009090_798fb3ffbb0745d7a3c0e863_step_007.step",
+              "00009999/00009999_003df34c1a7b4dc2bd43c5f4_step_000.step"
+            ],
+            "repeats": 1,
+            "timeout": 240.0,
+            "size_factor": 0.15,
+            "threads": 1,
+            "max_file_bytes": 67108864,
+            "max_work": 20000000,
+            "max_nodes": 200000,
+            "max_cells": 1000000,
+            "max_bytes": 134217728,
+            "max_audit_bytes": 134217728,
+            "native_cad": true,
+            "planar_recovery": true,
+            "general_recovery": true,
+            "separate_contact_bodies": true,
+            "separate_matched_box_faces": true,
+            "warning_quality": 0.25
+          },
+          "audit_valid": true,
+          "cad_volume": 57710.73894075777,
+          "native_aggregate_volume_relative_error": 0.002757409418391233,
+          "native_quality_warning": true,
+          "body_routes": [
+            {
+              "solid_tag": 1,
+              "route": "native_partition_star"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ABC20 / Two curved bodies",
+        "mesh": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0020-00-0b1d1861/mesh.paacsmesh",
+        "source": "local-data/abc_0000_step_v00/00000020/00000020_ad34a3f60c4a4caa99646600_step_000.step",
+        "units": "mm",
+        "section": {
+          "axis": "y",
+          "fraction": 0.51
+        },
+        "quality_warning_target": 0.25,
+        "verification": {
+          "verified": true,
+          "mesh_volume": 3543.1210558953385,
+          "minimum_quality": 3.2334787100353836e-09
+        },
+        "stats_note": "CAD volume error 0.001549%",
+        "metadata": {
+          "case_id": 20,
+          "normal_cli_receipt": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0020-00-0b1d1861/stdout.log",
+          "normal_cli_receipt_sha256": "1a37b51b7fcad79a577acea468daf66794d4604aef024969d4f608c778a8c2fb",
+          "selected_records": "out/visual-validation-2026-10-03/coverage-25-final/selected-native-records.json",
+          "source_sha256": "0392c2d92f45b8659158225801388d47a34743684894c3433150eec722dfa6d8",
+          "mesh_sha256": "a204244a7125c94a695a14a8c26e5e60a6499d8b1dd6996bf7d0a38167f10bcb",
+          "executable": "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+          "executable_sha256": "161d0dc0a4eb228df1fa58bd341f46b9d22e885bac4d1decad151f9a8abae686",
+          "profile": {
+            "limit": 0,
+            "smallest": 0,
+            "spread": 0,
+            "include": [
+              "00000000/00000000_290a9120f9f249a7a05cfe9c_step_000.step",
+              "00000001/00000001_1ffb81a71e5b402e966b9341_step_000.step",
+              "00000002/00000002_1ffb81a71e5b402e966b9341_step_001.step",
+              "00000003/00000003_1ffb81a71e5b402e966b9341_step_002.step",
+              "00000004/00000004_1ffb81a71e5b402e966b9341_step_003.step",
+              "00000005/00000005_d4fe04f0f5f84b52bd4f10e4_step_000.step",
+              "00000006/00000006_d4fe04f0f5f84b52bd4f10e4_step_001.step",
+              "00000007/00000007_b33a147f86da49879455d286_step_000.step",
+              "00000008/00000008_9b3d6a97e8de4aa193b81000_step_000.step",
+              "00000009/00000009_9b3d6a97e8de4aa193b81000_step_001.step",
+              "00000010/00000010_b4b99d35e04b4277931f9a9c_step_000.step",
+              "00000011/00000011_e909f412cda24521865fac0f_step_000.step",
+              "00000012/00000012_f16882934f314832b639ffc0_step_000.step",
+              "00000013/00000013_c2f4d27f35ed4c138caf5c18_step_000.step",
+              "00000014/00000014_5b1c2f8a8c6f40fdaae1e69d_step_000.step",
+              "00000015/00000015_b08aa818955948c690fd9b6d_step_000.step",
+              "00000016/00000016_b08aa818955948c690fd9b6d_step_001.step",
+              "00000017/00000017_e8e79d1385fd4c78be414f6c_step_000.step",
+              "00000018/00000018_e8e79d1385fd4c78be414f6c_step_001.step",
+              "00000019/00000019_e8e79d1385fd4c78be414f6c_step_002.step",
+              "00000020/00000020_ad34a3f60c4a4caa99646600_step_000.step",
+              "00000021/00000021_ad34a3f60c4a4caa99646600_step_001.step",
+              "00000022/00000022_ad34a3f60c4a4caa99646600_step_002.step",
+              "00000023/00000023_ad34a3f60c4a4caa99646600_step_003.step",
+              "00000024/00000024_ad34a3f60c4a4caa99646600_step_004.step",
+              "00000025/00000025_ad34a3f60c4a4caa99646600_step_005.step",
+              "00000026/00000026_ad34a3f60c4a4caa99646600_step_006.step",
+              "00000027/00000027_ad34a3f60c4a4caa99646600_step_007.step",
+              "00000028/00000028_ad34a3f60c4a4caa99646600_step_008.step",
+              "00000029/00000029_ad34a3f60c4a4caa99646600_step_009.step",
+              "00000383/00000383_239bbf0e92974a32bd214366_step_004.step",
+              "00000469/00000469_11951e51b89249dba38ded3e_step_004.step",
+              "00000638/00000638_5ae45a997c76423aba2fcc11_step_003.step",
+              "00000691/00000691_b9f3563b403143dbb86ab2b8_step_004.step",
+              "00000850/00000850_2c1efcc32d094e9fb9e1a88e_step_010.step",
+              "00000909/00000909_c9400dcd7ae9428caffe2204_step_002.step",
+              "00001818/00001818_9eb3d5245a8b448bb6aecbae_step_001.step",
+              "00002727/00002727_98d8f78b1bb5495f9a193852_step_013.step",
+              "00003636/00003636_3b2ec9d56c264f4b8b7f9c84_step_000.step",
+              "00004149/00004149_25c63692f99a42f6bee0033d_step_004.step",
+              "00004545/00004545_a9de53e862dd4ad197873cc0_step_007.step",
+              "00005454/00005454_2ccd2dfb9ffc4cf29e94e0cf_step_008.step",
+              "00005956/00005956_ec7b2e7cb95d42368f778c9d_step_006.step",
+              "00006363/00006363_f91e32a0ca0848dab541db70_step_002.step",
+              "00006566/00006566_635c4f0f74b642a29580ecf9_step_018.step",
+              "00006807/00006807_ca2313fee2d0437db8572b26_step_017.step",
+              "00007272/00007272_adfc323e64d54b67a5c4aca6_step_009.step",
+              "00008126/00008126_5d720e0ec69f4a628d58af42_step_001.step",
+              "00008181/00008181_d0a04676bb3b46dfaba09434_step_020.step",
+              "00009090/00009090_798fb3ffbb0745d7a3c0e863_step_007.step",
+              "00009999/00009999_003df34c1a7b4dc2bd43c5f4_step_000.step"
+            ],
+            "repeats": 1,
+            "timeout": 240.0,
+            "size_factor": 0.15,
+            "threads": 1,
+            "max_file_bytes": 67108864,
+            "max_work": 20000000,
+            "max_nodes": 200000,
+            "max_cells": 1000000,
+            "max_bytes": 134217728,
+            "max_audit_bytes": 134217728,
+            "native_cad": true,
+            "planar_recovery": true,
+            "general_recovery": true,
+            "separate_contact_bodies": true,
+            "separate_matched_box_faces": true,
+            "warning_quality": 0.25
+          },
+          "audit_valid": true,
+          "cad_volume": 3543.066159544191,
+          "native_aggregate_volume_relative_error": 1.5494023728426604e-05,
+          "native_quality_warning": true,
+          "body_routes": [
+            {
+              "solid_tag": 1,
+              "route": "native_partition_star"
+            },
+            {
+              "solid_tag": 2,
+              "route": "native_partition_star"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ABC29 / Circular contact",
+        "mesh": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0029-00-6d53c1c5/mesh.paacsmesh",
+        "source": "local-data/abc_0000_step_v00/00000029/00000029_ad34a3f60c4a4caa99646600_step_009.step",
+        "units": "mm",
+        "section": {
+          "axis": "y",
+          "fraction": 0.51
+        },
+        "quality_warning_target": 0.25,
+        "verification": {
+          "verified": true,
+          "mesh_volume": 16726.45719787724,
+          "minimum_quality": 5.729777091517498e-08
+        },
+        "stats_note": "CAD volume error 0.4089%",
+        "metadata": {
+          "case_id": 29,
+          "normal_cli_receipt": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0029-00-6d53c1c5/stdout.log",
+          "normal_cli_receipt_sha256": "70122a4332ddebd4d242e3501b533327d914ceb9d3c779df7fc66c8dcddd1e99",
+          "selected_records": "out/visual-validation-2026-10-03/coverage-25-final/selected-native-records.json",
+          "source_sha256": "460499c066bfa9ca375c888966b4bacdebc839aff7b4dfea271b547699aa891d",
+          "mesh_sha256": "46f1d097ea8feea4e23f383f0042ce07c8f171b3f0e3955dfbf8cef4e27c445d",
+          "executable": "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+          "executable_sha256": "161d0dc0a4eb228df1fa58bd341f46b9d22e885bac4d1decad151f9a8abae686",
+          "profile": {
+            "limit": 0,
+            "smallest": 0,
+            "spread": 0,
+            "include": [
+              "00000000/00000000_290a9120f9f249a7a05cfe9c_step_000.step",
+              "00000001/00000001_1ffb81a71e5b402e966b9341_step_000.step",
+              "00000002/00000002_1ffb81a71e5b402e966b9341_step_001.step",
+              "00000003/00000003_1ffb81a71e5b402e966b9341_step_002.step",
+              "00000004/00000004_1ffb81a71e5b402e966b9341_step_003.step",
+              "00000005/00000005_d4fe04f0f5f84b52bd4f10e4_step_000.step",
+              "00000006/00000006_d4fe04f0f5f84b52bd4f10e4_step_001.step",
+              "00000007/00000007_b33a147f86da49879455d286_step_000.step",
+              "00000008/00000008_9b3d6a97e8de4aa193b81000_step_000.step",
+              "00000009/00000009_9b3d6a97e8de4aa193b81000_step_001.step",
+              "00000010/00000010_b4b99d35e04b4277931f9a9c_step_000.step",
+              "00000011/00000011_e909f412cda24521865fac0f_step_000.step",
+              "00000012/00000012_f16882934f314832b639ffc0_step_000.step",
+              "00000013/00000013_c2f4d27f35ed4c138caf5c18_step_000.step",
+              "00000014/00000014_5b1c2f8a8c6f40fdaae1e69d_step_000.step",
+              "00000015/00000015_b08aa818955948c690fd9b6d_step_000.step",
+              "00000016/00000016_b08aa818955948c690fd9b6d_step_001.step",
+              "00000017/00000017_e8e79d1385fd4c78be414f6c_step_000.step",
+              "00000018/00000018_e8e79d1385fd4c78be414f6c_step_001.step",
+              "00000019/00000019_e8e79d1385fd4c78be414f6c_step_002.step",
+              "00000020/00000020_ad34a3f60c4a4caa99646600_step_000.step",
+              "00000021/00000021_ad34a3f60c4a4caa99646600_step_001.step",
+              "00000022/00000022_ad34a3f60c4a4caa99646600_step_002.step",
+              "00000023/00000023_ad34a3f60c4a4caa99646600_step_003.step",
+              "00000024/00000024_ad34a3f60c4a4caa99646600_step_004.step",
+              "00000025/00000025_ad34a3f60c4a4caa99646600_step_005.step",
+              "00000026/00000026_ad34a3f60c4a4caa99646600_step_006.step",
+              "00000027/00000027_ad34a3f60c4a4caa99646600_step_007.step",
+              "00000028/00000028_ad34a3f60c4a4caa99646600_step_008.step",
+              "00000029/00000029_ad34a3f60c4a4caa99646600_step_009.step",
+              "00000383/00000383_239bbf0e92974a32bd214366_step_004.step",
+              "00000469/00000469_11951e51b89249dba38ded3e_step_004.step",
+              "00000638/00000638_5ae45a997c76423aba2fcc11_step_003.step",
+              "00000691/00000691_b9f3563b403143dbb86ab2b8_step_004.step",
+              "00000850/00000850_2c1efcc32d094e9fb9e1a88e_step_010.step",
+              "00000909/00000909_c9400dcd7ae9428caffe2204_step_002.step",
+              "00001818/00001818_9eb3d5245a8b448bb6aecbae_step_001.step",
+              "00002727/00002727_98d8f78b1bb5495f9a193852_step_013.step",
+              "00003636/00003636_3b2ec9d56c264f4b8b7f9c84_step_000.step",
+              "00004149/00004149_25c63692f99a42f6bee0033d_step_004.step",
+              "00004545/00004545_a9de53e862dd4ad197873cc0_step_007.step",
+              "00005454/00005454_2ccd2dfb9ffc4cf29e94e0cf_step_008.step",
+              "00005956/00005956_ec7b2e7cb95d42368f778c9d_step_006.step",
+              "00006363/00006363_f91e32a0ca0848dab541db70_step_002.step",
+              "00006566/00006566_635c4f0f74b642a29580ecf9_step_018.step",
+              "00006807/00006807_ca2313fee2d0437db8572b26_step_017.step",
+              "00007272/00007272_adfc323e64d54b67a5c4aca6_step_009.step",
+              "00008126/00008126_5d720e0ec69f4a628d58af42_step_001.step",
+              "00008181/00008181_d0a04676bb3b46dfaba09434_step_020.step",
+              "00009090/00009090_798fb3ffbb0745d7a3c0e863_step_007.step",
+              "00009999/00009999_003df34c1a7b4dc2bd43c5f4_step_000.step"
+            ],
+            "repeats": 1,
+            "timeout": 240.0,
+            "size_factor": 0.15,
+            "threads": 1,
+            "max_file_bytes": 67108864,
+            "max_work": 20000000,
+            "max_nodes": 200000,
+            "max_cells": 1000000,
+            "max_bytes": 134217728,
+            "max_audit_bytes": 134217728,
+            "native_cad": true,
+            "planar_recovery": true,
+            "general_recovery": true,
+            "separate_contact_bodies": true,
+            "separate_matched_box_faces": true,
+            "warning_quality": 0.25
+          },
+          "audit_valid": true,
+          "cad_volume": 16795.13363848201,
+          "native_aggregate_volume_relative_error": 0.004089067826612231,
+          "native_quality_warning": true,
+          "body_routes": [
+            {
+              "solid_tag": 1,
+              "route": "native_partition_star"
+            },
+            {
+              "solid_tag": 2,
+              "route": "native_contact_cylinder"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ABC5454 / Through holes",
+        "mesh": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0041-00-7ecaff22/mesh.paacsmesh",
+        "source": "local-data/abc_0000_step_v00/00005454/00005454_2ccd2dfb9ffc4cf29e94e0cf_step_008.step",
+        "units": "mm",
+        "section": {
+          "axis": "y",
+          "fraction": 0.51
+        },
+        "quality_warning_target": 0.25,
+        "verification": {
+          "verified": true,
+          "mesh_volume": 3169.895999999245,
+          "minimum_quality": 0.011583436932431903
+        },
+        "stats_note": "CAD volume error 2.664e-11%",
+        "metadata": {
+          "case_id": 5454,
+          "normal_cli_receipt": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0041-00-7ecaff22/stdout.log",
+          "normal_cli_receipt_sha256": "f301153fb4d5fa48ecec8fd437cc260198579ab8c7d6fa6c055885cf6a567212",
+          "selected_records": "out/visual-validation-2026-10-03/coverage-25-final/selected-native-records.json",
+          "source_sha256": "76375df72b7d3f214c6be5a667a687e9ad39ef316e4a431025b6bcfb20d0bc65",
+          "mesh_sha256": "11cd0755424f77a0292da4e65d6b29a18d57a5a5445cde857658475a9cd4180b",
+          "executable": "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+          "executable_sha256": "161d0dc0a4eb228df1fa58bd341f46b9d22e885bac4d1decad151f9a8abae686",
+          "profile": {
+            "limit": 0,
+            "smallest": 0,
+            "spread": 0,
+            "include": [
+              "00000000/00000000_290a9120f9f249a7a05cfe9c_step_000.step",
+              "00000001/00000001_1ffb81a71e5b402e966b9341_step_000.step",
+              "00000002/00000002_1ffb81a71e5b402e966b9341_step_001.step",
+              "00000003/00000003_1ffb81a71e5b402e966b9341_step_002.step",
+              "00000004/00000004_1ffb81a71e5b402e966b9341_step_003.step",
+              "00000005/00000005_d4fe04f0f5f84b52bd4f10e4_step_000.step",
+              "00000006/00000006_d4fe04f0f5f84b52bd4f10e4_step_001.step",
+              "00000007/00000007_b33a147f86da49879455d286_step_000.step",
+              "00000008/00000008_9b3d6a97e8de4aa193b81000_step_000.step",
+              "00000009/00000009_9b3d6a97e8de4aa193b81000_step_001.step",
+              "00000010/00000010_b4b99d35e04b4277931f9a9c_step_000.step",
+              "00000011/00000011_e909f412cda24521865fac0f_step_000.step",
+              "00000012/00000012_f16882934f314832b639ffc0_step_000.step",
+              "00000013/00000013_c2f4d27f35ed4c138caf5c18_step_000.step",
+              "00000014/00000014_5b1c2f8a8c6f40fdaae1e69d_step_000.step",
+              "00000015/00000015_b08aa818955948c690fd9b6d_step_000.step",
+              "00000016/00000016_b08aa818955948c690fd9b6d_step_001.step",
+              "00000017/00000017_e8e79d1385fd4c78be414f6c_step_000.step",
+              "00000018/00000018_e8e79d1385fd4c78be414f6c_step_001.step",
+              "00000019/00000019_e8e79d1385fd4c78be414f6c_step_002.step",
+              "00000020/00000020_ad34a3f60c4a4caa99646600_step_000.step",
+              "00000021/00000021_ad34a3f60c4a4caa99646600_step_001.step",
+              "00000022/00000022_ad34a3f60c4a4caa99646600_step_002.step",
+              "00000023/00000023_ad34a3f60c4a4caa99646600_step_003.step",
+              "00000024/00000024_ad34a3f60c4a4caa99646600_step_004.step",
+              "00000025/00000025_ad34a3f60c4a4caa99646600_step_005.step",
+              "00000026/00000026_ad34a3f60c4a4caa99646600_step_006.step",
+              "00000027/00000027_ad34a3f60c4a4caa99646600_step_007.step",
+              "00000028/00000028_ad34a3f60c4a4caa99646600_step_008.step",
+              "00000029/00000029_ad34a3f60c4a4caa99646600_step_009.step",
+              "00000383/00000383_239bbf0e92974a32bd214366_step_004.step",
+              "00000469/00000469_11951e51b89249dba38ded3e_step_004.step",
+              "00000638/00000638_5ae45a997c76423aba2fcc11_step_003.step",
+              "00000691/00000691_b9f3563b403143dbb86ab2b8_step_004.step",
+              "00000850/00000850_2c1efcc32d094e9fb9e1a88e_step_010.step",
+              "00000909/00000909_c9400dcd7ae9428caffe2204_step_002.step",
+              "00001818/00001818_9eb3d5245a8b448bb6aecbae_step_001.step",
+              "00002727/00002727_98d8f78b1bb5495f9a193852_step_013.step",
+              "00003636/00003636_3b2ec9d56c264f4b8b7f9c84_step_000.step",
+              "00004149/00004149_25c63692f99a42f6bee0033d_step_004.step",
+              "00004545/00004545_a9de53e862dd4ad197873cc0_step_007.step",
+              "00005454/00005454_2ccd2dfb9ffc4cf29e94e0cf_step_008.step",
+              "00005956/00005956_ec7b2e7cb95d42368f778c9d_step_006.step",
+              "00006363/00006363_f91e32a0ca0848dab541db70_step_002.step",
+              "00006566/00006566_635c4f0f74b642a29580ecf9_step_018.step",
+              "00006807/00006807_ca2313fee2d0437db8572b26_step_017.step",
+              "00007272/00007272_adfc323e64d54b67a5c4aca6_step_009.step",
+              "00008126/00008126_5d720e0ec69f4a628d58af42_step_001.step",
+              "00008181/00008181_d0a04676bb3b46dfaba09434_step_020.step",
+              "00009090/00009090_798fb3ffbb0745d7a3c0e863_step_007.step",
+              "00009999/00009999_003df34c1a7b4dc2bd43c5f4_step_000.step"
+            ],
+            "repeats": 1,
+            "timeout": 240.0,
+            "size_factor": 0.15,
+            "threads": 1,
+            "max_file_bytes": 67108864,
+            "max_work": 20000000,
+            "max_nodes": 200000,
+            "max_cells": 1000000,
+            "max_bytes": 134217728,
+            "max_audit_bytes": 134217728,
+            "native_cad": true,
+            "planar_recovery": true,
+            "general_recovery": true,
+            "separate_contact_bodies": true,
+            "separate_matched_box_faces": true,
+            "warning_quality": 0.25
+          },
+          "audit_valid": true,
+          "cad_volume": 3169.8959999984004,
+          "native_aggregate_volume_relative_error": 2.664017464915537e-13,
+          "native_quality_warning": true,
+          "body_routes": [
+            {
+              "solid_tag": 1,
+              "route": "native_partition_star"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ABC7272 / Through holes",
+        "mesh": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0046-00-cb8fb62a/mesh.paacsmesh",
+        "source": "local-data/abc_0000_step_v00/00007272/00007272_adfc323e64d54b67a5c4aca6_step_009.step",
+        "units": "mm",
+        "section": {
+          "axis": "y",
+          "fraction": 0.51
+        },
+        "quality_warning_target": 0.25,
+        "verification": {
+          "verified": true,
+          "mesh_volume": 32609.848000177797,
+          "minimum_quality": 2.8269480453021907e-05
+        },
+        "stats_note": "CAD volume error 0.04394%",
+        "metadata": {
+          "case_id": 7272,
+          "normal_cli_receipt": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0046-00-cb8fb62a/stdout.log",
+          "normal_cli_receipt_sha256": "45b0ced10711241deb676fb8037f571fd9f56eafec71f446369807fb676a6c63",
+          "selected_records": "out/visual-validation-2026-10-03/coverage-25-final/selected-native-records.json",
+          "source_sha256": "89f28025d707815466d2ce8827c9b8bec9a7a4109cf1cc7cb6f3d5877d868ca2",
+          "mesh_sha256": "6ef6ddcaf2116a5b0f10a6e92ab1b699d8e564b88b1e1bde52b796565b9112bf",
+          "executable": "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+          "executable_sha256": "161d0dc0a4eb228df1fa58bd341f46b9d22e885bac4d1decad151f9a8abae686",
+          "profile": {
+            "limit": 0,
+            "smallest": 0,
+            "spread": 0,
+            "include": [
+              "00000000/00000000_290a9120f9f249a7a05cfe9c_step_000.step",
+              "00000001/00000001_1ffb81a71e5b402e966b9341_step_000.step",
+              "00000002/00000002_1ffb81a71e5b402e966b9341_step_001.step",
+              "00000003/00000003_1ffb81a71e5b402e966b9341_step_002.step",
+              "00000004/00000004_1ffb81a71e5b402e966b9341_step_003.step",
+              "00000005/00000005_d4fe04f0f5f84b52bd4f10e4_step_000.step",
+              "00000006/00000006_d4fe04f0f5f84b52bd4f10e4_step_001.step",
+              "00000007/00000007_b33a147f86da49879455d286_step_000.step",
+              "00000008/00000008_9b3d6a97e8de4aa193b81000_step_000.step",
+              "00000009/00000009_9b3d6a97e8de4aa193b81000_step_001.step",
+              "00000010/00000010_b4b99d35e04b4277931f9a9c_step_000.step",
+              "00000011/00000011_e909f412cda24521865fac0f_step_000.step",
+              "00000012/00000012_f16882934f314832b639ffc0_step_000.step",
+              "00000013/00000013_c2f4d27f35ed4c138caf5c18_step_000.step",
+              "00000014/00000014_5b1c2f8a8c6f40fdaae1e69d_step_000.step",
+              "00000015/00000015_b08aa818955948c690fd9b6d_step_000.step",
+              "00000016/00000016_b08aa818955948c690fd9b6d_step_001.step",
+              "00000017/00000017_e8e79d1385fd4c78be414f6c_step_000.step",
+              "00000018/00000018_e8e79d1385fd4c78be414f6c_step_001.step",
+              "00000019/00000019_e8e79d1385fd4c78be414f6c_step_002.step",
+              "00000020/00000020_ad34a3f60c4a4caa99646600_step_000.step",
+              "00000021/00000021_ad34a3f60c4a4caa99646600_step_001.step",
+              "00000022/00000022_ad34a3f60c4a4caa99646600_step_002.step",
+              "00000023/00000023_ad34a3f60c4a4caa99646600_step_003.step",
+              "00000024/00000024_ad34a3f60c4a4caa99646600_step_004.step",
+              "00000025/00000025_ad34a3f60c4a4caa99646600_step_005.step",
+              "00000026/00000026_ad34a3f60c4a4caa99646600_step_006.step",
+              "00000027/00000027_ad34a3f60c4a4caa99646600_step_007.step",
+              "00000028/00000028_ad34a3f60c4a4caa99646600_step_008.step",
+              "00000029/00000029_ad34a3f60c4a4caa99646600_step_009.step",
+              "00000383/00000383_239bbf0e92974a32bd214366_step_004.step",
+              "00000469/00000469_11951e51b89249dba38ded3e_step_004.step",
+              "00000638/00000638_5ae45a997c76423aba2fcc11_step_003.step",
+              "00000691/00000691_b9f3563b403143dbb86ab2b8_step_004.step",
+              "00000850/00000850_2c1efcc32d094e9fb9e1a88e_step_010.step",
+              "00000909/00000909_c9400dcd7ae9428caffe2204_step_002.step",
+              "00001818/00001818_9eb3d5245a8b448bb6aecbae_step_001.step",
+              "00002727/00002727_98d8f78b1bb5495f9a193852_step_013.step",
+              "00003636/00003636_3b2ec9d56c264f4b8b7f9c84_step_000.step",
+              "00004149/00004149_25c63692f99a42f6bee0033d_step_004.step",
+              "00004545/00004545_a9de53e862dd4ad197873cc0_step_007.step",
+              "00005454/00005454_2ccd2dfb9ffc4cf29e94e0cf_step_008.step",
+              "00005956/00005956_ec7b2e7cb95d42368f778c9d_step_006.step",
+              "00006363/00006363_f91e32a0ca0848dab541db70_step_002.step",
+              "00006566/00006566_635c4f0f74b642a29580ecf9_step_018.step",
+              "00006807/00006807_ca2313fee2d0437db8572b26_step_017.step",
+              "00007272/00007272_adfc323e64d54b67a5c4aca6_step_009.step",
+              "00008126/00008126_5d720e0ec69f4a628d58af42_step_001.step",
+              "00008181/00008181_d0a04676bb3b46dfaba09434_step_020.step",
+              "00009090/00009090_798fb3ffbb0745d7a3c0e863_step_007.step",
+              "00009999/00009999_003df34c1a7b4dc2bd43c5f4_step_000.step"
+            ],
+            "repeats": 1,
+            "timeout": 240.0,
+            "size_factor": 0.15,
+            "threads": 1,
+            "max_file_bytes": 67108864,
+            "max_work": 20000000,
+            "max_nodes": 200000,
+            "max_cells": 1000000,
+            "max_bytes": 134217728,
+            "max_audit_bytes": 134217728,
+            "native_cad": true,
+            "planar_recovery": true,
+            "general_recovery": true,
+            "separate_contact_bodies": true,
+            "separate_matched_box_faces": true,
+            "warning_quality": 0.25
+          },
+          "audit_valid": true,
+          "cad_volume": 32595.52629037469,
+          "native_aggregate_volume_relative_error": 0.0004393765474292898,
+          "native_quality_warning": true,
+          "body_routes": [
+            {
+              "solid_tag": 1,
+              "route": "native_partition_star"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ABC17 / 64 touching blocks",
+        "mesh": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0017-00-d425af2b/mesh.paacsmesh",
+        "source": "local-data/abc_0000_step_v00/00000017/00000017_e8e79d1385fd4c78be414f6c_step_000.step",
+        "units": "mm",
+        "section": {
+          "axis": "z",
+          "fraction": 0.51
+        },
+        "quality_warning_target": 0.25,
+        "verification": {
+          "verified": true,
+          "mesh_volume": 589934.3040000006,
+          "minimum_quality": 0.3232134331915287
+        },
+        "stats_note": "CAD volume error 3.947e-14%",
+        "metadata": {
+          "case_id": 17,
+          "normal_cli_receipt": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0017-00-d425af2b/stdout.log",
+          "normal_cli_receipt_sha256": "93cdda9058889f6ca030a98279586bb476f142124cc19c8d33392108f325e1a7",
+          "selected_records": "out/visual-validation-2026-10-03/coverage-25-final/selected-native-records.json",
+          "source_sha256": "ff5d59a91a341035c7604987eb5e54503710bfedf4962608c658f4d985ea0112",
+          "mesh_sha256": "ac1eb26ffbdb46d238bd76a1985a517f2ccd1c07d3ea25f76a3d6e05886a4050",
+          "executable": "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+          "executable_sha256": "161d0dc0a4eb228df1fa58bd341f46b9d22e885bac4d1decad151f9a8abae686",
+          "profile": {
+            "limit": 0,
+            "smallest": 0,
+            "spread": 0,
+            "include": [
+              "00000000/00000000_290a9120f9f249a7a05cfe9c_step_000.step",
+              "00000001/00000001_1ffb81a71e5b402e966b9341_step_000.step",
+              "00000002/00000002_1ffb81a71e5b402e966b9341_step_001.step",
+              "00000003/00000003_1ffb81a71e5b402e966b9341_step_002.step",
+              "00000004/00000004_1ffb81a71e5b402e966b9341_step_003.step",
+              "00000005/00000005_d4fe04f0f5f84b52bd4f10e4_step_000.step",
+              "00000006/00000006_d4fe04f0f5f84b52bd4f10e4_step_001.step",
+              "00000007/00000007_b33a147f86da49879455d286_step_000.step",
+              "00000008/00000008_9b3d6a97e8de4aa193b81000_step_000.step",
+              "00000009/00000009_9b3d6a97e8de4aa193b81000_step_001.step",
+              "00000010/00000010_b4b99d35e04b4277931f9a9c_step_000.step",
+              "00000011/00000011_e909f412cda24521865fac0f_step_000.step",
+              "00000012/00000012_f16882934f314832b639ffc0_step_000.step",
+              "00000013/00000013_c2f4d27f35ed4c138caf5c18_step_000.step",
+              "00000014/00000014_5b1c2f8a8c6f40fdaae1e69d_step_000.step",
+              "00000015/00000015_b08aa818955948c690fd9b6d_step_000.step",
+              "00000016/00000016_b08aa818955948c690fd9b6d_step_001.step",
+              "00000017/00000017_e8e79d1385fd4c78be414f6c_step_000.step",
+              "00000018/00000018_e8e79d1385fd4c78be414f6c_step_001.step",
+              "00000019/00000019_e8e79d1385fd4c78be414f6c_step_002.step",
+              "00000020/00000020_ad34a3f60c4a4caa99646600_step_000.step",
+              "00000021/00000021_ad34a3f60c4a4caa99646600_step_001.step",
+              "00000022/00000022_ad34a3f60c4a4caa99646600_step_002.step",
+              "00000023/00000023_ad34a3f60c4a4caa99646600_step_003.step",
+              "00000024/00000024_ad34a3f60c4a4caa99646600_step_004.step",
+              "00000025/00000025_ad34a3f60c4a4caa99646600_step_005.step",
+              "00000026/00000026_ad34a3f60c4a4caa99646600_step_006.step",
+              "00000027/00000027_ad34a3f60c4a4caa99646600_step_007.step",
+              "00000028/00000028_ad34a3f60c4a4caa99646600_step_008.step",
+              "00000029/00000029_ad34a3f60c4a4caa99646600_step_009.step",
+              "00000383/00000383_239bbf0e92974a32bd214366_step_004.step",
+              "00000469/00000469_11951e51b89249dba38ded3e_step_004.step",
+              "00000638/00000638_5ae45a997c76423aba2fcc11_step_003.step",
+              "00000691/00000691_b9f3563b403143dbb86ab2b8_step_004.step",
+              "00000850/00000850_2c1efcc32d094e9fb9e1a88e_step_010.step",
+              "00000909/00000909_c9400dcd7ae9428caffe2204_step_002.step",
+              "00001818/00001818_9eb3d5245a8b448bb6aecbae_step_001.step",
+              "00002727/00002727_98d8f78b1bb5495f9a193852_step_013.step",
+              "00003636/00003636_3b2ec9d56c264f4b8b7f9c84_step_000.step",
+              "00004149/00004149_25c63692f99a42f6bee0033d_step_004.step",
+              "00004545/00004545_a9de53e862dd4ad197873cc0_step_007.step",
+              "00005454/00005454_2ccd2dfb9ffc4cf29e94e0cf_step_008.step",
+              "00005956/00005956_ec7b2e7cb95d42368f778c9d_step_006.step",
+              "00006363/00006363_f91e32a0ca0848dab541db70_step_002.step",
+              "00006566/00006566_635c4f0f74b642a29580ecf9_step_018.step",
+              "00006807/00006807_ca2313fee2d0437db8572b26_step_017.step",
+              "00007272/00007272_adfc323e64d54b67a5c4aca6_step_009.step",
+              "00008126/00008126_5d720e0ec69f4a628d58af42_step_001.step",
+              "00008181/00008181_d0a04676bb3b46dfaba09434_step_020.step",
+              "00009090/00009090_798fb3ffbb0745d7a3c0e863_step_007.step",
+              "00009999/00009999_003df34c1a7b4dc2bd43c5f4_step_000.step"
+            ],
+            "repeats": 1,
+            "timeout": 240.0,
+            "size_factor": 0.15,
+            "threads": 1,
+            "max_file_bytes": 67108864,
+            "max_work": 20000000,
+            "max_nodes": 200000,
+            "max_cells": 1000000,
+            "max_bytes": 134217728,
+            "max_audit_bytes": 134217728,
+            "native_cad": true,
+            "planar_recovery": true,
+            "general_recovery": true,
+            "separate_contact_bodies": true,
+            "separate_matched_box_faces": true,
+            "warning_quality": 0.25
+          },
+          "audit_valid": true,
+          "cad_volume": 589934.3040000004,
+          "native_aggregate_volume_relative_error": 3.9467215599293155e-16,
+          "native_quality_warning": false,
+          "body_routes": [
+            {
+              "solid_tag": 1,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 2,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 3,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 4,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 5,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 6,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 7,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 8,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 9,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 10,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 11,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 12,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 13,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 14,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 15,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 16,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 17,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 18,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 19,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 20,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 21,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 22,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 23,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 24,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 25,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 26,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 27,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 28,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 29,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 30,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 31,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 32,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 33,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 34,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 35,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 36,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 37,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 38,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 39,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 40,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 41,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 42,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 43,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 44,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 45,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 46,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 47,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 48,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 49,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 50,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 51,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 52,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 53,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 54,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 55,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 56,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 57,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 58,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 59,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 60,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 61,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 62,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 63,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 64,
+              "route": "planar_core"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "renderer_provenance": {
+    "schema": "paacs-mesh-visual-report-v1",
+    "manifest_path": "out/visual-validation-2026-10-03/coverage-25-final/manifest.json",
+    "manifest_sha256": "4a7e65f7dc36c2ecba88b8b7267c67a5f6259acb290499f4cc5eb3510bd9d372",
+    "python": "3.12.6 (tags/v3.12.6:a4a2d2b, Sep  6 2024, 20:11:23) [MSC v.1940 64 bit (AMD64)]",
+    "numpy": "2.5.3",
+    "matplotlib": "3.10.8",
+    "renderer_sha256": "728a7453cde5bc82d96349604dcfbe3f14ea023fe485ae20249cc4c955104503",
+    "data_module_sha256": "afe6f834a2946bb296b1dff975ca67885dd27ec1326c2fa2f50772da3e345faa",
+    "self_tests": {
+      "passed": true,
+      "checks": [
+        "positive tet volume",
+        "analytic triangular section",
+        "four-edge quadrilateral section",
+        "planar Hex8 volume/section",
+        "native-defined Hex8 SubTetMeanRatio",
+        "shared-face section deduplication",
+        "curved Tet10 refused"
+      ]
+    },
+    "meshes": [
+      {
+        "name": "ABC4 / Curved hole bracket",
+        "mesh_path": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0004-00-f2ae50f7/mesh.paacsmesh",
+        "mesh_sha256": "4780c042354dc8be50d30ac9062c475a79161649b8d3437424e28ef4e388cec2",
+        "mesh_bytes": 363576,
+        "units": "mm",
+        "metrics": {
+          "nodes": 1677,
+          "cells": 7636,
+          "volume_cells": 4372,
+          "cell_types": {
+            "Tet4": 4372,
+            "Tri3": 3264
+          },
+          "positive_corner_volumes": true,
+          "convex_planar_corner_cells": true,
+          "exterior_volume_faces": 3264,
+          "volume_sum": 9282.089906856316,
+          "volume_cv": 2.3685834743623237,
+          "volume_min": 6.725054431286902e-16,
+          "volume_max": 64.55982250597587,
+          "volume_max_min": 9.599895906511162e+16,
+          "equivalent_size_definition": "cube root of positive cell volume; not target edge size",
+          "equivalent_size_cv": 0.7507264129682496,
+          "volume_quantiles": [
+            6.725054431286902e-16,
+            0.006303823786948441,
+            0.31392596233425696,
+            5.915289187219527,
+            64.55982250597587
+          ],
+          "equivalent_size_quantiles": [
+            8.761233759045591e-06,
+            0.18472858063496908,
+            0.6796350132366,
+            1.8085283080868129,
+            4.011629126961784
+          ],
+          "tet_mean_ratio_samples": 4372,
+          "tet_mean_ratio_min": 4.106322681390112e-11,
+          "tet_mean_ratio_quantiles": [
+            4.106322681390112e-11,
+            0.009610213955523746,
+            0.1031139959270236,
+            0.45916482525241814,
+            0.8863247381978101
+          ],
+          "quality_metric": "Tet corner mean ratio; linear mixed cells use native fixed minimum SubTetMeanRatio diagnostic",
+          "subtet_mean_ratio_min": 4.106322681390112e-11,
+          "subtet_mean_ratio_quantiles": [
+            4.106322681390112e-11,
+            0.009610213955523746,
+            0.1031139959270236,
+            0.45916482525241814,
+            0.8863247381978101
+          ],
+          "high_order_scope": "Tet10 sections/quality use corners only; straight midsides verified; faceted geometry",
+          "audit_scope": "Independent corner geometry and face multiplicity checks, not replacement for native full audit"
+        },
+        "section": {
+          "axis": "y",
+          "value": 36.08527276402986,
+          "polygon_count": 448,
+          "intersected_cells_before_shared_face_dedup": 448,
+          "coplanar_shared_polygons_removed": 0,
+          "section_area": 127.66311639725932,
+          "maximum_plane_residual": 0.0,
+          "method": "Actual convex cell-edge/plane intersections; shared coplanar faces drawn once"
+        },
+        "case_metadata": {
+          "case_id": 4,
+          "normal_cli_receipt": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0004-00-f2ae50f7/stdout.log",
+          "normal_cli_receipt_sha256": "669a252dd1b1e2c409f0932a51e074951399ce2fb87cb1f3b95e9d0aa9791bb9",
+          "selected_records": "out/visual-validation-2026-10-03/coverage-25-final/selected-native-records.json",
+          "source_sha256": "a7be17878aea45cc9a1aa0b68901756a8ad70d6988a9c42fb2ee6c8525a32195",
+          "mesh_sha256": "4780c042354dc8be50d30ac9062c475a79161649b8d3437424e28ef4e388cec2",
+          "executable": "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+          "executable_sha256": "161d0dc0a4eb228df1fa58bd341f46b9d22e885bac4d1decad151f9a8abae686",
+          "profile": {
+            "limit": 0,
+            "smallest": 0,
+            "spread": 0,
+            "include": [
+              "00000000/00000000_290a9120f9f249a7a05cfe9c_step_000.step",
+              "00000001/00000001_1ffb81a71e5b402e966b9341_step_000.step",
+              "00000002/00000002_1ffb81a71e5b402e966b9341_step_001.step",
+              "00000003/00000003_1ffb81a71e5b402e966b9341_step_002.step",
+              "00000004/00000004_1ffb81a71e5b402e966b9341_step_003.step",
+              "00000005/00000005_d4fe04f0f5f84b52bd4f10e4_step_000.step",
+              "00000006/00000006_d4fe04f0f5f84b52bd4f10e4_step_001.step",
+              "00000007/00000007_b33a147f86da49879455d286_step_000.step",
+              "00000008/00000008_9b3d6a97e8de4aa193b81000_step_000.step",
+              "00000009/00000009_9b3d6a97e8de4aa193b81000_step_001.step",
+              "00000010/00000010_b4b99d35e04b4277931f9a9c_step_000.step",
+              "00000011/00000011_e909f412cda24521865fac0f_step_000.step",
+              "00000012/00000012_f16882934f314832b639ffc0_step_000.step",
+              "00000013/00000013_c2f4d27f35ed4c138caf5c18_step_000.step",
+              "00000014/00000014_5b1c2f8a8c6f40fdaae1e69d_step_000.step",
+              "00000015/00000015_b08aa818955948c690fd9b6d_step_000.step",
+              "00000016/00000016_b08aa818955948c690fd9b6d_step_001.step",
+              "00000017/00000017_e8e79d1385fd4c78be414f6c_step_000.step",
+              "00000018/00000018_e8e79d1385fd4c78be414f6c_step_001.step",
+              "00000019/00000019_e8e79d1385fd4c78be414f6c_step_002.step",
+              "00000020/00000020_ad34a3f60c4a4caa99646600_step_000.step",
+              "00000021/00000021_ad34a3f60c4a4caa99646600_step_001.step",
+              "00000022/00000022_ad34a3f60c4a4caa99646600_step_002.step",
+              "00000023/00000023_ad34a3f60c4a4caa99646600_step_003.step",
+              "00000024/00000024_ad34a3f60c4a4caa99646600_step_004.step",
+              "00000025/00000025_ad34a3f60c4a4caa99646600_step_005.step",
+              "00000026/00000026_ad34a3f60c4a4caa99646600_step_006.step",
+              "00000027/00000027_ad34a3f60c4a4caa99646600_step_007.step",
+              "00000028/00000028_ad34a3f60c4a4caa99646600_step_008.step",
+              "00000029/00000029_ad34a3f60c4a4caa99646600_step_009.step",
+              "00000383/00000383_239bbf0e92974a32bd214366_step_004.step",
+              "00000469/00000469_11951e51b89249dba38ded3e_step_004.step",
+              "00000638/00000638_5ae45a997c76423aba2fcc11_step_003.step",
+              "00000691/00000691_b9f3563b403143dbb86ab2b8_step_004.step",
+              "00000850/00000850_2c1efcc32d094e9fb9e1a88e_step_010.step",
+              "00000909/00000909_c9400dcd7ae9428caffe2204_step_002.step",
+              "00001818/00001818_9eb3d5245a8b448bb6aecbae_step_001.step",
+              "00002727/00002727_98d8f78b1bb5495f9a193852_step_013.step",
+              "00003636/00003636_3b2ec9d56c264f4b8b7f9c84_step_000.step",
+              "00004149/00004149_25c63692f99a42f6bee0033d_step_004.step",
+              "00004545/00004545_a9de53e862dd4ad197873cc0_step_007.step",
+              "00005454/00005454_2ccd2dfb9ffc4cf29e94e0cf_step_008.step",
+              "00005956/00005956_ec7b2e7cb95d42368f778c9d_step_006.step",
+              "00006363/00006363_f91e32a0ca0848dab541db70_step_002.step",
+              "00006566/00006566_635c4f0f74b642a29580ecf9_step_018.step",
+              "00006807/00006807_ca2313fee2d0437db8572b26_step_017.step",
+              "00007272/00007272_adfc323e64d54b67a5c4aca6_step_009.step",
+              "00008126/00008126_5d720e0ec69f4a628d58af42_step_001.step",
+              "00008181/00008181_d0a04676bb3b46dfaba09434_step_020.step",
+              "00009090/00009090_798fb3ffbb0745d7a3c0e863_step_007.step",
+              "00009999/00009999_003df34c1a7b4dc2bd43c5f4_step_000.step"
+            ],
+            "repeats": 1,
+            "timeout": 240.0,
+            "size_factor": 0.15,
+            "threads": 1,
+            "max_file_bytes": 67108864,
+            "max_work": 20000000,
+            "max_nodes": 200000,
+            "max_cells": 1000000,
+            "max_bytes": 134217728,
+            "max_audit_bytes": 134217728,
+            "native_cad": true,
+            "planar_recovery": true,
+            "general_recovery": true,
+            "separate_contact_bodies": true,
+            "separate_matched_box_faces": true,
+            "warning_quality": 0.25
+          },
+          "audit_valid": true,
+          "cad_volume": 9318.659509090929,
+          "native_aggregate_volume_relative_error": 0.003924341499864733,
+          "native_quality_warning": true,
+          "body_routes": [
+            {
+              "solid_tag": 1,
+              "route": "native_partition_star"
+            }
+          ]
+        },
+        "quality_warning": {
+          "target": 0.25,
+          "volume_cells_below_target": 3276,
+          "cell_fraction_below_target": 0.7493138151875571
+        },
+        "native_verification": {
+          "verified": true,
+          "mesh_volume": 9282.089906856294,
+          "minimum_quality": 4.106322681376314e-11
+        },
+        "independent_volume_relative_delta_from_native": 2.351611874221013e-15,
+        "independent_quality_delta_from_native": 1.3797760358296636e-22,
+        "source_path": "local-data/abc_0000_step_v00/00000004/00000004_1ffb81a71e5b402e966b9341_step_003.step",
+        "source_sha256": "a7be17878aea45cc9a1aa0b68901756a8ad70d6988a9c42fb2ee6c8525a32195"
+      },
+      {
+        "name": "ABC5 / Ten separate bodies",
+        "mesh_path": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0005-00-fb9e6cc9/mesh.paacsmesh",
+        "mesh_sha256": "af4e339003d487c7da34ef0fd9d7f06b9d56a4dd3ab64c58573ab8772e8e143e",
+        "mesh_bytes": 256680,
+        "units": "mm",
+        "metrics": {
+          "nodes": 1190,
+          "cells": 5360,
+          "volume_cells": 3200,
+          "cell_types": {
+            "Tet4": 3200,
+            "Tri3": 2160
+          },
+          "positive_corner_volumes": true,
+          "convex_planar_corner_cells": true,
+          "exterior_volume_faces": 2160,
+          "volume_sum": 4812995.160497867,
+          "volume_cv": 1.2300000885927773,
+          "volume_min": 8.712362912331203e-05,
+          "volume_max": 6340.993867670153,
+          "volume_max_min": 72781562.60795003,
+          "equivalent_size_definition": "cube root of positive cell volume; not target edge size",
+          "equivalent_size_cv": 0.4601633653346567,
+          "volume_quantiles": [
+            8.712362912331203e-05,
+            58.94845039274651,
+            773.1168820787983,
+            4356.914146169274,
+            6340.993867670153
+          ],
+          "equivalent_size_quantiles": [
+            0.0443314550389796,
+            3.8918622864294115,
+            9.178007021273949,
+            16.313090222036305,
+            18.50912028287895
+          ],
+          "tet_mean_ratio_samples": 3200,
+          "tet_mean_ratio_min": 1.0721780997646312e-06,
+          "tet_mean_ratio_quantiles": [
+            1.0721780997646312e-06,
+            0.023982233054122566,
+            0.061854638010344,
+            0.18396605143412703,
+            0.5486365429836343
+          ],
+          "quality_metric": "Tet corner mean ratio; linear mixed cells use native fixed minimum SubTetMeanRatio diagnostic",
+          "subtet_mean_ratio_min": 1.0721780997646312e-06,
+          "subtet_mean_ratio_quantiles": [
+            1.0721780997646312e-06,
+            0.023982233054122566,
+            0.061854638010344,
+            0.18396605143412703,
+            0.5486365429836343
+          ],
+          "high_order_scope": "Tet10 sections/quality use corners only; straight midsides verified; faceted geometry",
+          "audit_scope": "Independent corner geometry and face multiplicity checks, not replacement for native full audit"
+        },
+        "section": {
+          "axis": "y",
+          "value": -123.8481811,
+          "polygon_count": 1240,
+          "intersected_cells_before_shared_face_dedup": 1240,
+          "coplanar_shared_polygons_removed": 0,
+          "section_area": 19042.408275174534,
+          "maximum_plane_residual": 0.0,
+          "method": "Actual convex cell-edge/plane intersections; shared coplanar faces drawn once"
+        },
+        "case_metadata": {
+          "case_id": 5,
+          "normal_cli_receipt": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0005-00-fb9e6cc9/stdout.log",
+          "normal_cli_receipt_sha256": "d9841a332e65252f9c1b3150973398cbfb54f3f6712a076cd1845c250d514de8",
+          "selected_records": "out/visual-validation-2026-10-03/coverage-25-final/selected-native-records.json",
+          "source_sha256": "7a970a7f10b5f7ef783e20a8713358f3a8c9cd005cf4355a586a19e72ca32de5",
+          "mesh_sha256": "af4e339003d487c7da34ef0fd9d7f06b9d56a4dd3ab64c58573ab8772e8e143e",
+          "executable": "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+          "executable_sha256": "161d0dc0a4eb228df1fa58bd341f46b9d22e885bac4d1decad151f9a8abae686",
+          "profile": {
+            "limit": 0,
+            "smallest": 0,
+            "spread": 0,
+            "include": [
+              "00000000/00000000_290a9120f9f249a7a05cfe9c_step_000.step",
+              "00000001/00000001_1ffb81a71e5b402e966b9341_step_000.step",
+              "00000002/00000002_1ffb81a71e5b402e966b9341_step_001.step",
+              "00000003/00000003_1ffb81a71e5b402e966b9341_step_002.step",
+              "00000004/00000004_1ffb81a71e5b402e966b9341_step_003.step",
+              "00000005/00000005_d4fe04f0f5f84b52bd4f10e4_step_000.step",
+              "00000006/00000006_d4fe04f0f5f84b52bd4f10e4_step_001.step",
+              "00000007/00000007_b33a147f86da49879455d286_step_000.step",
+              "00000008/00000008_9b3d6a97e8de4aa193b81000_step_000.step",
+              "00000009/00000009_9b3d6a97e8de4aa193b81000_step_001.step",
+              "00000010/00000010_b4b99d35e04b4277931f9a9c_step_000.step",
+              "00000011/00000011_e909f412cda24521865fac0f_step_000.step",
+              "00000012/00000012_f16882934f314832b639ffc0_step_000.step",
+              "00000013/00000013_c2f4d27f35ed4c138caf5c18_step_000.step",
+              "00000014/00000014_5b1c2f8a8c6f40fdaae1e69d_step_000.step",
+              "00000015/00000015_b08aa818955948c690fd9b6d_step_000.step",
+              "00000016/00000016_b08aa818955948c690fd9b6d_step_001.step",
+              "00000017/00000017_e8e79d1385fd4c78be414f6c_step_000.step",
+              "00000018/00000018_e8e79d1385fd4c78be414f6c_step_001.step",
+              "00000019/00000019_e8e79d1385fd4c78be414f6c_step_002.step",
+              "00000020/00000020_ad34a3f60c4a4caa99646600_step_000.step",
+              "00000021/00000021_ad34a3f60c4a4caa99646600_step_001.step",
+              "00000022/00000022_ad34a3f60c4a4caa99646600_step_002.step",
+              "00000023/00000023_ad34a3f60c4a4caa99646600_step_003.step",
+              "00000024/00000024_ad34a3f60c4a4caa99646600_step_004.step",
+              "00000025/00000025_ad34a3f60c4a4caa99646600_step_005.step",
+              "00000026/00000026_ad34a3f60c4a4caa99646600_step_006.step",
+              "00000027/00000027_ad34a3f60c4a4caa99646600_step_007.step",
+              "00000028/00000028_ad34a3f60c4a4caa99646600_step_008.step",
+              "00000029/00000029_ad34a3f60c4a4caa99646600_step_009.step",
+              "00000383/00000383_239bbf0e92974a32bd214366_step_004.step",
+              "00000469/00000469_11951e51b89249dba38ded3e_step_004.step",
+              "00000638/00000638_5ae45a997c76423aba2fcc11_step_003.step",
+              "00000691/00000691_b9f3563b403143dbb86ab2b8_step_004.step",
+              "00000850/00000850_2c1efcc32d094e9fb9e1a88e_step_010.step",
+              "00000909/00000909_c9400dcd7ae9428caffe2204_step_002.step",
+              "00001818/00001818_9eb3d5245a8b448bb6aecbae_step_001.step",
+              "00002727/00002727_98d8f78b1bb5495f9a193852_step_013.step",
+              "00003636/00003636_3b2ec9d56c264f4b8b7f9c84_step_000.step",
+              "00004149/00004149_25c63692f99a42f6bee0033d_step_004.step",
+              "00004545/00004545_a9de53e862dd4ad197873cc0_step_007.step",
+              "00005454/00005454_2ccd2dfb9ffc4cf29e94e0cf_step_008.step",
+              "00005956/00005956_ec7b2e7cb95d42368f778c9d_step_006.step",
+              "00006363/00006363_f91e32a0ca0848dab541db70_step_002.step",
+              "00006566/00006566_635c4f0f74b642a29580ecf9_step_018.step",
+              "00006807/00006807_ca2313fee2d0437db8572b26_step_017.step",
+              "00007272/00007272_adfc323e64d54b67a5c4aca6_step_009.step",
+              "00008126/00008126_5d720e0ec69f4a628d58af42_step_001.step",
+              "00008181/00008181_d0a04676bb3b46dfaba09434_step_020.step",
+              "00009090/00009090_798fb3ffbb0745d7a3c0e863_step_007.step",
+              "00009999/00009999_003df34c1a7b4dc2bd43c5f4_step_000.step"
+            ],
+            "repeats": 1,
+            "timeout": 240.0,
+            "size_factor": 0.15,
+            "threads": 1,
+            "max_file_bytes": 67108864,
+            "max_work": 20000000,
+            "max_nodes": 200000,
+            "max_cells": 1000000,
+            "max_bytes": 134217728,
+            "max_audit_bytes": 134217728,
+            "native_cad": true,
+            "planar_recovery": true,
+            "general_recovery": true,
+            "separate_contact_bodies": true,
+            "separate_matched_box_faces": true,
+            "warning_quality": 0.25
+          },
+          "audit_valid": true,
+          "cad_volume": 4812995.156538846,
+          "native_aggregate_volume_relative_error": 8.225748023081658e-10,
+          "native_quality_warning": true,
+          "body_routes": [
+            {
+              "solid_tag": 1,
+              "route": "native_partition_star"
+            },
+            {
+              "solid_tag": 2,
+              "route": "native_partition_star"
+            },
+            {
+              "solid_tag": 3,
+              "route": "native_partition_star"
+            },
+            {
+              "solid_tag": 4,
+              "route": "native_partition_star"
+            },
+            {
+              "solid_tag": 5,
+              "route": "native_partition_star"
+            },
+            {
+              "solid_tag": 6,
+              "route": "native_partition_star"
+            },
+            {
+              "solid_tag": 7,
+              "route": "native_partition_star"
+            },
+            {
+              "solid_tag": 8,
+              "route": "native_partition_star"
+            },
+            {
+              "solid_tag": 9,
+              "route": "native_partition_star"
+            },
+            {
+              "solid_tag": 10,
+              "route": "native_partition_star"
+            }
+          ]
+        },
+        "quality_warning": {
+          "target": 0.25,
+          "volume_cells_below_target": 2960,
+          "cell_fraction_below_target": 0.925
+        },
+        "native_verification": {
+          "verified": true,
+          "mesh_volume": 4812995.1604978945,
+          "minimum_quality": 1.0721780995666237e-06
+        },
+        "independent_volume_relative_delta_from_native": 5.805049933932211e-15,
+        "independent_quality_delta_from_native": 1.9800750394784877e-16,
+        "source_path": "local-data/abc_0000_step_v00/00000005/00000005_d4fe04f0f5f84b52bd4f10e4_step_000.step",
+        "source_sha256": "7a970a7f10b5f7ef783e20a8713358f3a8c9cd005cf4355a586a19e72ca32de5"
+      },
+      {
+        "name": "ABC8 / Curved solid",
+        "mesh_path": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0008-00-0d49fc7d/mesh.paacsmesh",
+        "mesh_sha256": "0efa709067a33861b337928d9306dd4c71a5bf586c30595433fee679ffd32daf",
+        "mesh_bytes": 1003696,
+        "units": "mm",
+        "metrics": {
+          "nodes": 3960,
+          "cells": 21262,
+          "volume_cells": 13938,
+          "cell_types": {
+            "Tet4": 13938,
+            "Tri3": 7324
+          },
+          "positive_corner_volumes": true,
+          "convex_planar_corner_cells": true,
+          "exterior_volume_faces": 7324,
+          "volume_sum": 10523.60201383698,
+          "volume_cv": 1.8525181005913425,
+          "volume_min": 5.901729530789716e-08,
+          "volume_max": 18.93901152919984,
+          "volume_max_min": 320906124.7282471,
+          "equivalent_size_definition": "cube root of positive cell volume; not target edge size",
+          "equivalent_size_cv": 0.41415501715597053,
+          "volume_quantiles": [
+            5.901729530789716e-08,
+            0.091604516589795,
+            0.3642450078455033,
+            1.5817902189190298,
+            18.93901152919984
+          ],
+          "equivalent_size_quantiles": [
+            0.003893376777419099,
+            0.45078794722382265,
+            0.714163860529714,
+            1.1651530112518702,
+            2.665543470186567
+          ],
+          "tet_mean_ratio_samples": 13938,
+          "tet_mean_ratio_min": 2.942844827476326e-06,
+          "tet_mean_ratio_quantiles": [
+            2.942844827476326e-06,
+            0.08374367927292349,
+            0.30820059229919583,
+            0.6873852503084464,
+            0.9868164943921158
+          ],
+          "quality_metric": "Tet corner mean ratio; linear mixed cells use native fixed minimum SubTetMeanRatio diagnostic",
+          "subtet_mean_ratio_min": 2.942844827476326e-06,
+          "subtet_mean_ratio_quantiles": [
+            2.942844827476326e-06,
+            0.08374367927292349,
+            0.30820059229919583,
+            0.6873852503084464,
+            0.9868164943921158
+          ],
+          "high_order_scope": "Tet10 sections/quality use corners only; straight midsides verified; faceted geometry",
+          "audit_scope": "Independent corner geometry and face multiplicity checks, not replacement for native full audit"
+        },
+        "section": {
+          "axis": "y",
+          "value": 0.7873999999999981,
+          "polygon_count": 294,
+          "intersected_cells_before_shared_face_dedup": 294,
+          "coplanar_shared_polygons_removed": 0,
+          "section_area": 132.71553793204149,
+          "maximum_plane_residual": 0.0,
+          "method": "Actual convex cell-edge/plane intersections; shared coplanar faces drawn once"
+        },
+        "case_metadata": {
+          "case_id": 8,
+          "normal_cli_receipt": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0008-00-0d49fc7d/stdout.log",
+          "normal_cli_receipt_sha256": "1dbe764182505ec96dcfd0c47a43190956e58820ac614e547ac2cd6e2f692732",
+          "selected_records": "out/visual-validation-2026-10-03/coverage-25-final/selected-native-records.json",
+          "source_sha256": "84c7687d1acf464c406a6648e379893f21f0c9ed358ea0dee92be7e10b882f47",
+          "mesh_sha256": "0efa709067a33861b337928d9306dd4c71a5bf586c30595433fee679ffd32daf",
+          "executable": "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+          "executable_sha256": "161d0dc0a4eb228df1fa58bd341f46b9d22e885bac4d1decad151f9a8abae686",
+          "profile": {
+            "limit": 0,
+            "smallest": 0,
+            "spread": 0,
+            "include": [
+              "00000000/00000000_290a9120f9f249a7a05cfe9c_step_000.step",
+              "00000001/00000001_1ffb81a71e5b402e966b9341_step_000.step",
+              "00000002/00000002_1ffb81a71e5b402e966b9341_step_001.step",
+              "00000003/00000003_1ffb81a71e5b402e966b9341_step_002.step",
+              "00000004/00000004_1ffb81a71e5b402e966b9341_step_003.step",
+              "00000005/00000005_d4fe04f0f5f84b52bd4f10e4_step_000.step",
+              "00000006/00000006_d4fe04f0f5f84b52bd4f10e4_step_001.step",
+              "00000007/00000007_b33a147f86da49879455d286_step_000.step",
+              "00000008/00000008_9b3d6a97e8de4aa193b81000_step_000.step",
+              "00000009/00000009_9b3d6a97e8de4aa193b81000_step_001.step",
+              "00000010/00000010_b4b99d35e04b4277931f9a9c_step_000.step",
+              "00000011/00000011_e909f412cda24521865fac0f_step_000.step",
+              "00000012/00000012_f16882934f314832b639ffc0_step_000.step",
+              "00000013/00000013_c2f4d27f35ed4c138caf5c18_step_000.step",
+              "00000014/00000014_5b1c2f8a8c6f40fdaae1e69d_step_000.step",
+              "00000015/00000015_b08aa818955948c690fd9b6d_step_000.step",
+              "00000016/00000016_b08aa818955948c690fd9b6d_step_001.step",
+              "00000017/00000017_e8e79d1385fd4c78be414f6c_step_000.step",
+              "00000018/00000018_e8e79d1385fd4c78be414f6c_step_001.step",
+              "00000019/00000019_e8e79d1385fd4c78be414f6c_step_002.step",
+              "00000020/00000020_ad34a3f60c4a4caa99646600_step_000.step",
+              "00000021/00000021_ad34a3f60c4a4caa99646600_step_001.step",
+              "00000022/00000022_ad34a3f60c4a4caa99646600_step_002.step",
+              "00000023/00000023_ad34a3f60c4a4caa99646600_step_003.step",
+              "00000024/00000024_ad34a3f60c4a4caa99646600_step_004.step",
+              "00000025/00000025_ad34a3f60c4a4caa99646600_step_005.step",
+              "00000026/00000026_ad34a3f60c4a4caa99646600_step_006.step",
+              "00000027/00000027_ad34a3f60c4a4caa99646600_step_007.step",
+              "00000028/00000028_ad34a3f60c4a4caa99646600_step_008.step",
+              "00000029/00000029_ad34a3f60c4a4caa99646600_step_009.step",
+              "00000383/00000383_239bbf0e92974a32bd214366_step_004.step",
+              "00000469/00000469_11951e51b89249dba38ded3e_step_004.step",
+              "00000638/00000638_5ae45a997c76423aba2fcc11_step_003.step",
+              "00000691/00000691_b9f3563b403143dbb86ab2b8_step_004.step",
+              "00000850/00000850_2c1efcc32d094e9fb9e1a88e_step_010.step",
+              "00000909/00000909_c9400dcd7ae9428caffe2204_step_002.step",
+              "00001818/00001818_9eb3d5245a8b448bb6aecbae_step_001.step",
+              "00002727/00002727_98d8f78b1bb5495f9a193852_step_013.step",
+              "00003636/00003636_3b2ec9d56c264f4b8b7f9c84_step_000.step",
+              "00004149/00004149_25c63692f99a42f6bee0033d_step_004.step",
+              "00004545/00004545_a9de53e862dd4ad197873cc0_step_007.step",
+              "00005454/00005454_2ccd2dfb9ffc4cf29e94e0cf_step_008.step",
+              "00005956/00005956_ec7b2e7cb95d42368f778c9d_step_006.step",
+              "00006363/00006363_f91e32a0ca0848dab541db70_step_002.step",
+              "00006566/00006566_635c4f0f74b642a29580ecf9_step_018.step",
+              "00006807/00006807_ca2313fee2d0437db8572b26_step_017.step",
+              "00007272/00007272_adfc323e64d54b67a5c4aca6_step_009.step",
+              "00008126/00008126_5d720e0ec69f4a628d58af42_step_001.step",
+              "00008181/00008181_d0a04676bb3b46dfaba09434_step_020.step",
+              "00009090/00009090_798fb3ffbb0745d7a3c0e863_step_007.step",
+              "00009999/00009999_003df34c1a7b4dc2bd43c5f4_step_000.step"
+            ],
+            "repeats": 1,
+            "timeout": 240.0,
+            "size_factor": 0.15,
+            "threads": 1,
+            "max_file_bytes": 67108864,
+            "max_work": 20000000,
+            "max_nodes": 200000,
+            "max_cells": 1000000,
+            "max_bytes": 134217728,
+            "max_audit_bytes": 134217728,
+            "native_cad": true,
+            "planar_recovery": true,
+            "general_recovery": true,
+            "separate_contact_bodies": true,
+            "separate_matched_box_faces": true,
+            "warning_quality": 0.25
+          },
+          "audit_valid": true,
+          "cad_volume": 10527.80955115289,
+          "native_aggregate_volume_relative_error": 0.0003996593304045561,
+          "native_quality_warning": true,
+          "body_routes": [
+            {
+              "solid_tag": 1,
+              "route": "native_partition_star"
+            }
+          ]
+        },
+        "quality_warning": {
+          "target": 0.25,
+          "volume_cells_below_target": 5672,
+          "cell_fraction_below_target": 0.40694504233032
+        },
+        "native_verification": {
+          "verified": true,
+          "mesh_volume": 10523.60201383705,
+          "minimum_quality": 2.9428448279507645e-06
+        },
+        "independent_volume_relative_delta_from_native": 6.568245097435024e-15,
+        "independent_quality_delta_from_native": 4.744384003501842e-16,
+        "source_path": "local-data/abc_0000_step_v00/00000008/00000008_9b3d6a97e8de4aa193b81000_step_000.step",
+        "source_sha256": "84c7687d1acf464c406a6648e379893f21f0c9ed358ea0dee92be7e10b882f47"
+      },
+      {
+        "name": "ABC9 / Hollow revolved part",
+        "mesh_path": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0009-00-23d1cf37/mesh.paacsmesh",
+        "mesh_sha256": "d8945eb44577af2ccf77c897fd82025b1648f19b278409c52574f68725bc37a5",
+        "mesh_bytes": 133608,
+        "units": "mm",
+        "metrics": {
+          "nodes": 674,
+          "cells": 2784,
+          "volume_cells": 1472,
+          "cell_types": {
+            "Tet4": 1472,
+            "Tri3": 1312
+          },
+          "positive_corner_volumes": true,
+          "convex_planar_corner_cells": true,
+          "exterior_volume_faces": 1312,
+          "volume_sum": 57551.606805660194,
+          "volume_cv": 1.5385180513848085,
+          "volume_min": 5.460081385306001e-06,
+          "volume_max": 264.2638985243422,
+          "volume_max_min": 48399259.988234036,
+          "equivalent_size_definition": "cube root of positive cell volume; not target edge size",
+          "equivalent_size_cv": 0.5456949650853659,
+          "volume_quantiles": [
+            5.460081385306001e-06,
+            1.1782703981533311,
+            14.816585471298783,
+            149.9132290595098,
+            264.2638985243422
+          ],
+          "equivalent_size_quantiles": [
+            0.017608932906466507,
+            1.0562052511033426,
+            2.4561188425095386,
+            5.312268116256323,
+            6.417205482433367
+          ],
+          "tet_mean_ratio_samples": 1472,
+          "tet_mean_ratio_min": 2.94875580089982e-07,
+          "tet_mean_ratio_quantiles": [
+            2.94875580089982e-07,
+            0.003993983220094587,
+            0.022491077945982534,
+            0.21693042362170306,
+            0.7296222529462774
+          ],
+          "quality_metric": "Tet corner mean ratio; linear mixed cells use native fixed minimum SubTetMeanRatio diagnostic",
+          "subtet_mean_ratio_min": 2.94875580089982e-07,
+          "subtet_mean_ratio_quantiles": [
+            2.94875580089982e-07,
+            0.003993983220094587,
+            0.022491077945982534,
+            0.21693042362170306,
+            0.7296222529462774
+          ],
+          "high_order_scope": "Tet10 sections/quality use corners only; straight midsides verified; faceted geometry",
+          "audit_scope": "Independent corner geometry and face multiplicity checks, not replacement for native full audit"
+        },
+        "section": {
+          "axis": "y",
+          "value": 0.7620000000000005,
+          "polygon_count": 126,
+          "intersected_cells_before_shared_face_dedup": 126,
+          "coplanar_shared_polygons_removed": 0,
+          "section_area": 657.8073300775638,
+          "maximum_plane_residual": 0.0,
+          "method": "Actual convex cell-edge/plane intersections; shared coplanar faces drawn once"
+        },
+        "case_metadata": {
+          "case_id": 9,
+          "normal_cli_receipt": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0009-00-23d1cf37/stdout.log",
+          "normal_cli_receipt_sha256": "7808e38ed1659a2d44e909be60b4e7e57eeb00491b342a6674604f6816477433",
+          "selected_records": "out/visual-validation-2026-10-03/coverage-25-final/selected-native-records.json",
+          "source_sha256": "34a7b399bef7d25ce7b85357d06210ec7c06fe6a39a6b20bc7369dc1abd40b77",
+          "mesh_sha256": "d8945eb44577af2ccf77c897fd82025b1648f19b278409c52574f68725bc37a5",
+          "executable": "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+          "executable_sha256": "161d0dc0a4eb228df1fa58bd341f46b9d22e885bac4d1decad151f9a8abae686",
+          "profile": {
+            "limit": 0,
+            "smallest": 0,
+            "spread": 0,
+            "include": [
+              "00000000/00000000_290a9120f9f249a7a05cfe9c_step_000.step",
+              "00000001/00000001_1ffb81a71e5b402e966b9341_step_000.step",
+              "00000002/00000002_1ffb81a71e5b402e966b9341_step_001.step",
+              "00000003/00000003_1ffb81a71e5b402e966b9341_step_002.step",
+              "00000004/00000004_1ffb81a71e5b402e966b9341_step_003.step",
+              "00000005/00000005_d4fe04f0f5f84b52bd4f10e4_step_000.step",
+              "00000006/00000006_d4fe04f0f5f84b52bd4f10e4_step_001.step",
+              "00000007/00000007_b33a147f86da49879455d286_step_000.step",
+              "00000008/00000008_9b3d6a97e8de4aa193b81000_step_000.step",
+              "00000009/00000009_9b3d6a97e8de4aa193b81000_step_001.step",
+              "00000010/00000010_b4b99d35e04b4277931f9a9c_step_000.step",
+              "00000011/00000011_e909f412cda24521865fac0f_step_000.step",
+              "00000012/00000012_f16882934f314832b639ffc0_step_000.step",
+              "00000013/00000013_c2f4d27f35ed4c138caf5c18_step_000.step",
+              "00000014/00000014_5b1c2f8a8c6f40fdaae1e69d_step_000.step",
+              "00000015/00000015_b08aa818955948c690fd9b6d_step_000.step",
+              "00000016/00000016_b08aa818955948c690fd9b6d_step_001.step",
+              "00000017/00000017_e8e79d1385fd4c78be414f6c_step_000.step",
+              "00000018/00000018_e8e79d1385fd4c78be414f6c_step_001.step",
+              "00000019/00000019_e8e79d1385fd4c78be414f6c_step_002.step",
+              "00000020/00000020_ad34a3f60c4a4caa99646600_step_000.step",
+              "00000021/00000021_ad34a3f60c4a4caa99646600_step_001.step",
+              "00000022/00000022_ad34a3f60c4a4caa99646600_step_002.step",
+              "00000023/00000023_ad34a3f60c4a4caa99646600_step_003.step",
+              "00000024/00000024_ad34a3f60c4a4caa99646600_step_004.step",
+              "00000025/00000025_ad34a3f60c4a4caa99646600_step_005.step",
+              "00000026/00000026_ad34a3f60c4a4caa99646600_step_006.step",
+              "00000027/00000027_ad34a3f60c4a4caa99646600_step_007.step",
+              "00000028/00000028_ad34a3f60c4a4caa99646600_step_008.step",
+              "00000029/00000029_ad34a3f60c4a4caa99646600_step_009.step",
+              "00000383/00000383_239bbf0e92974a32bd214366_step_004.step",
+              "00000469/00000469_11951e51b89249dba38ded3e_step_004.step",
+              "00000638/00000638_5ae45a997c76423aba2fcc11_step_003.step",
+              "00000691/00000691_b9f3563b403143dbb86ab2b8_step_004.step",
+              "00000850/00000850_2c1efcc32d094e9fb9e1a88e_step_010.step",
+              "00000909/00000909_c9400dcd7ae9428caffe2204_step_002.step",
+              "00001818/00001818_9eb3d5245a8b448bb6aecbae_step_001.step",
+              "00002727/00002727_98d8f78b1bb5495f9a193852_step_013.step",
+              "00003636/00003636_3b2ec9d56c264f4b8b7f9c84_step_000.step",
+              "00004149/00004149_25c63692f99a42f6bee0033d_step_004.step",
+              "00004545/00004545_a9de53e862dd4ad197873cc0_step_007.step",
+              "00005454/00005454_2ccd2dfb9ffc4cf29e94e0cf_step_008.step",
+              "00005956/00005956_ec7b2e7cb95d42368f778c9d_step_006.step",
+              "00006363/00006363_f91e32a0ca0848dab541db70_step_002.step",
+              "00006566/00006566_635c4f0f74b642a29580ecf9_step_018.step",
+              "00006807/00006807_ca2313fee2d0437db8572b26_step_017.step",
+              "00007272/00007272_adfc323e64d54b67a5c4aca6_step_009.step",
+              "00008126/00008126_5d720e0ec69f4a628d58af42_step_001.step",
+              "00008181/00008181_d0a04676bb3b46dfaba09434_step_020.step",
+              "00009090/00009090_798fb3ffbb0745d7a3c0e863_step_007.step",
+              "00009999/00009999_003df34c1a7b4dc2bd43c5f4_step_000.step"
+            ],
+            "repeats": 1,
+            "timeout": 240.0,
+            "size_factor": 0.15,
+            "threads": 1,
+            "max_file_bytes": 67108864,
+            "max_work": 20000000,
+            "max_nodes": 200000,
+            "max_cells": 1000000,
+            "max_bytes": 134217728,
+            "max_audit_bytes": 134217728,
+            "native_cad": true,
+            "planar_recovery": true,
+            "general_recovery": true,
+            "separate_contact_bodies": true,
+            "separate_matched_box_faces": true,
+            "warning_quality": 0.25
+          },
+          "audit_valid": true,
+          "cad_volume": 57710.73894075777,
+          "native_aggregate_volume_relative_error": 0.002757409418391233,
+          "native_quality_warning": true,
+          "body_routes": [
+            {
+              "solid_tag": 1,
+              "route": "native_partition_star"
+            }
+          ]
+        },
+        "quality_warning": {
+          "target": 0.25,
+          "volume_cells_below_target": 1364,
+          "cell_fraction_below_target": 0.9266304347826086
+        },
+        "native_verification": {
+          "verified": true,
+          "mesh_volume": 57551.60680566021,
+          "minimum_quality": 2.948755810151264e-07
+        },
+        "independent_volume_relative_delta_from_native": 2.528498513952119e-16,
+        "independent_quality_delta_from_native": 9.251443668864014e-16,
+        "source_path": "local-data/abc_0000_step_v00/00000009/00000009_9b3d6a97e8de4aa193b81000_step_001.step",
+        "source_sha256": "34a7b399bef7d25ce7b85357d06210ec7c06fe6a39a6b20bc7369dc1abd40b77"
+      },
+      {
+        "name": "ABC20 / Two curved bodies",
+        "mesh_path": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0020-00-0b1d1861/mesh.paacsmesh",
+        "mesh_sha256": "a204244a7125c94a695a14a8c26e5e60a6499d8b1dd6996bf7d0a38167f10bcb",
+        "mesh_bytes": 2310968,
+        "units": "mm",
+        "metrics": {
+          "nodes": 10345,
+          "cells": 48568,
+          "volume_cells": 28930,
+          "cell_types": {
+            "Tet4": 28930,
+            "Tri3": 19638
+          },
+          "positive_corner_volumes": true,
+          "convex_planar_corner_cells": true,
+          "exterior_volume_faces": 19638,
+          "volume_sum": 3543.1210558953317,
+          "volume_cv": 3.0755780365579453,
+          "volume_min": 8.088339234232202e-14,
+          "volume_max": 7.030353675688004,
+          "volume_max_min": 86919619369245.84,
+          "equivalent_size_definition": "cube root of positive cell volume; not target edge size",
+          "equivalent_size_cv": 0.7207872812852743,
+          "volume_quantiles": [
+            8.088339234232202e-14,
+            0.0011912421482526093,
+            0.02022150607994215,
+            0.21494277194907782,
+            7.030353675688004
+          ],
+          "equivalent_size_quantiles": [
+            4.3246714502860725e-05,
+            0.10600670849715484,
+            0.27244018419628446,
+            0.599019482763223,
+            1.915692171684535
+          ],
+          "tet_mean_ratio_samples": 28930,
+          "tet_mean_ratio_min": 3.2329843725666897e-09,
+          "tet_mean_ratio_quantiles": [
+            3.2329843725666897e-09,
+            0.0317466006093618,
+            0.13199255918605127,
+            0.3752218172568683,
+            0.9733619206263489
+          ],
+          "quality_metric": "Tet corner mean ratio; linear mixed cells use native fixed minimum SubTetMeanRatio diagnostic",
+          "subtet_mean_ratio_min": 3.2329843725666897e-09,
+          "subtet_mean_ratio_quantiles": [
+            3.2329843725666897e-09,
+            0.0317466006093618,
+            0.13199255918605127,
+            0.3752218172568683,
+            0.9733619206263489
+          ],
+          "high_order_scope": "Tet10 sections/quality use corners only; straight midsides verified; faceted geometry",
+          "audit_scope": "Independent corner geometry and face multiplicity checks, not replacement for native full audit"
+        },
+        "section": {
+          "axis": "y",
+          "value": 1.8109010343656244,
+          "polygon_count": 350,
+          "intersected_cells_before_shared_face_dedup": 350,
+          "coplanar_shared_polygons_removed": 0,
+          "section_area": 39.86305108277149,
+          "maximum_plane_residual": 0.0,
+          "method": "Actual convex cell-edge/plane intersections; shared coplanar faces drawn once"
+        },
+        "case_metadata": {
+          "case_id": 20,
+          "normal_cli_receipt": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0020-00-0b1d1861/stdout.log",
+          "normal_cli_receipt_sha256": "1a37b51b7fcad79a577acea468daf66794d4604aef024969d4f608c778a8c2fb",
+          "selected_records": "out/visual-validation-2026-10-03/coverage-25-final/selected-native-records.json",
+          "source_sha256": "0392c2d92f45b8659158225801388d47a34743684894c3433150eec722dfa6d8",
+          "mesh_sha256": "a204244a7125c94a695a14a8c26e5e60a6499d8b1dd6996bf7d0a38167f10bcb",
+          "executable": "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+          "executable_sha256": "161d0dc0a4eb228df1fa58bd341f46b9d22e885bac4d1decad151f9a8abae686",
+          "profile": {
+            "limit": 0,
+            "smallest": 0,
+            "spread": 0,
+            "include": [
+              "00000000/00000000_290a9120f9f249a7a05cfe9c_step_000.step",
+              "00000001/00000001_1ffb81a71e5b402e966b9341_step_000.step",
+              "00000002/00000002_1ffb81a71e5b402e966b9341_step_001.step",
+              "00000003/00000003_1ffb81a71e5b402e966b9341_step_002.step",
+              "00000004/00000004_1ffb81a71e5b402e966b9341_step_003.step",
+              "00000005/00000005_d4fe04f0f5f84b52bd4f10e4_step_000.step",
+              "00000006/00000006_d4fe04f0f5f84b52bd4f10e4_step_001.step",
+              "00000007/00000007_b33a147f86da49879455d286_step_000.step",
+              "00000008/00000008_9b3d6a97e8de4aa193b81000_step_000.step",
+              "00000009/00000009_9b3d6a97e8de4aa193b81000_step_001.step",
+              "00000010/00000010_b4b99d35e04b4277931f9a9c_step_000.step",
+              "00000011/00000011_e909f412cda24521865fac0f_step_000.step",
+              "00000012/00000012_f16882934f314832b639ffc0_step_000.step",
+              "00000013/00000013_c2f4d27f35ed4c138caf5c18_step_000.step",
+              "00000014/00000014_5b1c2f8a8c6f40fdaae1e69d_step_000.step",
+              "00000015/00000015_b08aa818955948c690fd9b6d_step_000.step",
+              "00000016/00000016_b08aa818955948c690fd9b6d_step_001.step",
+              "00000017/00000017_e8e79d1385fd4c78be414f6c_step_000.step",
+              "00000018/00000018_e8e79d1385fd4c78be414f6c_step_001.step",
+              "00000019/00000019_e8e79d1385fd4c78be414f6c_step_002.step",
+              "00000020/00000020_ad34a3f60c4a4caa99646600_step_000.step",
+              "00000021/00000021_ad34a3f60c4a4caa99646600_step_001.step",
+              "00000022/00000022_ad34a3f60c4a4caa99646600_step_002.step",
+              "00000023/00000023_ad34a3f60c4a4caa99646600_step_003.step",
+              "00000024/00000024_ad34a3f60c4a4caa99646600_step_004.step",
+              "00000025/00000025_ad34a3f60c4a4caa99646600_step_005.step",
+              "00000026/00000026_ad34a3f60c4a4caa99646600_step_006.step",
+              "00000027/00000027_ad34a3f60c4a4caa99646600_step_007.step",
+              "00000028/00000028_ad34a3f60c4a4caa99646600_step_008.step",
+              "00000029/00000029_ad34a3f60c4a4caa99646600_step_009.step",
+              "00000383/00000383_239bbf0e92974a32bd214366_step_004.step",
+              "00000469/00000469_11951e51b89249dba38ded3e_step_004.step",
+              "00000638/00000638_5ae45a997c76423aba2fcc11_step_003.step",
+              "00000691/00000691_b9f3563b403143dbb86ab2b8_step_004.step",
+              "00000850/00000850_2c1efcc32d094e9fb9e1a88e_step_010.step",
+              "00000909/00000909_c9400dcd7ae9428caffe2204_step_002.step",
+              "00001818/00001818_9eb3d5245a8b448bb6aecbae_step_001.step",
+              "00002727/00002727_98d8f78b1bb5495f9a193852_step_013.step",
+              "00003636/00003636_3b2ec9d56c264f4b8b7f9c84_step_000.step",
+              "00004149/00004149_25c63692f99a42f6bee0033d_step_004.step",
+              "00004545/00004545_a9de53e862dd4ad197873cc0_step_007.step",
+              "00005454/00005454_2ccd2dfb9ffc4cf29e94e0cf_step_008.step",
+              "00005956/00005956_ec7b2e7cb95d42368f778c9d_step_006.step",
+              "00006363/00006363_f91e32a0ca0848dab541db70_step_002.step",
+              "00006566/00006566_635c4f0f74b642a29580ecf9_step_018.step",
+              "00006807/00006807_ca2313fee2d0437db8572b26_step_017.step",
+              "00007272/00007272_adfc323e64d54b67a5c4aca6_step_009.step",
+              "00008126/00008126_5d720e0ec69f4a628d58af42_step_001.step",
+              "00008181/00008181_d0a04676bb3b46dfaba09434_step_020.step",
+              "00009090/00009090_798fb3ffbb0745d7a3c0e863_step_007.step",
+              "00009999/00009999_003df34c1a7b4dc2bd43c5f4_step_000.step"
+            ],
+            "repeats": 1,
+            "timeout": 240.0,
+            "size_factor": 0.15,
+            "threads": 1,
+            "max_file_bytes": 67108864,
+            "max_work": 20000000,
+            "max_nodes": 200000,
+            "max_cells": 1000000,
+            "max_bytes": 134217728,
+            "max_audit_bytes": 134217728,
+            "native_cad": true,
+            "planar_recovery": true,
+            "general_recovery": true,
+            "separate_contact_bodies": true,
+            "separate_matched_box_faces": true,
+            "warning_quality": 0.25
+          },
+          "audit_valid": true,
+          "cad_volume": 3543.066159544191,
+          "native_aggregate_volume_relative_error": 1.5494023728426604e-05,
+          "native_quality_warning": true,
+          "body_routes": [
+            {
+              "solid_tag": 1,
+              "route": "native_partition_star"
+            },
+            {
+              "solid_tag": 2,
+              "route": "native_partition_star"
+            }
+          ]
+        },
+        "quality_warning": {
+          "target": 0.25,
+          "volume_cells_below_target": 22068,
+          "cell_fraction_below_target": 0.7628067749740753
+        },
+        "native_verification": {
+          "verified": true,
+          "mesh_volume": 3543.1210558953385,
+          "minimum_quality": 3.2334787100353836e-09
+        },
+        "independent_volume_relative_delta_from_native": 1.9251981955138866e-15,
+        "independent_quality_delta_from_native": 4.943374686939048e-13,
+        "source_path": "local-data/abc_0000_step_v00/00000020/00000020_ad34a3f60c4a4caa99646600_step_000.step",
+        "source_sha256": "0392c2d92f45b8659158225801388d47a34743684894c3433150eec722dfa6d8"
+      },
+      {
+        "name": "ABC29 / Circular contact",
+        "mesh_path": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0029-00-6d53c1c5/mesh.paacsmesh",
+        "mesh_sha256": "46f1d097ea8feea4e23f383f0042ce07c8f171b3f0e3955dfbf8cef4e27c445d",
+        "mesh_bytes": 172272,
+        "units": "mm",
+        "metrics": {
+          "nodes": 777,
+          "cells": 3618,
+          "volume_cells": 2140,
+          "cell_types": {
+            "Tet4": 2140,
+            "Tri3": 1478
+          },
+          "positive_corner_volumes": true,
+          "convex_planar_corner_cells": true,
+          "exterior_volume_faces": 1478,
+          "volume_sum": 16726.457197877375,
+          "volume_cv": 2.1516560812048637,
+          "volume_min": 1.4897638979090632e-09,
+          "volume_max": 110.19542729880254,
+          "volume_max_min": 73968383482.4201,
+          "equivalent_size_definition": "cube root of positive cell volume; not target edge size",
+          "equivalent_size_cv": 1.0210010562866938,
+          "volume_quantiles": [
+            1.4897638979090632e-09,
+            0.003709654259844478,
+            0.3048286281509954,
+            30.609840909011314,
+            110.19542729880254
+          ],
+          "equivalent_size_quantiles": [
+            0.0011421044277015514,
+            0.1548024435557362,
+            0.6730054541962306,
+            3.1281460680199666,
+            4.7942556760393185
+          ],
+          "tet_mean_ratio_samples": 2140,
+          "tet_mean_ratio_min": 5.729777097176471e-08,
+          "tet_mean_ratio_quantiles": [
+            5.729777097176471e-08,
+            0.012779860304851022,
+            0.08275283386873397,
+            0.26449263568590653,
+            0.4447952397550029
+          ],
+          "quality_metric": "Tet corner mean ratio; linear mixed cells use native fixed minimum SubTetMeanRatio diagnostic",
+          "subtet_mean_ratio_min": 5.729777097176471e-08,
+          "subtet_mean_ratio_quantiles": [
+            5.729777097176471e-08,
+            0.012779860304851022,
+            0.08275283386873397,
+            0.26449263568590653,
+            0.4447952397550029
+          ],
+          "high_order_scope": "Tet10 sections/quality use corners only; straight midsides verified; faceted geometry",
+          "audit_scope": "Independent corner geometry and face multiplicity checks, not replacement for native full audit"
+        },
+        "section": {
+          "axis": "y",
+          "value": 0.17999999999999972,
+          "polygon_count": 393,
+          "intersected_cells_before_shared_face_dedup": 393,
+          "coplanar_shared_polygons_removed": 0,
+          "section_area": 1191.8173559700617,
+          "maximum_plane_residual": 0.0,
+          "method": "Actual convex cell-edge/plane intersections; shared coplanar faces drawn once"
+        },
+        "case_metadata": {
+          "case_id": 29,
+          "normal_cli_receipt": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0029-00-6d53c1c5/stdout.log",
+          "normal_cli_receipt_sha256": "70122a4332ddebd4d242e3501b533327d914ceb9d3c779df7fc66c8dcddd1e99",
+          "selected_records": "out/visual-validation-2026-10-03/coverage-25-final/selected-native-records.json",
+          "source_sha256": "460499c066bfa9ca375c888966b4bacdebc839aff7b4dfea271b547699aa891d",
+          "mesh_sha256": "46f1d097ea8feea4e23f383f0042ce07c8f171b3f0e3955dfbf8cef4e27c445d",
+          "executable": "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+          "executable_sha256": "161d0dc0a4eb228df1fa58bd341f46b9d22e885bac4d1decad151f9a8abae686",
+          "profile": {
+            "limit": 0,
+            "smallest": 0,
+            "spread": 0,
+            "include": [
+              "00000000/00000000_290a9120f9f249a7a05cfe9c_step_000.step",
+              "00000001/00000001_1ffb81a71e5b402e966b9341_step_000.step",
+              "00000002/00000002_1ffb81a71e5b402e966b9341_step_001.step",
+              "00000003/00000003_1ffb81a71e5b402e966b9341_step_002.step",
+              "00000004/00000004_1ffb81a71e5b402e966b9341_step_003.step",
+              "00000005/00000005_d4fe04f0f5f84b52bd4f10e4_step_000.step",
+              "00000006/00000006_d4fe04f0f5f84b52bd4f10e4_step_001.step",
+              "00000007/00000007_b33a147f86da49879455d286_step_000.step",
+              "00000008/00000008_9b3d6a97e8de4aa193b81000_step_000.step",
+              "00000009/00000009_9b3d6a97e8de4aa193b81000_step_001.step",
+              "00000010/00000010_b4b99d35e04b4277931f9a9c_step_000.step",
+              "00000011/00000011_e909f412cda24521865fac0f_step_000.step",
+              "00000012/00000012_f16882934f314832b639ffc0_step_000.step",
+              "00000013/00000013_c2f4d27f35ed4c138caf5c18_step_000.step",
+              "00000014/00000014_5b1c2f8a8c6f40fdaae1e69d_step_000.step",
+              "00000015/00000015_b08aa818955948c690fd9b6d_step_000.step",
+              "00000016/00000016_b08aa818955948c690fd9b6d_step_001.step",
+              "00000017/00000017_e8e79d1385fd4c78be414f6c_step_000.step",
+              "00000018/00000018_e8e79d1385fd4c78be414f6c_step_001.step",
+              "00000019/00000019_e8e79d1385fd4c78be414f6c_step_002.step",
+              "00000020/00000020_ad34a3f60c4a4caa99646600_step_000.step",
+              "00000021/00000021_ad34a3f60c4a4caa99646600_step_001.step",
+              "00000022/00000022_ad34a3f60c4a4caa99646600_step_002.step",
+              "00000023/00000023_ad34a3f60c4a4caa99646600_step_003.step",
+              "00000024/00000024_ad34a3f60c4a4caa99646600_step_004.step",
+              "00000025/00000025_ad34a3f60c4a4caa99646600_step_005.step",
+              "00000026/00000026_ad34a3f60c4a4caa99646600_step_006.step",
+              "00000027/00000027_ad34a3f60c4a4caa99646600_step_007.step",
+              "00000028/00000028_ad34a3f60c4a4caa99646600_step_008.step",
+              "00000029/00000029_ad34a3f60c4a4caa99646600_step_009.step",
+              "00000383/00000383_239bbf0e92974a32bd214366_step_004.step",
+              "00000469/00000469_11951e51b89249dba38ded3e_step_004.step",
+              "00000638/00000638_5ae45a997c76423aba2fcc11_step_003.step",
+              "00000691/00000691_b9f3563b403143dbb86ab2b8_step_004.step",
+              "00000850/00000850_2c1efcc32d094e9fb9e1a88e_step_010.step",
+              "00000909/00000909_c9400dcd7ae9428caffe2204_step_002.step",
+              "00001818/00001818_9eb3d5245a8b448bb6aecbae_step_001.step",
+              "00002727/00002727_98d8f78b1bb5495f9a193852_step_013.step",
+              "00003636/00003636_3b2ec9d56c264f4b8b7f9c84_step_000.step",
+              "00004149/00004149_25c63692f99a42f6bee0033d_step_004.step",
+              "00004545/00004545_a9de53e862dd4ad197873cc0_step_007.step",
+              "00005454/00005454_2ccd2dfb9ffc4cf29e94e0cf_step_008.step",
+              "00005956/00005956_ec7b2e7cb95d42368f778c9d_step_006.step",
+              "00006363/00006363_f91e32a0ca0848dab541db70_step_002.step",
+              "00006566/00006566_635c4f0f74b642a29580ecf9_step_018.step",
+              "00006807/00006807_ca2313fee2d0437db8572b26_step_017.step",
+              "00007272/00007272_adfc323e64d54b67a5c4aca6_step_009.step",
+              "00008126/00008126_5d720e0ec69f4a628d58af42_step_001.step",
+              "00008181/00008181_d0a04676bb3b46dfaba09434_step_020.step",
+              "00009090/00009090_798fb3ffbb0745d7a3c0e863_step_007.step",
+              "00009999/00009999_003df34c1a7b4dc2bd43c5f4_step_000.step"
+            ],
+            "repeats": 1,
+            "timeout": 240.0,
+            "size_factor": 0.15,
+            "threads": 1,
+            "max_file_bytes": 67108864,
+            "max_work": 20000000,
+            "max_nodes": 200000,
+            "max_cells": 1000000,
+            "max_bytes": 134217728,
+            "max_audit_bytes": 134217728,
+            "native_cad": true,
+            "planar_recovery": true,
+            "general_recovery": true,
+            "separate_contact_bodies": true,
+            "separate_matched_box_faces": true,
+            "warning_quality": 0.25
+          },
+          "audit_valid": true,
+          "cad_volume": 16795.13363848201,
+          "native_aggregate_volume_relative_error": 0.004089067826612231,
+          "native_quality_warning": true,
+          "body_routes": [
+            {
+              "solid_tag": 1,
+              "route": "native_partition_star"
+            },
+            {
+              "solid_tag": 2,
+              "route": "native_contact_cylinder"
+            }
+          ]
+        },
+        "quality_warning": {
+          "target": 0.25,
+          "volume_cells_below_target": 1836,
+          "cell_fraction_below_target": 0.8579439252336448
+        },
+        "native_verification": {
+          "verified": true,
+          "mesh_volume": 16726.45719787724,
+          "minimum_quality": 5.729777091517498e-08
+        },
+        "independent_volume_relative_delta_from_native": 8.047443297166131e-15,
+        "independent_quality_delta_from_native": 5.658972857557797e-17,
+        "source_path": "local-data/abc_0000_step_v00/00000029/00000029_ad34a3f60c4a4caa99646600_step_009.step",
+        "source_sha256": "460499c066bfa9ca375c888966b4bacdebc839aff7b4dfea271b547699aa891d"
+      },
+      {
+        "name": "ABC5454 / Through holes",
+        "mesh_path": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0041-00-7ecaff22/mesh.paacsmesh",
+        "mesh_sha256": "11cd0755424f77a0292da4e65d6b29a18d57a5a5445cde857658475a9cd4180b",
+        "mesh_bytes": 342544,
+        "units": "mm",
+        "metrics": {
+          "nodes": 1374,
+          "cells": 7066,
+          "volume_cells": 5520,
+          "cell_types": {
+            "Tet4": 5520,
+            "Tri3": 1546
+          },
+          "positive_corner_volumes": true,
+          "convex_planar_corner_cells": true,
+          "exterior_volume_faces": 1546,
+          "volume_sum": 3169.8959999992653,
+          "volume_cv": 1.2598336311140277,
+          "volume_min": 0.0008888888888888718,
+          "volume_max": 6.037333333333339,
+          "volume_max_min": 6792.000000000137,
+          "equivalent_size_definition": "cube root of positive cell volume; not target edge size",
+          "equivalent_size_cv": 0.35986609296880645,
+          "volume_quantiles": [
+            0.0008888888888888718,
+            0.08074074074074211,
+            0.39129117259552404,
+            1.1952000000000071,
+            6.037333333333339
+          ],
+          "equivalent_size_quantiles": [
+            0.09614997135382661,
+            0.4322127523247264,
+            0.7314186559512595,
+            1.0612395868133973,
+            1.820881645593905
+          ],
+          "tet_mean_ratio_samples": 5520,
+          "tet_mean_ratio_min": 0.011583436932431839,
+          "tet_mean_ratio_quantiles": [
+            0.011583436932431839,
+            0.16595147610373592,
+            0.5041171202938095,
+            0.7984989440359387,
+            0.9539420504672902
+          ],
+          "quality_metric": "Tet corner mean ratio; linear mixed cells use native fixed minimum SubTetMeanRatio diagnostic",
+          "subtet_mean_ratio_min": 0.011583436932431839,
+          "subtet_mean_ratio_quantiles": [
+            0.011583436932431839,
+            0.16595147610373592,
+            0.5041171202938095,
+            0.7984989440359387,
+            0.9539420504672902
+          ],
+          "high_order_scope": "Tet10 sections/quality use corners only; straight midsides verified; faceted geometry",
+          "audit_scope": "Independent corner geometry and face multiplicity checks, not replacement for native full audit"
+        },
+        "section": {
+          "axis": "y",
+          "value": -5.143999999999998,
+          "polygon_count": 264,
+          "intersected_cells_before_shared_face_dedup": 264,
+          "coplanar_shared_polygons_removed": 0,
+          "section_area": 56.519999999960525,
+          "maximum_plane_residual": 0.0,
+          "method": "Actual convex cell-edge/plane intersections; shared coplanar faces drawn once"
+        },
+        "case_metadata": {
+          "case_id": 5454,
+          "normal_cli_receipt": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0041-00-7ecaff22/stdout.log",
+          "normal_cli_receipt_sha256": "f301153fb4d5fa48ecec8fd437cc260198579ab8c7d6fa6c055885cf6a567212",
+          "selected_records": "out/visual-validation-2026-10-03/coverage-25-final/selected-native-records.json",
+          "source_sha256": "76375df72b7d3f214c6be5a667a687e9ad39ef316e4a431025b6bcfb20d0bc65",
+          "mesh_sha256": "11cd0755424f77a0292da4e65d6b29a18d57a5a5445cde857658475a9cd4180b",
+          "executable": "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+          "executable_sha256": "161d0dc0a4eb228df1fa58bd341f46b9d22e885bac4d1decad151f9a8abae686",
+          "profile": {
+            "limit": 0,
+            "smallest": 0,
+            "spread": 0,
+            "include": [
+              "00000000/00000000_290a9120f9f249a7a05cfe9c_step_000.step",
+              "00000001/00000001_1ffb81a71e5b402e966b9341_step_000.step",
+              "00000002/00000002_1ffb81a71e5b402e966b9341_step_001.step",
+              "00000003/00000003_1ffb81a71e5b402e966b9341_step_002.step",
+              "00000004/00000004_1ffb81a71e5b402e966b9341_step_003.step",
+              "00000005/00000005_d4fe04f0f5f84b52bd4f10e4_step_000.step",
+              "00000006/00000006_d4fe04f0f5f84b52bd4f10e4_step_001.step",
+              "00000007/00000007_b33a147f86da49879455d286_step_000.step",
+              "00000008/00000008_9b3d6a97e8de4aa193b81000_step_000.step",
+              "00000009/00000009_9b3d6a97e8de4aa193b81000_step_001.step",
+              "00000010/00000010_b4b99d35e04b4277931f9a9c_step_000.step",
+              "00000011/00000011_e909f412cda24521865fac0f_step_000.step",
+              "00000012/00000012_f16882934f314832b639ffc0_step_000.step",
+              "00000013/00000013_c2f4d27f35ed4c138caf5c18_step_000.step",
+              "00000014/00000014_5b1c2f8a8c6f40fdaae1e69d_step_000.step",
+              "00000015/00000015_b08aa818955948c690fd9b6d_step_000.step",
+              "00000016/00000016_b08aa818955948c690fd9b6d_step_001.step",
+              "00000017/00000017_e8e79d1385fd4c78be414f6c_step_000.step",
+              "00000018/00000018_e8e79d1385fd4c78be414f6c_step_001.step",
+              "00000019/00000019_e8e79d1385fd4c78be414f6c_step_002.step",
+              "00000020/00000020_ad34a3f60c4a4caa99646600_step_000.step",
+              "00000021/00000021_ad34a3f60c4a4caa99646600_step_001.step",
+              "00000022/00000022_ad34a3f60c4a4caa99646600_step_002.step",
+              "00000023/00000023_ad34a3f60c4a4caa99646600_step_003.step",
+              "00000024/00000024_ad34a3f60c4a4caa99646600_step_004.step",
+              "00000025/00000025_ad34a3f60c4a4caa99646600_step_005.step",
+              "00000026/00000026_ad34a3f60c4a4caa99646600_step_006.step",
+              "00000027/00000027_ad34a3f60c4a4caa99646600_step_007.step",
+              "00000028/00000028_ad34a3f60c4a4caa99646600_step_008.step",
+              "00000029/00000029_ad34a3f60c4a4caa99646600_step_009.step",
+              "00000383/00000383_239bbf0e92974a32bd214366_step_004.step",
+              "00000469/00000469_11951e51b89249dba38ded3e_step_004.step",
+              "00000638/00000638_5ae45a997c76423aba2fcc11_step_003.step",
+              "00000691/00000691_b9f3563b403143dbb86ab2b8_step_004.step",
+              "00000850/00000850_2c1efcc32d094e9fb9e1a88e_step_010.step",
+              "00000909/00000909_c9400dcd7ae9428caffe2204_step_002.step",
+              "00001818/00001818_9eb3d5245a8b448bb6aecbae_step_001.step",
+              "00002727/00002727_98d8f78b1bb5495f9a193852_step_013.step",
+              "00003636/00003636_3b2ec9d56c264f4b8b7f9c84_step_000.step",
+              "00004149/00004149_25c63692f99a42f6bee0033d_step_004.step",
+              "00004545/00004545_a9de53e862dd4ad197873cc0_step_007.step",
+              "00005454/00005454_2ccd2dfb9ffc4cf29e94e0cf_step_008.step",
+              "00005956/00005956_ec7b2e7cb95d42368f778c9d_step_006.step",
+              "00006363/00006363_f91e32a0ca0848dab541db70_step_002.step",
+              "00006566/00006566_635c4f0f74b642a29580ecf9_step_018.step",
+              "00006807/00006807_ca2313fee2d0437db8572b26_step_017.step",
+              "00007272/00007272_adfc323e64d54b67a5c4aca6_step_009.step",
+              "00008126/00008126_5d720e0ec69f4a628d58af42_step_001.step",
+              "00008181/00008181_d0a04676bb3b46dfaba09434_step_020.step",
+              "00009090/00009090_798fb3ffbb0745d7a3c0e863_step_007.step",
+              "00009999/00009999_003df34c1a7b4dc2bd43c5f4_step_000.step"
+            ],
+            "repeats": 1,
+            "timeout": 240.0,
+            "size_factor": 0.15,
+            "threads": 1,
+            "max_file_bytes": 67108864,
+            "max_work": 20000000,
+            "max_nodes": 200000,
+            "max_cells": 1000000,
+            "max_bytes": 134217728,
+            "max_audit_bytes": 134217728,
+            "native_cad": true,
+            "planar_recovery": true,
+            "general_recovery": true,
+            "separate_contact_bodies": true,
+            "separate_matched_box_faces": true,
+            "warning_quality": 0.25
+          },
+          "audit_valid": true,
+          "cad_volume": 3169.8959999984004,
+          "native_aggregate_volume_relative_error": 2.664017464915537e-13,
+          "native_quality_warning": true,
+          "body_routes": [
+            {
+              "solid_tag": 1,
+              "route": "native_partition_star"
+            }
+          ]
+        },
+        "quality_warning": {
+          "target": 0.25,
+          "volume_cells_below_target": 980,
+          "cell_fraction_below_target": 0.17753623188405798
+        },
+        "native_verification": {
+          "verified": true,
+          "mesh_volume": 3169.895999999245,
+          "minimum_quality": 0.011583436932431903
+        },
+        "independent_volume_relative_delta_from_native": 6.4556158277419075e-15,
+        "independent_quality_delta_from_native": 6.418476861114186e-17,
+        "source_path": "local-data/abc_0000_step_v00/00005454/00005454_2ccd2dfb9ffc4cf29e94e0cf_step_008.step",
+        "source_sha256": "76375df72b7d3f214c6be5a667a687e9ad39ef316e4a431025b6bcfb20d0bc65"
+      },
+      {
+        "name": "ABC7272 / Through holes",
+        "mesh_path": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0046-00-cb8fb62a/mesh.paacsmesh",
+        "mesh_sha256": "6ef6ddcaf2116a5b0f10a6e92ab1b699d8e564b88b1e1bde52b796565b9112bf",
+        "mesh_bytes": 541048,
+        "units": "mm",
+        "metrics": {
+          "nodes": 2393,
+          "cells": 11272,
+          "volume_cells": 7330,
+          "cell_types": {
+            "Tet4": 7330,
+            "Tri3": 3942
+          },
+          "positive_corner_volumes": true,
+          "convex_planar_corner_cells": true,
+          "exterior_volume_faces": 3942,
+          "volume_sum": 32609.848000177964,
+          "volume_cv": 1.661540766125342,
+          "volume_min": 6.371145061157767e-07,
+          "volume_max": 47.855390051786,
+          "volume_max_min": 75112698.88287507,
+          "equivalent_size_definition": "cube root of positive cell volume; not target edge size",
+          "equivalent_size_cv": 0.6184918931414836,
+          "volume_quantiles": [
+            6.371145061157767e-07,
+            0.052555875030515085,
+            1.089725099501325,
+            13.37214389202109,
+            47.855390051786
+          ],
+          "equivalent_size_quantiles": [
+            0.00860476798034775,
+            0.37457641066691294,
+            1.0290558288371885,
+            2.3735607245335335,
+            3.6305878794955255
+          ],
+          "tet_mean_ratio_samples": 7330,
+          "tet_mean_ratio_min": 2.8269480467364692e-05,
+          "tet_mean_ratio_quantiles": [
+            2.8269480467364692e-05,
+            0.10225971715664595,
+            0.380094127163489,
+            0.7366902923245151,
+            0.9533030252402745
+          ],
+          "quality_metric": "Tet corner mean ratio; linear mixed cells use native fixed minimum SubTetMeanRatio diagnostic",
+          "subtet_mean_ratio_min": 2.8269480467364692e-05,
+          "subtet_mean_ratio_quantiles": [
+            2.8269480467364692e-05,
+            0.10225971715664595,
+            0.380094127163489,
+            0.7366902923245151,
+            0.9533030252402745
+          ],
+          "high_order_scope": "Tet10 sections/quality use corners only; straight midsides verified; faceted geometry",
+          "audit_scope": "Independent corner geometry and face multiplicity checks, not replacement for native full audit"
+        },
+        "section": {
+          "axis": "y",
+          "value": 24.250500000000002,
+          "polygon_count": 310,
+          "intersected_cells_before_shared_face_dedup": 310,
+          "coplanar_shared_polygons_removed": 0,
+          "section_area": 344.10481089122834,
+          "maximum_plane_residual": 0.0,
+          "method": "Actual convex cell-edge/plane intersections; shared coplanar faces drawn once"
+        },
+        "case_metadata": {
+          "case_id": 7272,
+          "normal_cli_receipt": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0046-00-cb8fb62a/stdout.log",
+          "normal_cli_receipt_sha256": "45b0ced10711241deb676fb8037f571fd9f56eafec71f446369807fb676a6c63",
+          "selected_records": "out/visual-validation-2026-10-03/coverage-25-final/selected-native-records.json",
+          "source_sha256": "89f28025d707815466d2ce8827c9b8bec9a7a4109cf1cc7cb6f3d5877d868ca2",
+          "mesh_sha256": "6ef6ddcaf2116a5b0f10a6e92ab1b699d8e564b88b1e1bde52b796565b9112bf",
+          "executable": "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+          "executable_sha256": "161d0dc0a4eb228df1fa58bd341f46b9d22e885bac4d1decad151f9a8abae686",
+          "profile": {
+            "limit": 0,
+            "smallest": 0,
+            "spread": 0,
+            "include": [
+              "00000000/00000000_290a9120f9f249a7a05cfe9c_step_000.step",
+              "00000001/00000001_1ffb81a71e5b402e966b9341_step_000.step",
+              "00000002/00000002_1ffb81a71e5b402e966b9341_step_001.step",
+              "00000003/00000003_1ffb81a71e5b402e966b9341_step_002.step",
+              "00000004/00000004_1ffb81a71e5b402e966b9341_step_003.step",
+              "00000005/00000005_d4fe04f0f5f84b52bd4f10e4_step_000.step",
+              "00000006/00000006_d4fe04f0f5f84b52bd4f10e4_step_001.step",
+              "00000007/00000007_b33a147f86da49879455d286_step_000.step",
+              "00000008/00000008_9b3d6a97e8de4aa193b81000_step_000.step",
+              "00000009/00000009_9b3d6a97e8de4aa193b81000_step_001.step",
+              "00000010/00000010_b4b99d35e04b4277931f9a9c_step_000.step",
+              "00000011/00000011_e909f412cda24521865fac0f_step_000.step",
+              "00000012/00000012_f16882934f314832b639ffc0_step_000.step",
+              "00000013/00000013_c2f4d27f35ed4c138caf5c18_step_000.step",
+              "00000014/00000014_5b1c2f8a8c6f40fdaae1e69d_step_000.step",
+              "00000015/00000015_b08aa818955948c690fd9b6d_step_000.step",
+              "00000016/00000016_b08aa818955948c690fd9b6d_step_001.step",
+              "00000017/00000017_e8e79d1385fd4c78be414f6c_step_000.step",
+              "00000018/00000018_e8e79d1385fd4c78be414f6c_step_001.step",
+              "00000019/00000019_e8e79d1385fd4c78be414f6c_step_002.step",
+              "00000020/00000020_ad34a3f60c4a4caa99646600_step_000.step",
+              "00000021/00000021_ad34a3f60c4a4caa99646600_step_001.step",
+              "00000022/00000022_ad34a3f60c4a4caa99646600_step_002.step",
+              "00000023/00000023_ad34a3f60c4a4caa99646600_step_003.step",
+              "00000024/00000024_ad34a3f60c4a4caa99646600_step_004.step",
+              "00000025/00000025_ad34a3f60c4a4caa99646600_step_005.step",
+              "00000026/00000026_ad34a3f60c4a4caa99646600_step_006.step",
+              "00000027/00000027_ad34a3f60c4a4caa99646600_step_007.step",
+              "00000028/00000028_ad34a3f60c4a4caa99646600_step_008.step",
+              "00000029/00000029_ad34a3f60c4a4caa99646600_step_009.step",
+              "00000383/00000383_239bbf0e92974a32bd214366_step_004.step",
+              "00000469/00000469_11951e51b89249dba38ded3e_step_004.step",
+              "00000638/00000638_5ae45a997c76423aba2fcc11_step_003.step",
+              "00000691/00000691_b9f3563b403143dbb86ab2b8_step_004.step",
+              "00000850/00000850_2c1efcc32d094e9fb9e1a88e_step_010.step",
+              "00000909/00000909_c9400dcd7ae9428caffe2204_step_002.step",
+              "00001818/00001818_9eb3d5245a8b448bb6aecbae_step_001.step",
+              "00002727/00002727_98d8f78b1bb5495f9a193852_step_013.step",
+              "00003636/00003636_3b2ec9d56c264f4b8b7f9c84_step_000.step",
+              "00004149/00004149_25c63692f99a42f6bee0033d_step_004.step",
+              "00004545/00004545_a9de53e862dd4ad197873cc0_step_007.step",
+              "00005454/00005454_2ccd2dfb9ffc4cf29e94e0cf_step_008.step",
+              "00005956/00005956_ec7b2e7cb95d42368f778c9d_step_006.step",
+              "00006363/00006363_f91e32a0ca0848dab541db70_step_002.step",
+              "00006566/00006566_635c4f0f74b642a29580ecf9_step_018.step",
+              "00006807/00006807_ca2313fee2d0437db8572b26_step_017.step",
+              "00007272/00007272_adfc323e64d54b67a5c4aca6_step_009.step",
+              "00008126/00008126_5d720e0ec69f4a628d58af42_step_001.step",
+              "00008181/00008181_d0a04676bb3b46dfaba09434_step_020.step",
+              "00009090/00009090_798fb3ffbb0745d7a3c0e863_step_007.step",
+              "00009999/00009999_003df34c1a7b4dc2bd43c5f4_step_000.step"
+            ],
+            "repeats": 1,
+            "timeout": 240.0,
+            "size_factor": 0.15,
+            "threads": 1,
+            "max_file_bytes": 67108864,
+            "max_work": 20000000,
+            "max_nodes": 200000,
+            "max_cells": 1000000,
+            "max_bytes": 134217728,
+            "max_audit_bytes": 134217728,
+            "native_cad": true,
+            "planar_recovery": true,
+            "general_recovery": true,
+            "separate_contact_bodies": true,
+            "separate_matched_box_faces": true,
+            "warning_quality": 0.25
+          },
+          "audit_valid": true,
+          "cad_volume": 32595.52629037469,
+          "native_aggregate_volume_relative_error": 0.0004393765474292898,
+          "native_quality_warning": true,
+          "body_routes": [
+            {
+              "solid_tag": 1,
+              "route": "native_partition_star"
+            }
+          ]
+        },
+        "quality_warning": {
+          "target": 0.25,
+          "volume_cells_below_target": 2555,
+          "cell_fraction_below_target": 0.3485675306957708
+        },
+        "native_verification": {
+          "verified": true,
+          "mesh_volume": 32609.848000177797,
+          "minimum_quality": 2.8269480453021907e-05
+        },
+        "independent_volume_relative_delta_from_native": 5.13179408641544e-15,
+        "independent_quality_delta_from_native": 1.4342785178934545e-14,
+        "source_path": "local-data/abc_0000_step_v00/00007272/00007272_adfc323e64d54b67a5c4aca6_step_009.step",
+        "source_sha256": "89f28025d707815466d2ce8827c9b8bec9a7a4109cf1cc7cb6f3d5877d868ca2"
+      },
+      {
+        "name": "ABC17 / 64 touching blocks",
+        "mesh_path": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0017-00-d425af2b/mesh.paacsmesh",
+        "mesh_sha256": "ac1eb26ffbdb46d238bd76a1985a517f2ccd1c07d3ea25f76a3d6e05886a4050",
+        "mesh_bytes": 60968,
+        "units": "mm",
+        "metrics": {
+          "nodes": 512,
+          "cells": 1152,
+          "volume_cells": 384,
+          "cell_types": {
+            "Tet4": 384,
+            "Tri3": 768
+          },
+          "positive_corner_volumes": true,
+          "convex_planar_corner_cells": true,
+          "exterior_volume_faces": 768,
+          "volume_sum": 589934.3040000004,
+          "volume_cv": 0.0,
+          "volume_min": 1536.287250000001,
+          "volume_max": 1536.287250000001,
+          "volume_max_min": 1.0,
+          "equivalent_size_definition": "cube root of positive cell volume; not target edge size",
+          "equivalent_size_cv": 1.5394753416734964e-16,
+          "volume_quantiles": [
+            1536.287250000001,
+            1536.287250000001,
+            1536.287250000001,
+            1536.287250000001,
+            1536.287250000001
+          ],
+          "equivalent_size_quantiles": [
+            11.538715764484088,
+            11.538715764484088,
+            11.538715764484088,
+            11.538715764484088,
+            11.538715764484088
+          ],
+          "tet_mean_ratio_samples": 384,
+          "tet_mean_ratio_min": 0.3232134331915286,
+          "tet_mean_ratio_quantiles": [
+            0.3232134331915286,
+            0.3232134331915289,
+            0.32321343319152906,
+            0.37463375210836325,
+            0.37463375210836325
+          ],
+          "quality_metric": "Tet corner mean ratio; linear mixed cells use native fixed minimum SubTetMeanRatio diagnostic",
+          "subtet_mean_ratio_min": 0.3232134331915286,
+          "subtet_mean_ratio_quantiles": [
+            0.3232134331915286,
+            0.3232134331915289,
+            0.32321343319152906,
+            0.37463375210836325,
+            0.37463375210836325
+          ],
+          "high_order_scope": "Tet10 sections/quality use corners only; straight midsides verified; faceted geometry",
+          "audit_scope": "Independent corner geometry and face multiplicity checks, not replacement for native full audit"
+        },
+        "section": {
+          "axis": "z",
+          "value": 3.2384999999999997,
+          "polygon_count": 384,
+          "intersected_cells_before_shared_face_dedup": 384,
+          "coplanar_shared_polygons_removed": 0,
+          "section_area": 92903.04,
+          "maximum_plane_residual": 0.0,
+          "method": "Actual convex cell-edge/plane intersections; shared coplanar faces drawn once"
+        },
+        "case_metadata": {
+          "case_id": 17,
+          "normal_cli_receipt": "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0017-00-d425af2b/stdout.log",
+          "normal_cli_receipt_sha256": "93cdda9058889f6ca030a98279586bb476f142124cc19c8d33392108f325e1a7",
+          "selected_records": "out/visual-validation-2026-10-03/coverage-25-final/selected-native-records.json",
+          "source_sha256": "ff5d59a91a341035c7604987eb5e54503710bfedf4962608c658f4d985ea0112",
+          "mesh_sha256": "ac1eb26ffbdb46d238bd76a1985a517f2ccd1c07d3ea25f76a3d6e05886a4050",
+          "executable": "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe",
+          "executable_sha256": "161d0dc0a4eb228df1fa58bd341f46b9d22e885bac4d1decad151f9a8abae686",
+          "profile": {
+            "limit": 0,
+            "smallest": 0,
+            "spread": 0,
+            "include": [
+              "00000000/00000000_290a9120f9f249a7a05cfe9c_step_000.step",
+              "00000001/00000001_1ffb81a71e5b402e966b9341_step_000.step",
+              "00000002/00000002_1ffb81a71e5b402e966b9341_step_001.step",
+              "00000003/00000003_1ffb81a71e5b402e966b9341_step_002.step",
+              "00000004/00000004_1ffb81a71e5b402e966b9341_step_003.step",
+              "00000005/00000005_d4fe04f0f5f84b52bd4f10e4_step_000.step",
+              "00000006/00000006_d4fe04f0f5f84b52bd4f10e4_step_001.step",
+              "00000007/00000007_b33a147f86da49879455d286_step_000.step",
+              "00000008/00000008_9b3d6a97e8de4aa193b81000_step_000.step",
+              "00000009/00000009_9b3d6a97e8de4aa193b81000_step_001.step",
+              "00000010/00000010_b4b99d35e04b4277931f9a9c_step_000.step",
+              "00000011/00000011_e909f412cda24521865fac0f_step_000.step",
+              "00000012/00000012_f16882934f314832b639ffc0_step_000.step",
+              "00000013/00000013_c2f4d27f35ed4c138caf5c18_step_000.step",
+              "00000014/00000014_5b1c2f8a8c6f40fdaae1e69d_step_000.step",
+              "00000015/00000015_b08aa818955948c690fd9b6d_step_000.step",
+              "00000016/00000016_b08aa818955948c690fd9b6d_step_001.step",
+              "00000017/00000017_e8e79d1385fd4c78be414f6c_step_000.step",
+              "00000018/00000018_e8e79d1385fd4c78be414f6c_step_001.step",
+              "00000019/00000019_e8e79d1385fd4c78be414f6c_step_002.step",
+              "00000020/00000020_ad34a3f60c4a4caa99646600_step_000.step",
+              "00000021/00000021_ad34a3f60c4a4caa99646600_step_001.step",
+              "00000022/00000022_ad34a3f60c4a4caa99646600_step_002.step",
+              "00000023/00000023_ad34a3f60c4a4caa99646600_step_003.step",
+              "00000024/00000024_ad34a3f60c4a4caa99646600_step_004.step",
+              "00000025/00000025_ad34a3f60c4a4caa99646600_step_005.step",
+              "00000026/00000026_ad34a3f60c4a4caa99646600_step_006.step",
+              "00000027/00000027_ad34a3f60c4a4caa99646600_step_007.step",
+              "00000028/00000028_ad34a3f60c4a4caa99646600_step_008.step",
+              "00000029/00000029_ad34a3f60c4a4caa99646600_step_009.step",
+              "00000383/00000383_239bbf0e92974a32bd214366_step_004.step",
+              "00000469/00000469_11951e51b89249dba38ded3e_step_004.step",
+              "00000638/00000638_5ae45a997c76423aba2fcc11_step_003.step",
+              "00000691/00000691_b9f3563b403143dbb86ab2b8_step_004.step",
+              "00000850/00000850_2c1efcc32d094e9fb9e1a88e_step_010.step",
+              "00000909/00000909_c9400dcd7ae9428caffe2204_step_002.step",
+              "00001818/00001818_9eb3d5245a8b448bb6aecbae_step_001.step",
+              "00002727/00002727_98d8f78b1bb5495f9a193852_step_013.step",
+              "00003636/00003636_3b2ec9d56c264f4b8b7f9c84_step_000.step",
+              "00004149/00004149_25c63692f99a42f6bee0033d_step_004.step",
+              "00004545/00004545_a9de53e862dd4ad197873cc0_step_007.step",
+              "00005454/00005454_2ccd2dfb9ffc4cf29e94e0cf_step_008.step",
+              "00005956/00005956_ec7b2e7cb95d42368f778c9d_step_006.step",
+              "00006363/00006363_f91e32a0ca0848dab541db70_step_002.step",
+              "00006566/00006566_635c4f0f74b642a29580ecf9_step_018.step",
+              "00006807/00006807_ca2313fee2d0437db8572b26_step_017.step",
+              "00007272/00007272_adfc323e64d54b67a5c4aca6_step_009.step",
+              "00008126/00008126_5d720e0ec69f4a628d58af42_step_001.step",
+              "00008181/00008181_d0a04676bb3b46dfaba09434_step_020.step",
+              "00009090/00009090_798fb3ffbb0745d7a3c0e863_step_007.step",
+              "00009999/00009999_003df34c1a7b4dc2bd43c5f4_step_000.step"
+            ],
+            "repeats": 1,
+            "timeout": 240.0,
+            "size_factor": 0.15,
+            "threads": 1,
+            "max_file_bytes": 67108864,
+            "max_work": 20000000,
+            "max_nodes": 200000,
+            "max_cells": 1000000,
+            "max_bytes": 134217728,
+            "max_audit_bytes": 134217728,
+            "native_cad": true,
+            "planar_recovery": true,
+            "general_recovery": true,
+            "separate_contact_bodies": true,
+            "separate_matched_box_faces": true,
+            "warning_quality": 0.25
+          },
+          "audit_valid": true,
+          "cad_volume": 589934.3040000004,
+          "native_aggregate_volume_relative_error": 3.9467215599293155e-16,
+          "native_quality_warning": false,
+          "body_routes": [
+            {
+              "solid_tag": 1,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 2,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 3,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 4,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 5,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 6,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 7,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 8,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 9,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 10,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 11,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 12,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 13,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 14,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 15,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 16,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 17,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 18,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 19,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 20,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 21,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 22,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 23,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 24,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 25,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 26,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 27,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 28,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 29,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 30,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 31,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 32,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 33,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 34,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 35,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 36,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 37,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 38,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 39,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 40,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 41,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 42,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 43,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 44,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 45,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 46,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 47,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 48,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 49,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 50,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 51,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 52,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 53,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 54,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 55,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 56,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 57,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 58,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 59,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 60,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 61,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 62,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 63,
+              "route": "planar_core"
+            },
+            {
+              "solid_tag": 64,
+              "route": "planar_core"
+            }
+          ]
+        },
+        "quality_warning": {
+          "target": 0.25,
+          "volume_cells_below_target": 0,
+          "cell_fraction_below_target": 0.0
+        },
+        "native_verification": {
+          "verified": true,
+          "mesh_volume": 589934.3040000006,
+          "minimum_quality": 0.3232134331915287
+        },
+        "independent_volume_relative_delta_from_native": 3.9467215599293135e-16,
+        "independent_quality_delta_from_native": 5.551115123125783e-17,
+        "source_path": "local-data/abc_0000_step_v00/00000017/00000017_e8e79d1385fd4c78be414f6c_step_000.step",
+        "source_sha256": "ff5d59a91a341035c7604987eb5e54503710bfedf4962608c658f4d985ea0112"
+      }
+    ],
+    "geometry_cases": [],
+    "figures": [
+      {
+        "path": "out/visual-validation-2026-10-03/coverage-25-final/abc4-curved-hole-bracket.png",
+        "sha256": "653b57e1c09a6a5a6b20b6f3a61bec9f5106eb4041b0b59f56a09eba47e43ae3"
+      },
+      {
+        "path": "out/visual-validation-2026-10-03/coverage-25-final/abc5-ten-separate-bodies.png",
+        "sha256": "b5c03df6019245af87c99dee15c4fc1d43f09382e921e918796d9b904efb2077"
+      },
+      {
+        "path": "out/visual-validation-2026-10-03/coverage-25-final/abc8-curved-solid.png",
+        "sha256": "687bf58ba3ae1927e75e4801d08d9996b7aab89c949c158bfacff7941697872e"
+      },
+      {
+        "path": "out/visual-validation-2026-10-03/coverage-25-final/abc9-hollow-revolved-part.png",
+        "sha256": "34ee6bea03011aaf60cee53e9fb650fe434bc3ab4e98b6abf6c53b733b9ee196"
+      },
+      {
+        "path": "out/visual-validation-2026-10-03/coverage-25-final/abc20-two-curved-bodies.png",
+        "sha256": "5cf389540d8a11ed31e47e32e646474c25324d0dc3c838eb08495f91a54e40cf"
+      },
+      {
+        "path": "out/visual-validation-2026-10-03/coverage-25-final/abc29-circular-contact.png",
+        "sha256": "bba61ccdc2ee5bea3ff02fd99d6cad4af16e73265c1627b364be8305caaea920"
+      },
+      {
+        "path": "out/visual-validation-2026-10-03/coverage-25-final/abc5454-through-holes.png",
+        "sha256": "d37c77dbefd0cc1d89dc979a4efdaa014c703991e5911a516d837d2c18e9cb92"
+      },
+      {
+        "path": "out/visual-validation-2026-10-03/coverage-25-final/abc7272-through-holes.png",
+        "sha256": "9bd7a8092c0c7360579b4adf71cdbf364d192d64349f861962f8eba92ddc13aa"
+      },
+      {
+        "path": "out/visual-validation-2026-10-03/coverage-25-final/abc17-64-touching-blocks.png",
+        "sha256": "1ec6dc892e615a41f387c02646bdc4c0a8eef98b2ba2c86b6867733599d0b2fb"
+      },
+      {
+        "path": "out/visual-validation-2026-10-03/coverage-25-final/gallery.png",
+        "sha256": "69a4cd9f62c21fff558f61c21302476338341dec59864ba6103c81a10a1533ba"
+      },
+      {
+        "path": "out/visual-validation-2026-10-03/coverage-25-final/distributions.png",
+        "sha256": "cff83921ab2853a63739bcc29420ca28799fb436229ea96337444980a1f3dcc0"
+      }
+    ],
+    "scope": "Rendered actual retained cells and their convex planar intersections; Tet10 verified straight-sided. Native audits/geometry verification are separate receipts."
+  },
+  "final_visual_validation": {
+    "schema": "paacs-final-same-binary-visual-validation-v1",
+    "command": [
+      "C:\\Program Files\\Python312\\python.exe",
+      "scripts/mesh_visual_report.py",
+      "--manifest",
+      "out/visual-validation-2026-10-03/coverage-25-final/manifest.json",
+      "--output",
+      "out/visual-validation-2026-10-03/coverage-25-final"
+    ],
+    "pythonpath": "out/visual-validation-2026-10-03/python-deps",
+    "screen": "evidence/local-2026-10-03/coverage-25/final-complete-screen",
+    "screen_sources": 51,
+    "executable_sha256": "161d0dc0a4eb228df1fa58bd341f46b9d22e885bac4d1decad151f9a8abae686",
+    "returncode": 0,
+    "retained_sources_archives_cli_receipts_and_screen_unchanged": true,
+    "retained_before_sha256": {
+      "/Downloads/abc_0000_step_v00/00000004/00000004_1ffb81a71e5b402e966b9341_step_003.step": "a7be17878aea45cc9a1aa0b68901756a8ad70d6988a9c42fb2ee6c8525a32195",
+      "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0004-00-f2ae50f7/mesh.paacsmesh": "4780c042354dc8be50d30ac9062c475a79161649b8d3437424e28ef4e388cec2",
+      "build/coverage-25-frozen/final-complete-screen/paacs-cad-mesh.exe": "161d0dc0a4eb228df1fa58bd341f46b9d22e885bac4d1decad151f9a8abae686",
+      "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0004-00-f2ae50f7/stdout.log": "669a252dd1b1e2c409f0932a51e074951399ce2fb87cb1f3b95e9d0aa9791bb9",
+      "/Downloads/abc_0000_step_v00/00000005/00000005_d4fe04f0f5f84b52bd4f10e4_step_000.step": "7a970a7f10b5f7ef783e20a8713358f3a8c9cd005cf4355a586a19e72ca32de5",
+      "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0005-00-fb9e6cc9/mesh.paacsmesh": "af4e339003d487c7da34ef0fd9d7f06b9d56a4dd3ab64c58573ab8772e8e143e",
+      "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0005-00-fb9e6cc9/stdout.log": "d9841a332e65252f9c1b3150973398cbfb54f3f6712a076cd1845c250d514de8",
+      "/Downloads/abc_0000_step_v00/00000008/00000008_9b3d6a97e8de4aa193b81000_step_000.step": "84c7687d1acf464c406a6648e379893f21f0c9ed358ea0dee92be7e10b882f47",
+      "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0008-00-0d49fc7d/mesh.paacsmesh": "0efa709067a33861b337928d9306dd4c71a5bf586c30595433fee679ffd32daf",
+      "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0008-00-0d49fc7d/stdout.log": "1dbe764182505ec96dcfd0c47a43190956e58820ac614e547ac2cd6e2f692732",
+      "/Downloads/abc_0000_step_v00/00000009/00000009_9b3d6a97e8de4aa193b81000_step_001.step": "34a7b399bef7d25ce7b85357d06210ec7c06fe6a39a6b20bc7369dc1abd40b77",
+      "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0009-00-23d1cf37/mesh.paacsmesh": "d8945eb44577af2ccf77c897fd82025b1648f19b278409c52574f68725bc37a5",
+      "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0009-00-23d1cf37/stdout.log": "7808e38ed1659a2d44e909be60b4e7e57eeb00491b342a6674604f6816477433",
+      "/Downloads/abc_0000_step_v00/00000020/00000020_ad34a3f60c4a4caa99646600_step_000.step": "0392c2d92f45b8659158225801388d47a34743684894c3433150eec722dfa6d8",
+      "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0020-00-0b1d1861/mesh.paacsmesh": "a204244a7125c94a695a14a8c26e5e60a6499d8b1dd6996bf7d0a38167f10bcb",
+      "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0020-00-0b1d1861/stdout.log": "1a37b51b7fcad79a577acea468daf66794d4604aef024969d4f608c778a8c2fb",
+      "/Downloads/abc_0000_step_v00/00000029/00000029_ad34a3f60c4a4caa99646600_step_009.step": "460499c066bfa9ca375c888966b4bacdebc839aff7b4dfea271b547699aa891d",
+      "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0029-00-6d53c1c5/mesh.paacsmesh": "46f1d097ea8feea4e23f383f0042ce07c8f171b3f0e3955dfbf8cef4e27c445d",
+      "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0029-00-6d53c1c5/stdout.log": "70122a4332ddebd4d242e3501b533327d914ceb9d3c779df7fc66c8dcddd1e99",
+      "/Downloads/abc_0000_step_v00/00005454/00005454_2ccd2dfb9ffc4cf29e94e0cf_step_008.step": "76375df72b7d3f214c6be5a667a687e9ad39ef316e4a431025b6bcfb20d0bc65",
+      "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0041-00-7ecaff22/mesh.paacsmesh": "11cd0755424f77a0292da4e65d6b29a18d57a5a5445cde857658475a9cd4180b",
+      "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0041-00-7ecaff22/stdout.log": "f301153fb4d5fa48ecec8fd437cc260198579ab8c7d6fa6c055885cf6a567212",
+      "/Downloads/abc_0000_step_v00/00007272/00007272_adfc323e64d54b67a5c4aca6_step_009.step": "89f28025d707815466d2ce8827c9b8bec9a7a4109cf1cc7cb6f3d5877d868ca2",
+      "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0046-00-cb8fb62a/mesh.paacsmesh": "6ef6ddcaf2116a5b0f10a6e92ab1b699d8e564b88b1e1bde52b796565b9112bf",
+      "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0046-00-cb8fb62a/stdout.log": "45b0ced10711241deb676fb8037f571fd9f56eafec71f446369807fb676a6c63",
+      "/Downloads/abc_0000_step_v00/00000017/00000017_e8e79d1385fd4c78be414f6c_step_000.step": "ff5d59a91a341035c7604987eb5e54503710bfedf4962608c658f4d985ea0112",
+      "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0017-00-d425af2b/mesh.paacsmesh": "ac1eb26ffbdb46d238bd76a1985a517f2ccd1c07d3ea25f76a3d6e05886a4050",
+      "evidence/local-2026-10-03/coverage-25/final-complete-screen/runs/0017-00-d425af2b/stdout.log": "93cdda9058889f6ca030a98279586bb476f142124cc19c8d33392108f325e1a7",
+      "evidence/local-2026-10-03/coverage-25/final-complete-screen/manifest.json": "2c8d4c37a1589e350ef7da789227e53bf6e82487f072513ca36bb8e076014419",
+      "evidence/local-2026-10-03/coverage-25/final-complete-screen/results.jsonl": "8252018beef210e064895bad724f79a45973caf2bfad35b97469364751693a0a"
+    },
+    "selection_script_sha256": "e3428586e4239fd096817972acf7be2182dbbbc020e428f34f4277db59973b61",
+    "selection_helper_sha256": "5d377b86e0e69a8678fa6efe45b42307ff7e3327b6e31b66a1802c86c941f650",
+    "renderer_sha256": "728a7453cde5bc82d96349604dcfbe3f14ea023fe485ae20249cc4c955104503",
+    "scope": "Nine actual full normal-CLI meshes from a complete 51-source screen with one binary and profile. Coverage/test/install qualification is recorded separately; rendering adds no continuous CAD error certificate.",
+    "independent_derived_metrics": [
+      {
+        "name": "ABC4 / Curved hole bracket",
+        "mesh_sha256": "4780c042354dc8be50d30ac9062c475a79161649b8d3437424e28ef4e388cec2",
+        "source_sha256": "a7be17878aea45cc9a1aa0b68901756a8ad70d6988a9c42fb2ee6c8525a32195",
+        "volume_cells": 4372,
+        "minimum_quality": 4.106322681390112e-11,
+        "quality_warning": {
+          "target": 0.25,
+          "volume_cells_below_target": 3276,
+          "cell_fraction_below_target": 0.7493138151875571
+        },
+        "section": {
+          "axis": "y",
+          "value": 36.08527276402986,
+          "polygon_count": 448,
+          "intersected_cells_before_shared_face_dedup": 448,
+          "coplanar_shared_polygons_removed": 0,
+          "section_area": 127.66311639725932,
+          "maximum_plane_residual": 0.0,
+          "method": "Actual convex cell-edge/plane intersections; shared coplanar faces drawn once"
+        },
+        "relative_volume_delta_from_native": 2.351611874221013e-15,
+        "quality_delta_from_native": 1.3797760358296636e-22
+      },
+      {
+        "name": "ABC5 / Ten separate bodies",
+        "mesh_sha256": "af4e339003d487c7da34ef0fd9d7f06b9d56a4dd3ab64c58573ab8772e8e143e",
+        "source_sha256": "7a970a7f10b5f7ef783e20a8713358f3a8c9cd005cf4355a586a19e72ca32de5",
+        "volume_cells": 3200,
+        "minimum_quality": 1.0721780997646312e-06,
+        "quality_warning": {
+          "target": 0.25,
+          "volume_cells_below_target": 2960,
+          "cell_fraction_below_target": 0.925
+        },
+        "section": {
+          "axis": "y",
+          "value": -123.8481811,
+          "polygon_count": 1240,
+          "intersected_cells_before_shared_face_dedup": 1240,
+          "coplanar_shared_polygons_removed": 0,
+          "section_area": 19042.408275174534,
+          "maximum_plane_residual": 0.0,
+          "method": "Actual convex cell-edge/plane intersections; shared coplanar faces drawn once"
+        },
+        "relative_volume_delta_from_native": 5.805049933932211e-15,
+        "quality_delta_from_native": 1.9800750394784877e-16
+      },
+      {
+        "name": "ABC8 / Curved solid",
+        "mesh_sha256": "0efa709067a33861b337928d9306dd4c71a5bf586c30595433fee679ffd32daf",
+        "source_sha256": "84c7687d1acf464c406a6648e379893f21f0c9ed358ea0dee92be7e10b882f47",
+        "volume_cells": 13938,
+        "minimum_quality": 2.942844827476326e-06,
+        "quality_warning": {
+          "target": 0.25,
+          "volume_cells_below_target": 5672,
+          "cell_fraction_below_target": 0.40694504233032
+        },
+        "section": {
+          "axis": "y",
+          "value": 0.7873999999999981,
+          "polygon_count": 294,
+          "intersected_cells_before_shared_face_dedup": 294,
+          "coplanar_shared_polygons_removed": 0,
+          "section_area": 132.71553793204149,
+          "maximum_plane_residual": 0.0,
+          "method": "Actual convex cell-edge/plane intersections; shared coplanar faces drawn once"
+        },
+        "relative_volume_delta_from_native": 6.568245097435024e-15,
+        "quality_delta_from_native": 4.744384003501842e-16
+      },
+      {
+        "name": "ABC9 / Hollow revolved part",
+        "mesh_sha256": "d8945eb44577af2ccf77c897fd82025b1648f19b278409c52574f68725bc37a5",
+        "source_sha256": "34a7b399bef7d25ce7b85357d06210ec7c06fe6a39a6b20bc7369dc1abd40b77",
+        "volume_cells": 1472,
+        "minimum_quality": 2.94875580089982e-07,
+        "quality_warning": {
+          "target": 0.25,
+          "volume_cells_below_target": 1364,
+          "cell_fraction_below_target": 0.9266304347826086
+        },
+        "section": {
+          "axis": "y",
+          "value": 0.7620000000000005,
+          "polygon_count": 126,
+          "intersected_cells_before_shared_face_dedup": 126,
+          "coplanar_shared_polygons_removed": 0,
+          "section_area": 657.8073300775638,
+          "maximum_plane_residual": 0.0,
+          "method": "Actual convex cell-edge/plane intersections; shared coplanar faces drawn once"
+        },
+        "relative_volume_delta_from_native": 2.528498513952119e-16,
+        "quality_delta_from_native": 9.251443668864014e-16
+      },
+      {
+        "name": "ABC20 / Two curved bodies",
+        "mesh_sha256": "a204244a7125c94a695a14a8c26e5e60a6499d8b1dd6996bf7d0a38167f10bcb",
+        "source_sha256": "0392c2d92f45b8659158225801388d47a34743684894c3433150eec722dfa6d8",
+        "volume_cells": 28930,
+        "minimum_quality": 3.2329843725666897e-09,
+        "quality_warning": {
+          "target": 0.25,
+          "volume_cells_below_target": 22068,
+          "cell_fraction_below_target": 0.7628067749740753
+        },
+        "section": {
+          "axis": "y",
+          "value": 1.8109010343656244,
+          "polygon_count": 350,
+          "intersected_cells_before_shared_face_dedup": 350,
+          "coplanar_shared_polygons_removed": 0,
+          "section_area": 39.86305108277149,
+          "maximum_plane_residual": 0.0,
+          "method": "Actual convex cell-edge/plane intersections; shared coplanar faces drawn once"
+        },
+        "relative_volume_delta_from_native": 1.9251981955138866e-15,
+        "quality_delta_from_native": 4.943374686939048e-13
+      },
+      {
+        "name": "ABC29 / Circular contact",
+        "mesh_sha256": "46f1d097ea8feea4e23f383f0042ce07c8f171b3f0e3955dfbf8cef4e27c445d",
+        "source_sha256": "460499c066bfa9ca375c888966b4bacdebc839aff7b4dfea271b547699aa891d",
+        "volume_cells": 2140,
+        "minimum_quality": 5.729777097176471e-08,
+        "quality_warning": {
+          "target": 0.25,
+          "volume_cells_below_target": 1836,
+          "cell_fraction_below_target": 0.8579439252336448
+        },
+        "section": {
+          "axis": "y",
+          "value": 0.17999999999999972,
+          "polygon_count": 393,
+          "intersected_cells_before_shared_face_dedup": 393,
+          "coplanar_shared_polygons_removed": 0,
+          "section_area": 1191.8173559700617,
+          "maximum_plane_residual": 0.0,
+          "method": "Actual convex cell-edge/plane intersections; shared coplanar faces drawn once"
+        },
+        "relative_volume_delta_from_native": 8.047443297166131e-15,
+        "quality_delta_from_native": 5.658972857557797e-17
+      },
+      {
+        "name": "ABC5454 / Through holes",
+        "mesh_sha256": "11cd0755424f77a0292da4e65d6b29a18d57a5a5445cde857658475a9cd4180b",
+        "source_sha256": "76375df72b7d3f214c6be5a667a687e9ad39ef316e4a431025b6bcfb20d0bc65",
+        "volume_cells": 5520,
+        "minimum_quality": 0.011583436932431839,
+        "quality_warning": {
+          "target": 0.25,
+          "volume_cells_below_target": 980,
+          "cell_fraction_below_target": 0.17753623188405798
+        },
+        "section": {
+          "axis": "y",
+          "value": -5.143999999999998,
+          "polygon_count": 264,
+          "intersected_cells_before_shared_face_dedup": 264,
+          "coplanar_shared_polygons_removed": 0,
+          "section_area": 56.519999999960525,
+          "maximum_plane_residual": 0.0,
+          "method": "Actual convex cell-edge/plane intersections; shared coplanar faces drawn once"
+        },
+        "relative_volume_delta_from_native": 6.4556158277419075e-15,
+        "quality_delta_from_native": 6.418476861114186e-17
+      },
+      {
+        "name": "ABC7272 / Through holes",
+        "mesh_sha256": "6ef6ddcaf2116a5b0f10a6e92ab1b699d8e564b88b1e1bde52b796565b9112bf",
+        "source_sha256": "89f28025d707815466d2ce8827c9b8bec9a7a4109cf1cc7cb6f3d5877d868ca2",
+        "volume_cells": 7330,
+        "minimum_quality": 2.8269480467364692e-05,
+        "quality_warning": {
+          "target": 0.25,
+          "volume_cells_below_target": 2555,
+          "cell_fraction_below_target": 0.3485675306957708
+        },
+        "section": {
+          "axis": "y",
+          "value": 24.250500000000002,
+          "polygon_count": 310,
+          "intersected_cells_before_shared_face_dedup": 310,
+          "coplanar_shared_polygons_removed": 0,
+          "section_area": 344.10481089122834,
+          "maximum_plane_residual": 0.0,
+          "method": "Actual convex cell-edge/plane intersections; shared coplanar faces drawn once"
+        },
+        "relative_volume_delta_from_native": 5.13179408641544e-15,
+        "quality_delta_from_native": 1.4342785178934545e-14
+      },
+      {
+        "name": "ABC17 / 64 touching blocks",
+        "mesh_sha256": "ac1eb26ffbdb46d238bd76a1985a517f2ccd1c07d3ea25f76a3d6e05886a4050",
+        "source_sha256": "ff5d59a91a341035c7604987eb5e54503710bfedf4962608c658f4d985ea0112",
+        "volume_cells": 384,
+        "minimum_quality": 0.3232134331915286,
+        "quality_warning": {
+          "target": 0.25,
+          "volume_cells_below_target": 0,
+          "cell_fraction_below_target": 0.0
+        },
+        "section": {
+          "axis": "z",
+          "value": 3.2384999999999997,
+          "polygon_count": 384,
+          "intersected_cells_before_shared_face_dedup": 384,
+          "coplanar_shared_polygons_removed": 0,
+          "section_area": 92903.04,
+          "maximum_plane_residual": 0.0,
+          "method": "Actual convex cell-edge/plane intersections; shared coplanar faces drawn once"
+        },
+        "relative_volume_delta_from_native": 3.9467215599293135e-16,
+        "quality_delta_from_native": 5.551115123125783e-17
+      }
+    ]
+  },
+  "unique_distribution_receipt": {
+    "schema": "paacs-combined-distributions-v1",
+    "script_sha256": "2aeae870183df15a7278c8fbb70c6a12dfc57135959e7d79ef53e779d924617b",
+    "manifest_sha256": "4a7e65f7dc36c2ecba88b8b7267c67a5f6259acb290499f4cc5eb3510bd9d372",
+    "source_and_archive_unchanged": true,
+    "figure": {
+      "path": "out/visual-validation-2026-10-03/coverage-25-final/distributions-unique.png",
+      "sha256": "5e3cdb5ad0be20c90cb3fe9ee3d720c8acef663c30316671cd7ecf1e4f18a633"
+    },
+    "numpy": "2.5.3",
+    "matplotlib": "3.10.8",
+    "scope": "Actual retained Tet4 cell volumes and mean-ratio quality; no regenerated or replacement mesh."
+  },
+  "retained_rendering_evidence_sha256": {
+    "manifest.json": "4a7e65f7dc36c2ecba88b8b7267c67a5f6259acb290499f4cc5eb3510bd9d372",
+    "provenance.json": "cbaa52f86d228cde953dda279a1f679671dbefa68250e534585df02f4999a489",
+    "validation-receipt.json": "acaf968c078073ced4dabef10b6b5918b8c9dbb7dc0fa0cfd4d9bcbf47781a71",
+    "distributions-unique-receipt.json": "f80843f755d544ca470b8c546c6767f72da5d31e1f0cda4b359f8bb8e03307ce"
+  }
+}

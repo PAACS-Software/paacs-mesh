@@ -1,0 +1,36 @@
+{
+  "delaunay_50k": {
+    "points": 50000,
+    "tet4": 335606,
+    "hash_hex": "e763362f526a11b1"
+  },
+  "delaunay_200k": {
+    "points": 200000,
+    "tet4": 1346539,
+    "hash_hex": "fcd63f974312b432"
+  },
+  "box_tet4": {
+    "nodes": 26,
+    "volume_tet4": 43,
+    "total_cells": 115,
+    "strict_hash": 16723556976053534829
+  },
+  "box_tet10": {
+    "nodes": 118,
+    "volume_tet10": 43,
+    "total_cells": 115,
+    "invalid_tet10": 0,
+    "strict_hash": 16508864188371921865
+  },
+  "cylinder_tet4": {
+    "nodes": 182,
+    "volume_tet4": 428,
+    "total_cells": 842,
+    "strict_hash": 8085090672163299017
+  },
+  "mapped_hex_64": {
+    "nodes": 274625,
+    "volume_hex8": 262144,
+    "strict_hash": 10940713674713804929
+  }
+}

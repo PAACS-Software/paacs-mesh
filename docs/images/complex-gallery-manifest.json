@@ -1,0 +1,74 @@
+[
+  {
+    "archive": "i_beam-start-native.paacsmesh",
+    "sha256": "5622505e57271f333e58cc1f04809a5043af79862c520d41c73c26bca3a934d8",
+    "nodes": 938,
+    "volume_cells": 910
+  },
+  {
+    "archive": "multi_bore-start-tet4.paacsmesh",
+    "sha256": "70893216a137a2706acc528ef6b0b939bdba16a442f3fa3b0dc8e001229c306e",
+    "nodes": 1375,
+    "volume_cells": 5220
+  },
+  {
+    "archive": "star_duct-band-tet4.paacsmesh",
+    "sha256": "2d345852d7bbec330bcc6bc4c8aabfa6fcd173a75fac7a0ab5183ac2a1755d26",
+    "nodes": 1800,
+    "volume_cells": 7296
+  },
+  {
+    "archive": "cooling_channels-start-tet4.paacsmesh",
+    "sha256": "cc76fd9da4b54088af120ccfd9c5021829c301e31f86c3e13ae1e702d090b192",
+    "nodes": 1260,
+    "volume_cells": 4914
+  },
+  {
+    "archive": "notched_frame-band-native.paacsmesh",
+    "sha256": "e379dddc488ee7606665caa8401c8f2d6d0403d8bd9e75156dc1e82b11be74ee",
+    "nodes": 2074,
+    "volume_cells": 2608
+  },
+  {
+    "archive": "thin_bracket-start-tet4.paacsmesh",
+    "sha256": "50e748daeed1b8252741b094dfc02ce73cd8b419f5f1f18c79a8acd4ba3ecb60",
+    "nodes": 470,
+    "volume_cells": 1215
+  },
+  {
+    "archive": "multi_bore-start-native.paacsmesh",
+    "sha256": "66514334884da2fa80e2565233b4639de6c775227699d79fbe9ac76c82bfd509",
+    "nodes": 1375,
+    "volume_cells": 1740
+  },
+  {
+    "archive": "multi_bore-start-tet4.paacsmesh",
+    "sha256": "70893216a137a2706acc528ef6b0b939bdba16a442f3fa3b0dc8e001229c306e",
+    "nodes": 1375,
+    "volume_cells": 5220
+  },
+  {
+    "archive": "multi_bore-end-native.paacsmesh",
+    "sha256": "91407a58c5a0644cb764d5bff7deb6b39722796e52ab39191f41ed4ef9daa206",
+    "nodes": 1375,
+    "volume_cells": 1740
+  },
+  {
+    "archive": "multi_bore-end-tet4.paacsmesh",
+    "sha256": "1ebc9dca158694dfdbf93132312c48b6fe754570e37ab5ff290bff6319be1283",
+    "nodes": 1375,
+    "volume_cells": 5220
+  },
+  {
+    "archive": "multi_bore-band-native.paacsmesh",
+    "sha256": "45407f187a84420b5292de868ab321e2cb0de4be50c81c3811c62378989253ed",
+    "nodes": 2250,
+    "volume_cells": 2958
+  },
+  {
+    "archive": "multi_bore-band-tet4.paacsmesh",
+    "sha256": "3b5ccc4769e92fbc9cd932ee46f90d0234f3e4c3ec6f563f5896333490ff0ab2",
+    "nodes": 2250,
+    "volume_cells": 8874
+  }
+]

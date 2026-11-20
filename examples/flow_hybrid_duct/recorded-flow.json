@@ -1,0 +1,253 @@
+{
+  "schema": "paacs-hybrid-duct-flow-v1",
+  "geometry": {
+    "side_m": 0.01,
+    "length_m": 0.04,
+    "bounds_m": [
+      [
+        -0.005,
+        -0.005,
+        0.0
+      ],
+      [
+        0.005,
+        0.005,
+        0.04
+      ]
+    ]
+  },
+  "fluid": {
+    "dynamic_viscosity_pa_s": 0.001,
+    "density_kg_m3": 1000.0,
+    "bulk_speed_m_s": 0.01,
+    "reynolds": 100.0,
+    "target_flow_m3_s": 1.0000000000000002e-06
+  },
+  "reference": {
+    "conductance": 0.035144253738794345,
+    "conductance_double_sine": 0.03514425371330617,
+    "pressure_gradient_pa_m": 2.845415376955749,
+    "pressure_drop_pa": 0.11381661507822996,
+    "centerline_velocity_m_s": 0.02096255982270926
+  },
+  "metres_per_archive_unit": 0.001,
+  "model": "3D scalar axial-velocity Poisson equation with periodic end velocity and no-slip walls",
+  "meshes": [
+    {
+      "label": "level-1",
+      "archive_sha256": "1c61388d428cce4af6b79e620d06e814b71bdf803b696a495dd265be59e4a732",
+      "prism6": 1152,
+      "tet4": 1728,
+      "nodes": 1089,
+      "free_dofs": 776,
+      "periodic_node_pairs": 121,
+      "face_tags": {
+        "x-": 1,
+        "x+": 2,
+        "y-": 3,
+        "y+": 4,
+        "z-": 5,
+        "z+": 6
+      },
+      "first_wall_spacing_m": 0.0005999999999999994,
+      "quadrature_order": 4,
+      "conductance": 0.03481629946702723,
+      "pressure_gradient_pa_m": 2.8722179419069214,
+      "pressure_drop_pa": 0.11488871767627686,
+      "pressure_drop_error_percent": 0.9419561434945267,
+      "centerline_velocity_m_s": 0.021244740549882696,
+      "flow_m3_s": 1.0000000000000002e-06,
+      "section_fluxes": [
+        {
+          "z_m": 0.0054800000000000005,
+          "area_m2": 9.999999999999929e-05,
+          "flow_m3_s": 1.0000000000000012e-06,
+          "flux_error_percent": 1.1102230246251565e-13
+        },
+        {
+          "z_m": 0.01276,
+          "area_m2": 0.00010000000000000007,
+          "flow_m3_s": 9.999999999999983e-07,
+          "flux_error_percent": -1.887379141862766e-13
+        },
+        {
+          "z_m": 0.02284,
+          "area_m2": 9.999999999999961e-05,
+          "flow_m3_s": 9.999999999999972e-07,
+          "flux_error_percent": -2.9976021664879227e-13
+        },
+        {
+          "z_m": 0.031720000000000005,
+          "area_m2": 0.00010000000000000067,
+          "flow_m3_s": 9.999999999999983e-07,
+          "flux_error_percent": -1.887379141862766e-13
+        },
+        {
+          "z_m": 0.036680000000000004,
+          "area_m2": 0.00010000000000000007,
+          "flow_m3_s": 1.000000000000003e-06,
+          "flux_error_percent": 2.6645352591003757e-13
+        }
+      ],
+      "max_section_flux_error_percent": 2.9976021664879227e-13,
+      "relative_axial_gradient_energy": 7.535761619887573e-16,
+      "relative_volume_velocity_l2": 0.007686429393093539,
+      "relative_profile_velocity_l2": 0.009878179518573565,
+      "free_residual_relative": 6.714806204658388e-15,
+      "dissipation_w": 1.1488871767627687e-07,
+      "pressure_work_w": 1.1488871767627687e-07,
+      "wall_reaction": 3.9999999999999947,
+      "wall_velocity_max_m_s": 0.0,
+      "preparation_seconds": 0.11383640003623441,
+      "solve_seconds": 0.1027648999588564
+    },
+    {
+      "label": "level-2",
+      "archive_sha256": "5bda90f668c578c97a9a64ec193117486ef3afd2ea2399863d90db654be6a2e6",
+      "prism6": 3456,
+      "tet4": 5832,
+      "nodes": 3172,
+      "free_dofs": 2496,
+      "periodic_node_pairs": 244,
+      "face_tags": {
+        "x-": 1,
+        "x+": 2,
+        "y-": 3,
+        "y+": 4,
+        "z-": 5,
+        "z+": 6
+      },
+      "first_wall_spacing_m": 0.0002999999999999999,
+      "quadrature_order": 4,
+      "conductance": 0.034953673507987545,
+      "pressure_gradient_pa_m": 2.8609296238104474,
+      "pressure_drop_pa": 0.11443718495241789,
+      "pressure_drop_error_percent": 0.545236628027812,
+      "centerline_velocity_m_s": 0.020911226272612243,
+      "flow_m3_s": 1.0000000000000002e-06,
+      "section_fluxes": [
+        {
+          "z_m": 0.0054800000000000005,
+          "area_m2": 0.00010000000000000139,
+          "flow_m3_s": 1.0000000000000006e-06,
+          "flux_error_percent": 4.440892098500626e-14
+        },
+        {
+          "z_m": 0.01276,
+          "area_m2": 9.999999999999999e-05,
+          "flow_m3_s": 9.999999999999995e-07,
+          "flux_error_percent": -6.661338147750939e-14
+        },
+        {
+          "z_m": 0.02284,
+          "area_m2": 9.999999999999987e-05,
+          "flow_m3_s": 1.0000000000000027e-06,
+          "flux_error_percent": 2.4424906541753444e-13
+        },
+        {
+          "z_m": 0.031720000000000005,
+          "area_m2": 0.00010000000000000167,
+          "flow_m3_s": 9.999999999999995e-07,
+          "flux_error_percent": -6.661338147750939e-14
+        },
+        {
+          "z_m": 0.036680000000000004,
+          "area_m2": 0.00010000000000000018,
+          "flow_m3_s": 1.0000000000000038e-06,
+          "flux_error_percent": 3.552713678800501e-13
+        }
+      ],
+      "max_section_flux_error_percent": 3.552713678800501e-13,
+      "relative_axial_gradient_energy": 1.2089442927286522e-15,
+      "relative_volume_velocity_l2": 0.004264021941584104,
+      "relative_profile_velocity_l2": 0.002218254515610348,
+      "free_residual_relative": 1.2124216347805469e-14,
+      "dissipation_w": 1.1443718495241787e-07,
+      "pressure_work_w": 1.1443718495241791e-07,
+      "wall_reaction": 3.999999999999992,
+      "wall_velocity_max_m_s": 0.0,
+      "preparation_seconds": 0.3523437000112608,
+      "solve_seconds": 0.4225567000103183
+    },
+    {
+      "label": "level-3",
+      "archive_sha256": "af2fc55092b10d1e61a7b68e939f952b6a40a9ef0cf110ef3eaa9cbfe404fb2f",
+      "prism6": 7680,
+      "tet4": 13824,
+      "nodes": 6953,
+      "free_dofs": 5776,
+      "periodic_node_pairs": 409,
+      "face_tags": {
+        "x-": 1,
+        "x+": 2,
+        "y-": 3,
+        "y+": 4,
+        "z-": 5,
+        "z+": 6
+      },
+      "first_wall_spacing_m": 0.00014999999999999904,
+      "quadrature_order": 4,
+      "conductance": 0.034978101616118515,
+      "pressure_gradient_pa_m": 2.858931599475892,
+      "pressure_drop_pa": 0.11435726397903569,
+      "pressure_drop_error_percent": 0.47501755383791977,
+      "centerline_velocity_m_s": 0.02106873269181813,
+      "flow_m3_s": 1.0000000000000002e-06,
+      "section_fluxes": [
+        {
+          "z_m": 0.0054800000000000005,
+          "area_m2": 0.0001000000000000004,
+          "flow_m3_s": 9.999999999999949e-07,
+          "flux_error_percent": -5.329070518200751e-13
+        },
+        {
+          "z_m": 0.01276,
+          "area_m2": 0.0001000000000000012,
+          "flow_m3_s": 1.0000000000000002e-06,
+          "flux_error_percent": 0.0
+        },
+        {
+          "z_m": 0.02284,
+          "area_m2": 0.00010000000000000171,
+          "flow_m3_s": 1.000000000000004e-06,
+          "flux_error_percent": 3.774758283725532e-13
+        },
+        {
+          "z_m": 0.031720000000000005,
+          "area_m2": 9.999999999999904e-05,
+          "flow_m3_s": 1.0000000000000055e-06,
+          "flux_error_percent": 5.329070518200751e-13
+        },
+        {
+          "z_m": 0.036680000000000004,
+          "area_m2": 9.999999999999794e-05,
+          "flow_m3_s": 9.999999999999923e-07,
+          "flux_error_percent": -7.882583474838611e-13
+        }
+      ],
+      "max_section_flux_error_percent": 7.882583474838611e-13,
+      "relative_axial_gradient_energy": 1.787900944636856e-15,
+      "relative_volume_velocity_l2": 0.003543783898841485,
+      "relative_profile_velocity_l2": 0.0032042917243052024,
+      "free_residual_relative": 2.0719131558845023e-14,
+      "dissipation_w": 1.1435726397903546e-07,
+      "pressure_work_w": 1.1435726397903571e-07,
+      "wall_reaction": 4.000000000000005,
+      "wall_velocity_max_m_s": 0.0,
+      "preparation_seconds": 0.6647081999690272,
+      "solve_seconds": 0.9997678000363521
+    }
+  ],
+  "finest_quadrature_check": {
+    "order": 5,
+    "pressure_drop_pa": 0.11435726397903619,
+    "absolute_pressure_difference_pa": 4.996003610813204e-16,
+    "relative_volume_velocity_l2": 0.0035437874899895026,
+    "absolute_velocity_l2_difference": 3.591148017411533e-09
+  },
+  "solver_sha256": "50752c35516fe589c58c73e201e389eff024f1b76506233f61e68de6e66c4f70",
+  "fourier_reference_source_sha256": "da6dacc415ee1be81cbf5697dc890e96e26f963e98ee0b4d0a7f39c21825f572",
+  "numpy_version": "2.5.3",
+  "scipy_version": "1.17.1",
+  "mesh_receipts": "recorded-meshes.json"
+}

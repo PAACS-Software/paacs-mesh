@@ -1,0 +1,1479 @@
+{
+  "schema": "paacs-plate-hole-elasticity-v1",
+  "geometry": {
+    "bounds_mm": [
+      [
+        -50.0,
+        -25.0,
+        -1.0
+      ],
+      [
+        50.0,
+        25.0,
+        1.0
+      ]
+    ],
+    "radius_mm": 5.0,
+    "hole_center_xy_mm": [
+      0,
+      0
+    ]
+  },
+  "material": {
+    "young_mpa": 210000.0,
+    "poisson": 0.0
+  },
+  "load": {
+    "remote_stress_mpa": 100.0,
+    "kirsch_peak_mpa": 300.0,
+    "kirsch_kt": 3.0,
+    "boundary": "Kirsch tractions on x/y truncation faces; free hole and z faces",
+    "reference": "Exact for the ideal circular 3D domain at Poisson ratio zero"
+  },
+  "meshes": [
+    {
+      "label": "uniform-1",
+      "archive_sha256": "ec5cbef8d40246246794df044c997782b9ccc668b7fcf1b4327ae81b146adc70",
+      "nodes": 1077,
+      "dofs": 3231,
+      "tet4": 3780,
+      "surface_tri3": 1612,
+      "outer_face_tags": {
+        "x-": 1,
+        "x+": 6,
+        "y-": 2,
+        "y+": 4,
+        "z-": 5,
+        "z+": 3
+      },
+      "hole_face_tag": 7,
+      "hole_wall_tri3": 48,
+      "body_tag": 1,
+      "bounds_mm": [
+        [
+          -50.0,
+          -25.0,
+          -1.0
+        ],
+        [
+          50.0,
+          25.0,
+          1.0
+        ]
+      ],
+      "mesh_volume_mm3": 9850.0,
+      "ideal_cad_volume_mm3": 9842.92036732051,
+      "relative_volume_error": 0.0007192613995938846,
+      "edge_p50_mm": 4.0,
+      "edge_p95_mm": 5.6385192567095155,
+      "hole_edge_p50_mm": 2.5881904510252074,
+      "hole_circumferential_edge_p50_mm": 2.5881904510252074,
+      "maximum_hole_wall_cell_hoop_stress_mpa": 216.38364630859593,
+      "hole_probe": {
+        "radius_over_hole_radius": 1.0,
+        "samples": [
+          {
+            "position_mm": [
+              0.0,
+              -5.0,
+              0.0
+            ],
+            "cells": 4,
+            "fem_sigma_tt_mpa": 168.47244335409044
+          },
+          {
+            "position_mm": [
+              0.0,
+              5.0,
+              0.0
+            ],
+            "cells": 6,
+            "fem_sigma_tt_mpa": 167.92274448200337
+          }
+        ],
+        "fem_sigma_tt_mpa": 168.1975939180469,
+        "kirsch_sigma_tt_mpa": 300.0,
+        "fem_kt": 1.681975939180469,
+        "kirsch_kt": 3.0
+      },
+      "radial_probes": [
+        {
+          "radius_over_hole_radius": 1.0,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -5.0,
+                0.0
+              ],
+              "cells": 4,
+              "fem_sigma_tt_mpa": 168.47244335409044
+            },
+            {
+              "position_mm": [
+                0.0,
+                5.0,
+                0.0
+              ],
+              "cells": 6,
+              "fem_sigma_tt_mpa": 167.92274448200337
+            }
+          ],
+          "fem_sigma_tt_mpa": 168.1975939180469,
+          "kirsch_sigma_tt_mpa": 300.0,
+          "fem_kt": 1.681975939180469,
+          "kirsch_kt": 3.0
+        },
+        {
+          "radius_over_hole_radius": 1.05,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -5.25,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 125.19881167799932
+            },
+            {
+              "position_mm": [
+                0.0,
+                5.25,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 125.19029316023608
+            }
+          ],
+          "fem_sigma_tt_mpa": 125.1945524191177,
+          "kirsch_sigma_tt_mpa": 268.75684514168483,
+          "fem_kt": 1.251945524191177,
+          "kirsch_kt": 2.6875684514168485
+        },
+        {
+          "radius_over_hole_radius": 1.1,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -5.5,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 125.19881167799932
+            },
+            {
+              "position_mm": [
+                0.0,
+                5.5,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 125.19029316023608
+            }
+          ],
+          "fem_sigma_tt_mpa": 125.1945524191177,
+          "kirsch_sigma_tt_mpa": 243.7743323543474,
+          "fem_kt": 1.251945524191177,
+          "kirsch_kt": 2.437743323543474
+        },
+        {
+          "radius_over_hole_radius": 1.2,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -6.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 125.19881167799932
+            },
+            {
+              "position_mm": [
+                0.0,
+                6.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 125.19029316023608
+            }
+          ],
+          "fem_sigma_tt_mpa": 125.1945524191177,
+          "kirsch_sigma_tt_mpa": 207.06018518518516,
+          "fem_kt": 1.251945524191177,
+          "kirsch_kt": 2.0706018518518516
+        },
+        {
+          "radius_over_hole_radius": 1.4,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -7.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 125.19881167799932
+            },
+            {
+              "position_mm": [
+                0.0,
+                7.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 125.19029316023608
+            }
+          ],
+          "fem_sigma_tt_mpa": 125.1945524191177,
+          "kirsch_sigma_tt_mpa": 164.5564348188255,
+          "fem_kt": 1.251945524191177,
+          "kirsch_kt": 1.645564348188255
+        }
+      ],
+      "physical_probe_strip": {
+        "radius_range_over_hole_radius": [
+          1.05,
+          1.4
+        ],
+        "half_angle_degrees": 15,
+        "quadrature_samples": 7680,
+        "fem_sigma_tt_mpa": 178.59373799198084,
+        "kirsch_sigma_tt_mpa": 197.5823527228181
+      },
+      "fixed_annulus": {
+        "radius_range_over_hole_radius": [
+          1.01,
+          2.0
+        ],
+        "quadrature_samples": 24576,
+        "relative_kirsch_stress_l2": 0.3244571066071213
+      },
+      "relative_kirsch_stress_l2": 0.08011187862094418,
+      "relative_near_hole_kirsch_stress_l2": 0.29012567146413915,
+      "centroid_volume_inside_ideal_hole_mm3": 0.0,
+      "force_balance_n": [
+        -3.947945970139699e-09,
+        2.23505658425438e-11,
+        3.469657894328293e-11
+      ],
+      "moment_balance_n_mm": [
+        -1.8152133129945014e-09,
+        5.292065452522365e-09,
+        2.9815055313520133e-08
+      ],
+      "rigid_support_reaction_relative": 2.1163762718929016e-13,
+      "free_residual_relative": 3.291578882709138e-13,
+      "strain_energy_n_mm": 234.48110492558584,
+      "applied_work_n_mm": 468.9622098511341,
+      "assembly_seconds": 0.2447235999861732,
+      "solve_seconds": 0.03689230000600219
+    },
+    {
+      "label": "local-1",
+      "archive_sha256": "80af62de4ee9955f8c19dd5bfbc0d7b2b1c84ed38ef2e1e2d881b4bdde110c56",
+      "nodes": 1203,
+      "dofs": 3609,
+      "tet4": 4236,
+      "surface_tri3": 1796,
+      "outer_face_tags": {
+        "x-": 1,
+        "x+": 6,
+        "y-": 2,
+        "y+": 4,
+        "z-": 5,
+        "z+": 3
+      },
+      "hole_face_tag": 7,
+      "hole_wall_tri3": 80,
+      "body_tag": 1,
+      "bounds_mm": [
+        [
+          -50.0,
+          -25.0,
+          -1.0
+        ],
+        [
+          50.0,
+          25.0,
+          1.0
+        ]
+      ],
+      "mesh_volume_mm3": 9845.491502812525,
+      "ideal_cad_volume_mm3": 9842.92036732051,
+      "relative_volume_error": 0.0002612167320332759,
+      "edge_p50_mm": 4.0,
+      "edge_p95_mm": 5.6385192567095155,
+      "hole_edge_p50_mm": 1.5643446504023086,
+      "hole_circumferential_edge_p50_mm": 1.5643446504023086,
+      "maximum_hole_wall_cell_hoop_stress_mpa": 268.6223984768664,
+      "hole_probe": {
+        "radius_over_hole_radius": 1.0,
+        "samples": [
+          {
+            "position_mm": [
+              0.0,
+              -5.0,
+              0.0
+            ],
+            "cells": 2,
+            "fem_sigma_tt_mpa": 160.05944966831086
+          },
+          {
+            "position_mm": [
+              0.0,
+              5.0,
+              0.0
+            ],
+            "cells": 2,
+            "fem_sigma_tt_mpa": 159.8596108155848
+          }
+        ],
+        "fem_sigma_tt_mpa": 159.95953024194785,
+        "kirsch_sigma_tt_mpa": 300.0,
+        "fem_kt": 1.5995953024194784,
+        "kirsch_kt": 3.0
+      },
+      "radial_probes": [
+        {
+          "radius_over_hole_radius": 1.0,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -5.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 160.05944966831086
+            },
+            {
+              "position_mm": [
+                0.0,
+                5.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 159.8596108155848
+            }
+          ],
+          "fem_sigma_tt_mpa": 159.95953024194785,
+          "kirsch_sigma_tt_mpa": 300.0,
+          "fem_kt": 1.5995953024194784,
+          "kirsch_kt": 3.0
+        },
+        {
+          "radius_over_hole_radius": 1.05,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -5.25,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 160.05944966831086
+            },
+            {
+              "position_mm": [
+                0.0,
+                5.25,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 159.8596108155848
+            }
+          ],
+          "fem_sigma_tt_mpa": 159.95953024194785,
+          "kirsch_sigma_tt_mpa": 268.75684514168483,
+          "fem_kt": 1.5995953024194784,
+          "kirsch_kt": 2.6875684514168485
+        },
+        {
+          "radius_over_hole_radius": 1.1,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -5.5,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 160.05944966831086
+            },
+            {
+              "position_mm": [
+                0.0,
+                5.5,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 159.8596108155848
+            }
+          ],
+          "fem_sigma_tt_mpa": 159.95953024194785,
+          "kirsch_sigma_tt_mpa": 243.7743323543474,
+          "fem_kt": 1.5995953024194784,
+          "kirsch_kt": 2.437743323543474
+        },
+        {
+          "radius_over_hole_radius": 1.2,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -6.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 160.05944966831086
+            },
+            {
+              "position_mm": [
+                0.0,
+                6.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 159.8596108155848
+            }
+          ],
+          "fem_sigma_tt_mpa": 159.95953024194785,
+          "kirsch_sigma_tt_mpa": 207.06018518518516,
+          "fem_kt": 1.5995953024194784,
+          "kirsch_kt": 2.0706018518518516
+        },
+        {
+          "radius_over_hole_radius": 1.4,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -7.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 160.05944966831086
+            },
+            {
+              "position_mm": [
+                0.0,
+                7.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 159.8596108155848
+            }
+          ],
+          "fem_sigma_tt_mpa": 159.95953024194785,
+          "kirsch_sigma_tt_mpa": 164.5564348188255,
+          "fem_kt": 1.5995953024194784,
+          "kirsch_kt": 1.645564348188255
+        }
+      ],
+      "physical_probe_strip": {
+        "radius_range_over_hole_radius": [
+          1.05,
+          1.4
+        ],
+        "half_angle_degrees": 15,
+        "quadrature_samples": 7680,
+        "fem_sigma_tt_mpa": 189.71900680101666,
+        "kirsch_sigma_tt_mpa": 197.5823527228181
+      },
+      "fixed_annulus": {
+        "radius_range_over_hole_radius": [
+          1.01,
+          2.0
+        ],
+        "quadrature_samples": 24576,
+        "relative_kirsch_stress_l2": 0.213516517234783
+      },
+      "relative_kirsch_stress_l2": 0.05755932120567864,
+      "relative_near_hole_kirsch_stress_l2": 0.19222136840574133,
+      "centroid_volume_inside_ideal_hole_mm3": 0.0,
+      "force_balance_n": [
+        -3.3049332159862388e-09,
+        3.057865072264576e-11,
+        4.2553738310857625e-11
+      ],
+      "moment_balance_n_mm": [
+        -2.6208124559445878e-09,
+        4.819582954951329e-09,
+        3.118293534498662e-08
+      ],
+      "rigid_support_reaction_relative": 1.7906566911853785e-13,
+      "free_residual_relative": 3.316729616298709e-13,
+      "strain_energy_n_mm": 235.82168140991837,
+      "applied_work_n_mm": 471.6433628198331,
+      "assembly_seconds": 0.213903299998492,
+      "solve_seconds": 0.04111729998840019
+    },
+    {
+      "label": "uniform-2",
+      "archive_sha256": "e6b7b1c7caff5f3abef4c8daf847250e6ba0ba08f54c0e727e703c6984b82c37",
+      "nodes": 3044,
+      "dofs": 9132,
+      "tet4": 12564,
+      "surface_tri3": 3548,
+      "outer_face_tags": {
+        "x-": 1,
+        "x+": 6,
+        "y-": 2,
+        "y+": 4,
+        "z-": 5,
+        "z+": 3
+      },
+      "hole_face_tag": 7,
+      "hole_wall_tri3": 72,
+      "body_tag": 1,
+      "bounds_mm": [
+        [
+          -50.0,
+          -25.0,
+          -1.0
+        ],
+        [
+          50.0,
+          25.0,
+          1.0
+        ]
+      ],
+      "mesh_volume_mm3": 9850.000000000002,
+      "ideal_cad_volume_mm3": 9842.92036732051,
+      "relative_volume_error": 0.0007192613995941066,
+      "edge_p50_mm": 2.7147103345803054,
+      "edge_p95_mm": 3.7808543950950875,
+      "hole_edge_p50_mm": 2.5881904510252074,
+      "hole_circumferential_edge_p50_mm": 2.5881904510252074,
+      "maximum_hole_wall_cell_hoop_stress_mpa": 233.89615391080036,
+      "hole_probe": {
+        "radius_over_hole_radius": 1.0,
+        "samples": [
+          {
+            "position_mm": [
+              0.0,
+              -5.0,
+              0.0
+            ],
+            "cells": 2,
+            "fem_sigma_tt_mpa": 142.0657536830151
+          },
+          {
+            "position_mm": [
+              0.0,
+              5.0,
+              0.0
+            ],
+            "cells": 2,
+            "fem_sigma_tt_mpa": 141.9019127500128
+          }
+        ],
+        "fem_sigma_tt_mpa": 141.98383321651394,
+        "kirsch_sigma_tt_mpa": 300.0,
+        "fem_kt": 1.4198383321651393,
+        "kirsch_kt": 3.0
+      },
+      "radial_probes": [
+        {
+          "radius_over_hole_radius": 1.0,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -5.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 142.0657536830151
+            },
+            {
+              "position_mm": [
+                0.0,
+                5.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 141.9019127500128
+            }
+          ],
+          "fem_sigma_tt_mpa": 141.98383321651394,
+          "kirsch_sigma_tt_mpa": 300.0,
+          "fem_kt": 1.4198383321651393,
+          "kirsch_kt": 3.0
+        },
+        {
+          "radius_over_hole_radius": 1.05,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -5.25,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 142.0657536830151
+            },
+            {
+              "position_mm": [
+                0.0,
+                5.25,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 141.9019127500128
+            }
+          ],
+          "fem_sigma_tt_mpa": 141.98383321651394,
+          "kirsch_sigma_tt_mpa": 268.75684514168483,
+          "fem_kt": 1.4198383321651393,
+          "kirsch_kt": 2.6875684514168485
+        },
+        {
+          "radius_over_hole_radius": 1.1,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -5.5,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 142.0657536830151
+            },
+            {
+              "position_mm": [
+                0.0,
+                5.5,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 141.9019127500128
+            }
+          ],
+          "fem_sigma_tt_mpa": 141.98383321651394,
+          "kirsch_sigma_tt_mpa": 243.7743323543474,
+          "fem_kt": 1.4198383321651393,
+          "kirsch_kt": 2.437743323543474
+        },
+        {
+          "radius_over_hole_radius": 1.2,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -6.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 142.0657536830151
+            },
+            {
+              "position_mm": [
+                0.0,
+                6.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 141.9019127500128
+            }
+          ],
+          "fem_sigma_tt_mpa": 141.98383321651394,
+          "kirsch_sigma_tt_mpa": 207.06018518518516,
+          "fem_kt": 1.4198383321651393,
+          "kirsch_kt": 2.0706018518518516
+        },
+        {
+          "radius_over_hole_radius": 1.4,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -7.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 141.47715030431513
+            },
+            {
+              "position_mm": [
+                0.0,
+                7.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 141.39275591395347
+            }
+          ],
+          "fem_sigma_tt_mpa": 141.4349531091343,
+          "kirsch_sigma_tt_mpa": 164.5564348188255,
+          "fem_kt": 1.4143495310913432,
+          "kirsch_kt": 1.645564348188255
+        }
+      ],
+      "physical_probe_strip": {
+        "radius_range_over_hole_radius": [
+          1.05,
+          1.4
+        ],
+        "half_angle_degrees": 15,
+        "quadrature_samples": 7680,
+        "fem_sigma_tt_mpa": 162.99754424609884,
+        "kirsch_sigma_tt_mpa": 197.5823527228181
+      },
+      "fixed_annulus": {
+        "radius_range_over_hole_radius": [
+          1.01,
+          2.0
+        ],
+        "quadrature_samples": 24576,
+        "relative_kirsch_stress_l2": 0.2684245592695661
+      },
+      "relative_kirsch_stress_l2": 0.0668549200515834,
+      "relative_near_hole_kirsch_stress_l2": 0.22627418251336262,
+      "centroid_volume_inside_ideal_hole_mm3": 0.0,
+      "force_balance_n": [
+        1.5761543181724846e-09,
+        -9.539058432039837e-11,
+        -1.9003756719799059e-10
+      ],
+      "moment_balance_n_mm": [
+        9.23940257635536e-10,
+        2.8867361834272742e-09,
+        -6.832124199718237e-09
+      ],
+      "rigid_support_reaction_relative": 8.342553734143215e-14,
+      "free_residual_relative": 8.747363485906415e-13,
+      "strain_energy_n_mm": 235.18454423543568,
+      "applied_work_n_mm": 470.3690884709486,
+      "assembly_seconds": 0.3796060999738984,
+      "solve_seconds": 0.23702330002561212
+    },
+    {
+      "label": "local-2",
+      "archive_sha256": "ffaa3eac1c627c4af73843f570408efd7442167771c971340b573eb2d6caaef2",
+      "nodes": 3312,
+      "dofs": 9936,
+      "tet4": 13626,
+      "surface_tri3": 3880,
+      "outer_face_tags": {
+        "x-": 1,
+        "x+": 6,
+        "y-": 2,
+        "y+": 4,
+        "z-": 5,
+        "z+": 3
+      },
+      "hole_face_tag": 7,
+      "hole_wall_tri3": 168,
+      "body_tag": 1,
+      "bounds_mm": [
+        [
+          -50.0,
+          -25.0,
+          -1.0
+        ],
+        [
+          50.0,
+          25.0,
+          1.0
+        ]
+      ],
+      "mesh_volume_mm3": 9844.235346230582,
+      "ideal_cad_volume_mm3": 9842.92036732051,
+      "relative_volume_error": 0.00013359641864396643,
+      "edge_p50_mm": 2.631578947368425,
+      "edge_p95_mm": 3.7808543950950875,
+      "hole_edge_p50_mm": 1.1196447610330784,
+      "hole_circumferential_edge_p50_mm": 1.1196447610330784,
+      "maximum_hole_wall_cell_hoop_stress_mpa": 281.42124448464307,
+      "hole_probe": {
+        "radius_over_hole_radius": 1.0,
+        "samples": [
+          {
+            "position_mm": [
+              0.0,
+              -5.0,
+              0.0
+            ],
+            "cells": 1,
+            "fem_sigma_tt_mpa": 188.4527108579314
+          },
+          {
+            "position_mm": [
+              0.0,
+              5.0,
+              0.0
+            ],
+            "cells": 1,
+            "fem_sigma_tt_mpa": 188.3230917248119
+          }
+        ],
+        "fem_sigma_tt_mpa": 188.38790129137163,
+        "kirsch_sigma_tt_mpa": 300.0,
+        "fem_kt": 1.8838790129137164,
+        "kirsch_kt": 3.0
+      },
+      "radial_probes": [
+        {
+          "radius_over_hole_radius": 1.0,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -5.0,
+                0.0
+              ],
+              "cells": 1,
+              "fem_sigma_tt_mpa": 188.4527108579314
+            },
+            {
+              "position_mm": [
+                0.0,
+                5.0,
+                0.0
+              ],
+              "cells": 1,
+              "fem_sigma_tt_mpa": 188.3230917248119
+            }
+          ],
+          "fem_sigma_tt_mpa": 188.38790129137163,
+          "kirsch_sigma_tt_mpa": 300.0,
+          "fem_kt": 1.8838790129137164,
+          "kirsch_kt": 3.0
+        },
+        {
+          "radius_over_hole_radius": 1.05,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -5.25,
+                0.0
+              ],
+              "cells": 1,
+              "fem_sigma_tt_mpa": 188.4527108579314
+            },
+            {
+              "position_mm": [
+                0.0,
+                5.25,
+                0.0
+              ],
+              "cells": 1,
+              "fem_sigma_tt_mpa": 188.3230917248119
+            }
+          ],
+          "fem_sigma_tt_mpa": 188.38790129137163,
+          "kirsch_sigma_tt_mpa": 268.75684514168483,
+          "fem_kt": 1.8838790129137164,
+          "kirsch_kt": 2.6875684514168485
+        },
+        {
+          "radius_over_hole_radius": 1.1,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -5.5,
+                0.0
+              ],
+              "cells": 1,
+              "fem_sigma_tt_mpa": 188.4527108579314
+            },
+            {
+              "position_mm": [
+                0.0,
+                5.5,
+                0.0
+              ],
+              "cells": 1,
+              "fem_sigma_tt_mpa": 188.3230917248119
+            }
+          ],
+          "fem_sigma_tt_mpa": 188.38790129137163,
+          "kirsch_sigma_tt_mpa": 243.7743323543474,
+          "fem_kt": 1.8838790129137164,
+          "kirsch_kt": 2.437743323543474
+        },
+        {
+          "radius_over_hole_radius": 1.2,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -6.0,
+                0.0
+              ],
+              "cells": 1,
+              "fem_sigma_tt_mpa": 188.4321084837461
+            },
+            {
+              "position_mm": [
+                0.0,
+                6.0,
+                0.0
+              ],
+              "cells": 1,
+              "fem_sigma_tt_mpa": 186.44939241774367
+            }
+          ],
+          "fem_sigma_tt_mpa": 187.44075045074487,
+          "kirsch_sigma_tt_mpa": 207.06018518518516,
+          "fem_kt": 1.8744075045074486,
+          "kirsch_kt": 2.0706018518518516
+        },
+        {
+          "radius_over_hole_radius": 1.4,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -7.0,
+                0.0
+              ],
+              "cells": 1,
+              "fem_sigma_tt_mpa": 187.03907780204398
+            },
+            {
+              "position_mm": [
+                0.0,
+                7.0,
+                0.0
+              ],
+              "cells": 1,
+              "fem_sigma_tt_mpa": 186.94257558726832
+            }
+          ],
+          "fem_sigma_tt_mpa": 186.99082669465616,
+          "kirsch_sigma_tt_mpa": 164.5564348188255,
+          "fem_kt": 1.8699082669465616,
+          "kirsch_kt": 1.645564348188255
+        }
+      ],
+      "physical_probe_strip": {
+        "radius_range_over_hole_radius": [
+          1.05,
+          1.4
+        ],
+        "half_angle_degrees": 15,
+        "quadrature_samples": 7680,
+        "fem_sigma_tt_mpa": 190.91811844517343,
+        "kirsch_sigma_tt_mpa": 197.5823527228181
+      },
+      "fixed_annulus": {
+        "radius_range_over_hole_radius": [
+          1.01,
+          2.0
+        ],
+        "quadrature_samples": 24576,
+        "relative_kirsch_stress_l2": 0.16498432025731047
+      },
+      "relative_kirsch_stress_l2": 0.04434510294985508,
+      "relative_near_hole_kirsch_stress_l2": 0.14365805280300964,
+      "centroid_volume_inside_ideal_hole_mm3": 0.0,
+      "force_balance_n": [
+        7.421476766467094e-10,
+        -9.026757119556805e-11,
+        -2.7949884275191484e-10
+      ],
+      "moment_balance_n_mm": [
+        1.4973020601161124e-09,
+        4.471530701266602e-09,
+        -6.177288014441729e-09
+      ],
+      "rigid_support_reaction_relative": 4.145903550318879e-14,
+      "free_residual_relative": 9.077256161701863e-13,
+      "strain_energy_n_mm": 236.349188333053,
+      "applied_work_n_mm": 472.6983766661607,
+      "assembly_seconds": 0.40079789998708293,
+      "solve_seconds": 0.2753297000308521
+    },
+    {
+      "label": "uniform-3",
+      "archive_sha256": "70d1f10324b65f149678f77d80f5308e24ed5302bb7e04868980f3847b334813",
+      "nodes": 8020,
+      "dofs": 24060,
+      "tet4": 36240,
+      "surface_tri3": 7544,
+      "outer_face_tags": {
+        "x-": 1,
+        "x+": 6,
+        "y-": 2,
+        "y+": 4,
+        "z-": 5,
+        "z+": 3
+      },
+      "hole_face_tag": 7,
+      "hole_wall_tri3": 160,
+      "body_tag": 1,
+      "bounds_mm": [
+        [
+          -50.0,
+          -25.0,
+          -1.0
+        ],
+        [
+          50.0,
+          25.0,
+          1.0
+        ]
+      ],
+      "mesh_volume_mm3": 9845.491502812527,
+      "ideal_cad_volume_mm3": 9842.92036732051,
+      "relative_volume_error": 0.00026121673203349793,
+      "edge_p50_mm": 1.8543935693924518,
+      "edge_p95_mm": 2.5744030415628747,
+      "hole_edge_p50_mm": 1.5643446504023086,
+      "hole_circumferential_edge_p50_mm": 1.5643446504023086,
+      "maximum_hole_wall_cell_hoop_stress_mpa": 272.5639460815221,
+      "hole_probe": {
+        "radius_over_hole_radius": 1.0,
+        "samples": [
+          {
+            "position_mm": [
+              0.0,
+              -5.0,
+              0.0
+            ],
+            "cells": 2,
+            "fem_sigma_tt_mpa": 161.71597523917762
+          },
+          {
+            "position_mm": [
+              0.0,
+              5.0,
+              0.0
+            ],
+            "cells": 2,
+            "fem_sigma_tt_mpa": 161.55779509296417
+          }
+        ],
+        "fem_sigma_tt_mpa": 161.6368851660709,
+        "kirsch_sigma_tt_mpa": 300.0,
+        "fem_kt": 1.6163688516607089,
+        "kirsch_kt": 3.0
+      },
+      "radial_probes": [
+        {
+          "radius_over_hole_radius": 1.0,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -5.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 161.71597523917762
+            },
+            {
+              "position_mm": [
+                0.0,
+                5.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 161.55779509296417
+            }
+          ],
+          "fem_sigma_tt_mpa": 161.6368851660709,
+          "kirsch_sigma_tt_mpa": 300.0,
+          "fem_kt": 1.6163688516607089,
+          "kirsch_kt": 3.0
+        },
+        {
+          "radius_over_hole_radius": 1.05,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -5.25,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 161.71597523917762
+            },
+            {
+              "position_mm": [
+                0.0,
+                5.25,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 161.55779509296417
+            }
+          ],
+          "fem_sigma_tt_mpa": 161.6368851660709,
+          "kirsch_sigma_tt_mpa": 268.75684514168483,
+          "fem_kt": 1.6163688516607089,
+          "kirsch_kt": 2.6875684514168485
+        },
+        {
+          "radius_over_hole_radius": 1.1,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -5.5,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 161.71597523917762
+            },
+            {
+              "position_mm": [
+                0.0,
+                5.5,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 161.55779509296417
+            }
+          ],
+          "fem_sigma_tt_mpa": 161.6368851660709,
+          "kirsch_sigma_tt_mpa": 243.7743323543474,
+          "fem_kt": 1.6163688516607089,
+          "kirsch_kt": 2.437743323543474
+        },
+        {
+          "radius_over_hole_radius": 1.2,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -6.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 161.71597523917762
+            },
+            {
+              "position_mm": [
+                0.0,
+                6.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 161.55779509296417
+            }
+          ],
+          "fem_sigma_tt_mpa": 161.6368851660709,
+          "kirsch_sigma_tt_mpa": 207.06018518518516,
+          "fem_kt": 1.6163688516607089,
+          "kirsch_kt": 2.0706018518518516
+        },
+        {
+          "radius_over_hole_radius": 1.4,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -7.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 161.7159752391773
+            },
+            {
+              "position_mm": [
+                0.0,
+                7.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 161.55779509296454
+            }
+          ],
+          "fem_sigma_tt_mpa": 161.63688516607093,
+          "kirsch_sigma_tt_mpa": 164.5564348188255,
+          "fem_kt": 1.6163688516607093,
+          "kirsch_kt": 1.645564348188255
+        }
+      ],
+      "physical_probe_strip": {
+        "radius_range_over_hole_radius": [
+          1.05,
+          1.4
+        ],
+        "half_angle_degrees": 15,
+        "quadrature_samples": 7680,
+        "fem_sigma_tt_mpa": 193.83164504567253,
+        "kirsch_sigma_tt_mpa": 197.5823527228181
+      },
+      "fixed_annulus": {
+        "radius_range_over_hole_radius": [
+          1.01,
+          2.0
+        ],
+        "quadrature_samples": 24576,
+        "relative_kirsch_stress_l2": 0.1983856745217227
+      },
+      "relative_kirsch_stress_l2": 0.04899808928928338,
+      "relative_near_hole_kirsch_stress_l2": 0.1683921632489157,
+      "centroid_volume_inside_ideal_hole_mm3": 0.0,
+      "force_balance_n": [
+        3.978676943461323e-09,
+        -2.627704720481461e-10,
+        2.338662090372786e-10
+      ],
+      "moment_balance_n_mm": [
+        -3.730405095936362e-09,
+        -1.4701839745612233e-10,
+        2.727233550103847e-08
+      ],
+      "rigid_support_reaction_relative": 1.9993140157428605e-13,
+      "free_residual_relative": 1.5303226633251902e-12,
+      "strain_energy_n_mm": 236.11356883238795,
+      "applied_work_n_mm": 472.2271376648023,
+      "assembly_seconds": 0.7931609000079334,
+      "solve_seconds": 1.9978112999815494
+    },
+    {
+      "label": "local-3",
+      "archive_sha256": "a56e0c19df09cde6b175e1056ac8c15e1b8ac521de1043ab7ea55af5a6a878a2",
+      "nodes": 8630,
+      "dofs": 25890,
+      "tet4": 38928,
+      "surface_tri3": 8152,
+      "outer_face_tags": {
+        "x-": 1,
+        "x+": 6,
+        "y-": 2,
+        "y+": 4,
+        "z-": 5,
+        "z+": 3
+      },
+      "hole_face_tag": 7,
+      "hole_wall_tri3": 320,
+      "body_tag": 1,
+      "bounds_mm": [
+        [
+          -50.0,
+          -25.0,
+          -1.0
+        ],
+        [
+          50.0,
+          25.0,
+          1.0
+        ]
+      ],
+      "mesh_volume_mm3": 9843.56553495977,
+      "ideal_cad_volume_mm3": 9842.92036732051,
+      "relative_volume_error": 6.554636380085022e-05,
+      "edge_p50_mm": 1.846160363094145,
+      "edge_p95_mm": 2.5744030415628725,
+      "hole_edge_p50_mm": 0.7845909572784493,
+      "hole_circumferential_edge_p50_mm": 0.7845909572784493,
+      "maximum_hole_wall_cell_hoop_stress_mpa": 292.1273547319569,
+      "hole_probe": {
+        "radius_over_hole_radius": 1.0,
+        "samples": [
+          {
+            "position_mm": [
+              0.0,
+              -5.0,
+              0.0
+            ],
+            "cells": 5,
+            "fem_sigma_tt_mpa": 214.1369100140079
+          },
+          {
+            "position_mm": [
+              0.0,
+              5.0,
+              0.0
+            ],
+            "cells": 5,
+            "fem_sigma_tt_mpa": 214.04314970963173
+          }
+        ],
+        "fem_sigma_tt_mpa": 214.0900298618198,
+        "kirsch_sigma_tt_mpa": 300.0,
+        "fem_kt": 2.140900298618198,
+        "kirsch_kt": 3.0
+      },
+      "radial_probes": [
+        {
+          "radius_over_hole_radius": 1.0,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -5.0,
+                0.0
+              ],
+              "cells": 5,
+              "fem_sigma_tt_mpa": 214.1369100140079
+            },
+            {
+              "position_mm": [
+                0.0,
+                5.0,
+                0.0
+              ],
+              "cells": 5,
+              "fem_sigma_tt_mpa": 214.04314970963173
+            }
+          ],
+          "fem_sigma_tt_mpa": 214.0900298618198,
+          "kirsch_sigma_tt_mpa": 300.0,
+          "fem_kt": 2.140900298618198,
+          "kirsch_kt": 3.0
+        },
+        {
+          "radius_over_hole_radius": 1.05,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -5.25,
+                0.0
+              ],
+              "cells": 5,
+              "fem_sigma_tt_mpa": 214.1369100140079
+            },
+            {
+              "position_mm": [
+                0.0,
+                5.25,
+                0.0
+              ],
+              "cells": 5,
+              "fem_sigma_tt_mpa": 214.04314970963173
+            }
+          ],
+          "fem_sigma_tt_mpa": 214.0900298618198,
+          "kirsch_sigma_tt_mpa": 268.75684514168483,
+          "fem_kt": 2.140900298618198,
+          "kirsch_kt": 2.6875684514168485
+        },
+        {
+          "radius_over_hole_radius": 1.1,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -5.5,
+                0.0
+              ],
+              "cells": 5,
+              "fem_sigma_tt_mpa": 214.1369100140079
+            },
+            {
+              "position_mm": [
+                0.0,
+                5.5,
+                0.0
+              ],
+              "cells": 5,
+              "fem_sigma_tt_mpa": 214.04314970963173
+            }
+          ],
+          "fem_sigma_tt_mpa": 214.0900298618198,
+          "kirsch_sigma_tt_mpa": 243.7743323543474,
+          "fem_kt": 2.140900298618198,
+          "kirsch_kt": 2.437743323543474
+        },
+        {
+          "radius_over_hole_radius": 1.2,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -6.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 165.55229922406176
+            },
+            {
+              "position_mm": [
+                0.0,
+                6.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 165.5768359435891
+            }
+          ],
+          "fem_sigma_tt_mpa": 165.5645675838254,
+          "kirsch_sigma_tt_mpa": 207.06018518518516,
+          "fem_kt": 1.655645675838254,
+          "kirsch_kt": 2.0706018518518516
+        },
+        {
+          "radius_over_hole_radius": 1.4,
+          "samples": [
+            {
+              "position_mm": [
+                0.0,
+                -7.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 165.30709303232067
+            },
+            {
+              "position_mm": [
+                0.0,
+                7.0,
+                0.0
+              ],
+              "cells": 2,
+              "fem_sigma_tt_mpa": 165.32953812342924
+            }
+          ],
+          "fem_sigma_tt_mpa": 165.31831557787496,
+          "kirsch_sigma_tt_mpa": 164.5564348188255,
+          "fem_kt": 1.6531831557787495,
+          "kirsch_kt": 1.645564348188255
+        }
+      ],
+      "physical_probe_strip": {
+        "radius_range_over_hole_radius": [
+          1.05,
+          1.4
+        ],
+        "half_angle_degrees": 15,
+        "quadrature_samples": 7680,
+        "fem_sigma_tt_mpa": 194.08813344373596,
+        "kirsch_sigma_tt_mpa": 197.5823527228181
+      },
+      "fixed_annulus": {
+        "radius_range_over_hole_radius": [
+          1.01,
+          2.0
+        ],
+        "quadrature_samples": 24576,
+        "relative_kirsch_stress_l2": 0.12396805989058723
+      },
+      "relative_kirsch_stress_l2": 0.031414717150497866,
+      "relative_near_hole_kirsch_stress_l2": 0.10663076347369163,
+      "centroid_volume_inside_ideal_hole_mm3": 0.0,
+      "force_balance_n": [
+        2.337039006761188e-09,
+        -2.1991763965445443e-10,
+        1.856682619261076e-10
+      ],
+      "moment_balance_n_mm": [
+        -2.4273940635310964e-09,
+        -5.05374231352107e-09,
+        4.538401299214456e-08
+      ],
+      "rigid_support_reaction_relative": 1.1434985150678815e-13,
+      "free_residual_relative": 1.474766243372761e-12,
+      "strain_energy_n_mm": 236.7014108562313,
+      "applied_work_n_mm": 473.4028217124463,
+      "assembly_seconds": 0.8113882999750786,
+      "solve_seconds": 2.235658499994315
+    }
+  ],
+  "solver_sha256": "94a9e11476eb71effd9a8bae8a2d84eb903a4a3638672c82580e7324fd80110c",
+  "numpy_version": "2.5.3",
+  "scipy_version": "1.17.1",
+  "mesh_receipts": "recorded-meshes.json"
+}

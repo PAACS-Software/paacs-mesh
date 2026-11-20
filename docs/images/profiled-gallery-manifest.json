@@ -1,0 +1,56 @@
+[
+  {
+    "archive": "cylinder-start-tet4-volume.paacsmesh",
+    "sha256": "db4760076beca7920402b9502ca68b710093c2231de26df343f43a63805b619a",
+    "nodes": 829,
+    "volume_cells": 2973
+  },
+  {
+    "archive": "cylinder-start-hex-dominant-volume.paacsmesh",
+    "sha256": "5ec9844e02b31e9fa97a140fb867f3dfd4487db0c2e9e1cd755cab4248523bb4",
+    "nodes": 14769,
+    "volume_cells": 11892
+  },
+  {
+    "archive": "cylinder-end-tet4-volume.paacsmesh",
+    "sha256": "3664e7b53bd647ca1e816926e3f06cb1ed6494e09133c2b3e7d364ac42744812",
+    "nodes": 829,
+    "volume_cells": 2973
+  },
+  {
+    "archive": "cylinder-end-hex-dominant-volume.paacsmesh",
+    "sha256": "0acbb96408805cd52d49ed123c9e44cc93901cef20f080dbd8d4473f19f350cf",
+    "nodes": 14769,
+    "volume_cells": 11892
+  },
+  {
+    "archive": "cylinder-band-tet4-volume.paacsmesh",
+    "sha256": "fa2fd3a379e2e728ee7f23705301d3a4a54a7aedde2e56b4822390983e6e7e87",
+    "nodes": 1637,
+    "volume_cells": 7194
+  },
+  {
+    "archive": "cylinder-band-hex-dominant-volume.paacsmesh",
+    "sha256": "f7adfd1f973e0a0fe1a16f2d5ccfdeb40e435c4922e2482c8d8833f689643a8b",
+    "nodes": 33673,
+    "volume_cells": 28776
+  },
+  {
+    "archive": "cylinder-start-hex-dominant-sweep.paacsmesh",
+    "sha256": "728a5283c76c4446771d51ff28e6ffcedcc246576e337bf5d917e4fcff90fde7",
+    "nodes": 3009,
+    "volume_cells": 2560
+  },
+  {
+    "archive": "cylinder-start-tet4-volume.paacsmesh",
+    "sha256": "db4760076beca7920402b9502ca68b710093c2231de26df343f43a63805b619a",
+    "nodes": 829,
+    "volume_cells": 2973
+  },
+  {
+    "archive": "cylinder-start-hex-dominant-volume.paacsmesh",
+    "sha256": "5ec9844e02b31e9fa97a140fb867f3dfd4487db0c2e9e1cd755cab4248523bb4",
+    "nodes": 14769,
+    "volume_cells": 11892
+  }
+]

@@ -1,0 +1,175 @@
+{
+  "schema": "paacs-square-duct-flow-v1",
+  "geometry": {
+    "side_m": 0.01,
+    "length_m": 0.04,
+    "bounds_m": [
+      [
+        -0.005,
+        -0.005,
+        0.0
+      ],
+      [
+        0.005,
+        0.005,
+        0.04
+      ]
+    ]
+  },
+  "fluid": {
+    "dynamic_viscosity_pa_s": 0.001,
+    "density_kg_m3": 1000.0,
+    "bulk_speed_m_s": 0.01,
+    "reynolds": 100.0,
+    "target_flow_m3_s": 1.0000000000000002e-06
+  },
+  "reference": {
+    "conductance": 0.035144253738794345,
+    "conductance_double_sine": 0.03514425371330617,
+    "pressure_gradient_pa_m": 2.845415376955749,
+    "pressure_drop_pa": 0.11381661507822996,
+    "centerline_velocity_m_s": 0.02096255982270926,
+    "darcy_friction_factor": 0.5690830753911498,
+    "mean_wall_shear_pa": 0.0071135384423893725
+  },
+  "metres_per_archive_unit": 0.001,
+  "model": "Fully developed steady axial flow, exact scalar reduction of incompressible Newtonian equations",
+  "meshes": [
+    {
+      "label": "level-1",
+      "archive_sha256": "fc22eda099505660814157b43a3c4c18bee62471c68de57def1cf7cbf064ed21",
+      "prism6": 2304,
+      "nodes": 1521,
+      "section_nodes": 169,
+      "section_tri3": 288,
+      "section_free_dofs": 121,
+      "axial_layers": 8,
+      "wall_face_tags": {
+        "x-": 1,
+        "x+": 2,
+        "y-": 3,
+        "y+": 4,
+        "z-": 5,
+        "z+": 6
+      },
+      "body_tag": 1,
+      "first_wall_spacing_m": 0.0005999999999999994,
+      "wall_spacings_m": [
+        0.0005999999999999998,
+        0.0005999999999999994,
+        0.0005999999999999998,
+        0.0005999999999999994
+      ],
+      "axial_pitch_min_m": 0.0049999999999999975,
+      "axial_pitch_max_m": 0.0050000000000000044,
+      "conductance": 0.03458958560077599,
+      "pressure_gradient_pa_m": 2.891043597751474,
+      "pressure_drop_pa": 0.11564174391005896,
+      "pressure_drop_error_percent": 1.6035697692946993,
+      "relative_velocity_l2": 0.008320506841154813,
+      "flow_m3_s": 1.0000000000000002e-06,
+      "centerline_velocity_m_s": 0.021322892138761523,
+      "darcy_friction_factor": 0.5782087195502947,
+      "direct_wall_shear_pa": 0.006627882885797646,
+      "mean_wall_shear_at_fem_pressure_gradient_pa": 0.007227608994378685,
+      "force_balanced_wall_shear_pa": 0.007227608994378688,
+      "free_residual_relative": 2.7516201663612697e-15,
+      "dimensionless_energy": 0.03458958560077601,
+      "dimensionless_wall_reaction": 1.0000000000000004,
+      "preparation_seconds": 0.023037999984808266,
+      "section_solve_seconds": 0.0028799999854527414
+    },
+    {
+      "label": "level-2",
+      "archive_sha256": "ecc6f9c5b5b04b5f22f62444a88160d631467c03b2293af46a318d48250528a1",
+      "prism6": 7776,
+      "nodes": 4693,
+      "section_nodes": 361,
+      "section_tri3": 648,
+      "section_free_dofs": 289,
+      "axial_layers": 12,
+      "wall_face_tags": {
+        "x-": 1,
+        "x+": 2,
+        "y-": 3,
+        "y+": 4,
+        "z-": 5,
+        "z+": 6
+      },
+      "body_tag": 1,
+      "first_wall_spacing_m": 0.0002999999999999999,
+      "wall_spacings_m": [
+        0.0002999999999999999,
+        0.0003000000000000003,
+        0.0002999999999999999,
+        0.0003000000000000003
+      ],
+      "axial_pitch_min_m": 0.003333333333333327,
+      "axial_pitch_max_m": 0.003333333333333341,
+      "conductance": 0.03491349067505943,
+      "pressure_gradient_pa_m": 2.8642223411775705,
+      "pressure_drop_pa": 0.11456889364710282,
+      "pressure_drop_error_percent": 0.6609567226681268,
+      "relative_velocity_l2": 0.003341881829368139,
+      "flow_m3_s": 1.0000000000000006e-06,
+      "centerline_velocity_m_s": 0.021136630944666352,
+      "darcy_friction_factor": 0.572844468235514,
+      "direct_wall_shear_pa": 0.006832970816285002,
+      "mean_wall_shear_at_fem_pressure_gradient_pa": 0.007160555852943926,
+      "force_balanced_wall_shear_pa": 0.007160555852943923,
+      "free_residual_relative": 6.792080599724382e-15,
+      "dimensionless_energy": 0.03491349067505943,
+      "dimensionless_wall_reaction": 0.9999999999999996,
+      "preparation_seconds": 0.050108600000385195,
+      "section_solve_seconds": 0.0035930000012740493
+    },
+    {
+      "label": "level-3",
+      "archive_sha256": "55f7cd9405dd3740dca914efd2026d0f64fed9f3baa3ad6b0ca4bdd0923e5198",
+      "prism6": 18432,
+      "nodes": 10625,
+      "section_nodes": 625,
+      "section_tri3": 1152,
+      "section_free_dofs": 529,
+      "axial_layers": 16,
+      "wall_face_tags": {
+        "x-": 1,
+        "x+": 2,
+        "y-": 3,
+        "y+": 4,
+        "z-": 5,
+        "z+": 6
+      },
+      "body_tag": 1,
+      "first_wall_spacing_m": 0.00014999999999999904,
+      "wall_spacings_m": [
+        0.00014999999999999996,
+        0.00014999999999999904,
+        0.00014999999999999996,
+        0.00014999999999999904
+      ],
+      "axial_pitch_min_m": 0.0024999999999999953,
+      "axial_pitch_max_m": 0.0025000000000000022,
+      "conductance": 0.03500419118255702,
+      "pressure_gradient_pa_m": 2.856800760756647,
+      "pressure_drop_pa": 0.11427203043026588,
+      "pressure_drop_error_percent": 0.4001308172123075,
+      "relative_velocity_l2": 0.002176282647398329,
+      "flow_m3_s": 1.0000000000000002e-06,
+      "centerline_velocity_m_s": 0.021076437003256655,
+      "darcy_friction_factor": 0.5713601521513293,
+      "direct_wall_shear_pa": 0.0069886557128279675,
+      "mean_wall_shear_at_fem_pressure_gradient_pa": 0.007142001901891617,
+      "force_balanced_wall_shear_pa": 0.007142001901891617,
+      "free_residual_relative": 1.0508505767768019e-14,
+      "dimensionless_energy": 0.03500419118255702,
+      "dimensionless_wall_reaction": 1.0,
+      "preparation_seconds": 0.1265393000212498,
+      "section_solve_seconds": 0.00711770000634715
+    }
+  ],
+  "solver_sha256": "da6dacc415ee1be81cbf5697dc890e96e26f963e98ee0b4d0a7f39c21825f572",
+  "numpy_version": "2.5.3",
+  "scipy_version": "1.17.1",
+  "mesh_receipts": "recorded-meshes.json"
+}

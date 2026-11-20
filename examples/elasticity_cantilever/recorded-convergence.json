@@ -1,0 +1,206 @@
+[
+  {
+    "level": 1,
+    "target_size_mm": 5.0,
+    "mesh_wall_seconds": 0.11796090001007542,
+    "native_route": "planar_core",
+    "step_sha256": "3e7b941f9c50805489133cc79d3c68bd8b7367f544a6d5328577a26dc7fd25ea",
+    "mesher_sha256": "d304d518073b04b343e687987a3bf9adf233a57926d4f5400a3a0d698d4d29e3",
+    "archive": "out/step-simulation-release-review/beam-replay/level-1/mesh.paacsmesh",
+    "archive_sha256": "228b8a6b2fb9b81ea92a9386c2fa0e4da1f19b5326f0851b65a9949b2577f86d",
+    "nodes": 189,
+    "tet4": 480,
+    "surface_tri3": 336,
+    "edge_p50_mm": 5.000000000000007,
+    "edge_p95_mm": 8.660254037844387,
+    "mesh_volume_mm3": 9999.999999999996,
+    "solid_tags": [
+      1
+    ],
+    "fixed_face_tag": 1,
+    "loaded_face_tag": 2,
+    "fixed_area_mm2": 100.0,
+    "loaded_area_mm2": 100.0,
+    "tip_deflection_mm": 0.09669138526558346,
+    "euler_bernoulli_mm": 0.19047619047619047,
+    "timoshenko_mm": 0.19196190476190475,
+    "error_vs_euler_percent": -49.23702273556868,
+    "error_vs_timoshenko_percent": -49.6299094419217,
+    "reaction_force_n": [
+      9.208633855450898e-11,
+      1.0997780464094831e-10,
+      100.00000000081803
+    ],
+    "free_residual_relative": 9.319167385686664e-12,
+    "force_balance_n": [
+      9.208633855450898e-11,
+      1.0997780464094831e-10,
+      8.180318644690487e-10
+    ],
+    "moment_balance_n_mm": [
+      5.458645091493963e-09,
+      -5.8612044995243195e-08,
+      8.064489520620555e-09
+    ],
+    "strain_energy_n_mm": 4.834569263268914,
+    "applied_work_n_mm": 9.669138526558347,
+    "affine_patch": {
+      "relative_displacement_l2": 9.9360028040278e-17,
+      "max_absolute_strain_error": 9.75781955236954e-19,
+      "interior_dofs": 57
+    }
+  },
+  {
+    "level": 2,
+    "target_size_mm": 2.5,
+    "mesh_wall_seconds": 0.15798950000316836,
+    "native_route": "planar_core",
+    "step_sha256": "3e7b941f9c50805489133cc79d3c68bd8b7367f544a6d5328577a26dc7fd25ea",
+    "mesher_sha256": "d304d518073b04b343e687987a3bf9adf233a57926d4f5400a3a0d698d4d29e3",
+    "archive": "out/step-simulation-release-review/beam-replay/level-2/mesh.paacsmesh",
+    "archive_sha256": "5eafe2130bb011fa0dd05408e2a8a83b31db76671fab20d9d5265334ad617d5f",
+    "nodes": 1025,
+    "tet4": 3840,
+    "surface_tri3": 1344,
+    "edge_p50_mm": 3.5355339059327324,
+    "edge_p95_mm": 4.330127018922194,
+    "mesh_volume_mm3": 10000.0,
+    "solid_tags": [
+      1
+    ],
+    "fixed_face_tag": 1,
+    "loaded_face_tag": 2,
+    "fixed_area_mm2": 100.0,
+    "loaded_area_mm2": 100.0,
+    "tip_deflection_mm": 0.15109981382311147,
+    "euler_bernoulli_mm": 0.19047619047619047,
+    "timoshenko_mm": 0.19196190476190475,
+    "error_vs_euler_percent": -20.672597742866472,
+    "error_vs_timoshenko_percent": -21.28656255493796,
+    "reaction_force_n": [
+      -3.892779432135285e-10,
+      8.344827051587345e-10,
+      100.00000000306409
+    ],
+    "free_residual_relative": 5.513443243718519e-11,
+    "force_balance_n": [
+      -3.892779432135285e-10,
+      8.344827051587345e-10,
+      3.064088094362205e-09
+    ],
+    "moment_balance_n_mm": [
+      1.634172264175504e-08,
+      -1.9497738890095206e-07,
+      6.584332368220203e-08
+    ],
+    "strain_energy_n_mm": 7.554990691043469,
+    "applied_work_n_mm": 15.10998138231115,
+    "affine_patch": {
+      "relative_displacement_l2": 5.856179158297802e-16,
+      "max_absolute_strain_error": 5.095750210681871e-18,
+      "interior_dofs": 1053
+    }
+  },
+  {
+    "level": 3,
+    "target_size_mm": 1.25,
+    "mesh_wall_seconds": 0.3973544000182301,
+    "native_route": "planar_core",
+    "step_sha256": "3e7b941f9c50805489133cc79d3c68bd8b7367f544a6d5328577a26dc7fd25ea",
+    "mesher_sha256": "d304d518073b04b343e687987a3bf9adf233a57926d4f5400a3a0d698d4d29e3",
+    "archive": "out/step-simulation-release-review/beam-replay/level-3/mesh.paacsmesh",
+    "archive_sha256": "1b8a9c13cd746a492a6e52e395dfefbce6ffe97eb410a7b7834a4b2c02b413ce",
+    "nodes": 6561,
+    "tet4": 30720,
+    "surface_tri3": 5376,
+    "edge_p50_mm": 1.7677669529663638,
+    "edge_p95_mm": 2.165063509461097,
+    "mesh_volume_mm3": 10000.0,
+    "solid_tags": [
+      1
+    ],
+    "fixed_face_tag": 1,
+    "loaded_face_tag": 2,
+    "fixed_area_mm2": 100.0,
+    "loaded_area_mm2": 100.0,
+    "tip_deflection_mm": 0.17844467553001234,
+    "euler_bernoulli_mm": 0.19047619047619047,
+    "timoshenko_mm": 0.19196190476190475,
+    "error_vs_euler_percent": -6.316545346743519,
+    "error_vs_timoshenko_percent": -7.041620705242623,
+    "reaction_force_n": [
+      -1.584695041856321e-09,
+      3.226778844123146e-09,
+      100.00000003446686
+    ],
+    "free_residual_relative": 2.637140920371022e-10,
+    "force_balance_n": [
+      -1.584695041856321e-09,
+      3.226778844123146e-09,
+      3.446686458463688e-08
+    ],
+    "moment_balance_n_mm": [
+      1.596816705529136e-07,
+      -2.7541373484041287e-06,
+      2.2637760821453412e-07
+    ],
+    "strain_energy_n_mm": 8.922233776572092,
+    "applied_work_n_mm": 17.844467553001234,
+    "affine_patch": {
+      "relative_displacement_l2": 1.7007188923480813e-15,
+      "max_absolute_strain_error": 2.2659825404947043e-17,
+      "interior_dofs": 11613
+    }
+  },
+  {
+    "level": 4,
+    "target_size_mm": 0.8,
+    "mesh_wall_seconds": 1.0449986000021454,
+    "native_route": "planar_core",
+    "step_sha256": "3e7b941f9c50805489133cc79d3c68bd8b7367f544a6d5328577a26dc7fd25ea",
+    "mesher_sha256": "d304d518073b04b343e687987a3bf9adf233a57926d4f5400a3a0d698d4d29e3",
+    "archive": "out/step-simulation-release-review/beam-replay/level-4/mesh.paacsmesh",
+    "archive_sha256": "9f114f0870d35b93e259a4b05fc37b4e97524e0f99ebb3a34001375381a34e94",
+    "nodes": 24696,
+    "tet4": 126750,
+    "surface_tri3": 13676,
+    "edge_p50_mm": 1.0878565864408423,
+    "edge_p95_mm": 1.3503451235379504,
+    "mesh_volume_mm3": 10000.0,
+    "solid_tags": [
+      1
+    ],
+    "fixed_face_tag": 1,
+    "loaded_face_tag": 2,
+    "fixed_area_mm2": 100.0,
+    "loaded_area_mm2": 100.0,
+    "tip_deflection_mm": 0.18562340007090072,
+    "euler_bernoulli_mm": 0.19047619047619047,
+    "timoshenko_mm": 0.19196190476190475,
+    "error_vs_euler_percent": -2.5477149627771145,
+    "error_vs_timoshenko_percent": -3.3019596772942195,
+    "reaction_force_n": [
+      2.251539399367175e-09,
+      -1.1280292255833047e-09,
+      100.00000000954783
+    ],
+    "free_residual_relative": 7.044322766540674e-10,
+    "force_balance_n": [
+      2.251539399367175e-09,
+      -1.1280292255833047e-09,
+      9.548158513839056e-09
+    ],
+    "moment_balance_n_mm": [
+      -3.8978131389200144e-08,
+      -6.953505895523904e-07,
+      -8.96492338142707e-08
+    ],
+    "strain_energy_n_mm": 9.281170002493953,
+    "applied_work_n_mm": 18.562340007090075,
+    "affine_patch": {
+      "relative_displacement_l2": 7.116151280052388e-15,
+      "max_absolute_strain_error": 6.971419969081794e-17,
+      "interior_dofs": 53568
+    }
+  }
+]

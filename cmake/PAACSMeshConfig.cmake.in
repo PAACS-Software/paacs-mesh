@@ -1,0 +1,57 @@
+# PAACS Mesh
+# Project author: Paul LeDewhurst
+# Copyright PAACS Software Ltd.
+# SPDX-License-Identifier: MPL-2.0
+
+@PACKAGE_INIT@
+include(CMakeFindDependencyMacro)
+find_dependency(Threads)
+include("${CMAKE_CURRENT_LIST_DIR}/PAACSMeshTargets.cmake")
+# Preserve the installed target spelling used by earlier C++ consumers.
+if(NOT TARGET PAACS::Mesh)
+    add_library(PAACS::Mesh ALIAS PAACS::mesh)
+endif()
+set(PAACSMesh_RELEASE_VERSION "@PAACS_RELEASE_VERSION@")
+set(PAACSMesh_OCCT_FOUND FALSE)
+set(PAACSMesh_UI_FOUND FALSE)
+if(TARGET PAACS::ui)
+    set(PAACSMesh_UI_FOUND TRUE)
+endif()
+set(PAACSMesh_Mesh_FOUND TRUE)
+
+# A core-only lookup never discovers OCCT, even from an OCCT-enabled SDK.
+# Optional component dependencies must not inherit the outer REQUIRED flag.
+foreach(_paacs_component IN LISTS PAACSMesh_FIND_COMPONENTS)
+    if(_paacs_component STREQUAL "OCCT")
+        if(@PAACS_WITH_OCCT@ AND
+           EXISTS "${CMAKE_CURRENT_LIST_DIR}/PAACSOCCTTargets.cmake")
+            if(PAACSMesh_FIND_REQUIRED_OCCT)
+                find_dependency(OpenCASCADE CONFIG)
+            elseif(NOT CMAKE_DISABLE_FIND_PACKAGE_OpenCASCADE)
+                find_package(OpenCASCADE QUIET CONFIG)
+            endif()
+            if(OpenCASCADE_FOUND AND
+               DEFINED OpenCASCADE_MAJOR_VERSION AND
+               NOT OpenCASCADE_MAJOR_VERSION LESS 8)
+                include("${CMAKE_CURRENT_LIST_DIR}/PAACSOCCTTargets.cmake")
+                if(NOT TARGET PAACS::MeshOCCT)
+                    add_library(PAACS::MeshOCCT ALIAS PAACS::occt)
+                endif()
+                set(PAACSMesh_OCCT_FOUND TRUE)
+            else()
+                set(PAACSMesh_NOT_FOUND_MESSAGE
+                    "The OCCT component requires Open CASCADE 8 or newer")
+            endif()
+        else()
+            set(PAACSMesh_NOT_FOUND_MESSAGE
+                "This PAACS Mesh installation does not contain the OCCT component")
+        endif()
+    elseif(NOT _paacs_component STREQUAL "Mesh" AND
+           NOT _paacs_component STREQUAL "UI")
+        set(PAACSMesh_${_paacs_component}_FOUND FALSE)
+        set(PAACSMesh_NOT_FOUND_MESSAGE
+            "Unknown PAACS Mesh component: ${_paacs_component}")
+    endif()
+endforeach()
+unset(_paacs_component)
+check_required_components(PAACSMesh)

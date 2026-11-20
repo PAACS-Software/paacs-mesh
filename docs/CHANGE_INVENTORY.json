@@ -1,0 +1,402 @@
+[
+  {
+    "file": "include/paacs/core/Parallel.hpp",
+    "status": "modified"
+  },
+  {
+    "file": "include/paacs/core/PointGrid.hpp",
+    "status": "modified"
+  },
+  {
+    "file": "include/paacs/mesh/Mesh.hpp",
+    "status": "modified"
+  },
+  {
+    "file": "include/paacs/sdk/MeshArchive.hpp",
+    "status": "modified"
+  },
+  {
+    "file": "include/paacs/sdk/Version.hpp",
+    "status": "modified"
+  },
+  {
+    "file": "include/paacs/topo/FaceTopology.hpp",
+    "status": "modified"
+  },
+  {
+    "file": "src/algo/CanonicalCurveMesher.cpp",
+    "status": "modified"
+  },
+  {
+    "file": "src/algo/CurvedPrismLayerMesher.cpp",
+    "status": "modified"
+  },
+  {
+    "file": "src/algo/HybridMeshingExecutor.cpp",
+    "status": "modified"
+  },
+  {
+    "file": "src/algo/MixedMeshQuality.cpp",
+    "status": "modified"
+  },
+  {
+    "file": "src/algo/MultiRegionAuthority.cpp",
+    "status": "modified"
+  },
+  {
+    "file": "src/algo/MultiRegionMesher.cpp",
+    "status": "modified"
+  },
+  {
+    "file": "src/algo/PreparedSweepMesher.cpp",
+    "status": "modified"
+  },
+  {
+    "file": "src/algo/StraightPrismLayerMesher.cpp",
+    "status": "modified"
+  },
+  {
+    "file": "src/algo/StructuredPolyhedralMesher.cpp",
+    "status": "modified"
+  },
+  {
+    "file": "src/algo/SurfaceSizingPlanner.cpp",
+    "status": "modified"
+  },
+  {
+    "file": "src/algo/Tet10CurvingMesher.cpp",
+    "status": "modified"
+  },
+  {
+    "file": "src/algo/Tet10JacobianCertificate.cpp",
+    "status": "modified"
+  },
+  {
+    "file": "src/algo/TransitionTemplateCatalog.cpp",
+    "status": "modified"
+  },
+  {
+    "file": "src/bnd/TetFacetSetRecovery.cpp",
+    "status": "modified"
+  },
+  {
+    "file": "src/core/Parallel.cpp",
+    "status": "modified"
+  },
+  {
+    "file": "src/sdk/CAPI.cpp",
+    "status": "modified"
+  },
+  {
+    "file": "src/sdk/MeshArchive.cpp",
+    "status": "modified"
+  },
+  {
+    "file": "src/sdk/MeshingSession.cpp",
+    "status": "modified"
+  },
+  {
+    "file": "standalone/CMakeLists.txt",
+    "status": "modified"
+  },
+  {
+    "file": "tests/test_main.cpp",
+    "status": "modified"
+  },
+  {
+    "file": "tests/test_t5.cpp",
+    "status": "modified"
+  },
+  {
+    "file": ".clang-format",
+    "status": "added"
+  },
+  {
+    "file": ".github/workflows/ci.yml",
+    "status": "added"
+  },
+  {
+    "file": ".gitignore",
+    "status": "added"
+  },
+  {
+    "file": "CHANGELOG.md",
+    "status": "added"
+  },
+  {
+    "file": "CMakeLists.txt",
+    "status": "added"
+  },
+  {
+    "file": "CMakePresets.json",
+    "status": "added"
+  },
+  {
+    "file": "README.md",
+    "status": "added"
+  },
+  {
+    "file": "VALIDATION.md",
+    "status": "added"
+  },
+  {
+    "file": "VERSION.txt",
+    "status": "added"
+  },
+  {
+    "file": "apps/paacs_mesh.cpp",
+    "status": "added"
+  },
+  {
+    "file": "benchmarks/archive_bench.cpp",
+    "status": "added"
+  },
+  {
+    "file": "cmake/PAACSMeshConfig.cmake.in",
+    "status": "added"
+  },
+  {
+    "file": "cmake/Sources.cmake",
+    "status": "added"
+  },
+  {
+    "file": "docs/ARCHIVE_FORMAT.md",
+    "status": "added"
+  },
+  {
+    "file": "docs/BENCHMARK_PROTOCOL.md",
+    "status": "added"
+  },
+  {
+    "file": "docs/BUILDING.md",
+    "status": "added"
+  },
+  {
+    "file": "docs/CHANGE_INVENTORY.json",
+    "status": "added"
+  },
+  {
+    "file": "docs/RELEASE_READINESS.md",
+    "status": "added"
+  },
+  {
+    "file": "docs/TOOLCHAIN_LOCK.json",
+    "status": "added"
+  },
+  {
+    "file": "docs/TOOLCHAIN_SOURCES.md",
+    "status": "added"
+  },
+  {
+    "file": "docs/v0.10/BUILD_AND_TEST.md",
+    "status": "added"
+  },
+  {
+    "file": "docs/v0.10/FINAL_SUMMARY.md",
+    "status": "added"
+  },
+  {
+    "file": "docs/v0.10/GEOMETRY_PROVIDER.md",
+    "status": "added"
+  },
+  {
+    "file": "docs/v0.10/HYBRID_MODEL.md",
+    "status": "added"
+  },
+  {
+    "file": "docs/v0.10/KNOWN_LIMITATIONS.md",
+    "status": "added"
+  },
+  {
+    "file": "docs/v0.10/LAYERS_AND_TRANSITIONS.md",
+    "status": "added"
+  },
+  {
+    "file": "docs/v0.10/OCCT_READINESS_REVIEW.md",
+    "status": "added"
+  },
+  {
+    "file": "docs/v0.10/PACKAGE_VERIFICATION.md",
+    "status": "added"
+  },
+  {
+    "file": "docs/v0.10/PERFORMANCE_NOTES.md",
+    "status": "added"
+  },
+  {
+    "file": "docs/v0.10/SIZING_AND_METRICS.md",
+    "status": "added"
+  },
+  {
+    "file": "docs/v0.10/SURFACE_MESHING.md",
+    "status": "added"
+  },
+  {
+    "file": "docs/v0.10/TET10_REPORT.md",
+    "status": "added"
+  },
+  {
+    "file": "docs/v0.10/TET_PIPELINE.md",
+    "status": "added"
+  },
+  {
+    "file": "docs/v0.10/V010_REPORT.md",
+    "status": "added"
+  },
+  {
+    "file": "evidence/README.md",
+    "status": "added"
+  },
+  {
+    "file": "evidence/archive-comparison.json",
+    "status": "added"
+  },
+  {
+    "file": "evidence/asan-ctest-no-lsan.log",
+    "status": "added"
+  },
+  {
+    "file": "evidence/asan-ctest.log",
+    "status": "added"
+  },
+  {
+    "file": "evidence/baseline-ctest.log",
+    "status": "added"
+  },
+  {
+    "file": "evidence/baseline-diagnostic-configure.log",
+    "status": "added"
+  },
+  {
+    "file": "evidence/baseline-work-counts.log",
+    "status": "added"
+  },
+  {
+    "file": "evidence/build-info-Release.txt",
+    "status": "added"
+  },
+  {
+    "file": "evidence/cli-workflows.log",
+    "status": "added"
+  },
+  {
+    "file": "evidence/compat-configure.log",
+    "status": "added"
+  },
+  {
+    "file": "evidence/compatibility-archive.log",
+    "status": "added"
+  },
+  {
+    "file": "evidence/compatibility-parallel.log",
+    "status": "added"
+  },
+  {
+    "file": "evidence/compile-command-excerpts.json",
+    "status": "added"
+  },
+  {
+    "file": "evidence/consumer-build.log",
+    "status": "added"
+  },
+  {
+    "file": "evidence/consumer-configure.log",
+    "status": "added"
+  },
+  {
+    "file": "evidence/consumer-test.log",
+    "status": "added"
+  },
+  {
+    "file": "evidence/ctest-detailed.log",
+    "status": "added"
+  },
+  {
+    "file": "evidence/delaunay-200000.log",
+    "status": "added"
+  },
+  {
+    "file": "evidence/delaunay-50000.log",
+    "status": "added"
+  },
+  {
+    "file": "evidence/environment.json",
+    "status": "added"
+  },
+  {
+    "file": "evidence/gcc16-completed-build.log",
+    "status": "added"
+  },
+  {
+    "file": "evidence/gcc16-ctest.log",
+    "status": "added"
+  },
+  {
+    "file": "evidence/gcc16-initial-unit-findings.log",
+    "status": "added"
+  },
+  {
+    "file": "evidence/ipo-configure.log",
+    "status": "added"
+  },
+  {
+    "file": "evidence/lattice-recheck.log",
+    "status": "added"
+  },
+  {
+    "file": "evidence/old-archive-roundtrip.log",
+    "status": "added"
+  },
+  {
+    "file": "evidence/reject-old-compiler.log",
+    "status": "added"
+  },
+  {
+    "file": "evidence/tsan-run.log",
+    "status": "added"
+  },
+  {
+    "file": "examples/consumer/CMakeLists.txt",
+    "status": "added"
+  },
+  {
+    "file": "examples/consumer/main.c",
+    "status": "added"
+  },
+  {
+    "file": "examples/consumer/main.cpp",
+    "status": "added"
+  },
+  {
+    "file": "include/paacs/core/SmallSort.hpp",
+    "status": "added"
+  },
+  {
+    "file": "regression_corpus/README.md",
+    "status": "added"
+  },
+  {
+    "file": "regression_corpus/expected_results.json",
+    "status": "added"
+  },
+  {
+    "file": "scripts/package_source.py",
+    "status": "added"
+  },
+  {
+    "file": "tests/CMakeLists.txt",
+    "status": "added"
+  },
+  {
+    "file": "tests/allocation_failure.cpp",
+    "status": "added"
+  },
+  {
+    "file": "tests/hardening.cpp",
+    "status": "added"
+  },
+  {
+    "file": "tests/parallel_stress.cpp",
+    "status": "added"
+  }
+]

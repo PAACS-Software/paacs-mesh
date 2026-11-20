@@ -1,0 +1,375 @@
+{
+  "schema": "paacs-step-plate-sizing-qualification-v1",
+  "step_sha256": "b861ea770079feb3cb80a26a7f4e0e8c883da2290357757981131445459793ef",
+  "mesher_sha256": "8c4b4afd2f9f51e4a8fa0d89c2cb67bfba4a16e87d4aa030e573ab1b3ce39e48",
+  "sizing": {
+    "global_mm": 3.5,
+    "minimum_mm": 0.55,
+    "growth_ratio": 1.25,
+    "layers": 5,
+    "bore": {
+      "face_tag": 7,
+      "target_mm": 0.86
+    },
+    "box": {
+      "lower_mm": [
+        4,
+        -3,
+        -1
+      ],
+      "upper_mm": [
+        16,
+        3,
+        1
+      ],
+      "target_mm": 0.4
+    }
+  },
+  "meshes": [
+    {
+      "variant": "global",
+      "archive_sha256": "66d68df8d507a91cbefb707c1aaa0c0091661e5fefb04d08f050f1796a21b421",
+      "solver_input_sha256": "e5be4402216a66129f586c9f75c1f2c4a0a5c3a66a73e3c4825858cff7806c4f",
+      "cad_groups": {
+        "2:1": 160,
+        "2:2": 320,
+        "2:3": 1120,
+        "2:4": 320,
+        "2:5": 1120,
+        "2:6": 160,
+        "2:7": 240,
+        "3:1": 16800
+      },
+      "solver_groups": {
+        "2:1": 160,
+        "2:2": 320,
+        "2:3": 1120,
+        "2:4": 320,
+        "2:5": 1120,
+        "2:6": 160,
+        "2:7": 240,
+        "3:1": 16800
+      },
+      "route": "paacs_constrained_cap_sweep",
+      "nodes": 3720,
+      "tet4": 16800,
+      "layers": 5,
+      "bore_tag": 7,
+      "body_tag": 1,
+      "plate_radius_mm": 5,
+      "radius_nodes_per_rim": 24,
+      "maximum_bore_chord_error_mm": 0.04277569313094798,
+      "outside_centroids": 0,
+      "original_cad_volume_mm3": 9842.920367320505,
+      "tet_mesh_volume_mm3": 9844.708572938047,
+      "generation_seconds": 0.1014346,
+      "original_face_tags": [
+        5,
+        3,
+        1,
+        6,
+        2,
+        4,
+        7
+      ],
+      "rim_overlapping_box_mm": {
+        "count": 24,
+        "median": 1.3052619222005157,
+        "p95": 1.3052619222005188,
+        "maximum": 1.3052619222005188
+      },
+      "rim_other_mm": {
+        "count": 120,
+        "median": 1.3052619222005153,
+        "p95": 1.3052619222005188,
+        "maximum": 1.305261922200519
+      },
+      "left_bore_band_in_plane_mm": {
+        "count": 108,
+        "median": 2.9949223264451543,
+        "p95": 3.6063593594289434,
+        "maximum": 3.6063593594289434
+      },
+      "box_interior_in_plane_mm": {
+        "count": 66,
+        "median": 3.125,
+        "p95": 4.419417382415922,
+        "maximum": 4.419417382415922
+      },
+      "far_in_plane_mm": {
+        "count": 4320,
+        "median": 3.125,
+        "p95": 4.419417382415922,
+        "maximum": 4.419417382415922
+      },
+      "adjacent_equivalent_size_ratio": {
+        "count": 31880,
+        "median": 1.0,
+        "p95": 1.0000000000000002,
+        "maximum": 1.4801045192238473
+      }
+    },
+    {
+      "variant": "bore",
+      "archive_sha256": "8e50793220ac4d5dba57f32724dbb7eb4df5fec19d0b06d07ba3e9dfb06bd45f",
+      "solver_input_sha256": "baaab3420e8e213702245e8999576807e55bfb470b4c61fe4b692a5af6270a03",
+      "cad_groups": {
+        "2:1": 160,
+        "2:2": 320,
+        "2:3": 2032,
+        "2:4": 320,
+        "2:5": 2032,
+        "2:6": 160,
+        "2:7": 480,
+        "3:1": 30480
+      },
+      "solver_groups": {
+        "2:1": 160,
+        "2:2": 320,
+        "2:3": 2032,
+        "2:4": 320,
+        "2:5": 2032,
+        "2:6": 160,
+        "2:7": 480,
+        "3:1": 30480
+      },
+      "route": "paacs_constrained_cap_sweep",
+      "nodes": 6528,
+      "tet4": 30480,
+      "layers": 5,
+      "bore_tag": 7,
+      "body_tag": 1,
+      "plate_radius_mm": 5,
+      "radius_nodes_per_rim": 48,
+      "maximum_bore_chord_error_mm": 0.01070538380698327,
+      "outside_centroids": 0,
+      "original_cad_volume_mm3": 9842.920367320505,
+      "tet_mesh_volume_mm3": 9843.368569335405,
+      "generation_seconds": 0.1502373,
+      "original_face_tags": [
+        5,
+        3,
+        1,
+        6,
+        2,
+        4,
+        7
+      ],
+      "rim_overlapping_box_mm": {
+        "count": 60,
+        "median": 0.6540312923014304,
+        "p95": 0.6540312923014345,
+        "maximum": 0.6540312923014345
+      },
+      "rim_other_mm": {
+        "count": 228,
+        "median": 0.65403129230143,
+        "p95": 0.6540312923014338,
+        "maximum": 0.6540312923014345
+      },
+      "left_bore_band_in_plane_mm": {
+        "count": 1050,
+        "median": 0.78125,
+        "p95": 1.1048543456039805,
+        "maximum": 1.1048543456039805
+      },
+      "box_interior_in_plane_mm": {
+        "count": 402,
+        "median": 1.5625,
+        "p95": 2.209708691207961,
+        "maximum": 2.209708691207961
+      },
+      "far_in_plane_mm": {
+        "count": 4320,
+        "median": 3.125,
+        "p95": 4.419417382415922,
+        "maximum": 4.419417382415922
+      },
+      "adjacent_equivalent_size_ratio": {
+        "count": 58208,
+        "median": 1.0,
+        "p95": 1.144714242553332,
+        "maximum": 1.3433841564690376
+      }
+    },
+    {
+      "variant": "box",
+      "archive_sha256": "6926c513133d3ea763fe61393f525db7cc339544e2349df6b8451b19188c1229",
+      "solver_input_sha256": "72acf87f3485bd3222ded8e9e5024b6f13c55dbfba486fdd6f76f51ffec9fdf1",
+      "cad_groups": {
+        "2:1": 160,
+        "2:2": 320,
+        "2:3": 3628,
+        "2:4": 320,
+        "2:5": 3628,
+        "2:6": 160,
+        "2:7": 480,
+        "3:1": 54420
+      },
+      "solver_groups": {
+        "2:1": 160,
+        "2:2": 320,
+        "2:3": 3628,
+        "2:4": 320,
+        "2:5": 3628,
+        "2:6": 160,
+        "2:7": 480,
+        "3:1": 54420
+      },
+      "route": "paacs_constrained_cap_sweep",
+      "nodes": 11316,
+      "tet4": 54420,
+      "layers": 5,
+      "bore_tag": 7,
+      "body_tag": 1,
+      "plate_radius_mm": 5,
+      "radius_nodes_per_rim": 48,
+      "maximum_bore_chord_error_mm": 0.04277569313094798,
+      "outside_centroids": 0,
+      "original_cad_volume_mm3": 9842.920367320505,
+      "tet_mesh_volume_mm3": 9843.954551264293,
+      "generation_seconds": 0.2389728,
+      "original_face_tags": [
+        5,
+        3,
+        1,
+        6,
+        2,
+        4,
+        7
+      ],
+      "rim_overlapping_box_mm": {
+        "count": 120,
+        "median": 0.32719082821776135,
+        "p95": 0.3271908282177639,
+        "maximum": 0.32719082821776785
+      },
+      "rim_other_mm": {
+        "count": 168,
+        "median": 0.6540312923014311,
+        "p95": 1.3052619222005186,
+        "maximum": 1.3052619222005188
+      },
+      "left_bore_band_in_plane_mm": {
+        "count": 384,
+        "median": 1.5625,
+        "p95": 2.209708691207961,
+        "maximum": 2.209708691207961
+      },
+      "box_interior_in_plane_mm": {
+        "count": 5706,
+        "median": 0.390625,
+        "p95": 0.5524271728019903,
+        "maximum": 0.5524271728019903
+      },
+      "far_in_plane_mm": {
+        "count": 4320,
+        "median": 3.125,
+        "p95": 4.419417382415922,
+        "maximum": 4.419417382415922
+      },
+      "adjacent_equivalent_size_ratio": {
+        "count": 104492,
+        "median": 1.0,
+        "p95": 1.1447142425533319,
+        "maximum": 1.5291463756011772
+      }
+    },
+    {
+      "variant": "combined",
+      "archive_sha256": "39fc92c7ba06f8bb9d71b8d485ac87dd206160461904599f7c5db3c8ef317f34",
+      "solver_input_sha256": "54d00c85e7cad798bb82e1707516b4b27bfbe1b8441898b2d6385338537b229d",
+      "cad_groups": {
+        "2:1": 160,
+        "2:2": 320,
+        "2:3": 3996,
+        "2:4": 320,
+        "2:5": 3996,
+        "2:6": 160,
+        "2:7": 600,
+        "3:1": 59940
+      },
+      "solver_groups": {
+        "2:1": 160,
+        "2:2": 320,
+        "2:3": 3996,
+        "2:4": 320,
+        "2:5": 3996,
+        "2:6": 160,
+        "2:7": 600,
+        "3:1": 59940
+      },
+      "route": "paacs_constrained_cap_sweep",
+      "nodes": 12456,
+      "tet4": 59940,
+      "layers": 5,
+      "bore_tag": 7,
+      "body_tag": 1,
+      "plate_radius_mm": 5,
+      "radius_nodes_per_rim": 60,
+      "maximum_bore_chord_error_mm": 0.01070538380698327,
+      "outside_centroids": 0,
+      "original_cad_volume_mm3": 9842.920367320505,
+      "tet_mesh_volume_mm3": 9843.284549462905,
+      "generation_seconds": 0.2715199,
+      "original_face_tags": [
+        5,
+        3,
+        1,
+        6,
+        2,
+        4,
+        7
+      ],
+      "rim_overlapping_box_mm": {
+        "count": 120,
+        "median": 0.32719082821776135,
+        "p95": 0.3271908282177639,
+        "maximum": 0.32719082821776785
+      },
+      "rim_other_mm": {
+        "count": 240,
+        "median": 0.65403129230143,
+        "p95": 0.6540312923014325,
+        "maximum": 0.6540312923014345
+      },
+      "left_bore_band_in_plane_mm": {
+        "count": 1050,
+        "median": 0.78125,
+        "p95": 1.1048543456039805,
+        "maximum": 1.1048543456039805
+      },
+      "box_interior_in_plane_mm": {
+        "count": 5706,
+        "median": 0.390625,
+        "p95": 0.5524271728019903,
+        "maximum": 0.5524271728019903
+      },
+      "far_in_plane_mm": {
+        "count": 4320,
+        "median": 3.125,
+        "p95": 4.419417382415922,
+        "maximum": 4.419417382415922
+      },
+      "adjacent_equivalent_size_ratio": {
+        "count": 115104,
+        "median": 1.0,
+        "p95": 1.144714242553332,
+        "maximum": 1.5291463756011772
+      }
+    }
+  ],
+  "round_trip": {
+    "project_bytes_match": true,
+    "native_mesh_bytes_match": true,
+    "solver_export_bytes_match": true,
+    "tags_and_connectivity_match": true,
+    "legacy_archive_bytes_match": true,
+    "stale_step_refused": true,
+    "wrong_face_refused": true,
+    "maximum_displacement_difference_mm": 1.6829108094064404e-14,
+    "maximum_stress_difference_mpa": 4.864020297645766e-11,
+    "native_free_residual_relative": 1.9675670771807722e-12,
+    "solver_export_free_residual_relative": 1.971839180781092e-12
+  }
+}

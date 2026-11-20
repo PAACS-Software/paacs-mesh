@@ -1,0 +1,123 @@
+{
+  "version": 9,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 30,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "PAACS_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "gcc16-release",
+      "inherits": "base",
+      "displayName": "GCC 16 / C++26 release",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "gcc-16",
+        "CMAKE_CXX_COMPILER": "g++-16",
+        "PAACS_REQUIRE_GCC16": "ON",
+        "PAACS_BUILD_BENCHMARKS": "ON",
+        "PAACS_CXX_STANDARD": "26"
+      }
+    },
+    {
+      "name": "gcc16-ipo",
+      "inherits": "gcc16-release",
+      "cacheVariables": {
+        "PAACS_ENABLE_IPO": "ON"
+      }
+    },
+    {
+      "name": "compatibility",
+      "inherits": "base",
+      "cacheVariables": {
+        "PAACS_CXX_STANDARD": "23"
+      }
+    },
+    {
+      "name": "asan",
+      "inherits": "gcc16-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "PAACS_SANITIZER": "address-undefined",
+        "PAACS_BUILD_BENCHMARKS": "OFF"
+      }
+    },
+    {
+      "name": "tsan",
+      "inherits": "gcc16-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "PAACS_SANITIZER": "thread",
+        "PAACS_BUILD_BENCHMARKS": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "gcc16-release",
+      "configurePreset": "gcc16-release"
+    },
+    {
+      "name": "gcc16-ipo",
+      "configurePreset": "gcc16-ipo"
+    },
+    {
+      "name": "compatibility",
+      "configurePreset": "compatibility"
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan"
+    },
+    {
+      "name": "tsan",
+      "configurePreset": "tsan"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "gcc16-release",
+      "configurePreset": "gcc16-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "gcc16-ipo",
+      "configurePreset": "gcc16-ipo",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "compatibility",
+      "configurePreset": "compatibility",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "tsan",
+      "configurePreset": "tsan",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

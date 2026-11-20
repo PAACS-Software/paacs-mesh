@@ -1,0 +1,639 @@
+[
+  {
+    "title": "Cylinder \u00b7 Hex8",
+    "size": ".3",
+    "options": [],
+    "result": {
+      "shape": "cylinder",
+      "nodes": 2120,
+      "hexes": 1680,
+      "element_family": "hex-dominant",
+      "tet4s": 0,
+      "tet10s": 0,
+      "certified_tet10s": 0,
+      "quadratic_connectivity_verified": false,
+      "graded_cone": false,
+      "cone_refinement_levels": 0,
+      "quality_warning": false,
+      "low_quality_cells": 0,
+      "sharp_feature_low_quality_cells": 0,
+      "worst_cell": 1174,
+      "pyramids": 0,
+      "boundary_quads": 816,
+      "boundary_triangles": 0,
+      "output_bytes": 261376,
+      "planned_working_bytes": 206233,
+      "mesh_volume": 6.265257226562476,
+      "analytic_volume": 6.283185307179586,
+      "relative_volume_error": 0.0028533426503630256,
+      "chord_error_bound": 0.002141076761453336,
+      "minimum_quality": 0.32162645861673494,
+      "generation_seconds": 0.000114188,
+      "validation_seconds": 0.000832469,
+      "audit_seconds": 0.000278752,
+      "audit_passed": true,
+      "quality_examples": [],
+      "quality_histogram": [
+        0,
+        0,
+        0,
+        1064,
+        364,
+        252,
+        0,
+        0,
+        0,
+        0
+      ],
+      "quality_examples_truncated": false
+    }
+  },
+  {
+    "title": "Cylinder \u00b7 Tet4",
+    "size": ".3",
+    "options": [
+      "--elements",
+      "tet4"
+    ],
+    "result": {
+      "shape": "cylinder",
+      "nodes": 2120,
+      "hexes": 0,
+      "element_family": "tet4",
+      "tet4s": 10080,
+      "tet10s": 0,
+      "certified_tet10s": 0,
+      "quadratic_connectivity_verified": false,
+      "graded_cone": false,
+      "cone_refinement_levels": 0,
+      "quality_warning": false,
+      "low_quality_cells": 0,
+      "sharp_feature_low_quality_cells": 0,
+      "worst_cell": 6915,
+      "pyramids": 0,
+      "boundary_quads": 0,
+      "boundary_triangles": 1632,
+      "output_bytes": 710656,
+      "planned_working_bytes": 949568,
+      "mesh_volume": 6.265257226562476,
+      "analytic_volume": 6.283185307179586,
+      "relative_volume_error": 0.0028533426503630256,
+      "chord_error_bound": 0.002141076761453336,
+      "minimum_quality": 0.32162645861673506,
+      "generation_seconds": 0.004677786,
+      "validation_seconds": 0.000559296,
+      "audit_seconds": 0.004092502,
+      "audit_passed": true,
+      "quality_examples": [],
+      "quality_histogram": [
+        0,
+        0,
+        0,
+        2128,
+        4809,
+        2009,
+        1134,
+        0,
+        0,
+        0
+      ],
+      "quality_examples_truncated": false
+    }
+  },
+  {
+    "title": "Cylinder \u00b7 Tet10",
+    "size": ".3",
+    "options": [
+      "--elements",
+      "tet10"
+    ],
+    "result": {
+      "shape": "cylinder",
+      "nodes": 15135,
+      "hexes": 0,
+      "element_family": "tet10",
+      "tet4s": 0,
+      "tet10s": 10080,
+      "certified_tet10s": 10080,
+      "quadratic_connectivity_verified": true,
+      "graded_cone": false,
+      "cone_refinement_levels": 0,
+      "quality_warning": false,
+      "low_quality_cells": 0,
+      "sharp_feature_low_quality_cells": 0,
+      "worst_cell": 6915,
+      "pyramids": 0,
+      "boundary_quads": 0,
+      "boundary_triangles": 1632,
+      "output_bytes": 1650144,
+      "planned_working_bytes": 2280000,
+      "mesh_volume": 6.265257226562476,
+      "analytic_volume": 6.283185307179586,
+      "relative_volume_error": 0.0028533426503630256,
+      "chord_error_bound": 0.002141076761453336,
+      "minimum_quality": 0.32162645861673506,
+      "generation_seconds": 0.001759407,
+      "validation_seconds": 0.044700989999999996,
+      "audit_seconds": 0.001107595,
+      "audit_passed": true,
+      "quality_examples": [],
+      "quality_histogram": [
+        0,
+        0,
+        0,
+        2128,
+        4809,
+        2009,
+        1134,
+        0,
+        0,
+        0
+      ],
+      "quality_examples_truncated": false
+    }
+  },
+  {
+    "title": "Cone \u00b7 swept Tet4",
+    "size": ".15",
+    "options": [
+      "--elements",
+      "tet4",
+      "--cone-strategy",
+      "swept"
+    ],
+    "result": {
+      "shape": "cone",
+      "nodes": 5416,
+      "hexes": 0,
+      "element_family": "tet4",
+      "tet4s": 28896,
+      "tet10s": 0,
+      "certified_tet10s": 0,
+      "quadratic_connectivity_verified": false,
+      "graded_cone": false,
+      "cone_refinement_levels": 0,
+      "quality_warning": true,
+      "low_quality_cells": 3224,
+      "sharp_feature_low_quality_cells": 672,
+      "worst_cell": 28601,
+      "pyramids": 0,
+      "boundary_quads": 0,
+      "boundary_triangles": 2064,
+      "output_bytes": 1890560,
+      "planned_working_bytes": 2593216,
+      "mesh_volume": 2.0884190755208256,
+      "analytic_volume": 2.0943951023931953,
+      "relative_volume_error": 0.0028533426503628842,
+      "chord_error_bound": 0.002141076761453336,
+      "minimum_quality": 0.0234443891424878,
+      "generation_seconds": 0.004345786,
+      "validation_seconds": 0.00165287,
+      "audit_seconds": 0.002674599,
+      "audit_passed": true,
+      "quality_examples": [
+        {
+          "cell": 23308,
+          "quality": 0.09639409704205142,
+          "sharp_feature": false
+        },
+        {
+          "cell": 23596,
+          "quality": 0.09639409704205142,
+          "sharp_feature": false
+        },
+        {
+          "cell": 23619,
+          "quality": 0.09639409704205142,
+          "sharp_feature": false
+        },
+        {
+          "cell": 23907,
+          "quality": 0.09639409704205142,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24192,
+          "quality": 0.07754036592316148,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24193,
+          "quality": 0.07754036592316148,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24195,
+          "quality": 0.07706268576039584,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24196,
+          "quality": 0.07706268576039586,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24198,
+          "quality": 0.07912756262952679,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24199,
+          "quality": 0.0789698594653424,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24201,
+          "quality": 0.0784601201829493,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24202,
+          "quality": 0.07857886421652173,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24204,
+          "quality": 0.08053481094864948,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24205,
+          "quality": 0.08020875908246068,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24207,
+          "quality": 0.07966395785357384,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24208,
+          "quality": 0.07990917203704001,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24210,
+          "quality": 0.08173930270600416,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24211,
+          "quality": 0.0812365494346192,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24213,
+          "quality": 0.08065395655311329,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24214,
+          "quality": 0.08103157944762654,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24216,
+          "quality": 0.08272051562992808,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24217,
+          "quality": 0.08203545959986658,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24219,
+          "quality": 0.08141275504675302,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24220,
+          "quality": 0.08192660281036171,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24222,
+          "quality": 0.08346103630697323,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24223,
+          "quality": 0.08259119747104855,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24225,
+          "quality": 0.08192660281036164,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24226,
+          "quality": 0.08257810661004647,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24228,
+          "quality": 0.08394730293799904,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24229,
+          "quality": 0.0828935711019572,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24231,
+          "quality": 0.08218596680817841,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24232,
+          "quality": 0.0829740064419764,
+          "sharp_feature": false
+        }
+      ],
+      "quality_histogram": [
+        3224,
+        3016,
+        3166,
+        3092,
+        3618,
+        4314,
+        4425,
+        3207,
+        834,
+        0
+      ],
+      "quality_examples_truncated": true
+    }
+  },
+  {
+    "title": "Cone \u00b7 graded Tet4",
+    "size": ".15",
+    "options": [
+      "--elements",
+      "tet4"
+    ],
+    "result": {
+      "shape": "cone",
+      "nodes": 13073,
+      "hexes": 0,
+      "element_family": "tet4",
+      "tet4s": 65536,
+      "tet10s": 0,
+      "certified_tet10s": 0,
+      "quadratic_connectivity_verified": false,
+      "graded_cone": true,
+      "cone_refinement_levels": 4,
+      "quality_warning": false,
+      "low_quality_cells": 0,
+      "sharp_feature_low_quality_cells": 0,
+      "worst_cell": 6759,
+      "pyramids": 0,
+      "boundary_quads": 0,
+      "boundary_triangles": 8192,
+      "output_bytes": 4481568,
+      "planned_working_bytes": 4429960,
+      "mesh_volume": 2.093889438169658,
+      "analytic_volume": 2.0943951023931953,
+      "relative_volume_error": 0.0002414368821621467,
+      "chord_error_bound": 0.0024018399496530452,
+      "minimum_quality": 0.3276545501525666,
+      "generation_seconds": 0.011277378,
+      "validation_seconds": 0.003667945,
+      "audit_seconds": 0.007833134,
+      "audit_passed": true,
+      "quality_examples": [],
+      "quality_histogram": [
+        0,
+        0,
+        0,
+        43072,
+        22464,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "quality_examples_truncated": false
+    }
+  },
+  {
+    "title": "Sharp cone \u00b7 quality warnings",
+    "size": ".3",
+    "options": [
+      "--radius",
+      ".3",
+      "--height",
+      "3",
+      "--elements",
+      "tet4"
+    ],
+    "result": {
+      "shape": "cone",
+      "nodes": 13073,
+      "hexes": 0,
+      "element_family": "tet4",
+      "tet4s": 65536,
+      "tet10s": 0,
+      "certified_tet10s": 0,
+      "quadratic_connectivity_verified": false,
+      "graded_cone": true,
+      "cone_refinement_levels": 4,
+      "quality_warning": true,
+      "low_quality_cells": 65536,
+      "sharp_feature_low_quality_cells": 784,
+      "worst_cell": 56014,
+      "pyramids": 0,
+      "boundary_quads": 0,
+      "boundary_triangles": 8192,
+      "output_bytes": 4481568,
+      "planned_working_bytes": 4429960,
+      "mesh_volume": 0.28267507415290377,
+      "analytic_volume": 0.2827433388230814,
+      "relative_volume_error": 0.00024143688216235872,
+      "chord_error_bound": 0.0007205519849641256,
+      "minimum_quality": 0.04531364812200698,
+      "generation_seconds": 0.013284341,
+      "validation_seconds": 0.004072612,
+      "audit_seconds": 0.007929936,
+      "audit_passed": true,
+      "quality_examples": [
+        {
+          "cell": 0,
+          "quality": 0.060808366262396184,
+          "sharp_feature": false
+        },
+        {
+          "cell": 1,
+          "quality": 0.060808366262396184,
+          "sharp_feature": false
+        },
+        {
+          "cell": 2,
+          "quality": 0.060808366262396184,
+          "sharp_feature": false
+        },
+        {
+          "cell": 3,
+          "quality": 0.060808366262396184,
+          "sharp_feature": false
+        },
+        {
+          "cell": 4,
+          "quality": 0.06097833026494021,
+          "sharp_feature": false
+        },
+        {
+          "cell": 5,
+          "quality": 0.04585865443535133,
+          "sharp_feature": false
+        },
+        {
+          "cell": 6,
+          "quality": 0.06097833026494021,
+          "sharp_feature": false
+        },
+        {
+          "cell": 7,
+          "quality": 0.04585865443535134,
+          "sharp_feature": false
+        },
+        {
+          "cell": 8,
+          "quality": 0.06080836626239617,
+          "sharp_feature": false
+        },
+        {
+          "cell": 9,
+          "quality": 0.0608083662623962,
+          "sharp_feature": false
+        },
+        {
+          "cell": 10,
+          "quality": 0.0608083662623962,
+          "sharp_feature": false
+        },
+        {
+          "cell": 11,
+          "quality": 0.06080836626239617,
+          "sharp_feature": false
+        },
+        {
+          "cell": 12,
+          "quality": 0.06097833026494023,
+          "sharp_feature": false
+        },
+        {
+          "cell": 13,
+          "quality": 0.045858654435351344,
+          "sharp_feature": false
+        },
+        {
+          "cell": 14,
+          "quality": 0.06097833026494019,
+          "sharp_feature": false
+        },
+        {
+          "cell": 15,
+          "quality": 0.04585865443535133,
+          "sharp_feature": false
+        },
+        {
+          "cell": 16,
+          "quality": 0.06080836626239616,
+          "sharp_feature": false
+        },
+        {
+          "cell": 17,
+          "quality": 0.060808366262396184,
+          "sharp_feature": false
+        },
+        {
+          "cell": 18,
+          "quality": 0.0608083662623962,
+          "sharp_feature": false
+        },
+        {
+          "cell": 19,
+          "quality": 0.06080836626239616,
+          "sharp_feature": false
+        },
+        {
+          "cell": 20,
+          "quality": 0.06097833026494021,
+          "sharp_feature": false
+        },
+        {
+          "cell": 21,
+          "quality": 0.045858654435351344,
+          "sharp_feature": false
+        },
+        {
+          "cell": 22,
+          "quality": 0.06097833026494019,
+          "sharp_feature": false
+        },
+        {
+          "cell": 23,
+          "quality": 0.04585865443535133,
+          "sharp_feature": false
+        },
+        {
+          "cell": 24,
+          "quality": 0.060808366262396184,
+          "sharp_feature": false
+        },
+        {
+          "cell": 25,
+          "quality": 0.060808366262396184,
+          "sharp_feature": false
+        },
+        {
+          "cell": 26,
+          "quality": 0.060808366262396184,
+          "sharp_feature": false
+        },
+        {
+          "cell": 27,
+          "quality": 0.060808366262396184,
+          "sharp_feature": false
+        },
+        {
+          "cell": 28,
+          "quality": 0.06097833026494021,
+          "sharp_feature": false
+        },
+        {
+          "cell": 29,
+          "quality": 0.04585865443535133,
+          "sharp_feature": false
+        },
+        {
+          "cell": 30,
+          "quality": 0.06097833026494021,
+          "sharp_feature": false
+        },
+        {
+          "cell": 31,
+          "quality": 0.04585865443535134,
+          "sharp_feature": false
+        }
+      ],
+      "quality_histogram": [
+        65536,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "quality_examples_truncated": true
+    }
+  }
+]

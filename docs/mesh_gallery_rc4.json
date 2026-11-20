@@ -1,0 +1,155 @@
+[
+  {
+    "case": "torus",
+    "cutaway": false,
+    "options": [],
+    "result": {
+      "shape": "torus",
+      "nodes": 45453,
+      "hexes": 41856,
+      "pyramids": 0,
+      "boundary_quads": 6976,
+      "boundary_triangles": 0,
+      "output_bytes": 5528480,
+      "planned_working_bytes": 4516873,
+      "mesh_volume": 39.39320623671375,
+      "analytic_volume": 39.47841760435743,
+      "relative_volume_error": 0.0021584291573600173,
+      "chord_error_bound": 0.002450514823330967,
+      "minimum_quality": 0.2902409392055448,
+      "generation_seconds": 0.00241204,
+      "validation_seconds": 0.019036526,
+      "audit_seconds": 0.006444122,
+      "audit_passed": true
+    }
+  },
+  {
+    "case": "cone",
+    "cutaway": true,
+    "options": [],
+    "result": {
+      "shape": "cone",
+      "nodes": 2121,
+      "hexes": 1680,
+      "pyramids": 240,
+      "boundary_quads": 576,
+      "boundary_triangles": 48,
+      "output_bytes": 265632,
+      "planned_working_bytes": 220577,
+      "mesh_volume": 2.0884190755208256,
+      "analytic_volume": 2.0943951023931953,
+      "relative_volume_error": 0.0028533426503628842,
+      "chord_error_bound": 0.002141076761453336,
+      "minimum_quality": 0.031654651968300695,
+      "generation_seconds": 0.000202679,
+      "validation_seconds": 0.00110434,
+      "audit_seconds": 0.000558274,
+      "audit_passed": true
+    }
+  },
+  {
+    "case": "cylinder",
+    "cutaway": true,
+    "options": [],
+    "result": {
+      "shape": "cylinder",
+      "nodes": 2120,
+      "hexes": 1680,
+      "pyramids": 0,
+      "boundary_quads": 816,
+      "boundary_triangles": 0,
+      "output_bytes": 261376,
+      "planned_working_bytes": 204441,
+      "mesh_volume": 6.265257226562476,
+      "analytic_volume": 6.283185307179586,
+      "relative_volume_error": 0.0028533426503630256,
+      "chord_error_bound": 0.002141076761453336,
+      "minimum_quality": 0.32162645861673494,
+      "generation_seconds": 0.000122972,
+      "validation_seconds": 0.000709797,
+      "audit_seconds": 0.000366041,
+      "audit_passed": true
+    }
+  },
+  {
+    "case": "tube",
+    "cutaway": false,
+    "options": [
+      "--inner-radius",
+      ".78"
+    ],
+    "result": {
+      "shape": "tube",
+      "nodes": 768,
+      "hexes": 336,
+      "pyramids": 0,
+      "boundary_quads": 768,
+      "boundary_triangles": 0,
+      "output_bytes": 97152,
+      "planned_working_bytes": 55552,
+      "mesh_volume": 2.4534747299218655,
+      "analytic_volume": 2.4604953662915254,
+      "relative_volume_error": 0.0028533426503628946,
+      "chord_error_bound": 0.002141076761453336,
+      "minimum_quality": 0.5150676256538216,
+      "generation_seconds": 5.3479e-05,
+      "validation_seconds": 0.000144603,
+      "audit_seconds": 0.000104535,
+      "audit_passed": true
+    }
+  },
+  {
+    "case": "frustum",
+    "cutaway": false,
+    "options": [
+      "--end-radius",
+      ".35"
+    ],
+    "result": {
+      "shape": "frustum",
+      "nodes": 2385,
+      "hexes": 1920,
+      "pyramids": 0,
+      "boundary_quads": 864,
+      "boundary_triangles": 0,
+      "output_bytes": 293664,
+      "planned_working_bytes": 230385,
+      "mesh_volume": 3.0751970887044155,
+      "analytic_volume": 3.0839967882739803,
+      "relative_volume_error": 0.002853342650363021,
+      "chord_error_bound": 0.002141076761453336,
+      "minimum_quality": 0.11166622785327492,
+      "generation_seconds": 0.000123552,
+      "validation_seconds": 0.000841682,
+      "audit_seconds": 0.00031802,
+      "audit_passed": true
+    }
+  },
+  {
+    "case": "elbow",
+    "cutaway": false,
+    "options": [
+      "--inner-radius",
+      ".78"
+    ],
+    "result": {
+      "shape": "elbow",
+      "nodes": 3712,
+      "hexes": 1792,
+      "pyramids": 0,
+      "boundary_quads": 3712,
+      "boundary_triangles": 0,
+      "output_bytes": 484352,
+      "planned_working_bytes": 267920,
+      "mesh_volume": 3.85670780177721,
+      "analytic_volume": 3.8649370834665917,
+      "relative_volume_error": 0.002129214916482035,
+      "chord_error_bound": 0.002384664645725794,
+      "minimum_quality": 0.32265161919037455,
+      "generation_seconds": 0.000228507,
+      "validation_seconds": 0.000777007,
+      "audit_seconds": 0.000468141,
+      "audit_passed": true
+    }
+  }
+]

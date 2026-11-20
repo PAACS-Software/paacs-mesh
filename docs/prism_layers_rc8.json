@@ -1,0 +1,26 @@
+[
+  {
+    "case": "structured",
+    "wedges": 4896,
+    "hexes": 0,
+    "nodes": 3042,
+    "archive_sha256": "0b37bd28a7bb80f1209ad2db49e1d0afe5a1f38f8ef1fee27baa5f10dd92c731",
+    "section_polygons": 204
+  },
+  {
+    "case": "unstructured",
+    "wedges": 4896,
+    "hexes": 0,
+    "nodes": 3042,
+    "archive_sha256": "5bea410e723e0f00398859589898cc31624a5c7deb5dc70cbcf330fac3672688",
+    "section_polygons": 408
+  },
+  {
+    "case": "mixed",
+    "wedges": 2448,
+    "hexes": 1224,
+    "nodes": 3042,
+    "archive_sha256": "43a12002d5dbdc66747267e6bb28d2744238c07c1b85af64773742c3d9fc1fb6",
+    "section_polygons": 204
+  }
+]

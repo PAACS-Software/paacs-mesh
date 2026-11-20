@@ -1,0 +1,218 @@
+[
+  {
+    "case": "point",
+    "nodes": 1310,
+    "tetrahedra": 5704,
+    "archive_sha256": "e41efab7ca0c1045d4b5ebb6f19b805028a7857ab1c3c32ad2eb15c5c19e629b",
+    "archive_fnv1a": "1399858673838591313",
+    "field_csv_sha256": "1198c3d1a8627609e8778a7bb3ac9a95c997e43415e08a61d01413ffe3ce4245",
+    "section_polygons": 197,
+    "independent_metrics": {
+      "volume_cv": 1.340726225063865,
+      "volume_max_min": 64.00000000000004,
+      "size_cv": 0.5001895238912424,
+      "quality_min": 0.5602591948123061,
+      "quality_p10": 0.7326466393699389,
+      "quality_median": 0.8000000000000005,
+      "edge_length_cell_weighted_quantiles": [
+        0.04419417382415922,
+        0.08838834764831845,
+        0.21650635094610965
+      ],
+      "volume_quantiles": [
+        1.0172526041666671e-05,
+        8.138020833333341e-05,
+        0.0006510416666666668
+      ]
+    }
+  },
+  {
+    "case": "segment",
+    "nodes": 3785,
+    "tetrahedra": 17176,
+    "archive_sha256": "79d2b63b51f30b6a53baf4bfeea7bb079f71b78f642118b7f67a2a4eaacca52c",
+    "archive_fnv1a": "2848047692453235401",
+    "field_csv_sha256": "d0f8e79c10bb9b3b8eeaf12b377fb191481b8e5a93b5aedcffcd8f119c07700e",
+    "section_polygons": 570,
+    "independent_metrics": {
+      "volume_cv": 2.092524028818869,
+      "volume_max_min": 64.00000000000004,
+      "size_cv": 0.48572074734973275,
+      "quality_min": 0.5602591948123061,
+      "quality_p10": 0.7326466393699389,
+      "quality_median": 0.8000000000000005,
+      "edge_length_cell_weighted_quantiles": [
+        0.04419417382415922,
+        0.05412658773652741,
+        0.125
+      ],
+      "volume_quantiles": [
+        1.0172526041666671e-05,
+        1.0172526041666671e-05,
+        8.138020833333341e-05
+      ]
+    }
+  },
+  {
+    "case": "triangle",
+    "nodes": 4925,
+    "tetrahedra": 22484,
+    "archive_sha256": "27cb3949fcb6e9522b0e3fa5782aeba767da2394bed89a4ede7cf99111d7053c",
+    "archive_fnv1a": "10008625597596659803",
+    "field_csv_sha256": "e639e7c32e2456b7fe78508402100998530570f5d4571dc812ef72c15bb2b34d",
+    "section_polygons": 744,
+    "independent_metrics": {
+      "volume_cv": 2.3178154166983327,
+      "volume_max_min": 64.00000000000004,
+      "size_cv": 0.4626495095521093,
+      "quality_min": 0.5602591948123061,
+      "quality_p10": 0.7326466393699389,
+      "quality_median": 0.8000000000000005,
+      "edge_length_cell_weighted_quantiles": [
+        0.03125,
+        0.05412658773652741,
+        0.10825317547305482
+      ],
+      "volume_quantiles": [
+        1.0172526041666671e-05,
+        1.0172526041666671e-05,
+        8.138020833333341e-05
+      ]
+    }
+  },
+  {
+    "case": "box",
+    "nodes": 5509,
+    "tetrahedra": 24672,
+    "archive_sha256": "601ed6f9d5e82ff8822219b9f600dabd20acbb3b0c86866b5b2d60d6952bb8e9",
+    "archive_fnv1a": "16438174229083770064",
+    "field_csv_sha256": "e8321423f0b46216951c738fe65e99ba0cd05ef02a6cb334e73376169e140fc5",
+    "section_polygons": 464,
+    "independent_metrics": {
+      "volume_cv": 0.8378155014399803,
+      "volume_max_min": 8.000000000000004,
+      "size_cv": 0.32942523964019127,
+      "quality_min": 0.5602591948123061,
+      "quality_p10": 0.7559526299369244,
+      "quality_median": 0.8000000000000005,
+      "edge_length_cell_weighted_quantiles": [
+        0.04419417382415922,
+        0.0625,
+        0.10825317547305482
+      ],
+      "volume_quantiles": [
+        1.0172526041666671e-05,
+        2.0345052083333346e-05,
+        8.138020833333341e-05
+      ]
+    }
+  },
+  {
+    "case": "ball",
+    "nodes": 4949,
+    "tetrahedra": 22320,
+    "archive_sha256": "3f418f7047df8fa4e9fc10ee49623b09a575fb9c8111da6683de20bf0ec6542a",
+    "archive_fnv1a": "6089037636951107188",
+    "field_csv_sha256": "93ce3d8d7ac2965ee3593550206bc9461e0f68296dba40d681521b2017c69f6f",
+    "section_polygons": 464,
+    "independent_metrics": {
+      "volume_cv": 1.116097725694655,
+      "volume_max_min": 64.00000000000004,
+      "size_cv": 0.34922875072928866,
+      "quality_min": 0.5602591948123061,
+      "quality_p10": 0.7559526299369244,
+      "quality_median": 0.8000000000000005,
+      "edge_length_cell_weighted_quantiles": [
+        0.04419417382415922,
+        0.0625,
+        0.10825317547305482
+      ],
+      "volume_quantiles": [
+        1.0172526041666671e-05,
+        2.0345052083333346e-05,
+        8.138020833333341e-05
+      ]
+    }
+  },
+  {
+    "case": "minimum",
+    "nodes": 5317,
+    "tetrahedra": 24112,
+    "archive_sha256": "8cf0847ca21f69b87c950a0ab2ea3a7e840a7a52f889d75b9048901dada335b0",
+    "archive_fnv1a": "15413274906024423189",
+    "field_csv_sha256": "809ab6d1e544b79060498d41067486672d1b3a82e49038a7b5aab6776a3797dc",
+    "section_polygons": 548,
+    "independent_metrics": {
+      "volume_cv": 1.2713455251993633,
+      "volume_max_min": 64.00000000000004,
+      "size_cv": 0.35378348468040693,
+      "quality_min": 0.5602591948123061,
+      "quality_p10": 0.7559526299369244,
+      "quality_median": 0.8000000000000005,
+      "edge_length_cell_weighted_quantiles": [
+        0.04419417382415922,
+        0.0625,
+        0.10825317547305482
+      ],
+      "volume_quantiles": [
+        1.0172526041666671e-05,
+        1.0172526041666671e-05,
+        8.138020833333341e-05
+      ]
+    }
+  },
+  {
+    "case": "maximum",
+    "nodes": 993,
+    "tetrahedra": 4352,
+    "archive_sha256": "2a6776857250b5094f65e8dcbc50c2bd92fe27c3a13e8e1523a18c844e8795f8",
+    "archive_fnv1a": "9503133598788002704",
+    "field_csv_sha256": "63c442a5f02388405638af285e4ceaf02369ae7ee355a1bab22a1c2c9a053c99",
+    "section_polygons": 152,
+    "independent_metrics": {
+      "volume_cv": 1.1188465003383814,
+      "volume_max_min": 64.00000000000004,
+      "size_cv": 0.4640347456972918,
+      "quality_min": 0.5602591948123061,
+      "quality_p10": 0.7326466393699389,
+      "quality_median": 0.8000000000000005,
+      "edge_length_cell_weighted_quantiles": [
+        0.04419417382415922,
+        0.10825317547305482,
+        0.21650635094610965
+      ],
+      "volume_quantiles": [
+        1.0172526041666671e-05,
+        8.138020833333341e-05,
+        0.0006510416666666674
+      ]
+    }
+  },
+  {
+    "case": "smooth",
+    "nodes": 10863,
+    "tetrahedra": 50736,
+    "archive_sha256": "a97fe24bb4ffc1649f186f227eea03c56de0ca0dc89d84d371d936505d09a638",
+    "archive_fnv1a": "12086590649398331173",
+    "field_csv_sha256": "548ffd582ae5a5d7fd00ce6106fbe205e4995fb99cbfa19cd84df7fc0c04394f",
+    "section_polygons": 872,
+    "independent_metrics": {
+      "volume_cv": 1.5746366263330804,
+      "volume_max_min": 64.00000000000004,
+      "size_cv": 0.6260324325985474,
+      "quality_min": 0.5602591948123061,
+      "quality_p10": 0.7559526299369244,
+      "quality_median": 0.8000000000000005,
+      "edge_length_cell_weighted_quantiles": [
+        0.02209708691207961,
+        0.03125,
+        0.10825317547305482
+      ],
+      "volume_quantiles": [
+        1.2715657552083337e-06,
+        1.2715657552083337e-06,
+        8.138020833333341e-05
+      ]
+    }
+  }
+]

@@ -1,0 +1,17 @@
+{
+  "schema": "paacs-plate-sizing-v1",
+  "geometry": {
+    "step": "plate-hole.step",
+    "sha256": "b861ea770079feb3cb80a26a7f4e0e8c883da2290357757981131445459793ef",
+    "unit": "mm",
+    "body_tag": 1
+  },
+  "sizing": {
+    "global_mm": 3.5,
+    "minimum_mm": 0.55,
+    "growth_ratio": 1.25,
+    "layers": 5,
+    "bore": {"face_tag": 7, "target_mm": 0.86},
+    "box": {"lower_mm": [4, -3, -1], "upper_mm": [16, 3, 1], "target_mm": 0.4}
+  }
+}

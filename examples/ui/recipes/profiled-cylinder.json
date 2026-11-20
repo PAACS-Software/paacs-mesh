@@ -1,0 +1,20 @@
+{
+  "route": "primitive",
+  "options": {
+    "kind": "cylinder",
+    "elements": "tet4",
+    "height": 1,
+    "target_size": 0.4,
+    "maximum_chord_error": 0.04,
+    "profile_global_size": 0.4,
+    "profile_length": 1
+  },
+  "profile_controls": [
+    {
+      "begin": 0,
+      "end": 0,
+      "size": 0.2,
+      "growth": 1.3
+    }
+  ]
+}

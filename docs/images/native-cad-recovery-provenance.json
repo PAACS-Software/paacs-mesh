@@ -1,0 +1,14 @@
+{
+  "scope": "Exact local source and solver candidate tetrahedra; no full ABC5454 mesh published",
+  "numpy": "2.5.3",
+  "matplotlib": "3.10.8",
+  "source_sha256": {
+    "abc5454-before.jsonl": "dc8bc85dd63e05fe7b1052c175105f5923d8a45eb71bdd25cdbc2b17a5c1b242",
+    "strip-candidate.json": "7606dd783f37ec8bea9dea985d6107d08e61d1762cc565595c757a6b8c2e54e6",
+    "abc5454-late-neighborhood.json": "c40bad8a0747b31cc703d0085c67b9b6553e2f0f2766239992ce35a2cb949c3f",
+    "render-cavities.py": "5d9a0a508b73d4380ee7eced92bfd1e3c84bbfff3e4217fad24236ba7602d90e"
+  },
+  "image_sha256": "df5ddf85051a029098b730f90948d02a5d89faa1bc75c7654900979f22fda95c",
+  "candidate_work": 1011,
+  "candidate_states": 194
+}

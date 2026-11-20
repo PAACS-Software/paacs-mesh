@@ -1,0 +1,152 @@
+[
+  {
+    "case": "cube",
+    "growth": 1.3,
+    "volume_cells": 52176,
+    "nodes": 11195,
+    "archive_sha256": "03db3f62bf3c99ae1bdca0dd38d222275d6bd0117c784a011cfc8708d647bc6e",
+    "metrics": {
+      "volume_cv": 1.13164338917077,
+      "volume_max_min": 8.000000000000004,
+      "size_cv": 0.2751608559996913,
+      "quality_min": 0.5602591948123061,
+      "quality_p10": 0.7559526299369244,
+      "quality_median": 0.8000000000000005,
+      "edge_length_cell_weighted_quantiles": [
+        0.03125,
+        0.05412658773652741,
+        0.08838834764831845
+      ],
+      "volume_quantiles": [
+        1.0172526041666671e-05,
+        1.0172526041666671e-05,
+        8.138020833333341e-05
+      ]
+    }
+  },
+  {
+    "case": "cube",
+    "growth": 1.7,
+    "volume_cells": 24672,
+    "nodes": 5509,
+    "archive_sha256": "1953fa6096f0d8731366b1fa8f5ea1b940d5fbee716d2aa71796aa4a7081ef0b",
+    "metrics": {
+      "volume_cv": 0.8378155014399803,
+      "volume_max_min": 8.000000000000004,
+      "size_cv": 0.3294252396401913,
+      "quality_min": 0.5602591948123061,
+      "quality_p10": 0.7559526299369244,
+      "quality_median": 0.8000000000000005,
+      "edge_length_cell_weighted_quantiles": [
+        0.04419417382415922,
+        0.0625,
+        0.10825317547305482
+      ],
+      "volume_quantiles": [
+        1.0172526041666671e-05,
+        2.0345052083333346e-05,
+        8.138020833333341e-05
+      ]
+    }
+  },
+  {
+    "case": "sphere",
+    "growth": 1.3,
+    "volume_cells": 63168,
+    "nodes": 13729,
+    "archive_sha256": "18fae7698b4211151d69b4011004b339808041c49593db22d412ae970d2f4077",
+    "metrics": {
+      "volume_cv": 1.08569860231932,
+      "volume_max_min": 8.000000000000004,
+      "size_cv": 0.23177720932756724,
+      "quality_min": 0.5602591948123061,
+      "quality_p10": 0.8000000000000005,
+      "quality_median": 0.8000000000000005,
+      "edge_length_cell_weighted_quantiles": [
+        0.03125,
+        0.05412658773652741,
+        0.0625
+      ],
+      "volume_quantiles": [
+        1.0172526041666671e-05,
+        1.0172526041666671e-05,
+        2.0345052083333346e-05
+      ]
+    }
+  },
+  {
+    "case": "sphere",
+    "growth": 1.7,
+    "volume_cells": 38352,
+    "nodes": 8323,
+    "archive_sha256": "576a77688d5a39c4a191fa5bf52b3217dac4be71444e63e648e364b82aade61c",
+    "metrics": {
+      "volume_cv": 1.0646878324955458,
+      "volume_max_min": 8.000000000000004,
+      "size_cv": 0.31804393785926793,
+      "quality_min": 0.5602591948123061,
+      "quality_p10": 0.7559526299369244,
+      "quality_median": 0.8000000000000005,
+      "edge_length_cell_weighted_quantiles": [
+        0.03125,
+        0.05412658773652741,
+        0.10825317547305482
+      ],
+      "volume_quantiles": [
+        1.0172526041666671e-05,
+        1.0172526041666671e-05,
+        8.138020833333341e-05
+      ]
+    }
+  },
+  {
+    "case": "face",
+    "growth": 1.3,
+    "volume_cells": 32384,
+    "nodes": 7434,
+    "archive_sha256": "200488a8ada3f9f221204aa4e1a2b158cf0285186ed273e6c2225113396d1646",
+    "metrics": {
+      "volume_cv": 2.1223047654286393,
+      "volume_max_min": 64.00000000000004,
+      "size_cv": 0.39147763682151354,
+      "quality_min": 0.5602591948123061,
+      "quality_p10": 0.8000000000000005,
+      "quality_median": 0.8000000000000005,
+      "edge_length_cell_weighted_quantiles": [
+        0.03125,
+        0.05412658773652741,
+        0.10825317547305482
+      ],
+      "volume_quantiles": [
+        1.0172526041666671e-05,
+        1.0172526041666671e-05,
+        8.138020833333341e-05
+      ]
+    }
+  },
+  {
+    "case": "face",
+    "growth": 1.7,
+    "volume_cells": 18944,
+    "nodes": 4488,
+    "archive_sha256": "bdfad579a24f9ba5baa87c95a47cd1d65f5bb3d1460e0820bc63c5463368e3a4",
+    "metrics": {
+      "volume_cv": 2.2552985451548935,
+      "volume_max_min": 64.00000000000004,
+      "size_cv": 0.4851117121996696,
+      "quality_min": 0.5602591948123061,
+      "quality_p10": 0.7559526299369246,
+      "quality_median": 0.8000000000000005,
+      "edge_length_cell_weighted_quantiles": [
+        0.03125,
+        0.05412658773652741,
+        0.10825317547305482
+      ],
+      "volume_quantiles": [
+        1.0172526041666671e-05,
+        1.0172526041666671e-05,
+        8.138020833333341e-05
+      ]
+    }
+  }
+]

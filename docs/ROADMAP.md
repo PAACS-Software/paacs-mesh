@@ -1,0 +1,145 @@
+# PAACS Mesh roadmap
+
+PAACS will qualify meshes for structural, thermal and fluid workflows through
+reproducible CAD and solver studies. The priorities below extend the current
+mapped, swept and tetrahedral routes. Release support and evidence are recorded
+in the [release policy](RELEASE_POLICY.md) and [validation report](../VALIDATION.md).
+
+## Current starting point
+
+| Area | Implemented scope |
+|---|---|
+| Geometry | Explicit primitives, recognized affine blocks and polygonal sweeps, and bounded Tet4 for supported polyhedral models. The optional OCCT adapter provides native CAD queries and meshing routes with their own documented coverage. |
+| Volume elements | Tet4, straight-sided Tet10, Prism6, mapped and swept Hex8, and Pyramid5 transitions on supported routes. |
+| Wall layers | Graded stacks from prepared planar triangular, quadrilateral and mixed patches. A separate prepared curved triangular-front component supports normal smoothing, obstacle clipping and thickness backoff. |
+| Higher order | Shared midside nodes for straight-sided Tet10. A bounded provider-driven curving API supports shared-node placement and whole-element Tet10 Jacobian certification. |
+| Controls and output | Composable spatial sizing, profiles, layer schedules and achieved-size reports on supported routes. Native archive v1 and legacy VTK and MSH 4.1 ASCII writers are available. |
+
+See [element choices](ELEMENT_CHOICES.md), [native CAD](NATIVE_CAD.md),
+[prism layer controls](PRISM_LAYER_CONTROLS.md), [spatial fields](SPATIAL_CONTROL_FIELDS.md)
+and [archive format](ARCHIVE_FORMAT.md).
+
+## 1. Broaden CAD coverage and apply sizing consistently
+
+Qualify the complete path from shared edge sampling through trimmed face
+meshing, volume recovery and native CAD checks. Include spline and periodic
+faces, holes, pockets, branching passages, thin walls, small gaps and touching
+assemblies. Retain body and feature IDs. Build each conforming shared interface
+once and use it on both sides with opposite winding. Preserve independently
+meshed bodies and report material interference when the selected assembly
+policy permits it. Report any geometry repair and its measured displacement.
+
+Apply global size, selected CAD face and edge sizing, volume controls, curvature
+and proximity through a common physical-size policy. Measure achieved spacing,
+adjacent growth and geometric error. Keep targets, warnings and hard limits
+distinct in the report.
+
+**Qualification.** Publish fixed and held-out STEP cases with original-body
+identity, boundary and void checks, CAD deviation, achieved size, runtime,
+peak memory and bounded failure diagnostics.
+
+## 2. Build Prism6 wall layers with conforming transitions
+
+Connect the prepared wall-layer components to CAD-tagged surface patches and
+a separately generated Tet4 core. Preserve first-layer height, growth and
+patch labels through concave and convex corners, narrow gaps and opposing
+walls. Resolve collisions with bounded clipping, termination or a reported
+refusal. Construct conforming Prism6, Hex8, Pyramid5 and Tet4 transitions where
+the interface topology calls for them.
+
+**Qualification.** Check positive full-cell Jacobians, layer intersections,
+matching core interfaces and achieved first-layer height, thickness and layer
+count by patch. The [hybrid straight-duct example](../examples/flow_hybrid_duct/README.md)
+checks four wall-normal stacks, a conforming tetrahedral core and laminar
+pressure-drop convergence on a prepared duct. Extend validation to curved
+walls, junctions and automatically generated core interfaces. Determine
+first-layer requirements from the flow regime and wall treatment.
+
+## 3. Extend Hex8 coverage and develop Hex27
+
+Expand reliable Hex8 meshing through sweep recognition, compatible end-face
+meshes and multi-block decomposition. Cover swept bends, holes, branched
+parts and interfaces where a compatible block layout can be established.
+Develop conforming hex-dominant transitions for the remaining volume.
+Evaluate the existing Tet4-to-Hex8 conversion separately on its supported
+single-region input. Automatic all-hex meshing of broader CAD remains research.
+
+Introduce Hex27 on verified Hex8 layouts. Define the triquadratic node order,
+share edge and face nodes across adjacent cells, and extend storage, archives
+and writers. Start with affine blocks and progress to curved mappings.
+Any additional higher-order wedge or pyramid families need the same topology,
+Jacobian and interoperability checks.
+
+**Qualification.** Check whole-cell Jacobians, shared high-order faces and
+interfaces, CAD error, solver ordering and convergence on mapped and swept
+cases. Require an explicit result for layouts the block strategy cannot cover.
+
+## 4. Qualify CAD Tet10 and higher-order geometry
+
+Integrate the Tet10 placement provider with native CAD ownership. Project shared
+midside nodes through the correct curves and trimmed faces across seams and
+interfaces. Try bounded high-order quality improvement when a projection
+distorts a cell. Report straight-sided and curved output separately.
+
+**Qualification.** Check positive Jacobians over the complete reference
+element after curving, measure boundary deviation, and independently verify
+shared-node topology and downstream high-order connectivity. Record whether a
+refusal came from geometry, an invalid element or exhausted certification work.
+
+## 5. Enable bounded local mesh editing
+
+Extend local insertion, splitting, swapping, relocation and coarsening to
+operate on selected regions while preserving CAD ownership and material
+interfaces. Support solver-provided size or error indicators and retain a map
+between original and edited entities for field transfer.
+
+**Qualification.** Certify each affected patch before committing it. Verify
+conservation for supported field transfers, reproducibility under fixed
+settings, rollback on refusal, and agreement between local checks and full
+mesh audits on regression cases.
+
+## 6. Prove interoperability and simulation accuracy
+
+Qualify a downstream structural and a flow-solver export workflow. Verify
+units, element ordering and orientation, named boundary and material sets,
+shared interfaces and high-order connectivity after import. Extend the native
+archive and exchange formats as those workflows require.
+
+Build from the [cantilever](../examples/elasticity_cantilever/README.md),
+[plate-with-hole](../examples/elasticity_plate_hole/README.md) and
+[hybrid straight-duct](../examples/flow_hybrid_duct/README.md) convergence studies.
+Add curved Tet10, thick-cylinder stress and manufactured diffusion before
+moving to more complex CFD cases. Across at least three mesh levels,
+report solution error or quantity-of-interest convergence, degrees of freedom,
+mesh generation and solve time, and memory. Include family-specific metrics
+such as Jacobian and dihedral distributions for structural meshes and face
+skewness, non-orthogonality and wall-normal spacing for finite-volume meshes.
+
+## 7. Extend the mesh and model workflows
+
+Qualify standalone curve and surface meshes, then add shell and beam solver
+exports with explicit thickness, section and orientation metadata. Build on
+CAD ownership and shared-interface checks to support periodic node mappings,
+embedded features and independently meshed contact pairs. Add partitioning
+with stable global IDs, ghost entities and named groups for parallel solves.
+
+Expose CAD selection, size assignment, background meshing, section inspection
+and local remeshing through the application layer. Save the CAD source reference,
+settings, selections and mesh together so the workflow can be reopened and
+reproduced. Extend adaptive remeshing and verify how field transfer affects
+the solver's quantity of interest.
+
+## 8. Distribute the engine through Python
+
+Build a small Python API over the C++ engine, starting with the supported
+primitive and adaptive-box routes. Return node, connectivity and classification
+arrays, and expose diagnostics, work limits and cancellation. Extend the
+interface to native STEP import, face and volume sizing, and tagged export.
+
+Provide prebuilt wheels for supported Windows, macOS and Linux configurations.
+Keep CAD dependencies optional and document the operations each package covers.
+Python packaging is planned; the current release uses the C++ SDK and CLI.
+
+**Qualification.** Install each wheel in a fresh virtual environment without a
+compiler or manually configured library paths. Compare its meshes, audits and
+face/body tags with the native engine on the same inputs and settings.

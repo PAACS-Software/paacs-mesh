@@ -1,0 +1,11 @@
+/build/
+/out/
+/evidence/
+/.toolchain/
+/.vs/
+CMakeUserPresets.json
+__pycache__/
+*.py[cod]
+*.paacsmesh
+*.zip
+*.zip.sha256

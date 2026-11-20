@@ -1,0 +1,26 @@
+[
+  {
+    "source_faces": 7544,
+    "tetrahedra": 36240,
+    "source_contact_tests": 63042,
+    "tet_contact_tests": 2282910,
+    "illegal_source_pairs": 0,
+    "illegal_tet_pairs": 0,
+    "nonpositive": 0,
+    "seconds": 82.2832,
+    "label": "uniform-3",
+    "archive_sha256": "70d1f10324b65f149678f77d80f5308e24ed5302bb7e04868980f3847b334813"
+  },
+  {
+    "source_faces": 8152,
+    "tetrahedra": 38928,
+    "source_contact_tests": 67152,
+    "tet_contact_tests": 2407476,
+    "illegal_source_pairs": 0,
+    "illegal_tet_pairs": 0,
+    "nonpositive": 0,
+    "seconds": 80.194,
+    "label": "local-3",
+    "archive_sha256": "a56e0c19df09cde6b175e1056ac8c15e1b8ac521de1043ab7ea55af5a6a878a2"
+  }
+]
