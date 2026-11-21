@@ -33,7 +33,7 @@ struct OcctInteriorSiteReport {
 template<class SizeField, class AdmitNode, class Charge>
 mesh::Mesh appendOcctInteriorSites(const mesh::Mesh& boundary, const SizeField& field,
     mesh::Classification region, std::size_t maximumSites, AdmitNode admitNode,
-    Charge charge, OcctInteriorSiteReport* report=nullptr) {
+    Charge charge, OcctInteriorSiteReport* report=nullptr, bool sampleControls=true) {
     mesh::Mesh result=boundary;
     if (report) *report={};
     if (!maximumSites || !boundary.nodeCount() || region.dim!=3) return result;
@@ -134,6 +134,7 @@ mesh::Mesh appendOcctInteriorSites(const mesh::Mesh& boundary, const SizeField& 
         boxBudget/std::max<std::size_t>(1,std::size_t(boxCount)));
     for (const auto& box:controls) {
         charge(1);
+        if (!sampleControls) break;
         if (box.kind!=sizing::SizeRegionKind::Box || box.targetSize>=baseSize) continue;
         const auto h=std::max(field.boxes().minimumSize(),box.targetSize);
         const auto extent=box.upper-box.lower;

@@ -25,6 +25,7 @@
 #include "OcctShellProximity.hpp"
 #include "OcctSpatialSizing.hpp"
 #include "OcctInteriorSites.hpp"
+#include "OcctInteriorFront.hpp"
 #include "paacs/algo/BoundaryConformingMesher.hpp"
 #include "paacs/bnd/TetPlcCavityRecovery.hpp"
 #include "../bnd/TetPlcRetainedRecovery.hpp"
@@ -175,7 +176,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
         };
         OcctSolidClassifier classifier(OcctModelAccess::solid(model,tag));
         const auto tol=model.tolerance(3,tag);
-        if(spatialSizing&&options.improveNativeTetQuality){
+        if(spatialSizing&&(options.improveNativeTetQuality||options.useAdvancingInteriorFront)){
             // Put size-aware interior sites into the first Delaunay point set.
             // The prescribed surface remains the same input constraint complex.
             OcctStageTrace placement("interior_sites",tag);
@@ -206,7 +207,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                         ++siteQueries;++out.nativeQueries;
                         classifier.Perform(gp_Pnt(p.x,p.y,p.z),tol);
                         return classifier.State()==TopAbs_IN;
-                    },siteCharge);
+                    },siteCharge,nullptr,!options.useAdvancingInteriorFront);
             }
             }catch(const SiteLimit&){
                 // This optional preparation leaves the original shell intact.
@@ -707,6 +708,48 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             need(result.reason!=bnd::TetPlcCavityReason::AllocationFailed,NativeCadMeshReason::AllocationFailed,"allocation-failed");need(result.reason!=bnd::TetPlcCavityReason::Cancelled,NativeCadMeshReason::Cancelled,"cancelled");need(result.reason!=bnd::TetPlcCavityReason::BudgetExceeded,NativeCadMeshReason::BudgetExceeded,result.diagnostic);
             need(result.published,localRefinementBound?NativeCadMeshReason::BudgetExceeded:NativeCadMeshReason::GeometryError,localRefinementBound?"native-plc-refinement-budget":"native-plc-cavity-material-refusal");out.cavitiesClosed+=result.cavitiesClosed;completed.swap(repaired);out.surfaceTriangles=boundary.cellCount();
         }
+        if(options.useAdvancingInteriorFront){
+            OcctStageTrace construction("interior_front",tag);
+            const auto started=Clock::now();
+            const auto used=strictAdmissions.retainedPayloadBytes();
+            const auto bytes=std::uint64_t(completed.nodeCount())*(sizeof(Vec3)+sizeof(mesh::Classification))+
+                std::uint64_t(completed.cellCount())*sizeof(mesh::Cell)+
+                std::uint64_t(completed.connectivityCount())*sizeof(Index);
+            const auto reserve=1024*(std::uint64_t(completed.nodeCount())+
+                std::uint64_t(completed.countCells(mesh::CellType::Tet4)));
+            const auto room=remaining();
+            const auto budget=room>reserve?std::min<std::uint64_t>(42'000'000,(room-reserve)/2):0;
+            const auto queries=out.nativeQueries<maximumSpacedCandidateQueries?
+                std::min<std::uint64_t>(12'000,(maximumSpacedCandidateQueries-out.nativeQueries)/2):0;
+            out.interiorFrontDiagnostic="budget_limited";
+            if(budget&&queries&&used<availableBytes&&bytes<o.maximumOutputBytes){
+                const auto growth=(o.maximumOutputBytes-bytes)/(
+                    sizeof(Vec3)+sizeof(mesh::Classification)+sizeof(mesh::Cell)+4*sizeof(Index));
+                OcctInteriorFrontLimits limits;
+                limits.work=budget;limits.queries=queries;
+                limits.nodes=std::min(o.maximumNodes,std::uint64_t(completed.nodeCount())+growth);
+                limits.tets=std::min(frontCells,std::uint64_t(completed.countCells(mesh::CellType::Tet4))+growth);
+                limits.workingBytes=availableBytes-used;
+                const auto built=advanceOcctInteriorFront(completed,*sizeField,limits,
+                    [&](Vec3 p){
+                        tick();admitQueries(1);++out.nativeQueries;
+                        classifier.Perform(gp_Pnt(p.x,p.y,p.z),tol);
+                        return classifier.State()==TopAbs_IN;
+                    },nativeCentroid,tick);
+                out.interiorFrontDiagnostic=!built.initialized?"scaffold_refused":
+                    built.targetsSatisfied?"targets_satisfied":built.budgetLimited?"budget_limited":"targets_unmet";
+                out.interiorFrontNodes=built.sites;
+                out.interiorFrontCandidates=built.candidates;
+                out.interiorFrontWork=built.workUsed;
+                out.interiorFrontQueries=built.nativeQueries;
+                out.interiorFrontRemainingOversized=built.remainingOversized;
+                out.interiorFrontActivations=built.frontActivations;
+                out.interiorVoidActivations=built.voidActivations;
+                out.interiorFrontAdvances=built.frontAdvances;
+            }
+            out.interiorFrontSeconds=std::chrono::duration<double>(Clock::now()-started).count();
+            construction.finish(out.interiorFrontDiagnostic);
+        }
         if(improveQuality&&out.nativeQueries<maximumSpacedCandidateQueries){
             // Reserve work and queries for the strict validation of the
             // candidate. Swaps retain the existing boundary and its nodes.
@@ -719,7 +762,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                     native,tick);
             }
         }
-        if(spatialSizing||(useLocalDelaunay&&!refinedBeforeMaterial)){
+        if(!options.useAdvancingInteriorFront&&(spatialSizing||(useLocalDelaunay&&!refinedBeforeMaterial))){
             OcctStageTrace refinement("local_delaunay_refinement",tag);
             out.localDelaunayRefinementNodes=localInsert(completed,{}, {},
                 !spatialSizing||improveQuality?&out.localDelaunayQualityEdits:nullptr);

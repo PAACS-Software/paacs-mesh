@@ -894,7 +894,7 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
     }
     detail::OcctStageObserverScope observe(o.stageObserver);
     detail::OcctStageTrace meshTrace("native_mesh");
-    const bool spatialSizing=o.useSpatialSizing||!o.sizeBoxes.empty();
+    const bool spatialSizing=o.useSpatialSizing||!o.sizeBoxes.empty()||o.useAdvancingInteriorFront;
     if(o.maximumRecoveryRandomRetries>4||o.maximumEdgeRecoverySteinerCandidates>64||o.maximumRecoveryPatchStates>65536||o.curvaturePointsPerTurn>64||
        (o.recoveryMode!=NativeCadRecoveryMode::Standard&&o.recoveryMode!=NativeCadRecoveryMode::Advanced)||
        (o.assemblyPolicy!=NativeCadAssemblyPolicy::ConformingDomain&&o.assemblyPolicy!=NativeCadAssemblyPolicy::IndependentParts)){NativeCadMeshOutcome invalid;invalid.reason=NativeCadMeshReason::InvalidRequest;return invalid;}
@@ -1178,6 +1178,16 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
                         report.recoveryMergedComponents+=recovered.mergedComponents;report.recoverySourceBlockedCandidates+=recovered.sourceBlockedCandidates;report.recoveryOtherComponentBlockedCandidates+=recovered.otherComponentBlockedCandidates;report.recoverySourceFacetNodes+=recovered.sourceFacetNodes;
                         report.recoveryRegions=recovered.regionRecovery;
                         report.constraintRecovery=recovered.constraintRecovery;
+                        report.interiorFrontDiagnostic=recovered.interiorFrontDiagnostic;
+                        report.interiorFrontNodes=recovered.interiorFrontNodes;
+                        report.interiorFrontCandidates=recovered.interiorFrontCandidates;
+                        report.interiorFrontWork=recovered.interiorFrontWork;
+                        report.interiorFrontQueries=recovered.interiorFrontQueries;
+                        report.interiorFrontRemainingOversized=recovered.interiorFrontRemainingOversized;
+                        report.interiorFrontActivations=recovered.interiorFrontActivations;
+                        report.interiorVoidActivations=recovered.interiorVoidActivations;
+                        report.interiorFrontAdvances=recovered.interiorFrontAdvances;
+                        report.interiorFrontSeconds=recovered.interiorFrontSeconds;
                         if(recovered.published){report.route=spatialSizing?"native_spatial_sizing":!spaceSurface?
                                 (recovered.liveMaterialPatches?"native_plc_live_material":"native_plc_cavity"):
                                 surfaceMode==OcctFrontSurface::Curvature?"native_curvature_surface":

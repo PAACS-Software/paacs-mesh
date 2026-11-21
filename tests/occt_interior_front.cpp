@@ -9,6 +9,7 @@
 #include "paacs/mesh/LinearVolumeAudit.hpp"
 #include "paacs/mesh/Quality.hpp"
 #include <BRepPrimAPI_MakeCylinder.hxx>
+#include <BRepTools.hxx>
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -542,7 +543,9 @@ void exerciseNativeAndLimits() {
     }
 }
 
-
+std::string snapshot(const geo::OcctModel& model) {
+    std::ostringstream stream;BRepTools::Write(OcctModelAccess::shape(model),stream);return stream.str();
+}
 void exerciseNativeFieldBounds() {
     auto imported=OcctModelAccess::fromShape(BRepPrimAPI_MakeCylinder(1.,2.).Shape());
     check(imported.imported(),"field-bound cylinder import failed");
@@ -573,7 +576,66 @@ void exerciseNativeFieldBounds() {
         "native conservative field query missed a tiny enclosed box");
 }
 
-
+void exercisePublicNativeFront() {
+    auto imported=OcctModelAccess::fromShape(BRepPrimAPI_MakeCylinder(1.,2.).Shape());
+    check(imported.imported(),"production front cylinder import failed");
+    const auto& model=*imported.model;const auto originalCad=snapshot(model);
+    int wall=-1;
+    for (const auto* face:model.faces()) {
+        const auto* surface=model.surfaceDescriptor(face->tag());
+        if (surface&&surface->kind==geo::SurfaceKind::Cylinder) wall=face->tag();
+    }
+    check(wall>0,"production front fixture needs its original wall tag");
+    geo::NativeCadMeshOptions options;
+    options.geometry.targetSize=.7;options.geometry.threads=1;
+    options.geometry.maximumNodes=50'000;options.geometry.maximumCells=250'000;
+    options.geometry.maximumOutputBytes=128ULL*1024*1024;options.geometry.maximumMeshingWork=100'000'000;
+    options.geometry.maximumAuditTemporaryBytes=512ULL*1024*1024;
+    options.geometry.minimumElementQuality=0.;options.geometry.warningElementQuality=.25;
+    options.maximumValidationWork=100'000'000;options.maximumPrimitiveWorkingBytes=512ULL*1024*1024;
+    options.maximumNativeValidationThreads=1;options.maximumChordError=.0086602540378443865;
+    options.maximumRelativeVolumeError=.01;options.minimumSize=.12;
+    options.faceSizes.push_back({wall,.16,1.55});
+    options.sizeBoxes.push_back({{-.3,-.3,.7},{.3,.3,1.3},.15,1.55});
+    options.useSpatialSizing=true;options.improveNativeTetQuality=true;
+    options.allowCentroidsWithinChordTolerance=false;options.recoveryMode=geo::NativeCadRecoveryMode::Standard;
+    mesh::Mesh baseline;
+    const auto ordinary=geo::meshNativeCad(model,options,baseline);
+    check(ordinary.published&&ordinary.audit.valid&&ordinary.quality.valid&&ordinary.bodies.size()==1,
+        "front-disabled production baseline failed");
+    check(std::string(ordinary.bodies.front().interiorFrontDiagnostic)=="not_attempted",
+        "disabled front changed the established route");
+    options.useAdvancingInteriorFront=true;
+    mesh::Mesh advanced;const auto built=geo::meshNativeCad(model,options,advanced);
+    if (!built.published) std::cerr<<"native front publication: "<<geo::nativeCadMeshReasonName(built.reason)<<'\n';
+    check(built.published&&built.audit.complete&&built.audit.valid&&built.quality.complete&&built.quality.valid&&built.bodies.size()==1,
+        "public advancing-front route must publish an audited native mesh");
+    const auto& body=built.bodies.front();
+    const auto tets=std::uint64_t(advanced.countCells(mesh::CellType::Tet4));
+    check(body.solidTag==1&&body.boundaryEmbeddingCertified&&body.nativeCentroidsChecked==tets&&
+        body.nativeCentroidThreads==1&&body.nativeCentroidSourceGuard&&body.centroidOutsideDistanceLimit==0.&&
+        body.maximumOutsideCentroidDistance==0.&&body.centroidsWithinChordTolerance==0.,
+        "advancing front lost strict original-body native centroid coverage");
+    check(body.interiorFrontNodes>0&&body.interiorFrontCandidates>=body.interiorFrontNodes&&
+        body.interiorFrontActivations>0&&body.interiorFrontAdvances>0&&body.interiorFrontWork>0&&
+        body.interiorFrontWork<=options.geometry.maximumMeshingWork&&body.interiorFrontQueries>0,
+        "production route did not exercise admitted advancing-front cavities");
+    const std::string diagnostic=body.interiorFrontDiagnostic;
+    check(diagnostic!="not_attempted"&&diagnostic!="scaffold_refused"&&
+        (diagnostic!="targets_satisfied"||body.interiorFrontRemainingOversized==0),
+        "production front result hides refusal or unresolved size targets");
+    check(boundarySignature(baseline)==boundarySignature(advanced),
+        "advancing-front opt-in changed exact prescribed boundary coordinates, winding or tags");
+    for (Index i=0;i<advanced.cellCount();++i) {
+        const auto cell=advanced.cell(i);
+        if (cell.type==mesh::CellType::Tet4) check(cell.onEntity==mesh::Classification{3,1},"front lost original body tags");
+        else check(cell.type==mesh::CellType::Tri3&&cell.onEntity.dim==2&&model.face(cell.onEntity.tag),
+            "front lost original CAD boundary face tags");
+    }
+    check(snapshot(model)==originalCad,"advancing-front production route modified original CAD");
+    std::cout<<"native front cylinder: sites="<<body.interiorFrontNodes<<" advances="<<body.interiorFrontAdvances
+        <<" voids="<<body.interiorVoidActivations<<" diagnostic="<<diagnostic<<'\n';
+}
 }
 
 int main(int argc,char** argv) {
@@ -588,6 +650,7 @@ int main(int argc,char** argv) {
         exerciseAllLiveVertexSpacing();
         exerciseNativeAndLimits();
         exerciseNativeFieldBounds();
+        if (!pure) exercisePublicNativeFront();
         std::cout<<"native interior front geometry, enclosed fields, live spacing and transactional admissions passed\n";
         return 0;
     } catch (const std::exception& error) {

@@ -146,6 +146,10 @@ struct NativeCadMeshOptions {
     // Try local interior-point insertion on a recovered Tet4 mesh in the
     // strict live material recovery trial.
     bool useLocalDelaunayRefinement = false;
+    // Experimental single-solid Tet4 construction: advance interior faces
+    // using size-aware spacing and prospective cavity shape. Keeps the CAD
+    // surface fixed and reports unmet sizing targets when a bound is reached.
+    bool useAdvancingInteriorFront = false;
     [[nodiscard]] bool regularMeshQualityEnabled() const noexcept {
         return improveRegularMeshQuality.value_or(recoveryMode==NativeCadRecoveryMode::Advanced);
     }
@@ -220,6 +224,12 @@ struct NativeCadBodyMeshReport {
     std::uint64_t liveMaterialInitialRejects=0,liveMaterialRemainingRejects=0,liveMaterialPatches=0;
     std::uint64_t localDelaunaySupportNodes=0,localDelaunayRefinementNodes=0;
     unsigned localDelaunayQualityEdits=0;
+    const char* interiorFrontDiagnostic="not_attempted";
+    std::uint64_t interiorFrontNodes=0,interiorFrontCandidates=0;
+    std::uint64_t interiorFrontWork=0,interiorFrontQueries=0;
+    std::uint64_t interiorFrontRemainingOversized=0;
+    std::uint64_t interiorFrontActivations=0,interiorVoidActivations=0,interiorFrontAdvances=0;
+    double interiorFrontSeconds=0;
     bool localDelaunayUsedGlobalFallback=false;
     NativeCadRegionRecoveryReport recoveryRegions;
     NativeCadConstraintRecoveryReport constraintRecovery;

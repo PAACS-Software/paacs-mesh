@@ -25,6 +25,12 @@ struct OcctFrontOutcome {
     std::uint64_t liveMaterialInitialRejects=0,liveMaterialRemainingRejects=0,liveMaterialPatches=0;
     std::uint64_t localDelaunaySupportNodes=0,localDelaunayRefinementNodes=0;
     unsigned localDelaunayQualityEdits=0;
+    const char* interiorFrontDiagnostic="not_attempted";
+    std::uint64_t interiorFrontNodes=0,interiorFrontCandidates=0;
+    std::uint64_t interiorFrontWork=0,interiorFrontQueries=0;
+    std::uint64_t interiorFrontRemainingOversized=0;
+    std::uint64_t interiorFrontActivations=0,interiorVoidActivations=0,interiorFrontAdvances=0;
+    double interiorFrontSeconds=0;
     bool localDelaunayUsedGlobalFallback=false;
     double surfaceSeconds=0,volumeSeconds=0,meshVolume=0,chord=0;
     double maximumNodeError=0,maximumFacetError=0;
