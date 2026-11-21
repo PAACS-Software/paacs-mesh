@@ -7,6 +7,8 @@
 #include <pybind11/stl.h>
 #include <pybind11/stl/filesystem.h>
 
+#include "NumpyArrays.hpp"
+
 #include "paacs/algo/Meshers.hpp"
 #include "paacs/geometry/OcctMesher.hpp"
 #include "paacs/sdk/MeshArchive.hpp"
@@ -597,6 +599,10 @@ PYBIND11_MODULE(_native, m) {
         .def_property_readonly("face_tags", [](const MeshResult& mesh) { return mesh.tags(2); })
         .def_property_readonly("body_tags", [](const MeshResult& mesh) { return mesh.tags(3); })
         .def_property_readonly("report", &MeshResult::report)
+        .def("to_numpy", [](const MeshResult& mesh, const py::object& maximumBytes) {
+            return paacs::python::meshArrays(mesh.value, positiveInteger(maximumBytes, "max_bytes"));
+        }, py::kw_only(), py::arg("max_bytes") = py::int_(536870912),
+            "Copy owned, initially read-only NumPy arrays; max_bytes bounds their numerical payload.")
         .def("write", &MeshResult::write, py::arg("path"))
         .def("write_vtk", &MeshResult::writeVtk, py::arg("path"), py::kw_only(), py::arg("volume_only") = false)
         .def("write_archive", &MeshResult::writeArchive, py::arg("path"));

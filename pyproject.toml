@@ -26,6 +26,9 @@ classifiers = [
     "Topic :: Scientific/Engineering",
 ]
 
+[project.optional-dependencies]
+numpy = ["numpy>=1.26.4,<3"]
+
 [project.urls]
 Homepage = "https://github.com/PAACS-Software/paacs-mesh"
 Issues = "https://github.com/PAACS-Software/paacs-mesh/issues"
