@@ -4,15 +4,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 // Optional OCCT display exporter. No PAACS surface/volume mesh is generated.
-#include "OcctModelInternal.hpp"
+#include "paacs/geometry/OcctPreview.hpp"
 #include "NumberArgument.hpp"
-#include <BRepBuilderAPI_Copy.hxx>
-#include <BRepMesh_IncrementalMesh.hxx>
-#include <BRep_Tool.hxx>
-#include <Poly_Triangulation.hxx>
-#include <Standard_Failure.hxx>
-#include <TopLoc_Location.hxx>
-#include <TopoDS.hxx>
 #include <array>
 #include <chrono>
 #include <cmath>
@@ -90,12 +83,6 @@ void publish(const std::filesystem::path &destination, const std::string &json) 
 #endif
     temporary.owned=false;
 }
-struct FaceCopy {
-    int tag = 0;
-    TopoDS_Face original, copied;
-    occ::handle<Poly_Triangulation> initialTriangulation;
-    int initialNodes = 0, initialTriangles = 0;
-};
 } // namespace
 
 int main(int argc, char **argv) {
@@ -130,69 +117,17 @@ int main(int argc, char **argv) {
         }
         const auto cad=geo::importOcctCad(input,options);
         require(cad.imported(),geo::cadImportReasonName(cad.reason));
-        const auto identity=cad.model->identity();
-        BRepBuilderAPI_Copy copy(geo::detail::OcctModelAccess::shape(*cad.model),true,false);
-        require(copy.IsDone(),"native deep copy failed");
-        auto copiedRoot=copy.Shape();
-        std::vector<FaceCopy> faces;
-        for (const auto *entity : cad.model->faces()) {
-            FaceCopy face;
-            face.tag=entity->tag();
-            face.original=geo::detail::OcctModelAccess::face(*cad.model,face.tag);
-            face.copied=TopoDS::Face(copy.ModifiedShape(face.original));
-            // ModifiedShape retains the copied TShape but can normalize its
-            // orientation. Restore the source face's oriented use explicitly.
-            face.copied.Orientation(face.original.Orientation());
-            require(!face.copied.IsNull() && !face.copied.IsSame(face.original),"copy lost native face identity");
-            TopLoc_Location location;
-            face.initialTriangulation=BRep_Tool::Triangulation(face.original,location);
-            if (!face.initialTriangulation.IsNull()) {
-                face.initialNodes=face.initialTriangulation->NbNodes();
-                face.initialTriangles=face.initialTriangulation->NbTriangles();
-            }
-            faces.push_back(std::move(face));
-        }
-        BRepMesh_IncrementalMesh mesher(copiedRoot,deflection,false,.4,false);
-        require(mesher.IsDone(),"OCCT display tessellation failed");
-        std::vector<std::array<double,3>> points;
-        std::vector<std::array<std::uint64_t,3>> triangles;
-        std::vector<int> tags;
-        for (const auto &face : faces) {
-            TopLoc_Location location;
-            const auto triangulation=BRep_Tool::Triangulation(face.copied,location);
-            require(!triangulation.IsNull() && triangulation->NbNodes() > 0 && triangulation->NbTriangles() > 0,
-                    "copied face lacks display tessellation");
-            const auto nodes=static_cast<std::uint64_t>(triangulation->NbNodes());
-            const auto count=static_cast<std::uint64_t>(triangulation->NbTriangles());
-            require(nodes <= maxPoints-points.size() && count <= maxTriangles-triangles.size(),
-                    "display point/triangle output budget exceeded");
-            const auto first=static_cast<std::uint64_t>(points.size());
-            for (int n=1; n<=triangulation->NbNodes(); ++n) {
-                const auto p=triangulation->Node(n).Transformed(location.Transformation());
-                require(std::isfinite(p.X()) && std::isfinite(p.Y()) && std::isfinite(p.Z()),
-                        "nonfinite display point");
-                points.push_back({p.X(),p.Y(),p.Z()});
-            }
-            for (int t=1; t<=triangulation->NbTriangles(); ++t) {
-                int a,b,c;
-                triangulation->Triangle(t).Get(a,b,c);
-                require(a >= 1 && b >= 1 && c >= 1 && a <= triangulation->NbNodes() &&
-                        b <= triangulation->NbNodes() && c <= triangulation->NbNodes() &&
-                        a != b && b != c && a != c,"invalid native display triangle");
-                if (face.copied.Orientation() == TopAbs_REVERSED) std::swap(b,c);
-                triangles.push_back({first+static_cast<unsigned>(a-1),first+static_cast<unsigned>(b-1),
-                                     first+static_cast<unsigned>(c-1)});
-                tags.push_back(face.tag);
-            }
-            TopLoc_Location originalLocation;
-            const auto initial=BRep_Tool::Triangulation(face.original,originalLocation);
-            require(initial == face.initialTriangulation &&
-                    (initial.IsNull() || (initial->NbNodes() == face.initialNodes &&
-                                         initial->NbTriangles() == face.initialTriangles)),
-                    "authoritative source triangulation changed");
-        }
-        require(cad.model->identity() == identity && tags.size() == triangles.size(),
-                "native model identity/output accounting changed");
+        geo::OcctPreviewOptions displayOptions;
+        displayOptions.linearDeflection=deflection;
+        displayOptions.maximumPoints=maxPoints;
+        displayOptions.maximumTriangles=maxTriangles;
+        displayOptions.maximumOutputBytes=maxJsonBytes;
+        geo::OcctPreview display;
+        const auto displayed=geo::previewOcctCad(*cad.model,displayOptions,display);
+        require(displayed.completed,geo::occtPreviewReasonName(displayed.reason));
+        const auto& points=display.points;
+        const auto& triangles=display.triangles;
+        const auto& tags=display.faceTags;
         std::ostringstream json;
         json << std::setprecision(17)
              << "{\"schema\":\"paacs-native-cad-display-v1\",\"display_geometry_only\":true"
@@ -206,7 +141,7 @@ int main(int argc, char **argv) {
              << ",\"points\":[";
         for (std::size_t i=0; i<points.size(); ++i) {
             if (i) json << ',';
-            json << '[' << points[i][0] << ',' << points[i][1] << ',' << points[i][2] << ']';
+            json << '[' << points[i].x << ',' << points[i].y << ',' << points[i].z << ']';
         }
         json << "],\"triangles\":[";
         for (std::size_t i=0; i<triangles.size(); ++i) {
@@ -226,8 +161,6 @@ int main(int argc, char **argv) {
                   << ",\"points\":" << points.size() << ",\"triangles\":" << triangles.size()
                   << ",\"native_faces\":" << cad.faces << ",\"json_bytes\":" << bytes.size() << "}\n";
         return 0;
-    } catch (const Standard_Failure &error) {
-        std::cerr << "native CAD display: " << error.GetMessageString() << '\n';
     } catch (const std::exception &error) {
         std::cerr << "native CAD display: " << error.what() << '\n';
     }

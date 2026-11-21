@@ -135,7 +135,7 @@ if(PAACS_WITH_OCCT)
         message(FATAL_ERROR "PAACS_WITH_OCCT requires Open CASCADE 8 or newer")
     endif()
     add_library(paacs_occt STATIC src/geometry/OcctImport.cpp
-        src/geometry/OcctModel.cpp src/geometry/OcctMesher.cpp src/geometry/OcctBoundary.cpp src/geometry/OcctStarMesher.cpp
+        src/geometry/OcctModel.cpp src/geometry/OcctPreview.cpp src/geometry/OcctMesher.cpp src/geometry/OcctBoundary.cpp src/geometry/OcctStarMesher.cpp
         src/geometry/OcctPartition.cpp src/geometry/OcctTrimTolerance.cpp src/geometry/OcctPartitionMesher.cpp src/geometry/OcctContactCylinder.cpp
         src/geometry/OcctBoxContact.cpp src/geometry/OcctNativeValidation.cpp src/geometry/OcctQueryContext.cpp
         src/geometry/OcctContactAssembly.cpp src/geometry/OcctContactComponents.cpp src/geometry/OcctNativeSweep.cpp
@@ -172,9 +172,7 @@ if(PAACS_BUILD_CLI)
         target_link_libraries(paacs-cad-mesh PRIVATE PAACS::occt)
         install(TARGETS paacs-cad-mesh RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
         add_executable(paacs-native-cad-preview apps/native_cad_preview.cpp)
-        target_include_directories(paacs-native-cad-preview SYSTEM PRIVATE ${OpenCASCADE_INCLUDE_DIR})
-        target_include_directories(paacs-native-cad-preview PRIVATE src/geometry)
-        target_link_libraries(paacs-native-cad-preview PRIVATE PAACS::occt TKMesh)
+        target_link_libraries(paacs-native-cad-preview PRIVATE PAACS::occt)
         set_target_properties(paacs-native-cad-preview PROPERTIES DISABLE_PRECOMPILE_HEADERS ON)
         install(TARGETS paacs-native-cad-preview RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
     endif()
