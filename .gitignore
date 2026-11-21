@@ -9,3 +9,7 @@ __pycache__/
 *.paacsmesh
 *.zip
 *.zip.sha256
+/dist/
+*.whl
+*.egg-info/
+.venv/

@@ -18,6 +18,7 @@ a fixture in `tests/occt_corpus.cpp`.
 | `src/geometry/` | Geometry adapters, native STEP meshing and CAD validation |
 | `src/sizing/`, `src/mesh/` | Size fields, mesh storage, quality and validity audits |
 | `apps/` | Command-line entry points |
+| `python/` | Optional native bindings, Python package and installed-wheel tests |
 | `tests/fixtures/`, `tests/` | Reproducible inputs and regression checks |
 | `examples/`, `scripts/` | SDK consumers, solver examples and report tools |
 
@@ -30,6 +31,7 @@ ctest --preset gcc16-release --output-on-failure
 ```
 
 Changes to native STEP should also pass the [STEP fixture check](docs/BUILDING.md#automatic-step-build).
+Python changes should pass the [installed-wheel checks](docs/PYTHON.md#build-and-qualify-a-wheel).
 For changes to recovery or sizing, report whether the mesh passed the audit,
 its element count and the achieved size. Include end-to-end time and work limits
 for performance changes.

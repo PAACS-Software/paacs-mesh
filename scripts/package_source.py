@@ -27,18 +27,18 @@ output.parent.mkdir(parents=True, exist_ok=True)
 checksum_path = output.with_name(output.name + '.sha256')
 source_roots = {
     '.github', 'apps', 'benchmarks', 'cmake', 'docs', 'examples', 'include',
-    'regression_corpus', 'scripts', 'src', 'standalone', 'tests',
+    'python', 'regression_corpus', 'scripts', 'src', 'standalone', 'tests',
 }
 root_files = {
     '.clang-format', '.gitattributes', '.gitignore', 'CMakeLists.txt',
     'CMakePresets.json', 'CHANGELOG.md', 'CITATION.cff', 'CONTRIBUTING.md', 'LICENSING_STATUS.md',
-    'README.md', 'RELEASE_NOTES.md', 'VALIDATION.md', 'VERSION.txt',
+    'README.md', 'RELEASE_NOTES.md', 'VALIDATION.md', 'VERSION.txt', 'pyproject.toml',
 }
 excluded = {'.git', '.vs', '__pycache__'}
 source_suffixes = {
     '.brep', '.c', '.cc', '.cmake', '.cpp', '.csv', '.cxx', '.h', '.hpp', '.hxx',
     '.html', '.in', '.json', '.md', '.png', '.ps1', '.py', '.sh', '.step',
-    '.txt', '.yaml', '.yml',
+    '.toml', '.txt', '.yaml', '.yml',
 }
 excluded_suffixes = {
     '.zip', '.paacsmesh', '.pyc', '.exe', '.obj', '.dll', '.lib', '.pdb',

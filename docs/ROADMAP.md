@@ -131,14 +131,18 @@ the solver's quantity of interest.
 
 ## 8. Distribute the engine through Python
 
-Build a small Python API over the C++ engine, starting with the supported
-primitive and adaptive-box routes. Return node, connectivity and classification
-arrays, and expose diagnostics, work limits and cancellation. Extend the
-interface to native STEP import, face and volume sizing, and tagged export.
+The first [Python interface](PYTHON.md) wraps native STEP import, audited Tet4
+meshing and tagged export. Its development wheel targets Windows x64 and
+CPython 3.12. Extend it with combined face and volume sizing, growth and NumPy
+node, connectivity and classification arrays. Expose additional native controls
+and cancellation without introducing a separate meshing implementation.
 
 Provide prebuilt wheels for supported Windows, macOS and Linux configurations.
-Keep CAD dependencies optional and document the operations each package covers.
-Python packaging is planned; the current release uses the C++ SDK and CLI.
+Keep CAD dependencies optional in the C++ build and bundle the required runtime
+in STEP wheels. Publish wheels to PyPI after installation qualification.
+Add CAD inspection, semantic selections and a bounded inspect–select–mesh–audit
+workflow suitable for automated callers, preserving original body identities
+and reporting ambiguous selections.
 
 **Qualification.** Install each wheel in a fresh virtual environment without a
 compiler or manually configured library paths. Compare its meshes, audits and

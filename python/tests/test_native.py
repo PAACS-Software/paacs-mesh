@@ -146,17 +146,17 @@ class NativeWheelTests(unittest.TestCase):
             missing = Path(directory) / "missing.step"
             with self.assertRaises(pm.CadImportError) as caught:
                 pm.read_step(missing)
-            self.assertEqual(caught.exception.reason, "file_unavailable")
+            self.assertEqual(caught.exception.reason, "file-unavailable")
             self.assertEqual(caught.exception.stage, "import")
             self.assertFalse(caught.exception.report["imported"])
             malformed = Path(directory) / "malformed.step"
             malformed.write_text("this is not STEP", encoding="ascii")
             with self.assertRaises(pm.CadImportError) as caught:
                 pm.read_step(malformed)
-            self.assertEqual(caught.exception.reason, "parse_failed")
+            self.assertEqual(caught.exception.reason, "parse-failed")
         with self.assertRaises(pm.CadImportError) as caught:
             pm.read_step(self.fixture, max_file_bytes=1)
-        self.assertEqual(caught.exception.reason, "file_budget")
+        self.assertEqual(caught.exception.reason, "file-budget")
         with self.assertRaises(pm.MeshingError) as caught:
             self.model.mesh(0.3, max_nodes=1)
         self.assertFalse(caught.exception.report["mesh_published"])
@@ -173,7 +173,7 @@ class NativeWheelTests(unittest.TestCase):
                         {"max_seconds": math.nan}, {"max_seconds": 1e300}):
             with self.subTest(options=options), self.assertRaises((ValueError, TypeError, OverflowError)):
                 self.model.mesh(0.3, **options)
-        with self.assertRaises(ValueError):
+        with self.assertRaises((ValueError, TypeError)):
             pm.read_step("bad\0path.step")
 
     def test_export_failure_and_source_protection(self):

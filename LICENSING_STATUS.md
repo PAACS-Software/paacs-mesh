@@ -16,8 +16,19 @@ The source package contains a build recipe that fetches OCCT directly from
 upstream and installs it as separate shared libraries in the local build tree.
 The automatic build installs the two OCCT license files under
 `build/step/occt/share/doc/opencascade`.
-For a future binary distribution with OCCT, include the applicable notices
-and satisfy the LGPL source and library replacement requirements.
+The experimental [Python wheel build](docs/PYTHON.md) bundles the shared OCCT
+runtime and resources with these license texts, a source URL and hash, and a
+library replacement build recipe. The build script supplies the verified OCCT
+source archive beside the wheel. Retain that archive and the applicable notices
+when redistributing binaries, and satisfy the LGPL source and library
+replacement requirements.
+
+The Python extension also includes code from BSD-licensed pybind11 headers;
+the Windows DLL loader added by delvewheel is MIT-licensed. Their notices are
+included in the wheel. Windows wheels include required, unmodified Microsoft
+Visual C++ redistributable files from the build toolchain's licensed redist
+directory. Those files retain Microsoft's separate terms, linked from the
+wheel's `paacs_mesh/_occt/OCCT_NOTICE.txt`.
 
 Boost headers are used by the tests. NumPy, Matplotlib and SciPy are dependencies
 of selected Python examples and visualization tools.

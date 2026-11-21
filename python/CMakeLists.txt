@@ -17,6 +17,7 @@ execute_process(COMMAND "${Python_EXECUTABLE}" -c
     "from importlib.metadata import distribution; d=distribution('pybind11'); print(next(str(d.locate_file(p)) for p in d.files if p.name == 'LICENSE'))"
     OUTPUT_VARIABLE paacs_pybind_license OUTPUT_STRIP_TRAILING_WHITESPACE
     COMMAND_ERROR_IS_FATAL ANY)
+file(TO_CMAKE_PATH "${paacs_pybind_license}" paacs_pybind_license)
 install(FILES "${paacs_pybind_license}" DESTINATION paacs_mesh/_occt/licenses
     RENAME pybind11-LICENSE.txt COMPONENT Python)
 install(FILES "${PROJECT_SOURCE_DIR}/cmake/python/delvewheel-LICENSE.txt"
