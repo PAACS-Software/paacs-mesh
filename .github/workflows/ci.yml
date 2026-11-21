@@ -103,6 +103,17 @@ jobs:
           cmake -S cmake/step -B build/step -DPAACS_STEP_JOBS=3
           cmake --build build/step --config Release
           ctest --test-dir build/step -C Release --output-on-failure
+      - name: Build and run native volume quality regressions
+        shell: bash
+        env:
+          CMAKE_GENERATOR: ${{ runner.os == 'Windows' && 'Visual Studio 17 2022' || 'Ninja' }}
+        run: |
+          cmake -S tests/occt_quality -B build/step-quality \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DPAACS_NATIVE_BUILD="$PWD/build/step/paacs" \
+            -DOpenCASCADE_DIR="$PWD/build/step/occt/lib/cmake/opencascade"
+          cmake --build build/step-quality --config Release --parallel 3
+          ctest --test-dir build/step-quality -C Release --output-on-failure
       - uses: actions/setup-python@v6
         if: runner.os == 'Windows' || runner.os == 'macOS'
         with:
