@@ -85,22 +85,40 @@ attempts count toward work and time. Trace stages include `interior_sites`,
 size and quality distributions, since bounded runs can leave weak cells unresolved.
 
 `--advancing-interior-front` selects the native size-field route for a single
-Tet4 solid, including a global-size request without face or box controls. It
-uses surface support points and a private, constraint-certified material
-scaffold, then advances faces into oversized cells. Volume controls influence
-the size field; this mode does not insert a separate Cartesian grid into them.
-Conservative field bounds also identify enclosed refinement regions.
+Tet4 solid. It constructs initial interior points **before** constrained volume
+meshing, including for a uniform global-size request with no face or box controls.
+An advancing front starts at the fixed surface triangles and prioritizes its
+newly exposed faces. Step lengths follow actual neighbouring edges and grow
+toward the requested size, rather than launching a long connection from a small
+surface triangle. Existing points can be reused where advancing regions meet.
 
-Each insertion compares candidate positions using neighbour separation and the
-shape and size of every proposed cavity tetrahedron. Exact topology, protected
-boundaries, original body identity and native-solid admission remain mandatory.
-The optional `--improve-tet-quality` pass can follow this construction.
+Fresh positions are ranked using neighbour separation and the actual connected
+conflict cavity in a persistent auxiliary Delaunay triangulation. Cavity discovery
+can visit the complete admitted complex; a small fixed cell count must not bias
+which point positions are considered. Work and storage still bound the search.
+The selected patch must pass the full topology and survivor checks before any
+insertion. Exact source-surface and temporary-cell intersection checks, strict
+native point admission and original body identity are retained.
 
-The body receipt's `interior_front` object records advances, isolated-region
-activations, work, queries and elapsed time. `targets_unmet` or `budget_limited`
-means sizing remains unresolved; inspect achieved sizes and quality before use.
-The internal size criterion and local shape admission floors do not certify
-every requested edge length, growth ratio or global minimum quality.
+Only the accepted point coordinates enter ordinary constrained construction.
+Temporary front cells and the auxiliary triangulation are not published material
+meshes or coverage certificates. Rebuilding and recovering constraints can change
+Delaunay connections, so initial proposal quality is not a final quality guarantee.
+The normal native validity and CAD-error checks still control publication.
+
+The body receipt's `initial_front` object records initial sites, reused apices,
+propagated faces, complete-cavity sizes, certification work, queries and elapsed
+time. A zero `cavity_limit` means automatic discovery of the complete admitted
+cavity. Propagation depth describes ancestry, not distance from the CAD surface.
+`budget_limited` or `stalled` can retain admitted sites with unresolved construction.
+Inspect the achieved sizes and quality; there is no certificate for every edge
+length, growth ratio or global minimum quality.
+
+A uniform request does not run the later adaptive interior stage. Explicit face
+or volume sizing controls can additionally activate it; `interior_front` then
+reports its separate work and unresolved targets. Volume controls supply a size
+field rather than a Cartesian point grid. The optional `--improve-tet-quality`
+pass remains separate and is not required to run initial point construction.
 
 The default material checks reject exterior tetrahedron centroids. On eligible
 Tet4 recovery routes, `--allow-centroids-within-chord-tolerance` applies a

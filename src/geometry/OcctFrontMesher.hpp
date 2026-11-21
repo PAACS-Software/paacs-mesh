@@ -25,6 +25,7 @@ struct OcctFrontOutcome {
     std::uint64_t liveMaterialInitialRejects=0,liveMaterialRemainingRejects=0,liveMaterialPatches=0;
     std::uint64_t localDelaunaySupportNodes=0,localDelaunayRefinementNodes=0;
     unsigned localDelaunayQualityEdits=0;
+    NativeCadInitialFrontReport initialFront;
     const char* interiorFrontDiagnostic="not_attempted";
     std::uint64_t interiorFrontNodes=0,interiorFrontCandidates=0;
     std::uint64_t interiorFrontWork=0,interiorFrontQueries=0;

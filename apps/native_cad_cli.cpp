@@ -182,6 +182,23 @@ int runNativeCadCli(int argc,char** argv) {
                 <<",\"local_delaunay_support_nodes\":"<<b.localDelaunaySupportNodes
                 <<",\"local_delaunay_refinement_nodes\":"<<b.localDelaunayRefinementNodes
                 <<",\"local_delaunay_quality_edits\":"<<b.localDelaunayQualityEdits
+                <<",\"initial_front\":{\"diagnostic\":\""<<b.initialFront.diagnostic
+                <<"\",\"nodes\":"<<b.initialFront.nodes<<",\"candidates\":"<<b.initialFront.candidates
+                <<",\"work\":"<<b.initialFront.work<<",\"queries\":"<<b.initialFront.queries
+                <<",\"cones\":"<<b.initialFront.cones<<",\"reused_apices\":"<<b.initialFront.reusedApices
+                <<",\"source_activations\":"<<b.initialFront.sourceActivations
+                <<",\"propagated_activations\":"<<b.initialFront.propagatedActivations
+                <<",\"propagated_sites\":"<<b.initialFront.propagatedSites
+                <<",\"maximum_depth\":"<<b.initialFront.maximumDepth
+                <<",\"remaining_faces\":"<<b.initialFront.remainingFaces
+                <<",\"delaunay_evaluations\":"<<b.initialFront.delaunayEvaluations
+                <<",\"delaunay_commits\":"<<b.initialFront.delaunayCommits
+                <<",\"full_certifications\":"<<b.initialFront.fullCertifications
+                <<",\"cavity_unavailable\":"<<b.initialFront.cavityUnavailable
+                <<",\"cavity_limit\":"<<b.initialFront.cavityLimit
+                <<",\"maximum_planned_cavity\":"<<b.initialFront.maximumPlannedCavity
+                <<",\"maximum_accepted_cavity\":"<<b.initialFront.maximumAcceptedCavity
+                <<",\"seconds\":"<<b.initialFront.seconds<<"}"
                 <<",\"interior_front\":{\"diagnostic\":\""<<b.interiorFrontDiagnostic
                 <<"\",\"nodes\":"<<b.interiorFrontNodes<<",\"candidates\":"<<b.interiorFrontCandidates
                 <<",\"work\":"<<b.interiorFrontWork<<",\"queries\":"<<b.interiorFrontQueries

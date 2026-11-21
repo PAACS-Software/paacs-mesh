@@ -26,6 +26,7 @@
 #include "OcctSpatialSizing.hpp"
 #include "OcctInteriorSites.hpp"
 #include "OcctInteriorFront.hpp"
+#include "OcctInitialPointFront.hpp"
 #include "paacs/algo/BoundaryConformingMesher.hpp"
 #include "paacs/bnd/TetPlcCavityRecovery.hpp"
 #include "../bnd/TetPlcRetainedRecovery.hpp"
@@ -177,12 +178,15 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
         OcctSolidClassifier classifier(OcctModelAccess::solid(model,tag));
         const auto tol=model.tolerance(3,tag);
         if(spatialSizing&&(options.improveNativeTetQuality||options.useAdvancingInteriorFront)){
-            // Put size-aware interior sites into the first Delaunay point set.
+            // Construct the first interior point set before constraint recovery.
             // The prescribed surface remains the same input constraint complex.
             OcctStageTrace placement("interior_sites",tag);
+            const auto placementStarted=Clock::now();
             struct SiteLimit {};
             mesh::Mesh sites;
-            const auto siteBudget=std::min<std::uint64_t>(1'000'000,remaining()/8);
+            const auto siteBudget=options.useAdvancingInteriorFront?
+                std::min<std::uint64_t>(42'000'000,remaining()/2):
+                std::min<std::uint64_t>(1'000'000,remaining()/8);
             constexpr auto nodeBytes=sizeof(Vec3)+sizeof(mesh::Classification);
             constexpr auto tetBytes=sizeof(mesh::Cell)+4*sizeof(Index);
             const auto boundaryBytes=std::uint64_t(ns)*nodeBytes+
@@ -198,21 +202,57 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 if(amount>siteBudget-siteWork)throw SiteLimit{};
                 tick(amount);siteWork+=amount;
             };
+            if(options.useAdvancingInteriorFront)out.initialFront.diagnostic="budget_limited";
             try {if(siteCap&&siteBudget&&preparationBytes<=options.maximumPrimitiveWorkingBytes-retained){
-                sites=appendOcctInteriorSites(boundary,*sizeField,mesh::Classification{3,tag},
-                    std::size_t(siteCap),
-                    [&](Vec3 p){
-                        siteCharge();
-                        if(siteQueries>=2048)throw SiteLimit{};
-                        ++siteQueries;++out.nativeQueries;
-                        classifier.Perform(gp_Pnt(p.x,p.y,p.z),tol);
-                        return classifier.State()==TopAbs_IN;
-                    },siteCharge,nullptr,!options.useAdvancingInteriorFront);
+                if(options.useAdvancingInteriorFront){
+                    OcctInitialPointFrontLimits limits;
+                    limits.work=siteBudget;limits.queries=12'000;limits.sites=std::size_t(siteCap);
+                    limits.workingBytes=std::min<std::uint64_t>(128ULL*1024*1024,
+                        options.maximumPrimitiveWorkingBytes-retained);
+                    OcctInitialPointFrontReport built;
+                    sites=appendOcctInitialPointFrontSites(boundary,*sizeField,o.targetSize,
+                        mesh::Classification{3,tag},limits,[&](Vec3 p){
+                            // The builder charges and bounds both point and
+                            // cached material-witness queries before this call.
+                            ++siteQueries;++out.nativeQueries;
+                            classifier.Perform(gp_Pnt(p.x,p.y,p.z),tol);
+                            return classifier.State()==TopAbs_IN;
+                        },siteCharge,&built);
+                    auto& report=out.initialFront;
+                    report.diagnostic=built.budgetLimited?"budget_limited":!built.initialized?
+                        "unavailable":built.frontClosed?"front_closed":"stalled";
+                    report.nodes=built.sites;report.candidates=built.candidates;
+                    report.cones=built.seedCones;report.reusedApices=built.reusedApices;
+                    report.sourceActivations=built.originalFaceActivations;
+                    report.propagatedActivations=built.propagatedFaceActivations;
+                    report.propagatedSites=built.deepSites;report.maximumDepth=built.maximumDepth;
+                    report.remainingFaces=built.remainingFrontFaces;
+                    report.delaunayEvaluations=built.auxiliaryScorerEvaluations;
+                    report.delaunayCommits=built.auxiliaryCommits;
+                    report.fullCertifications=built.auxiliaryFullCertifications;
+                    report.cavityUnavailable=built.auxiliaryScoreCavityUnavailable;
+                    report.cavityLimit=built.auxiliaryCavityLimit;
+                    report.maximumPlannedCavity=built.auxiliaryMaximumPlannedCavity;
+                    report.maximumAcceptedCavity=built.auxiliaryMaximumAcceptedCavity;
+                }else{
+                    sites=appendOcctInteriorSites(boundary,*sizeField,mesh::Classification{3,tag},
+                        std::size_t(siteCap),[&](Vec3 p){
+                            siteCharge();
+                            if(siteQueries>=2048)throw SiteLimit{};
+                            ++siteQueries;++out.nativeQueries;
+                            classifier.Perform(gp_Pnt(p.x,p.y,p.z),tol);
+                            return classifier.State()==TopAbs_IN;
+                        },siteCharge);
+                }
             }
             }catch(const SiteLimit&){
                 // This optional preparation leaves the original shell intact.
             }catch(const std::bad_alloc&){
                 // Preparation is transactional; retain the ordinary seed route.
+            }
+            if(options.useAdvancingInteriorFront){
+                out.initialFront.work=siteWork;out.initialFront.queries=siteQueries;
+                out.initialFront.seconds=std::chrono::duration<double>(Clock::now()-placementStarted).count();
             }
             placement.finish(sites.nodeCount()>ns?"seeded":"unchanged");
             if(sites.nodeCount()>ns){
@@ -708,7 +748,9 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             need(result.reason!=bnd::TetPlcCavityReason::AllocationFailed,NativeCadMeshReason::AllocationFailed,"allocation-failed");need(result.reason!=bnd::TetPlcCavityReason::Cancelled,NativeCadMeshReason::Cancelled,"cancelled");need(result.reason!=bnd::TetPlcCavityReason::BudgetExceeded,NativeCadMeshReason::BudgetExceeded,result.diagnostic);
             need(result.published,localRefinementBound?NativeCadMeshReason::BudgetExceeded:NativeCadMeshReason::GeometryError,localRefinementBound?"native-plc-refinement-budget":"native-plc-cavity-material-refusal");out.cavitiesClosed+=result.cavitiesClosed;completed.swap(repaired);out.surfaceTriangles=boundary.cellCount();
         }
-        if(options.useAdvancingInteriorFront){
+        // Uniform requests use only the initial point construction above.
+        // Explicit local controls can additionally require adaptive sizing.
+        if(options.useAdvancingInteriorFront&&(!options.faceSizes.empty()||!options.sizeBoxes.empty())){
             OcctStageTrace construction("interior_front",tag);
             const auto started=Clock::now();
             const auto used=strictAdmissions.retainedPayloadBytes();
@@ -736,8 +778,8 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                         classifier.Perform(gp_Pnt(p.x,p.y,p.z),tol);
                         return classifier.State()==TopAbs_IN;
                     },nativeCentroid,tick);
-                out.interiorFrontDiagnostic=!built.initialized?"scaffold_refused":
-                    built.targetsSatisfied?"targets_satisfied":built.budgetLimited?"budget_limited":"targets_unmet";
+                out.interiorFrontDiagnostic=built.budgetLimited?"budget_limited":
+                    !built.initialized?"scaffold_refused":built.targetsSatisfied?"targets_satisfied":"targets_unmet";
                 out.interiorFrontNodes=built.sites;
                 out.interiorFrontCandidates=built.candidates;
                 out.interiorFrontWork=built.workUsed;

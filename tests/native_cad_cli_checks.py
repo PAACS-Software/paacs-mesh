@@ -93,10 +93,28 @@ def main():
                          "--improve-tet-quality", "--max-work", "100000000"),
                         success=True, size=".7")
         front = advancing["bodies"][0].get("interior_front", {})
+        placement = advancing["bodies"][0].get("initial_front", {})
         if (advancing.get("advancing_interior_front") is not True or advancing.get("audit_valid") is not True
-                or front.get("nodes", 0) == 0 or front.get("front_advances", 0) == 0
+                or placement.get("nodes", 0) == 0 or placement.get("propagated_activations", 0) == 0
+                or front.get("nodes", 0) == 0
+                or front.get("front_advances", 0) + front.get("void_activations", 0) == 0
                 or front.get("diagnostic") not in {"targets_satisfied", "targets_unmet", "budget_limited"}):
             raise RuntimeError(f"advancing interior front did not report audited construction: {advancing}")
+        initial = run("uniform_initial_interior_front", "cylinder.step",
+                      ("--advancing-interior-front", "--max-work", "100000000",
+                       "--max-chord-error", ".008660254037844387", "--min-quality", "0"),
+                      success=True)
+        initial_body = initial["bodies"][0]
+        seed = initial_body.get("initial_front", {})
+        if (initial.get("face_size_controls") != 0 or initial.get("size_box_controls") != 0
+                or initial.get("improve_tet_quality") is not False
+                or initial.get("audit_valid") is not True
+                or seed.get("nodes", 0) == 0 or seed.get("propagated_activations", 0) == 0
+                or seed.get("delaunay_commits") != seed.get("nodes")
+                or seed.get("full_certifications", 0) < seed.get("delaunay_commits", 0)
+                or seed.get("maximum_planned_cavity", 0) <= 64
+                or initial_body.get("interior_front", {}).get("diagnostic") != "not_attempted"):
+            raise RuntimeError(f"uniform initial construction did not run independently: {initial}")
         run("advancing_front_independent_parts_refused", "assembly.step",
             ("--advancing-interior-front", "--independent-parts"), reason="unsupported-control")
         standard = run("planar_box", "box.step", success=True, size="3e-1")

@@ -146,9 +146,10 @@ struct NativeCadMeshOptions {
     // Try local interior-point insertion on a recovered Tet4 mesh in the
     // strict live material recovery trial.
     bool useLocalDelaunayRefinement = false;
-    // Experimental single-solid Tet4 construction: advance interior faces
-    // using size-aware spacing and prospective cavity shape. Keeps the CAD
-    // surface fixed and reports unmet sizing targets when a bound is reached.
+    // Experimental single-solid Tet4 construction: grow initial interior
+    // sites from the fixed CAD surface using neighbour spacing and actual
+    // prospective Delaunay cavities. Works with a uniform global size;
+    // optional sizing controls can trigger a separate adaptive stage.
     bool useAdvancingInteriorFront = false;
     [[nodiscard]] bool regularMeshQualityEnabled() const noexcept {
         return improveRegularMeshQuality.value_or(recoveryMode==NativeCadRecoveryMode::Advanced);
@@ -169,6 +170,17 @@ struct NativeCadRegionRecoveryReport {
     double searchSeconds=0,preparationSeconds=0,visibilitySeconds=0,publicationSeconds=0,validationSeconds=0;
     std::uint64_t localFrontTets=0,localFrontClosed=0;
     double localFrontSeconds=0;
+};
+struct NativeCadInitialFrontReport {
+    const char* diagnostic="not_attempted";
+    std::uint64_t nodes=0,candidates=0,work=0,queries=0;
+    std::uint64_t cones=0,reusedApices=0,sourceActivations=0,propagatedActivations=0;
+    // Propagation ancestry is not a physical distance from the CAD boundary.
+    std::uint64_t propagatedSites=0,maximumDepth=0,remainingFaces=0;
+    std::uint64_t delaunayEvaluations=0,delaunayCommits=0,fullCertifications=0;
+    // A zero cavityLimit selects the complete admitted numerical complex.
+    std::uint64_t cavityUnavailable=0,cavityLimit=0,maximumPlannedCavity=0,maximumAcceptedCavity=0;
+    double seconds=0;
 };
 struct NativeCadBodyMeshReport {
     int solidTag = -1;
@@ -224,6 +236,7 @@ struct NativeCadBodyMeshReport {
     std::uint64_t liveMaterialInitialRejects=0,liveMaterialRemainingRejects=0,liveMaterialPatches=0;
     std::uint64_t localDelaunaySupportNodes=0,localDelaunayRefinementNodes=0;
     unsigned localDelaunayQualityEdits=0;
+    NativeCadInitialFrontReport initialFront;
     const char* interiorFrontDiagnostic="not_attempted";
     std::uint64_t interiorFrontNodes=0,interiorFrontCandidates=0;
     std::uint64_t interiorFrontWork=0,interiorFrontQueries=0;

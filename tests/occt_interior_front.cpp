@@ -616,10 +616,15 @@ void exercisePublicNativeFront() {
         body.nativeCentroidThreads==1&&body.nativeCentroidSourceGuard&&body.centroidOutsideDistanceLimit==0.&&
         body.maximumOutsideCentroidDistance==0.&&body.centroidsWithinChordTolerance==0.,
         "advancing front lost strict original-body native centroid coverage");
+    check(body.initialFront.nodes>0&&body.initialFront.propagatedActivations>0&&
+        body.initialFront.delaunayCommits==body.initialFront.nodes&&
+        body.initialFront.fullCertifications>=body.initialFront.delaunayCommits&&
+        body.initialFront.work>0&&body.initialFront.queries>0,
+        "production route did not construct and certify the initial point set");
     check(body.interiorFrontNodes>0&&body.interiorFrontCandidates>=body.interiorFrontNodes&&
-        body.interiorFrontActivations>0&&body.interiorFrontAdvances>0&&body.interiorFrontWork>0&&
+        body.interiorFrontAdvances+body.interiorVoidActivations>0&&body.interiorFrontWork>0&&
         body.interiorFrontWork<=options.geometry.maximumMeshingWork&&body.interiorFrontQueries>0,
-        "production route did not exercise admitted advancing-front cavities");
+        "explicit sizing controls did not exercise the separate adaptive stage");
     const std::string diagnostic=body.interiorFrontDiagnostic;
     check(diagnostic!="not_attempted"&&diagnostic!="scaffold_refused"&&
         (diagnostic!="targets_satisfied"||body.interiorFrontRemainingOversized==0),

@@ -1178,6 +1178,7 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
                         report.recoveryMergedComponents+=recovered.mergedComponents;report.recoverySourceBlockedCandidates+=recovered.sourceBlockedCandidates;report.recoveryOtherComponentBlockedCandidates+=recovered.otherComponentBlockedCandidates;report.recoverySourceFacetNodes+=recovered.sourceFacetNodes;
                         report.recoveryRegions=recovered.regionRecovery;
                         report.constraintRecovery=recovered.constraintRecovery;
+                        report.initialFront=recovered.initialFront;
                         report.interiorFrontDiagnostic=recovered.interiorFrontDiagnostic;
                         report.interiorFrontNodes=recovered.interiorFrontNodes;
                         report.interiorFrontCandidates=recovered.interiorFrontCandidates;
