@@ -14,6 +14,10 @@ growth inherits ``mesh(growth=...)``. Face and box controls select the native
 spatial sizing route by default, which currently requires one solid and an
 explicit ``assembly="conforming"`` request. ``native_sizing=False`` retains the
 legacy face-cap route; volume boxes require native spatial sizing.
+
+``Mesh.to_numpy()`` makes independent, initially read-only coordinate,
+connectivity and CAD-classification arrays. NumPy is optional and loaded only
+for extraction; import, meshing and export work without it.
 """
 
 # PAACS Mesh
