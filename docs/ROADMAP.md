@@ -144,9 +144,10 @@ Extend the prebuilt wheel matrix to additional supported Python versions and
 architectures.
 Keep CAD dependencies optional in the C++ build and bundle the required runtime
 in STEP wheels. Publish wheels to PyPI after installation qualification.
-Add CAD inspection, semantic selections and a bounded inspect–select–mesh–audit
-workflow suitable for automated callers, preserving original body identities
-and reporting ambiguous selections.
+CAD inspection and source-bound semantic selections expose named groups and
+explicit geometric predicates, preserving original body identities and
+reporting ambiguous selections. Add a bounded inspect–select–mesh–audit workflow
+for automated callers, with reproducible recipes and explicit retry controls.
 
 **Qualification.** Install each wheel in a fresh virtual environment without a
 compiler or manually configured library paths. Compare its meshes, audits and

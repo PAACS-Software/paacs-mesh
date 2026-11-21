@@ -260,6 +260,87 @@ except pm.MeshingError as error:
     print(error.reason, error.report)
 ```
 
+## Inspect CAD and select faces
+
+An imported model exposes copied JSON metadata for bodies, faces, edges and
+vertices. Inspection is paginated (`limit` up to 1,000); each response identifies
+the exact imported STEP bytes, the CAD kernel version and the units.
+
+```python
+import paacs_mesh as pm
+
+model = pm.read_step("housing.step")
+page = model.inspect("faces", limit=100, topology=True)
+for face in page["entities"]:
+    print(face["tag"], face["surface"], face["area"], face["owners"])
+
+bore = model.select_faces(surface="cylinder", radius=2.5, expect=1)
+caps = model.select_faces(surface="plane", normal=[0, 0, 1], expect=1)
+model.define_group("bore_wall", bore, group_id="housing-bore-wall")
+model.save_intent("housing.paacs.json", revision="design-1")
+
+mesh = model.mesh(
+    1.0, assembly="conforming", min_size=.15, growth=1.3,
+    face_sizes=[pm.FaceSize(tag, .2) for tag in bore.tags],
+    volume_controls=[pm.BoxSize([-3, -3, 0], [3, 3, 5], .3)],
+)
+```
+
+Predicates combine with AND. Available filters include explicit face tags, a
+companion group, a directly mapped STEP representation name, surface category,
+owning body, area, analytic radius, area-centroid box, planar outward normal and
+shared-edge adjacency. Radius applies to cylinders and spheres. A normal filter
+applies to planes; a shared face needs an explicit owning body to define its
+outward direction. Face area centroids can lie outside a trimmed face or off a
+curved surface; they are not projection samples.
+
+Geometric/name queries expect one face by default. Use `expect=2` or an explicit
+`expect=(minimum, maximum)` for multiple matches. Queries using only explicit
+tags, and group queries, retain their full count. `SelectionError` reports
+unknown tags, incomplete required metadata, budget limits or a cardinality
+mismatch. Queries scan the complete
+bounded candidate set rather than choosing the first match. Returned records,
+query descriptions and group dictionaries are independent copies. A selection
+belongs to its imported model; applying it to another model is refused.
+
+`read_step(..., names=True)` retains nonempty names from directly transferred,
+shape-backed STEP representation items. This is not full product/XDE metadata:
+product labels, colors and assembly paths are not provided. Names must match the
+same placed topology; a prototype name is not guessed onto another instance.
+Conflicting candidates and unmatched face-name mappings remain diagnostic.
+`names=False` skips this optional metadata scan without changing meshing.
+
+`SelectionError` and `IntentError` are `ValueError` subclasses with `stage`,
+`reason` and a copied JSON-compatible `report`.
+
+## Save groups and reopen a design
+
+```python
+reopened = pm.read_step("housing.step", intent="housing.paacs.json")
+bore = reopened.select_faces(group="bore_wall")
+print(reopened.groups["bore_wall"]["id"], bore.tags)
+```
+
+The `paacs-cad-intent-v1` companion file records the source SHA-256 and byte count,
+kernel/tag-scheme versions, caller-assigned group IDs, queries, face tags and
+geometry/orientation guards. Reopening verifies all groups before applying any
+of them. Edited sources, incompatible kernels and mismatched guards are refused
+by default. Tags identify entities within one imported snapshot; they do not
+claim universal correspondence across CAD edits or STEP re-export.
+
+`load_intent(path, rebind=True)` explicitly reruns independent geometric/name
+queries for a changed source and reports changes while preserving group IDs.
+It requires the previous exact match count and surface categories. Queries tied
+to old tags, bodies, adjacency or other groups cannot be rebound automatically.
+Review and preview the resulting selections before using a changed design.
+
+The source hash is captured from the same immutable bytes passed to the parser.
+Later edits to the input path cannot change a live model's identity. Ordinary
+imports release those bytes; `retain_source=True` keeps them for later project
+export even when the original file has been deleted. This increases retained
+memory by the input size. Input/topology and metadata-output budgets do not
+impose a hard process-memory limit on the CAD parser.
+
 ## Build and qualify a wheel
 
 Windows builds require Visual Studio 2022 C++ build tools and CPython 3.12 x64.
@@ -323,7 +404,5 @@ the C++ SDK headers and static libraries.
 ## Next milestones
 
 Extend the qualified platform and Python-version matrix.
-CAD inspection, semantic selections and
-an inspect–select–mesh–audit loop build on those foundations. These features
-will use the native engine's controls and classification rather than a separate
-Python meshing implementation.
+A bounded inspect–select–mesh–audit workflow will build on the native controls,
+source-bound selections and mesh classification.
