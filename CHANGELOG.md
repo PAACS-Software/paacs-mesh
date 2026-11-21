@@ -9,6 +9,8 @@
   per-control overrides, request diagnostics and command-line controls.
 - Add optional NumPy mesh snapshots with typed connectivity, CAD classifications
   and an extraction byte budget; preserve native mesh ownership and ordering.
+- Build macOS 15 ARM64 and manylinux 2.28 x64 wheels alongside Windows, with
+  repaired dependencies, native CLI parity and independent artifact installs.
 - Preserve Unicode file paths and full VTK coordinate precision, export both
   classification dimensions and tags, and publish VTK files atomically.
 
