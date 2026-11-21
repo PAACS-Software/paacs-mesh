@@ -61,12 +61,21 @@ The `plot` command uses exact intersections of the stored Tet4 cells.
 | `--warning-quality`, `--min-quality` | Report a weak mesh or require a strict quality floor. |
 | `--trace-native-stages` | Record active stages and diagnostics on standard error. |
 
-The optional spatial Tet4 quality pass uses edge swaps and partial interior-node
-movements. It preserves CAD boundary coordinates and tags, and retains the native
-geometry and validity checks. Its separate work and query limits can leave weak
-cells unresolved; inspect the quality distribution rather than assuming the
-switch meets a requested quality floor. `volume_quality` appears in the stage
-trace when this pass is requested.
+For spatial Tet4 sizing, `--improve-tet-quality` also supplies interior sites to
+the first constrained Delaunay construction. Enclosed boxes contribute points
+before the fill, and oriented surface triangles propose inward points using the
+local size field. Spacing and native-solid checks admit these proposals. This
+avoids relying on small later insertions to replace long connections inherited
+from a boundary-only fill; it does not guarantee a requested quality floor.
+
+The subsequent bounded quality pass uses edge swaps and partial interior-node
+movements. Both stages preserve CAD boundary coordinates and tags, and retain
+the native geometry and validity checks. Placement is limited by node, work,
+query, temporary-storage and output admissions. If the extra-site seed is refused,
+the ordinary boundary seed is retried within the remaining allowance; both
+attempts count toward work and time. Trace stages include `interior_sites`,
+`interior_seed_fallback` when needed, and `volume_quality`. Inspect the achieved
+size and quality distributions, since bounded runs can leave weak cells unresolved.
 
 The default material checks reject exterior tetrahedron centroids. On eligible
 Tet4 recovery routes, `--allow-centroids-within-chord-tolerance` applies a

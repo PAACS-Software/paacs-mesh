@@ -24,6 +24,7 @@
 #include "OcctInwardSites.hpp"
 #include "OcctShellProximity.hpp"
 #include "OcctSpatialSizing.hpp"
+#include "OcctInteriorSites.hpp"
 #include "paacs/algo/BoundaryConformingMesher.hpp"
 #include "paacs/bnd/TetPlcCavityRecovery.hpp"
 #include "../bnd/TetPlcRetainedRecovery.hpp"
@@ -146,27 +147,89 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
         const auto retained=std::uint64_t(ns)*1024+std::uint64_t(nf)*16384+frontCells*512+apexStorage+96ULL*1024*1024;
         need(retained<options.maximumPrimitiveWorkingBytes,NativeCadMeshReason::BudgetExceeded,"native-plc-front-storage-admission");
         mesh::Mesh pendingRecovery;
-        const auto buildConstraintSeed=[&](const mesh::Mesh& sites,mesh::Mesh& seed){
+        const auto buildConstraintSeed=[&](const mesh::Mesh& sites,mesh::Mesh& seed,
+                                          std::uint64_t maximumSeedTets=UINT64_MAX,
+                                          bool reserveRetry=false){
             OcctStageTrace recovering("constraint-recovery",tag);
-            const auto constraintWork=earlyConstraintWork
+            const auto priorWork=out.constraintRecovery.work;
+            const auto priorSeconds=out.constraintRecovery.seconds;
+            auto constraintWork=earlyConstraintWork
                 ?std::min(remaining(),earlyConstraintWork)
                 :std::min<std::uint64_t>(remaining()/3,450'000'000);
+            if(reserveRetry)constraintWork=std::min(constraintWork,remaining()/3);
             const auto constraints=bnd::detail::recoverTetConstraints(sites,{3,tag},
                 constraintWork,options.maximumPrimitiveWorkingBytes/2,
-                frontCells,o.cancellation,seed,
+                std::min(frontCells,maximumSeedTets),o.cancellation,seed,
                 std::min<std::uint64_t>(64,o.maximumNodes-std::uint64_t(sites.nodeCount())));
             out.constraintRecovery={constraints.diagnostic,constraints.candidateCells,
                 constraints.missingEdgesBefore,constraints.missingFacesBefore,
                 constraints.missingEdgesAfter,constraints.missingFacesAfter,constraints.patches,
-                constraints.seedCells,constraints.work,constraints.seconds,
+                constraints.seedCells,priorWork+constraints.work,priorSeconds+constraints.seconds,
                 constraints.edgeWalks,constraints.facetWalks,constraints.walkFallbacks,
                 constraints.steinerAttempts,constraints.steinerWork,constraints.steinerNodes,
                 constraints.retainedSteinerNodes,constraints.piercingPatches};
+            recovering.finish(constraints.diagnostic);
             tick(constraints.work);
             need(std::string_view(constraints.diagnostic)!="cancelled",NativeCadMeshReason::Cancelled,"cancelled");
             need(std::string_view(constraints.diagnostic)!="allocation_failed",NativeCadMeshReason::AllocationFailed,"allocation-failed");
         };
-        if(spaceSurface||options.recoveryMode==NativeCadRecoveryMode::Advanced)
+        OcctSolidClassifier classifier(OcctModelAccess::solid(model,tag));
+        const auto tol=model.tolerance(3,tag);
+        if(spatialSizing&&options.improveNativeTetQuality){
+            // Put size-aware interior sites into the first Delaunay point set.
+            // The prescribed surface remains the same input constraint complex.
+            OcctStageTrace placement("interior_sites",tag);
+            struct SiteLimit {};
+            mesh::Mesh sites;
+            const auto siteBudget=std::min<std::uint64_t>(1'000'000,remaining()/8);
+            constexpr auto nodeBytes=sizeof(Vec3)+sizeof(mesh::Classification);
+            constexpr auto tetBytes=sizeof(mesh::Cell)+4*sizeof(Index);
+            const auto boundaryBytes=std::uint64_t(ns)*nodeBytes+
+                std::uint64_t(nf)*(sizeof(mesh::Cell)+3*sizeof(Index));
+            const auto outputRoom=boundaryBytes<o.maximumOutputBytes?
+                o.maximumOutputBytes-boundaryBytes:0;
+            const auto siteCap=std::min({std::uint64_t(512),
+                o.maximumNodes-std::uint64_t(ns),outputRoom/(nodeBytes+16*tetBytes)});
+            // Bound the copied shell, point/hash arrays and cached edge sizes.
+            const auto preparationBytes=(std::uint64_t(ns)+std::uint64_t(nf)+siteCap)*1024;
+            std::uint64_t siteWork=0,siteQueries=0;
+            const auto siteCharge=[&](std::uint64_t amount=1){
+                if(amount>siteBudget-siteWork)throw SiteLimit{};
+                tick(amount);siteWork+=amount;
+            };
+            try {if(siteCap&&siteBudget&&preparationBytes<=options.maximumPrimitiveWorkingBytes-retained){
+                sites=appendOcctInteriorSites(boundary,*sizeField,mesh::Classification{3,tag},
+                    std::size_t(siteCap),
+                    [&](Vec3 p){
+                        siteCharge();
+                        if(siteQueries>=2048)throw SiteLimit{};
+                        ++siteQueries;++out.nativeQueries;
+                        classifier.Perform(gp_Pnt(p.x,p.y,p.z),tol);
+                        return classifier.State()==TopAbs_IN;
+                    },siteCharge);
+            }
+            }catch(const SiteLimit&){
+                // This optional preparation leaves the original shell intact.
+            }catch(const std::bad_alloc&){
+                // Preparation is transactional; retain the ordinary seed route.
+            }
+            placement.finish(sites.nodeCount()>ns?"seeded":"unchanged");
+            if(sites.nodeCount()>ns){
+                const auto siteBytes=std::uint64_t(sites.nodeCount())*nodeBytes+
+                    std::uint64_t(nf)*(sizeof(mesh::Cell)+3*sizeof(Index));
+                const auto steinerBytes=std::min<std::uint64_t>(64,
+                    o.maximumNodes-std::uint64_t(sites.nodeCount()))*nodeBytes;
+                const auto seedTets=siteBytes<o.maximumOutputBytes&&
+                    steinerBytes<o.maximumOutputBytes-siteBytes?
+                    (o.maximumOutputBytes-siteBytes-steinerBytes)/tetBytes:0;
+                if(seedTets)buildConstraintSeed(sites,pendingRecovery,seedTets,true);
+                if(!pendingRecovery.cellCount()){
+                    OcctStageTrace retry("interior_seed_fallback",tag);
+                    buildConstraintSeed(boundary,pendingRecovery);
+                    retry.finish("boundary_only");
+                }
+            }else buildConstraintSeed(boundary,pendingRecovery);
+        }else if(spaceSurface||options.recoveryMode==NativeCadRecoveryMode::Advanced)
             buildConstraintSeed(boundary,pendingRecovery);
         const bool usesConstraintSeed=pendingRecovery.cellCount()!=0;
         need(!spaceSurface||usesConstraintSeed,NativeCadMeshReason::MeshingFailed,"spaced-surface-constraint-seed-refused");
@@ -182,7 +245,6 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
         // fit. Restrict the first scan only for surfaces needing more storage.
         front.useLocalCandidates=(std::uint64_t(ns)+64)*std::uint64_t(nf)>
             apexStorage/sizeof(std::pair<double,bnd::TetFacetVertexId>);
-        OcctSolidClassifier classifier(OcctModelAccess::solid(model,tag));const auto tol=model.tolerance(3,tag);
         const auto pointKey=[](Vec3 p){return std::array{std::bit_cast<std::uint64_t>(p.x),
             std::bit_cast<std::uint64_t>(p.y),std::bit_cast<std::uint64_t>(p.z)};};
         const std::uint64_t maximumSpacedCandidateQueries=curvatureSurface||spatialSizing?
