@@ -5,10 +5,13 @@
 
 #include "../src/geometry/OcctDelaunayMeshQuality.hpp"
 #include "paacs/algo/MixedMeshQuality.hpp"
+#include "paacs/mesh/LinearVolumeAudit.hpp"
 #include "paacs/mesh/MeshAudit.hpp"
 
 #include <array>
+#include <bit>
 #include <cmath>
+#include <cstdint>
 #include <iostream>
 #include <stdexcept>
 
@@ -99,9 +102,186 @@ void requireUnchanged(const Complex& live,std::uint64_t before,unsigned edits) {
 }
 struct NativeStop {};
 struct WorkStop {};
+
+Complex capBipyramid() {
+    Complex live;
+    live.walkConstraints=true;
+    for (const auto p:std::array{Vec3{0,0,0},Vec3{1,0,0},Vec3{0,1,0},
+                                Vec3{.3,.3,std::ldexp(1.,-45)},Vec3{.3,.3,-1}})
+        live.vertices.push_back({p,live.vertices.size()+1});
+    for (const auto vertices:std::array<std::array<Vertex,4>,2>{{{0,1,2,3},{0,2,1,4}}}) {
+        bnd::TetFacetCell cell{vertices,0,{3,17}};
+        require(live.positive(cell),"cap bipyramid requires positive original cells");
+        live.insert(cell);
+    }
+    for (const auto& [face,owners]:live.faces) if (owners.size()==1) {
+        live.protectedFaces.insert(face);
+        for (unsigned i=0;i<3;++i)
+            live.protectedEdges.insert(Complex::key(Complex::Edge{face[i],face[(i+1)%3]}));
+    }
+    return live;
+}
+
+mesh::Mesh asCapMesh(const Complex& live) {
+    mesh::Mesh result;
+    for (std::size_t i=0;i<live.vertices.size();++i)
+        result.addNode(live.vertices[i].position,{0,int(i)+1});
+    int faceTag=1;
+    for (const auto& key:live.protectedFaces) {
+        const auto owner=*live.faces.at(key).begin();
+        const auto& cell=live.cells[owner];
+        for (unsigned side=0;side<4;++side) {
+            auto face=bnd::tet_facet_detail::outwardFace(cell,side);
+            if (Complex::key(face)!=key) continue;
+            // Fix a cyclic starting vertex without changing orientation so
+            // equivalent oriented patch shells have identical test payloads.
+            std::rotate(face.begin(),std::min_element(face.begin(),face.end()),face.end());
+            result.addCell(mesh::CellType::Tri3,{face[0],face[1],face[2]},{2,faceTag++});
+            break;
+        }
+    }
+    for (std::size_t id=0;id<live.cells.size();++id) if (live.alive[id]) {
+        const auto& cell=live.cells[id];
+        const auto& v=cell.vertices;
+        result.addCell(mesh::CellType::Tet4,{v[0],v[1],v[2],v[3]},cell.classification);
+    }
+    return result;
+}
+
+void sameCapBoundary(const mesh::Mesh& before,const mesh::Mesh& after) {
+    require(before.nodeCount()==after.nodeCount() &&
+            before.countCells(mesh::CellType::Tri3)==after.countCells(mesh::CellType::Tri3),
+            "cap face repair must preserve all boundary nodes and six facets");
+    for (Index i=0;i<before.nodeCount();++i) {
+        const auto a=before.node(i),b=after.node(i);
+        require(std::bit_cast<std::uint64_t>(a.x)==std::bit_cast<std::uint64_t>(b.x) &&
+                std::bit_cast<std::uint64_t>(a.y)==std::bit_cast<std::uint64_t>(b.y) &&
+                std::bit_cast<std::uint64_t>(a.z)==std::bit_cast<std::uint64_t>(b.z) &&
+                before.nodeClass(i)==after.nodeClass(i),
+                "cap repair moved or reclassified an original boundary vertex");
+    }
+    for (Index i=0;i<before.countCells(mesh::CellType::Tri3);++i) {
+        const auto a=before.cell(i),b=after.cell(i);
+        require(a.type==b.type && a.onEntity==b.onEntity &&
+                std::equal(before.cellNodes(i),before.cellNodes(i)+3,after.cellNodes(i)),
+                "cap repair changed the exact oriented CAD facet payload");
+    }
+}
+
+void exerciseCriticalFaceRepair() {
+    constexpr std::array<unsigned char,5> allFixed{1,1,1,1,1};
+    auto live=capBipyramid();
+    const auto source=asCapMesh(live);
+    const auto before=algo::analyzeMixedMeshQuality(source);
+    const auto beforePoor=poorCounts(live);
+    const auto beforeRadius=minimumRadiusRatio(live,live.vertices[4].position);
+    require(before.valid && before.minimumQuality<.01 &&
+            mesh::auditLinearVolumeBoundary(source).valid,
+            "cap fixture must reproduce an exactly positive sliver inside a closed oriented shell");
+    const auto boundary=live.protectedFaces;
+    const auto edges=live.protectedEdges;
+    unsigned edits=0,nodeQueries=0,centroidQueries=0;
+    std::uint64_t work=0,firstNativeWork=0;
+    live.chargeWork=[&](std::uint64_t n) {work+=n;};
+    geo::detail::optimizeOcctDelaunayQuality(live,allFixed,
+        [&](Vec3) {if (!centroidQueries) firstNativeWork=work;++centroidQueries;return true;},
+        [&](Vec3) {++nodeQueries;return false;},edits,3);
+    const auto repaired=asCapMesh(live);
+    const auto after=algo::analyzeMixedMeshQuality(repaired);
+    require(edits==1 && live.metrics.flips23==1 && after.valid && after.tet4==3 &&
+            after.minimumQuality>.25 && minimumRadiusRatio(live,live.vertices[4].position)>beforeRadius,
+            "fixed-vertex cap sliver requires an improving two-to-three face repair");
+    require(nodeQueries==0 && centroidQueries==3 && live.edges.contains(Complex::Edge{3,4}) &&
+            !live.faces.contains(Complex::Face{0,1,2}),
+            "cap repair must replace only its unprotected shared face with the interior apex edge");
+    require(live.protectedFaces==boundary && live.protectedEdges==edges &&
+            mesh::auditLinearVolumeBoundary(repaired).valid &&
+            std::abs(after.totalVolume-before.totalVolume)<=before.totalVolume*1e-12,
+            "critical face repair must retain the protected shell and material volume");
+    sameCapBoundary(source,repaired);
+    const auto afterPoor=poorCounts(live);
+    require(afterPoor[0]==0 && afterPoor[1]==0 && beforePoor[0]>0,
+            "critical face repair must remove the sliver without increasing poor-cell counts");
+    for (std::size_t id=0;id<live.cells.size();++id) if (live.alive[id]) {
+        const auto& cell=live.cells[id];
+        const auto& v=cell.vertices;
+        require(cell.classification==mesh::Classification{3,17} &&
+                predicates::orient3d(live.vertices[v[0]].position,live.vertices[v[1]].position,
+                    live.vertices[v[2]].position,live.vertices[v[3]].position)==predicates::Sign::Positive,
+                "cap replacement must preserve original body tags and exact positive orientation");
+    }
+
+    // Each refusal leaves the complete fixed-vertex complex untouched. The
+    // boundary edges have stars of size two, so no edge move can hide a face
+    // repair that crossed its protected/interface or resource boundary.
+    for (unsigned refusal=0;refusal<5;++refusal) {
+        auto refused=capBipyramid();
+        if (refusal==0) refused.protectedFaces.insert({0,1,2});
+        if (refusal==1) refused.cells[1].classification={3,18};
+        if (refusal==2) refused.maximumStoredCells=refused.cells.size()+2;
+        const auto original=mesh::meshHash(asCapMesh(refused));
+        unsigned refusedEdits=0,queries=0;
+        geo::detail::optimizeOcctDelaunayQuality(refused,allFixed,
+            [&](Vec3) {++queries;return refusal!=4;},
+            [](Vec3) {return true;},refusedEdits,refusal==3?2:3);
+        require(refusedEdits==0 && mesh::meshHash(asCapMesh(refused))==original,
+                "cap face repair violated a protected face, solid interface, storage/tet cap or native refusal");
+        if (refusal==4) require(queries>0,"cap repair must obtain original-solid centroid admission");
+    }
+    {
+        auto refused=capBipyramid();
+        const auto original=mesh::meshHash(asCapMesh(refused));
+        unsigned refusedEdits=0,queries=0;
+        bool caught=false;
+        try {
+            geo::detail::optimizeOcctDelaunayQuality(refused,allFixed,
+                [&](Vec3) {if (++queries==2) throw NativeStop{};return true;},
+                [](Vec3) {return true;},refusedEdits,3);
+        } catch (const NativeStop&) {caught=true;}
+        require(caught && refusedEdits==0 && mesh::meshHash(asCapMesh(refused))==original,
+                "interrupted cap centroid admission must leave the face transaction uncommitted");
+    }
+    require(firstNativeWork>0,"critical face repair must charge its geometric proposal work");
+    for (bool afterNative:{false,true}) {
+        auto refused=capBipyramid();
+        const auto original=mesh::meshHash(asCapMesh(refused));
+        unsigned refusedEdits=0,queries=0;
+        std::uint64_t spent=0;
+        bool caught=false;
+        refused.chargeWork=[&](std::uint64_t n) {
+            if ((afterNative && queries==3) || (!afterNative && n>firstNativeWork-1-spent))
+                throw WorkStop{};
+            spent+=n;
+        };
+        try {
+            geo::detail::optimizeOcctDelaunayQuality(refused,allFixed,
+                [&](Vec3) {++queries;return true;},[](Vec3) {return true;},refusedEdits,3);
+        } catch (const WorkStop&) {caught=true;}
+        require(caught && refusedEdits==0 && mesh::meshHash(asCapMesh(refused))==original,
+                "cap face repair must stop before publication when charged work is exhausted");
+    }
+    for (const auto queries:std::array<std::uint64_t,3>{0,1,2}) {
+        auto transaction=source;
+        const auto original=mesh::meshHash(transaction);
+        const auto refused=geo::detail::improveOcctDelaunayMeshQuality(transaction,
+            200000,queries,3,64*1024*1024,[](Vec3) {return true;},
+            [](Vec3) {return true;},[](std::uint64_t) {});
+        require(!refused && mesh::meshHash(transaction)==original,
+                "postfill cap query exhaustion must retain the full original mesh");
+    }
+    auto transaction=source;
+    const auto accepted=geo::detail::improveOcctDelaunayMeshQuality(transaction,
+        200000,3,3,64*1024*1024,[](Vec3) {return false;},
+        [](Vec3) {return true;},[](std::uint64_t) {});
+    require(accepted==1 && algo::analyzeMixedMeshQuality(transaction).minimumQuality>.25 &&
+            mesh::auditLinearVolumeBoundary(transaction).valid,
+            "postfill transaction must publish the fully admitted fixed-boundary cap repair");
+    sameCapBoundary(source,transaction);
+}
 }
 int main() {
     try {
+        exerciseCriticalFaceRepair();
         auto live=closedStar();
         const auto before=algo::analyzeMixedMeshQuality(asMesh(live));
         const auto beforePoor=poorCounts(live);

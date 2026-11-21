@@ -68,8 +68,13 @@ local size field. Spacing and native-solid checks admit these proposals. This
 avoids relying on small later insertions to replace long connections inherited
 from a boundary-only fill; it does not guarantee a requested quality floor.
 
-The subsequent bounded quality pass uses edge swaps and partial interior-node
-movements. Both stages preserve CAD boundary coordinates and tags, and retain
+The subsequent bounded quality pass first tries to repair critical cells with
+face and edge swaps. If direct swaps cannot replace a nonconvex edge star, it
+can reconstruct a bounded connected cavity from an existing nearby vertex.
+The replacement must preserve the oriented shell, every vertex, protected
+constraints and body ownership, and pass quality and native-solid checks.
+Partial interior-node movements and ordinary edge swaps then improve spacing.
+These stages preserve CAD boundary coordinates and tags, and retain
 the native geometry and validity checks. Placement is limited by node, work,
 query, temporary-storage and output admissions. If the extra-site seed is refused,
 the ordinary boundary seed is retried within the remaining allowance; both

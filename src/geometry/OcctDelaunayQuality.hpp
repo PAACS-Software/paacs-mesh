@@ -6,6 +6,7 @@
 #pragma once
 
 #include "../bnd/TetBistellarRecovery.hpp"
+#include "OcctDelaunayRecone.hpp"
 #include "paacs/mesh/Quality.hpp"
 #include <algorithm>
 #include <array>
@@ -64,6 +65,52 @@ void optimizeOcctDelaunayQuality(bnd::detail::BistellarComplex& live,
         if (!(volume>0.) || !(sum>0.)) return 0.;
         const auto q=12.*std::pow(3.*volume,2./3.)/sum;
         return std::isfinite(q)?q:0.;
+    };
+    const auto swapFace=[&](Complex::Face face) {
+        live.charge();
+        if (tetCount>=maximumTets || live.cells.size()>live.maximumStoredCells ||
+            live.maximumStoredCells-live.cells.size()<3) return false;
+        // The existing bistellar builder certifies a convex two-cell union
+        // or validates its complete oriented replacement shell. Its vertices
+        // remain fixed, including all original CAD boundary vertices.
+        auto patch=live.flip23(Complex::key(face),std::nullopt);
+        if (!patch) return false;
+        double beforeQuality=1.,beforeMeanRatio=1.,beforeVolume=0.;
+        double afterQuality=1.,afterMeanRatio=1.,afterVolume=0.;
+        std::array<unsigned,2> beforePoor{},afterPoor{};
+        for (const auto id:patch->removed) {
+            live.charge(4);
+            const auto p=points(live.cells[id]);
+            const auto mean=meanRatio(p);
+            beforeQuality=std::min(beforeQuality,quality(p));
+            beforeMeanRatio=std::min(beforeMeanRatio,mean);
+            beforePoor[0]+=mean<.1;
+            beforePoor[1]+=mean<.25;
+            beforeVolume+=signedVolume(p);
+        }
+        for (const auto& cell:patch->added) {
+            live.charge(4);
+            const auto p=points(cell);
+            const auto mean=meanRatio(p);
+            afterQuality=std::min(afterQuality,quality(p));
+            afterMeanRatio=std::min(afterMeanRatio,mean);
+            afterPoor[0]+=mean<.1;
+            afterPoor[1]+=mean<.25;
+            afterVolume+=signedVolume(p);
+        }
+        if (!(beforeVolume>0.) || !(afterVolume>0.) ||
+            !(afterQuality>beforeQuality+1e-12) || afterMeanRatio<beforeMeanRatio ||
+            afterPoor[0]>beforePoor[0] || afterPoor[1]>beforePoor[1] ||
+            !(std::abs(afterVolume-beforeVolume)<=1e-10*(afterVolume+beforeVolume)) ||
+            !live.valid(*patch,std::nullopt) || !live.preservesSurvivors(*patch)) return false;
+        for (const auto& cell:patch->added) {
+            live.charge();
+            if (!admitCentroid(centroid(points(cell)))) return false;
+        }
+        live.apply(*patch);
+        tetCount=tetCount-patch->removed.size()+patch->added.size();
+        ++edits;
+        return true;
     };
     const auto swapEdge=[&](Complex::Edge edge) {
         live.charge();
@@ -197,7 +244,93 @@ void optimizeOcctDelaunayQuality(bnd::detail::BistellarComplex& live,
         return false;
     };
 
-    // Give interior spacing a bounded sweep before the edge search spends
+    const auto reconeEdge=[&](Complex::Edge edge) {
+        live.charge();
+        if (live.protectedEdges.contains(Complex::key(edge))) return false;
+        for (const auto apex:occtDelaunayEdgeReconeApices(live,edge,fixedVertices,8)) {
+            live.charge();
+            auto patch=buildOcctDelaunayEdgeRecone(live,edge,apex,64);
+            if (!patch || patch->removed.size()>tetCount ||
+                live.cells.size()>live.maximumStoredCells ||
+                patch->added.size()>live.maximumStoredCells-live.cells.size()) continue;
+            const auto retainedTets=tetCount-patch->removed.size();
+            if (retainedTets>maximumTets || patch->added.size()>maximumTets-retainedTets) continue;
+            double beforeQuality=1.,beforeMeanRatio=1.,beforeVolume=0.;
+            double afterQuality=1.,afterMeanRatio=1.,afterVolume=0.;
+            std::array<unsigned,2> beforePoor{},afterPoor{};
+            for (const auto id:patch->removed) {
+                live.charge(4);
+                const auto p=points(live.cells[id]);
+                const auto mean=meanRatio(p);
+                beforeQuality=std::min(beforeQuality,quality(p));
+                beforeMeanRatio=std::min(beforeMeanRatio,mean);
+                beforePoor[0]+=mean<.1;
+                beforePoor[1]+=mean<.25;
+                beforeVolume+=signedVolume(p);
+            }
+            bool clearsCriticalFloor=true;
+            for (const auto& cell:patch->added) {
+                live.charge(4);
+                const auto p=points(cell);
+                const auto mean=meanRatio(p);
+                clearsCriticalFloor=clearsCriticalFloor && mean>=.01;
+                afterQuality=std::min(afterQuality,quality(p));
+                afterMeanRatio=std::min(afterMeanRatio,mean);
+                afterPoor[0]+=mean<.1;
+                afterPoor[1]+=mean<.25;
+                afterVolume+=signedVolume(p);
+            }
+            if (!clearsCriticalFloor || !(beforeVolume>0.) || !(afterVolume>0.) ||
+                !(afterQuality>beforeQuality+1e-12) || afterMeanRatio<beforeMeanRatio ||
+                afterPoor[0]>beforePoor[0] || afterPoor[1]>beforePoor[1] ||
+                !(std::abs(afterVolume-beforeVolume)<=1e-10*(afterVolume+beforeVolume)) ||
+                !live.valid(*patch,std::nullopt) || !live.preservesSurvivors(*patch)) continue;
+            if (!std::ranges::all_of(patch->added,[&](const Cell& cell) {
+                live.charge();
+                return admitCentroid(centroid(points(cell)));
+            })) continue;
+            live.apply(*patch);
+            tetCount=retainedTets+patch->added.size();
+            ++edits;
+            return true;
+        }
+        return false;
+    };
+
+    // A boundary-only sliver cannot be improved by moving an interior vertex.
+    // Repair the worst critical cells before relocation or ordinary edge
+    // searches consume their shared work and original-solid query allowance.
+    for (unsigned pass=0;pass<2 && edits<maximumEdits;++pass) {
+        std::vector<std::pair<double,std::size_t>> critical;
+        for (std::size_t id=0;id<live.cells.size();++id) {
+            live.charge();
+            if (!live.alive[id]) continue;
+            const auto mean=meanRatio(points(live.cells[id]));
+            if (mean<.01) critical.emplace_back(mean,id);
+        }
+        std::sort(critical.begin(),critical.end());
+        const auto previous=edits;
+        for (const auto& [mean,id]:critical) {
+            (void)mean;
+            if (edits>=maximumEdits) break;
+            live.charge();
+            if (!live.alive[id] || meanRatio(points(live.cells[id]))>=.01) continue;
+            bool changed=false;
+            for (const auto face:Complex::faceKeys(live.cells[id])) {
+                if (swapFace(face)) {changed=true;break;}
+            }
+            if (!changed) for (const auto edge:Complex::edgeKeys(live.cells[id]))
+                if (swapEdge(edge)) {changed=true;break;}
+            // A nonconvex link can block every direct flip. Reconstruct its
+            // complete edge star and bounded visibility closure from an
+            // existing adjacent apex, with every point and PLC facet fixed.
+            if (!changed) for (const auto edge:Complex::edgeKeys(live.cells[id]))
+                if (reconeEdge(edge)) break;
+        }
+        if (edits==previous) break;
+    }
+
+    // Give interior spacing a bounded sweep before the ordinary edge search spends
     // its work allowance. Repeat only after topology changes make new stars.
     // A closed positive star retains its oriented link and material volume.
     const auto relocate=[&] {
