@@ -1,0 +1,26 @@
+Open CASCADE Technology @PAACS_OCCT_VERSION@
+
+This wheel uses shared Open CASCADE Technology libraries. OCCT is licensed under
+GNU LGPL version 2.1 with the Open CASCADE exception. Both texts are included in
+the adjacent licenses directory. PAACS Mesh is separately licensed under MPL-2.0.
+
+The unmodified OCCT source used by the wheel source-build recipe is available at:
+@PAACS_OCCT_URL@
+SHA-512: @PAACS_OCCT_SHA512@
+
+The wheel build script provides the verified source archive beside the wheel.
+Keep this archive available with any redistributed wheel. The PAACS source
+contains the matching build recipe in cmake/step and cmake/python. OCCT shared
+libraries are bundled separately from the PAACS extension. DLL filenames may be
+isolated by the wheel repair tool; the OCCT source is unchanged.
+
+To replace OCCT, use the provided source recipe to build a compatible shared SDK,
+then rebuild the wheel with scripts/build_python_wheel.py --occt-dir pointing to
+that SDK's CMake configuration directory. The supported public wheels use the
+pinned OCCT version above. Do not replace only one DLL in an incompatible set.
+
+Windows wheels may include unmodified Microsoft Visual C++ runtime files from
+the licensed Visual Studio redistributable directory. These files are separately
+licensed by Microsoft, not under MPL or LGPL. Their redistribution terms are at:
+https://learn.microsoft.com/en-us/visualstudio/releases/2022/redistribution
+https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files
