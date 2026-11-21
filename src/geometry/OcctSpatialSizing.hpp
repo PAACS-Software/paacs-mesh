@@ -61,6 +61,32 @@ public:
         return h;
     }
 
+    // Conservative minimum over a cell box. Analytic volume controls retain
+    // their exact bound; trimmed-face distance uses its 1-Lipschitz property.
+    // This exposes enclosed fine regions without depending on vertex samples.
+    double minimumOnBox(Vec3 lower, Vec3 upper) const {
+        auto h=boxes_.minimumOnBox(lower,upper);
+        const auto center=lower+(upper-lower)*.5;
+        const auto radius=(upper-lower).norm()*.5;
+        for (const auto& face:faces_) {
+            if (face.size>=h) continue;
+            if (face.slope==0.) {h=face.size;continue;}
+            const auto gap=[](double a,double b,double c,double d) {
+                return std::max({0.,a-d,c-b});
+            };
+            auto distance=std::hypot(gap(lower.x,upper.x,face.lower.x,face.upper.x),
+                gap(lower.y,upper.y,face.lower.y,face.upper.y),
+                gap(lower.z,upper.z,face.lower.z,face.upper.z));
+            if (face.size+face.slope*distance>=h) continue;
+            Vec3 closest;
+            if (!closestPointOnOcctFace(model_,face.tag,center,closest))
+                throw std::runtime_error("native sizing could not bound the selected trimmed face");
+            distance=std::max(distance,std::max(0.,(center-closest).norm()-radius));
+            h=std::min(h,face.size+face.slope*distance);
+        }
+        return h;
+    }
+
 private:
     struct Face {
         int tag;

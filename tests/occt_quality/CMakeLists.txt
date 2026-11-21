@@ -61,7 +61,7 @@ if(WIN32)
 endif()
 
 enable_testing()
-foreach(name IN ITEMS delaunay_cavity delaunay_quality delaunay_recone interior_sites)
+foreach(name IN ITEMS delaunay_cavity delaunay_quality delaunay_recone interior_sites interior_front)
     add_executable(${name} "${paacs_source}/tests/occt_${name}.cpp")
     target_include_directories(${name} PRIVATE
         "${paacs_source}/include" "${paacs_source}/src/geometry")
