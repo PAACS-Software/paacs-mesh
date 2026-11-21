@@ -11,8 +11,11 @@ This interface has not been published to PyPI. Download and extract the workflow
 artifact, then install its `.whl` file in a Python 3.12 environment:
 
 ```powershell
-python -m pip install --only-binary=:all: .\paacs_mesh-1.2.0rc1-cp312-cp312-win_amd64.whl
+python -m pip install --force-reinstall --only-binary=:all: .\paacs_mesh-1.2.0rc1-cp312-cp312-win_amd64.whl
 ```
+
+Development artifacts can share the candidate version; `--force-reinstall`
+ensures an updated wheel replaces an earlier artifact with that version.
 
 ## Import, mesh and export
 
@@ -43,6 +46,80 @@ The same operation is available from the command line:
 ```powershell
 python -m paacs_mesh part.step part.vtk --size 0.7
 ```
+
+## Face sizing, volume regions and growth
+
+Use `model.face_tags` and `model.body_tags` to inspect the imported IDs before
+assigning controls. Face tags belong to that imported model; a different or
+edited STEP file can assign different IDs.
+
+`FaceSize` refines a selected CAD face. `BoxSize` defines a sizing influence
+region inside the existing material; it does not create another body or an
+internal material boundary. These immutable controls are copied into the native
+request. Overlapping influences use the smaller requested size.
+
+For the project-generated [cylinder fixture](../tests/fixtures/cad/cylinder.step),
+face 1 is the curved wall:
+
+```python
+model = pm.read_step("cylinder.step")
+print(model.face_tags)  # [1, 2, 3]
+
+mesh = model.mesh(
+    size=0.7,
+    face_sizes=[pm.FaceSize(tag=1, size=0.16)],
+    volume_controls=[pm.BoxSize(
+        lower=(-0.3, -0.3, 0.7), upper=(0.3, 0.3, 1.3), size=0.15,
+    )],
+    min_size=0.12,
+    growth=1.55,
+    assembly="conforming",
+    max_work=100_000_000,
+)
+mesh.write("sized-cylinder.vtk")
+print(mesh.report["sizing"])
+```
+
+The spatial route currently supports **one Tet4 solid with
+`assembly="conforming"`**. The assembly-preserving default remains unchanged;
+unsupported combinations return a `MeshingError` with a hint. No parts are
+fused or dropped to accommodate a sizing request. The example explicitly raises
+the logical work budget for the spatial route.
+
+`native_sizing=None` automatically selects spatial sizing when controls are
+present. Set `native_sizing=True` to use that route even without controls, for
+example when comparing a uniform baseline against a refined mesh. Set it to
+`False` to retain the existing analytic end-cap sizing on supported cylinders
+and tubes; box controls require spatial sizing. Calls without controls retain
+the existing route selection and defaults.
+
+`min_size` clamps the requested field, rather than imposing a minimum on every
+produced edge. Curvature, boundary recovery and connectivity can require smaller
+edges. A control's `growth=None` inherits the global `growth`; an explicit
+per-control value overrides it:
+
+```python
+wall = pm.FaceSize(tag=1, size=0.16, growth=1.25)
+```
+
+Growth must be at least 1. It sets the distance-based transition from a fine
+control to the global size, rather than a strict adjacent-cell size ratio.
+**Growth 1 extends that control's fine size throughout the domain.** Sizes remain
+best-effort targets. Inspect achieved medians, percentiles and geometric error
+when qualifying a mesh; a good median alone can conceal larger cells.
+
+The command-line equivalent is:
+
+```powershell
+python -m paacs_mesh cylinder.step sized-cylinder.vtk --size .7 `
+  --face-size 1 .16 --size-box -.3 -.3 .7 .3 .3 1.3 .15 `
+  --min-size .12 --growth 1.55 --assembly conforming --max-work 100000000
+```
+
+Repeat `--face-size` and `--size-box` for additional controls. The CLI also
+accepts `--native-sizing` and `--no-native-sizing`.
+The [Python sizing example](../examples/python_step_sizing/README.md) compares
+four requests on the same cylinder, with measured sizes and mesh sections.
 
 ## Recovery, assemblies and limits
 
@@ -134,8 +211,8 @@ the C++ SDK headers and static libraries.
 
 ## Next milestones
 
-Extend this interface with combined face/volume sizing and growth, NumPy mesh
-arrays, then macOS and Linux wheels. CAD inspection, semantic selections and
+Extend this interface with NumPy mesh arrays, then macOS and Linux wheels.
+CAD inspection, semantic selections and
 an inspect–select–mesh–audit loop build on those foundations. These features
 will use the native engine's controls and classification rather than a separate
 Python meshing implementation.

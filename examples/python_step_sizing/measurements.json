@@ -1,0 +1,233 @@
+{
+  "schema": "paacs-python-sizing-example-v1",
+  "source": "tests/fixtures/cad/cylinder.step",
+  "source_sha256": "a05d283e8c8cecee8e0917147db2e359689f3e5d8312a5f051010f002ba42988",
+  "controls": {
+    "global_size": 0.7,
+    "min_size": 0.12,
+    "requested_min_size": 0.12,
+    "growth": 1.55,
+    "native_sizing": true,
+    "requested_native_sizing": true,
+    "mode": "spatial",
+    "face_sizes": [
+      {
+        "tag": 1,
+        "size": 0.16,
+        "effective_size": 0.16,
+        "growth": 1.55,
+        "requested_growth": null
+      }
+    ],
+    "volume_controls": [
+      {
+        "kind": "box",
+        "lower": [
+          -0.3,
+          -0.3,
+          0.7
+        ],
+        "upper": [
+          0.3,
+          0.3,
+          1.3
+        ],
+        "size": 0.15,
+        "effective_size": 0.15,
+        "growth": 1.55,
+        "requested_growth": null
+      }
+    ]
+  },
+  "sizes_are_best_effort": true,
+  "variants": [
+    {
+      "variant": "global",
+      "nodes": 386,
+      "tetrahedra": 1035,
+      "audit_valid": true,
+      "measurements": {
+        "nodes": 386,
+        "tet4": 1035,
+        "selected_face_edges_mm": {
+          "count": 888,
+          "median": 0.2284058328919107,
+          "p95": 0.24372767673822834,
+          "maximum": 0.2859806465305429
+        },
+        "box_tet_median_edges_mm": {
+          "count": 12,
+          "median": 1.418560121182863,
+          "p95": 1.872943709191756,
+          "maximum": 1.91512241586137
+        },
+        "outside_box_tet_median_edges_mm": {
+          "count": 1023,
+          "median": 0.43780852645045754,
+          "p95": 0.9536787103351306,
+          "maximum": 1.7378935827840347
+        },
+        "volume_tet_median_edges_mm": {
+          "count": 1035,
+          "median": 0.43920990230340956,
+          "p95": 1.0101865401541668,
+          "maximum": 1.91512241586137
+        },
+        "adjacent_tet_size_ratio": {
+          "count": 1686,
+          "median": 1.1033284791665268,
+          "p95": 1.8052933169990553,
+          "maximum": 4.91957688515429
+        },
+        "near_box_adjacent_tet_size_ratio": {
+          "count": 189,
+          "median": 1.071506938930008,
+          "p95": 1.894415522278304,
+          "maximum": 3.845784556076153
+        }
+      },
+      "archive_sha256": "db562e5776845b541fb9eebcef4d2fc01a904c6fe1c01ff21ce7058009fa2fe4"
+    },
+    {
+      "variant": "face",
+      "nodes": 936,
+      "tetrahedra": 3952,
+      "audit_valid": true,
+      "measurements": {
+        "nodes": 936,
+        "tet4": 3952,
+        "selected_face_edges_mm": {
+          "count": 1252,
+          "median": 0.17117293978895204,
+          "p95": 0.326587880497949,
+          "maximum": 0.5413939803616183
+        },
+        "box_tet_median_edges_mm": {
+          "count": 3,
+          "median": 1.6719396142243614,
+          "p95": 1.802277800046748,
+          "maximum": 1.81675982069368
+        },
+        "outside_box_tet_median_edges_mm": {
+          "count": 3949,
+          "median": 0.1960632940759766,
+          "p95": 0.5005671455444916,
+          "maximum": 1.5302744915329236
+        },
+        "volume_tet_median_edges_mm": {
+          "count": 3952,
+          "median": 0.19608136064534742,
+          "p95": 0.503992183905707,
+          "maximum": 1.81675982069368
+        },
+        "adjacent_tet_size_ratio": {
+          "count": 7336,
+          "median": 1.1108339740497546,
+          "p95": 1.5352443332426438,
+          "maximum": 4.334023416518823
+        },
+        "near_box_adjacent_tet_size_ratio": {
+          "count": 114,
+          "median": 1.251137374983418,
+          "p95": 2.0087291428303398,
+          "maximum": 2.399167502914752
+        }
+      },
+      "archive_sha256": "21183cf0d37ed8ebd987bea279fd22b247a29a4678827f1ddfa7c4bfba931235"
+    },
+    {
+      "variant": "box",
+      "nodes": 655,
+      "tetrahedra": 2474,
+      "audit_valid": true,
+      "measurements": {
+        "nodes": 655,
+        "tet4": 2474,
+        "selected_face_edges_mm": {
+          "count": 888,
+          "median": 0.2284058328919107,
+          "p95": 0.24372767673822834,
+          "maximum": 0.2859806465305429
+        },
+        "box_tet_median_edges_mm": {
+          "count": 674,
+          "median": 0.15186128457623216,
+          "p95": 0.9830404952788092,
+          "maximum": 1.437161138889937
+        },
+        "outside_box_tet_median_edges_mm": {
+          "count": 1800,
+          "median": 0.3419630984537318,
+          "p95": 0.9088828026716187,
+          "maximum": 1.7378935827840347
+        },
+        "volume_tet_median_edges_mm": {
+          "count": 2474,
+          "median": 0.2901548700353055,
+          "p95": 0.9317947628841315,
+          "maximum": 1.7378935827840347
+        },
+        "adjacent_tet_size_ratio": {
+          "count": 4562,
+          "median": 1.143322058919223,
+          "p95": 2.2462806896302485,
+          "maximum": 4.79267385640546
+        },
+        "near_box_adjacent_tet_size_ratio": {
+          "count": 2706,
+          "median": 1.1789395972081793,
+          "p95": 2.6928915377842193,
+          "maximum": 4.350780672218748
+        }
+      },
+      "archive_sha256": "a71c47416d466b951d22807e04ee19154c03d63fecf849b166afd99a193adb95"
+    },
+    {
+      "variant": "combined",
+      "nodes": 985,
+      "tetrahedra": 4133,
+      "audit_valid": true,
+      "measurements": {
+        "nodes": 985,
+        "tet4": 4133,
+        "selected_face_edges_mm": {
+          "count": 1252,
+          "median": 0.17117293978895204,
+          "p95": 0.326587880497949,
+          "maximum": 0.5413939803616183
+        },
+        "box_tet_median_edges_mm": {
+          "count": 575,
+          "median": 0.16592196975406337,
+          "p95": 0.6440438922333755,
+          "maximum": 1.3187772095087773
+        },
+        "outside_box_tet_median_edges_mm": {
+          "count": 3558,
+          "median": 0.22663893914228878,
+          "p95": 0.696250620206037,
+          "maximum": 1.4206558521664212
+        },
+        "volume_tet_median_edges_mm": {
+          "count": 4133,
+          "median": 0.21836642066977907,
+          "p95": 0.6863969046019996,
+          "maximum": 1.4206558521664212
+        },
+        "adjacent_tet_size_ratio": {
+          "count": 7700,
+          "median": 1.1346630297295106,
+          "p95": 1.7589859118469207,
+          "maximum": 4.592110229917378
+        },
+        "near_box_adjacent_tet_size_ratio": {
+          "count": 2490,
+          "median": 1.150079659426538,
+          "p95": 2.2845321206570186,
+          "maximum": 4.592110229917378
+        }
+      },
+      "archive_sha256": "fb6be1c23dbd76257c7f1d6a76b34f0ba87ebfe7ed43642b895d4ceae9b2a355"
+    }
+  ]
+}
