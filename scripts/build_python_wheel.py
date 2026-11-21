@@ -32,6 +32,7 @@ CRT_NAMES = {
     "msvcp140_atomic_wait.dll", "msvcp140_codecvt_ids.dll", "concrt140.dll",
     "vcruntime140.dll", "vcruntime140_1.dll", "vcruntime140_threads.dll",
 }
+NUMPY_TEST_VERSIONS = ("1.26.4", "2.5.5")
 
 
 def run(command: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> str:
@@ -151,7 +152,7 @@ def validate_contents(wheel: Path, runtime: Path, crt: list[str]) -> dict:
                 "unmodified_microsoft_runtime": crt}
 
 
-def installed_smoke(source: Path, wheel: Path, build_dir: Path) -> None:
+def installed_smoke(source: Path, wheel: Path, build_dir: Path) -> list[dict]:
     environment = build_dir / "installed-test"
     venv.EnvBuilder(with_pip=True, clear=True).create(environment)
     python = environment / "Scripts/python.exe"
@@ -167,18 +168,42 @@ def installed_smoke(source: Path, wheel: Path, build_dir: Path) -> None:
     clean["PATH"] = os.pathsep.join([str(environment / "Scripts"), str(windows / "System32"), str(windows)])
     clean["PAACS_TEST_STEP_FIXTURE"] = str(fixture)
     clean["PAACS_EXPECT_INSTALLED"] = "1"
+    clean["PAACS_EXPECT_NO_NUMPY"] = "1"
+    clean.pop("PAACS_REQUIRE_NUMPY", None)
     sizing_results = build_dir / "sizing-validation.json"
     if sizing_results.is_file():
         sizing_results.unlink()
     clean["PAACS_SIZING_RESULTS"] = str(sizing_results)
     clean["PYTHONNOUSERSITE"] = "1"
     run([str(python), "-I", "-c", "import paacs_mesh; print(paacs_mesh.__file__)"], cwd=environment, env=clean)
+    run([str(python), "-I", "-c",
+         "import importlib.util; assert importlib.util.find_spec('numpy') is None"],
+        cwd=environment, env=clean)
     result = run([str(python), "-I", "-m", "unittest", "discover", "-s", str(source / "python/tests"), "-v"],
                  cwd=environment, env=clean)
     if "Ran 0 tests" in result:
         raise RuntimeError("Installed-wheel qualification did not discover any tests")
     if (source / "python/tests/test_sizing.py").is_file() and not sizing_results.is_file():
         raise RuntimeError("Installed-wheel sizing checks did not produce their measurements")
+    numpy_results = []
+    if (source / "python/tests/test_numpy.py").is_file():
+        clean.pop("PAACS_EXPECT_NO_NUMPY", None)
+        clean["PAACS_REQUIRE_NUMPY"] = "1"
+        for version in NUMPY_TEST_VERSIONS:
+            run([str(python), "-m", "pip", "install", "--disable-pip-version-check",
+                 "--only-binary=:all:", "--no-deps", "--force-reinstall", f"numpy=={version}"],
+                cwd=environment, env=clean)
+            run([str(python), "-I", "-c",
+                 f"import numpy; assert numpy.__version__ == {version!r}; print(numpy.__version__)"],
+                cwd=environment, env=clean)
+            result = run([str(python), "-I", "-m", "unittest", "discover",
+                          "-s", str(source / "python/tests"), "-p", "test_numpy.py", "-v"],
+                         cwd=environment, env=clean)
+            count = re.search(r"^Ran (\d+) tests? in ", result, re.MULTILINE)
+            if count is None or int(count.group(1)) == 0 or re.search(r"^OK \(skipped=", result, re.MULTILINE):
+                raise RuntimeError("NumPy qualification must discover and pass every array test")
+            numpy_results.append({"version": version, "tests": int(count.group(1)), "status": "passed"})
+    return numpy_results
 
 
 def main() -> None:
@@ -236,7 +261,9 @@ def main() -> None:
     receipt = validate_contents(wheel, runtime, crt)
     archive = source_archive(source, sdk, output)
     receipt["occt_source"] = {"file": archive.name, "sha256": sha256(archive)}
-    installed_smoke(source, wheel, build_dir)
+    numpy_results = installed_smoke(source, wheel, build_dir)
+    if numpy_results:
+        receipt["numpy_validation"] = numpy_results
     sizing_results = build_dir / "sizing-validation.json"
     if sizing_results.is_file():
         sizing_output = output / sizing_results.name
