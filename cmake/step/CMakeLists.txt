@@ -20,6 +20,12 @@ set(compiler_args
     "-DCMAKE_C_COMPILER:FILEPATH=${CMAKE_C_COMPILER}"
     "-DCMAKE_CXX_COMPILER:FILEPATH=${CMAKE_CXX_COMPILER}"
 )
+foreach(paacs_setting CMAKE_OSX_ARCHITECTURES CMAKE_OSX_DEPLOYMENT_TARGET
+        CMAKE_OSX_SYSROOT CMAKE_TOOLCHAIN_FILE)
+    if(DEFINED ${paacs_setting} AND NOT "${${paacs_setting}}" STREQUAL "")
+        list(APPEND compiler_args "-D${paacs_setting}:STRING=${${paacs_setting}}")
+    endif()
+endforeach()
 get_property(multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 if(NOT multi_config)
     list(APPEND compiler_args "-DCMAKE_BUILD_TYPE:STRING=Release")
@@ -68,6 +74,7 @@ ExternalProject_Add(occt
         "-DUSE_TK:BOOL=OFF"
         "-DUSE_FREETYPE:BOOL=OFF"
         "-DUSE_XLIB:BOOL=OFF"
+        "-DUSE_TBB:BOOL=OFF"
     BUILD_COMMAND "${CMAKE_COMMAND}" --build <BINARY_DIR> --config Release --parallel "${PAACS_STEP_JOBS}"
     INSTALL_COMMAND "${CMAKE_COMMAND}" --install <BINARY_DIR> --config Release
     USES_TERMINAL_DOWNLOAD ON

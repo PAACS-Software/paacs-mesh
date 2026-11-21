@@ -1,14 +1,23 @@
 # Python STEP interface
 
-The first Python distribution targets **CPython 3.12 on Windows x64**. It calls
-the C++ STEP importer and Tet4 mesher in process. The repaired wheel contains
-the shared CAD libraries and runtime dependencies; installation does not need
-a compiler, an OCCT SDK or changes to `PATH`.
+The Python distribution calls the C++ STEP importer and Tet4 mesher in process.
+Development wheels target **CPython 3.12** on these platforms:
+
+| System | Architecture | Compatibility target |
+|---|---|---|
+| Windows | x64 | Qualified on Windows Server 2022 |
+| macOS | ARM64 | macOS 15 or newer |
+| Linux | x64 | glibc 2.28 or newer, manylinux 2.28 |
+
+Each repaired wheel contains the shared CAD libraries and runtime dependencies.
+Installation needs Python and pip, with no compiler, OCCT SDK or `PATH` setup.
 
 Wheels are development artifacts from the
-[Python STEP wheel workflow](../.github/workflows/python-wheel.yml).
+[Python STEP wheel workflow](../.github/workflows/python-wheel.yml). Choose the
+artifact matching the system and architecture above.
 This interface has not been published to PyPI. Download and extract the workflow
-artifact, then install its `.whl` file in a Python 3.12 environment:
+artifact, then install its `.whl` file in a Python 3.12 environment. For example,
+on Windows:
 
 ```powershell
 python -m pip install --force-reinstall --only-binary=:all: .\paacs_mesh-1.2.0rc1-cp312-cp312-win_amd64.whl
@@ -253,24 +262,50 @@ except pm.MeshingError as error:
 
 ## Build and qualify a wheel
 
-Building requires Visual Studio 2022 C++ build tools and CPython 3.12 x64. Run
-from the repository root:
+Windows builds require Visual Studio 2022 C++ build tools and CPython 3.12 x64.
+Run from the repository root:
 
 ```powershell
 python -m venv build/python-dev
-build/python-dev/Scripts/python.exe -m pip install build==1.6.1 delvewheel==1.13.2
+build/python-dev/Scripts/python.exe -m pip install build==1.6.1 delvewheel==1.13.2 cmake==4.4.3 ninja==1.13.2
 build/python-dev/Scripts/python.exe scripts/build_python_wheel.py --jobs 4
 ```
 
-The script builds the SHA-512-pinned OCCT 8.0.1 source, builds the extension,
-repairs the wheel's DLL dependencies and verifies the bundled Microsoft runtime
-files. It installs the wheel into a fresh virtual environment and tests STEP
-import, Tet4 publication, failures and tagged exports with SDK paths removed
-and CAD environment variables cleared. `dist/` receives the repaired wheel,
-matching OCCT source archive and a validation receipt. Keep the source archive
-and notices available when redistributing the wheel.
-Use this script for a distributable Windows wheel: the build backend produces
-an intermediate wheel that still needs DLL repair.
+On macOS 15 ARM64, install Xcode command-line tools and ARM64 CPython 3.12, then:
+
+```sh
+python3.12 -m venv build/python-dev
+build/python-dev/bin/python -m pip install build==1.6.1 delocate==0.13.0 cmake==4.4.3 ninja==1.13.2
+build/python-dev/bin/python scripts/build_python_wheel.py --jobs 3
+```
+
+Linux wheels build inside the digest-pinned manylinux 2.28 x64 container in the
+[workflow](../.github/workflows/python-wheel.yml). Its compiler and glibc target
+establish the compatibility floor before auditwheel repairs the dependency
+closure. The builder refuses a different glibc build host. See the workflow for
+the complete container command and image digest.
+
+The script builds the SHA-512-pinned OCCT 8.0.1 source, builds the extension and
+a matching native CLI, then repairs the wheel with delvewheel, delocate or
+auditwheel. Windows runtime files are checked against their unmodified
+redistributable originals. macOS architecture and deployment target propagate
+through both OCCT bootstrap layers.
+
+The wheel is installed in a fresh virtual environment with SDK, loader and CAD
+variables removed. Qualification exercises STEP import, Tet4 publication,
+failures, sizing, tagged export and both supported NumPy series. A separate
+check compares complete Python/native CLI archives for a cylinder, an assembly
+and combined face/volume sizing at matching settings.
+
+Actions also downloads each artifact onto a separate runner or fresh container
+that has never built OCCT, and repeats the installed-package checks. The Linux
+consumer uses glibc 2.28 and a different mount path from the builder. This checks
+that repaired libraries resolve without absolute paths into the build SDK.
+
+`dist/` receives the repaired wheel, matching OCCT source archive, dependency
+audit, native parity receipt, sizing measurements and validation receipt. Keep
+the source archive and notices available when redistributing the wheel. Use
+this script for distributable wheels; backend output requires platform repair.
 
 For local iteration, reuse a source-built shared OCCT 8.0.1 installation:
 
@@ -287,7 +322,7 @@ the C++ SDK headers and static libraries.
 
 ## Next milestones
 
-Qualify macOS and Linux wheels alongside the Windows distribution.
+Extend the qualified platform and Python-version matrix.
 CAD inspection, semantic selections and
 an inspect–select–mesh–audit loop build on those foundations. These features
 will use the native engine's controls and classification rather than a separate
