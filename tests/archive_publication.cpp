@@ -4,6 +4,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 #include "paacs/sdk/MeshArchive.hpp"
+#include "paacs/algo/Meshers.hpp"
+#include <array>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -11,6 +13,7 @@
 #include <iostream>
 #include <limits>
 #include <new>
+#include <sstream>
 #include <stdexcept>
 #include <vector>
 #if defined(_WIN32)
@@ -53,7 +56,7 @@ std::vector<char> read(const std::filesystem::path &path) {
 }
 void noTemporaryFiles(const std::filesystem::path &directory) {
     for (const auto &entry : std::filesystem::recursive_directory_iterator(directory))
-        require(entry.path().filename().string().find(".paacs-tmp-") == std::string::npos,
+        require(entry.path().filename().u8string().find(u8".paacs-tmp-") == std::u8string::npos,
                 "temporary archive leaked");
 }
 struct Directory {
@@ -100,6 +103,64 @@ int main() {
                     loaded.nodeCount() == 2 && loaded.node(0).x == 4 &&
                     loaded.nodeClass(1).tag == 3,
                 "published replacement readback");
+        noTemporaryFiles(directory.path);
+        // Native path entry points must not narrow Unicode names on Windows.
+        // The archive round trip also checks that a face and a volume may have
+        // the same tag without losing their classification dimension.
+        const auto unicodeDirectory = directory.path /
+            std::filesystem::path(u8"mesh-\u03b4-\u6d4b\u8bd5");
+        require(std::filesystem::create_directory(unicodeDirectory), "Unicode export directory");
+        paacs::mesh::Mesh classified;
+        const double precise = 1.2345678901234567;
+        classified.addNode({precise, 0, 0}, {0, 11});
+        classified.addNode({0, 1, 0}, {1, 12});
+        classified.addNode({0, 0, 1}, {2, 13});
+        classified.addNode({0, 0, 0}, {3, 14});
+        classified.addCell(paacs::mesh::CellType::Tri3,
+                           std::array<paacs::Index, 3>{0, 1, 2}, {2, 7});
+        classified.addCell(paacs::mesh::CellType::Tet4,
+                           std::array<paacs::Index, 4>{0, 1, 2, 3}, {3, 7});
+        const auto unicodeArchive = unicodeDirectory / "classified.paacsmesh";
+        require(paacs::sdk::writeMeshArchiveFile(classified, unicodeArchive).completed,
+                "Unicode archive export");
+        paacs::mesh::Mesh reopened;
+        require(paacs::sdk::readMeshArchiveFile(unicodeArchive, reopened).completed &&
+                    reopened.node(0).x == precise && reopened.nodeClass(2).dim == 2 &&
+                    reopened.nodeClass(2).tag == 13 && reopened.cell(0).onEntity.dim == 2 &&
+                    reopened.cell(1).onEntity.dim == 3 && reopened.cell(0).onEntity.tag == 7 &&
+                    reopened.cell(1).onEntity.tag == 7,
+                "Unicode archive precision/classification round trip");
+        const auto unicodeVtk = unicodeDirectory / "classified.vtk";
+        paacs::io::writeVtkFile(classified, unicodeVtk);
+        const auto vtkBytes = read(unicodeVtk);
+        const std::string vtkText(vtkBytes.begin(), vtkBytes.end());
+        std::istringstream vtk(vtkText);
+        std::string line;
+        bool foundPoints = false;
+        while (std::getline(vtk, line)) {
+            if (line == "POINTS 4 double") {
+                double x = 0, y = 0, z = 0;
+                vtk >> x >> y >> z;
+                require(x == precise && y == 0 && z == 0, "VTK coordinate precision");
+                foundPoints = true;
+                break;
+            }
+        }
+        require(foundPoints &&
+                    vtkText.find("CELL_TYPES 2\n5\n10\nCELL_DATA 2\n") != std::string::npos &&
+                    vtkText.find("POINT_DATA 4\nSCALARS entity_tag int 1\nLOOKUP_TABLE default\n11\n12\n13\n14\nSCALARS entity_dimension int 1\nLOOKUP_TABLE default\n0\n1\n2\n3\n") != std::string::npos &&
+                    vtkText.find("CELL_DATA 2\nSCALARS entity_tag int 1\nLOOKUP_TABLE default\n7\n7\nSCALARS entity_dimension int 1\nLOOKUP_TABLE default\n2\n3\n") != std::string::npos,
+                "VTK point/cell classifications");
+#if defined(_WIN32)
+        {
+            FileLock lock(unicodeVtk);
+            bool refused = false;
+            try { paacs::io::writeVtkFile(second, unicodeVtk); }
+            catch (const std::runtime_error &) { refused = true; }
+            require(refused && read(unicodeVtk) == vtkBytes,
+                    "locked VTK publication must preserve the original");
+        }
+#endif
         noTemporaryFiles(directory.path);
 
         paacs::mesh::Mesh invalid;

@@ -265,7 +265,8 @@ MeshArchiveOutcome deserializeMeshArchive(const std::vector<std::uint8_t> &bytes
                                           mesh::Mesh &value) noexcept {
     return deserializeMeshArchive(std::span<const std::uint8_t>(bytes), value);
 }
-MeshArchiveOutcome writeMeshArchive(const mesh::Mesh &value, const std::string &path) noexcept {
+MeshArchiveOutcome writeMeshArchiveFile(const mesh::Mesh &value,
+                                        const std::filesystem::path &path) noexcept {
     std::vector<std::uint8_t> bytes;
     auto out = serializeMeshArchive(value, bytes);
     if (!out.completed)
@@ -278,7 +279,7 @@ MeshArchiveOutcome writeMeshArchive(const mesh::Mesh &value, const std::string &
         // from truncating an existing file, including across concurrent writers.
         if (path.empty())
             return failure(MeshArchiveReason::IoError);
-        const auto destination = std::filesystem::absolute(std::filesystem::path(path));
+        const auto destination = std::filesystem::absolute(path);
         TemporaryArchive temporary;
         std::ofstream stream;
         static std::atomic<std::uint64_t> sequence{0};
@@ -327,8 +328,8 @@ MeshArchiveOutcome writeMeshArchive(const mesh::Mesh &value, const std::string &
         return failure(MeshArchiveReason::IoError);
     }
 }
-MeshArchiveOutcome readMeshArchive(const std::string &path, mesh::Mesh &value,
-                                   const MeshArchiveLimits &limits) noexcept {
+MeshArchiveOutcome readMeshArchiveFile(const std::filesystem::path &path, mesh::Mesh &value,
+                                       const MeshArchiveLimits &limits) noexcept {
     try {
         std::ifstream stream(path, std::ios::binary | std::ios::ate);
         if (!stream)
@@ -348,6 +349,25 @@ MeshArchiveOutcome readMeshArchive(const std::string &path, mesh::Mesh &value,
         if (!stream)
             return failure(MeshArchiveReason::IoError);
         return deserializeMeshArchive(std::span<const std::uint8_t>(bytes), value, limits);
+    } catch (const std::bad_alloc &) {
+        return failure(MeshArchiveReason::AllocationFailed);
+    } catch (...) {
+        return failure(MeshArchiveReason::IoError);
+    }
+}
+MeshArchiveOutcome writeMeshArchive(const mesh::Mesh &value, const std::string &path) noexcept {
+    try {
+        return writeMeshArchiveFile(value, std::filesystem::path(path));
+    } catch (const std::bad_alloc &) {
+        return failure(MeshArchiveReason::AllocationFailed);
+    } catch (...) {
+        return failure(MeshArchiveReason::IoError);
+    }
+}
+MeshArchiveOutcome readMeshArchive(const std::string &path, mesh::Mesh &value,
+                                   const MeshArchiveLimits &limits) noexcept {
+    try {
+        return readMeshArchiveFile(std::filesystem::path(path), value, limits);
     } catch (const std::bad_alloc &) {
         return failure(MeshArchiveReason::AllocationFailed);
     } catch (...) {

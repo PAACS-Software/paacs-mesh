@@ -6,6 +6,7 @@
 #pragma once
 #include "paacs/mesh/Mesh.hpp"
 #include <cstdint>
+#include <filesystem>
 #include <span>
 #include <string>
 #include <vector>
@@ -48,4 +49,11 @@ MeshArchiveOutcome readMeshArchive(
 MeshArchiveOutcome readMeshArchive(
     const std::string& path, mesh::Mesh& value,
     const MeshArchiveLimits& limits) noexcept;
+// Native filesystem paths, including Unicode paths on Windows. The distinct
+// names preserve source compatibility for existing string and literal callers.
+MeshArchiveOutcome writeMeshArchiveFile(
+    const mesh::Mesh& value, const std::filesystem::path& path) noexcept;
+MeshArchiveOutcome readMeshArchiveFile(
+    const std::filesystem::path& path, mesh::Mesh& value,
+    const MeshArchiveLimits& limits = {}) noexcept;
 } // namespace paacs::sdk
