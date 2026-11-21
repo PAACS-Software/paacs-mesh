@@ -32,6 +32,10 @@ def main(argv=None):
                         help="force spatial sizing or retain legacy cap sizing; automatic with controls")
     parser.add_argument("--max-work", type=int, help="native meshing and validation work budget")
     parser.add_argument("--max-seconds", type=float, help="cooperative native cancellation deadline")
+    parser.add_argument("--warning-quality", type=float,
+                        help="preferred mean-ratio quality in [0,1]; 0 disables warnings")
+    parser.add_argument("--minimum-quality", type=float,
+                        help="strict minimum mean-ratio quality in [0,1]")
     args = parser.parse_args(argv)
     try:
         model = read_step(args.input)
@@ -42,7 +46,8 @@ def main(argv=None):
                           face_sizes=face_sizes, volume_controls=volume_controls,
                           min_size=args.min_size, growth=args.growth,
                           native_sizing=args.native_sizing, max_work=args.max_work,
-                          max_seconds=args.max_seconds)
+                          max_seconds=args.max_seconds, warning_quality=args.warning_quality,
+                          minimum_quality=args.minimum_quality)
         mesh.write(args.output)
         print(json.dumps(mesh.report, indent=2, allow_nan=False))
         return 0
