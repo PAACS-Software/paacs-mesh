@@ -20,8 +20,10 @@ execute_process(COMMAND "${Python_EXECUTABLE}" -c
 file(TO_CMAKE_PATH "${paacs_pybind_license}" paacs_pybind_license)
 install(FILES "${paacs_pybind_license}" DESTINATION paacs_mesh/_occt/licenses
     RENAME pybind11-LICENSE.txt COMPONENT Python)
-install(FILES "${PROJECT_SOURCE_DIR}/cmake/python/delvewheel-LICENSE.txt"
-    DESTINATION paacs_mesh/_occt/licenses COMPONENT Python)
+if(WIN32)
+    install(FILES "${PROJECT_SOURCE_DIR}/cmake/python/delvewheel-LICENSE.txt"
+        DESTINATION paacs_mesh/_occt/licenses COMPONENT Python)
+endif()
 
 include("${PROJECT_SOURCE_DIR}/cmake/OCCTVersion.cmake")
 if(NOT "${OpenCASCADE_MAJOR_VERSION}.${OpenCASCADE_MINOR_VERSION}.${OpenCASCADE_MAINTENANCE_VERSION}"

@@ -19,7 +19,7 @@ set(paacs_python_occt_args
     "-DPAACS_STEP_BUILD_TOOLS:BOOL=OFF")
 foreach(paacs_setting CMAKE_GENERATOR_PLATFORM CMAKE_GENERATOR_TOOLSET
         CMAKE_C_COMPILER CMAKE_CXX_COMPILER CMAKE_MAKE_PROGRAM CMAKE_OSX_ARCHITECTURES
-        CMAKE_OSX_DEPLOYMENT_TARGET CMAKE_TOOLCHAIN_FILE)
+        CMAKE_OSX_DEPLOYMENT_TARGET CMAKE_OSX_SYSROOT CMAKE_TOOLCHAIN_FILE)
     if(DEFINED ${paacs_setting} AND NOT "${${paacs_setting}}" STREQUAL "")
         list(APPEND paacs_python_occt_args "-D${paacs_setting}:STRING=${${paacs_setting}}")
     endif()
