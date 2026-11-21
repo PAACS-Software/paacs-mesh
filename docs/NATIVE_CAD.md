@@ -56,13 +56,15 @@ The `plot` command uses exact intersections of the stored Tet4 cells.
 | `--local-partition-recovery`, `--adaptive-tet-recovery` | Enable optional bounded recovery routes. |
 | `--curvature-points-per-turn N` | Enable curvature-based surface sizing on eligible native routes. |
 | `--improve-tet-quality` | Try bounded quality improvement on native pieces and after spatial sizing, keeping the prescribed surface fixed. |
+| `--advancing-interior-front` | Select experimental size- and shape-guided interior construction for one native Tet4 solid. |
 | `--independent-parts` | Mesh supported bodies separately and report material interference. The result certifies each part individually. |
 | `--max-work`, `--max-working-bytes` | Set work and temporary storage limits. |
 | `--warning-quality`, `--min-quality` | Report a weak mesh or require a strict quality floor. |
 | `--trace-native-stages` | Record active stages and diagnostics on standard error. |
 
-For spatial Tet4 sizing, `--improve-tet-quality` also supplies interior sites to
-the first constrained Delaunay construction. Enclosed boxes contribute points
+For spatial Tet4 sizing without the advancing interior front,
+`--improve-tet-quality` also supplies interior sites to the first constrained
+Delaunay construction. Enclosed boxes contribute points
 before the fill, and oriented surface triangles propose inward points using the
 local size field. Spacing and native-solid checks admit these proposals. This
 avoids relying on small later insertions to replace long connections inherited
@@ -81,6 +83,24 @@ the ordinary boundary seed is retried within the remaining allowance; both
 attempts count toward work and time. Trace stages include `interior_sites`,
 `interior_seed_fallback` when needed, and `volume_quality`. Inspect the achieved
 size and quality distributions, since bounded runs can leave weak cells unresolved.
+
+`--advancing-interior-front` selects the native size-field route for a single
+Tet4 solid, including a global-size request without face or box controls. It
+uses surface support points and a private, constraint-certified material
+scaffold, then advances faces into oversized cells. Volume controls influence
+the size field; this mode does not insert a separate Cartesian grid into them.
+Conservative field bounds also identify enclosed refinement regions.
+
+Each insertion compares candidate positions using neighbour separation and the
+shape and size of every proposed cavity tetrahedron. Exact topology, protected
+boundaries, original body identity and native-solid admission remain mandatory.
+The optional `--improve-tet-quality` pass can follow this construction.
+
+The body receipt's `interior_front` object records advances, isolated-region
+activations, work, queries and elapsed time. `targets_unmet` or `budget_limited`
+means sizing remains unresolved; inspect achieved sizes and quality before use.
+The internal size criterion and local shape admission floors do not certify
+every requested edge length, growth ratio or global minimum quality.
 
 The default material checks reject exterior tetrahedron centroids. On eligible
 Tet4 recovery routes, `--allow-centroids-within-chord-tolerance` applies a

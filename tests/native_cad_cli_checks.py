@@ -87,6 +87,18 @@ def main():
                 or sized_body.get("route") != "native_spatial_sizing"
                 or sized_body.get("local_delaunay_refinement_nodes", 0) == 0):
             raise RuntimeError(f"curved controls did not refine and audit the native volume: {sized}")
+        advancing = run("advancing_interior_front", "cylinder.step",
+                        ("--face-size", "1", ".16", "--size-box", "-.3", "-.3", ".7", ".3", ".3", "1.3", ".15",
+                         "--min-size", ".12", "--growth", "1.55", "--advancing-interior-front",
+                         "--improve-tet-quality", "--max-work", "100000000"),
+                        success=True, size=".7")
+        front = advancing["bodies"][0].get("interior_front", {})
+        if (advancing.get("advancing_interior_front") is not True or advancing.get("audit_valid") is not True
+                or front.get("nodes", 0) == 0 or front.get("front_advances", 0) == 0
+                or front.get("diagnostic") not in {"targets_satisfied", "targets_unmet", "budget_limited"}):
+            raise RuntimeError(f"advancing interior front did not report audited construction: {advancing}")
+        run("advancing_front_independent_parts_refused", "assembly.step",
+            ("--advancing-interior-front", "--independent-parts"), reason="unsupported-control")
         standard = run("planar_box", "box.step", success=True, size="3e-1")
         standard_bytes = output.read_bytes()
         advanced = run("advanced_recognized_box", "box.step", ("--recovery-mode", "advanced"), success=True)

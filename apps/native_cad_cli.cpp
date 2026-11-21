@@ -89,13 +89,14 @@ int runNativeCadCli(int argc,char** argv) {
             <<",\"local_partition_recovery\":"<<(options.useLocalPartitionRecovery?"true":"false")
             <<",\"adaptive_tet_recovery\":"<<(options.useAdaptiveTetRecovery?"true":"false")
             <<",\"curvature_points_per_turn\":"<<options.curvaturePointsPerTurn
-            <<",\"native_spatial_sizing\":"<<((options.useSpatialSizing||!options.sizeBoxes.empty())?"true":"false")
+            <<",\"native_spatial_sizing\":"<<((options.useSpatialSizing||!options.sizeBoxes.empty()||options.useAdvancingInteriorFront)?"true":"false")
             <<",\"face_size_controls\":"<<options.faceSizes.size()<<",\"size_box_controls\":"<<options.sizeBoxes.size()
             <<",\"live_material_recovery\":"<<(options.useLiveMaterialRecovery?"true":"false")
             <<",\"trimmed_ray_witnesses\":"<<(options.useTrimmedRayWitnesses?"true":"false")
             <<",\"local_delaunay_refinement\":"<<(options.useLocalDelaunayRefinement?"true":"false")
             <<",\"improve_surface_spacing\":"<<(options.improveNativeSurfaceSpacing?"true":"false")
             <<",\"improve_tet_quality\":"<<(options.improveNativeTetQuality?"true":"false")
+            <<",\"advancing_interior_front\":"<<(options.useAdvancingInteriorFront?"true":"false")
             <<",\"regular_surface_front\":"<<(options.useRegularSurfaceFront?"true":"false")
             <<",\"improve_regular_quality\":"<<(options.regularMeshQualityEnabled()?"true":"false")
             <<",\"maximum_edge_recovery_steiner_candidates\":"<<options.maximumEdgeRecoverySteinerCandidates
@@ -181,6 +182,14 @@ int runNativeCadCli(int argc,char** argv) {
                 <<",\"local_delaunay_support_nodes\":"<<b.localDelaunaySupportNodes
                 <<",\"local_delaunay_refinement_nodes\":"<<b.localDelaunayRefinementNodes
                 <<",\"local_delaunay_quality_edits\":"<<b.localDelaunayQualityEdits
+                <<",\"interior_front\":{\"diagnostic\":\""<<b.interiorFrontDiagnostic
+                <<"\",\"nodes\":"<<b.interiorFrontNodes<<",\"candidates\":"<<b.interiorFrontCandidates
+                <<",\"work\":"<<b.interiorFrontWork<<",\"queries\":"<<b.interiorFrontQueries
+                <<",\"remaining_oversized\":"<<b.interiorFrontRemainingOversized
+                <<",\"front_activations\":"<<b.interiorFrontActivations
+                <<",\"front_advances\":"<<b.interiorFrontAdvances
+                <<",\"void_activations\":"<<b.interiorVoidActivations
+                <<",\"seconds\":"<<b.interiorFrontSeconds<<"}"
                 <<",\"local_delaunay_used_global_fallback\":"<<(b.localDelaunayUsedGlobalFallback?"true":"false")
                 <<",\"contact_cylinder_reason\":\""<<b.contactCylinderReason<<"\""
                 <<",\"contact_source_edge_tag\":"<<b.contactSourceEdgeTag
@@ -235,7 +244,7 @@ int runNativeCadCli(int argc,char** argv) {
     };
     for(int i=1;i<argc;++i)report|=std::string_view(argv[i])=="--report-json"||std::string_view(argv[i])=="--independent-parts";
     try {
-        if(argc<4)throw std::invalid_argument("usage: paacs-cad-mesh input.step size output.paacsmesh --native-cad [--face-size tag size] [--native-sizing] [--size-box x0 y0 z0 x1 y1 z1 size] [--min-size h] [--growth g] [--report-json] [--trace-native-stages] [--independent-parts] [--local-partition-recovery] [--adaptive-tet-recovery] [--live-material-recovery] [--curvature-points-per-turn 0..64] [--trimmed-ray-witnesses] [--local-delaunay-refinement] [--improve-surface-spacing] [--regular-surface-front] [--no-improve-regular-quality] [--recovery-mode standard|advanced] [--recovery-seed N] [--recovery-retries 0..4] [--recovery-steiner-candidates 0..64]");
+        if(argc<4)throw std::invalid_argument("usage: paacs-cad-mesh input.step size output.paacsmesh --native-cad [--face-size tag size] [--native-sizing] [--size-box x0 y0 z0 x1 y1 z1 size] [--min-size h] [--growth g] [--report-json] [--trace-native-stages] [--independent-parts] [--local-partition-recovery] [--adaptive-tet-recovery] [--live-material-recovery] [--curvature-points-per-turn 0..64] [--trimmed-ray-witnesses] [--local-delaunay-refinement] [--advancing-interior-front] [--improve-tet-quality] [--improve-surface-spacing] [--regular-surface-front] [--no-improve-regular-quality] [--recovery-mode standard|advanced] [--recovery-seed N] [--recovery-retries 0..4] [--recovery-steiner-candidates 0..64]");
         options.geometry.targetSize=number<double>(argv[2]);
         for(int i=4;i<argc;++i) {
             const std::string_view a(argv[i]);
@@ -265,6 +274,7 @@ int runNativeCadCli(int argc,char** argv) {
             else if(a=="--curvature-points-per-turn"&&i+1<argc)
                 options.curvaturePointsPerTurn=number<unsigned>(argv[++i]);
             else if(a=="--improve-tet-quality")options.improveNativeTetQuality=true;
+            else if(a=="--advancing-interior-front")options.useAdvancingInteriorFront=true;
             else if(a=="--improve-surface-spacing")options.improveNativeSurfaceSpacing=true;
             else if(a=="--regular-surface-front")options.useRegularSurfaceFront=true;
             else if(a=="--improve-regular-quality")options.improveRegularMeshQuality=true;
