@@ -6,6 +6,7 @@
 #pragma once
 
 #include "../bnd/TetBistellarRecovery.hpp"
+#include "paacs/mesh/Quality.hpp"
 #include <algorithm>
 #include <cmath>
 #include <optional>
@@ -16,10 +17,13 @@ namespace paacs::geo::detail {
 // or a tetrahedron already known to contain an inward support point.
 // The connected in-sphere cavity must contain the point. Extend it across
 // nonvisible shell faces only within the same region and away from protected
-// faces. The caller certifies and commits the proposed replacement.
+// faces. An optional dimensionless shape floor also expands across visible
+// faces whose cones would be nearly flat. The caller certifies and commits
+// the proposed replacement.
 inline std::optional<bnd::detail::BistellarComplex::Proposal> buildOcctDelaunayCavity(
     const bnd::detail::BistellarComplex& live, std::size_t start, Vec3 point,
-    std::size_t maximumCells, std::size_t& containing, bool growInSphere = true) {
+    std::size_t maximumCells, std::size_t& containing, bool growInSphere = true,
+    double minimumConeShape = 0.) {
     using Complex = bnd::detail::BistellarComplex;
     using predicates::Sign;
     using bnd::tet_facet_detail::outwardFace;
@@ -74,7 +78,13 @@ inline std::optional<bnd::detail::BistellarComplex::Proposal> buildOcctDelaunayC
         for (unsigned f=0; f<4; ++f) {
             const auto next = live.neighbours[cell][f];
             const auto face = outwardFace(live.cells[cell],f);
-            if (contains(next) || side(face)==Sign::Negative) continue;
+            if (contains(next)) continue;
+            if (side(face)==Sign::Negative) {
+                if (!(minimumConeShape>0.)) continue;
+                live.charge(4);
+                if (mesh::tetScaledJacobian(point,position(face[0]),position(face[1]),
+                                            position(face[2]))>=minimumConeShape) continue;
+            }
             if (cavity.size()>=maximumCells || !canCross(next,face)) return {};
             cavity.push_back(next);
         }

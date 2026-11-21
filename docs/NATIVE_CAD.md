@@ -55,10 +55,32 @@ The `plot` command uses exact intersections of the stored Tet4 cells.
 | `--recovery-mode advanced` | Try bounded native edge and face recovery on routes that reach a certified shell. The default is `standard`. |
 | `--local-partition-recovery`, `--adaptive-tet-recovery` | Enable optional bounded recovery routes. |
 | `--curvature-points-per-turn N` | Enable curvature-based surface sizing on eligible native routes. |
+| `--improve-tet-quality` | Try bounded quality improvement on native pieces and after spatial sizing, keeping the prescribed surface fixed. |
 | `--independent-parts` | Mesh supported bodies separately and report material interference. The result certifies each part individually. |
 | `--max-work`, `--max-working-bytes` | Set work and temporary storage limits. |
 | `--warning-quality`, `--min-quality` | Report a weak mesh or require a strict quality floor. |
 | `--trace-native-stages` | Record active stages and diagnostics on standard error. |
+
+For spatial Tet4 sizing, `--improve-tet-quality` also supplies interior sites to
+the first constrained Delaunay construction. Enclosed boxes contribute points
+before the fill, and oriented surface triangles propose inward points using the
+local size field. Spacing and native-solid checks admit these proposals. This
+avoids relying on small later insertions to replace long connections inherited
+from a boundary-only fill; it does not guarantee a requested quality floor.
+
+The subsequent bounded quality pass first tries to repair critical cells with
+face and edge swaps. If direct swaps cannot replace a nonconvex edge star, it
+can reconstruct a bounded connected cavity from an existing nearby vertex.
+The replacement must preserve the oriented shell, every vertex, protected
+constraints and body ownership, and pass quality and native-solid checks.
+Partial interior-node movements and ordinary edge swaps then improve spacing.
+These stages preserve CAD boundary coordinates and tags, and retain
+the native geometry and validity checks. Placement is limited by node, work,
+query, temporary-storage and output admissions. If the extra-site seed is refused,
+the ordinary boundary seed is retried within the remaining allowance; both
+attempts count toward work and time. Trace stages include `interior_sites`,
+`interior_seed_fallback` when needed, and `volume_quality`. Inspect the achieved
+size and quality distributions, since bounded runs can leave weak cells unresolved.
 
 The default material checks reject exterior tetrahedron centroids. On eligible
 Tet4 recovery routes, `--allow-centroids-within-chord-tolerance` applies a
