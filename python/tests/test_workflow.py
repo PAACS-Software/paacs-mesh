@@ -69,6 +69,9 @@ class WorkflowTests(unittest.TestCase):
         self.assertFalse(self.result.mesh.report["interbody_nonoverlap_certified"])
         self.assertTrue(report["cooperative_deadline"])
         self.assertFalse(report["publication_included"])
+        for key in ("warning_quality", "minimum_quality"):
+            self.assertIsNone(self.recipe["options"][key])
+            self.assertIsNone(report["attempts"][0]["options"][key])
 
     def test_selected_face_and_box_controls_replay_through_native_engine(self):
         model = pm.read_step(self.fixture)
@@ -115,15 +118,20 @@ class WorkflowTests(unittest.TestCase):
     def test_recipe_inputs_and_result_metadata_are_independent_copies(self):
         faces = [pm.FaceSize(1, .2)]
         boxes = [pm.BoxSize((-.2, -.2, .5), (.2, .2, 1.5), .15)]
-        recipe = pm.create_recipe(self.model, .7, face_sizes=faces, volume_controls=boxes)
+        recipe = pm.create_recipe(self.model, .7, face_sizes=faces, volume_controls=boxes,
+                                  warning_quality=.6, minimum_quality=.2)
         faces.append(pm.FaceSize(2, .1))
         boxes.clear()
         self.assertEqual(len(recipe["options"]["face_sizes"]), 1)
         self.assertEqual(len(recipe["options"]["volume_controls"]), 1)
+        self.assertEqual(recipe["options"]["warning_quality"], .6)
+        self.assertEqual(recipe["options"]["minimum_quality"], .2)
         copied_recipe, copied_report = self.result.recipe, self.result.report
         copied_recipe["options"]["size"] = 999
+        copied_recipe["options"]["warning_quality"] = 1
         copied_report["attempts"].clear()
         self.assertEqual(self.result.recipe["options"]["size"], .7)
+        self.assertIsNone(self.result.recipe["options"]["warning_quality"])
         self.assertEqual(len(self.result.report["attempts"]), 1)
         with self.assertRaises(AttributeError):
             self.result.mesh = self.baseline
@@ -135,7 +143,8 @@ class WorkflowTests(unittest.TestCase):
     def test_opted_recovery_records_standard_advanced_and_finer_attempts(self):
         model = pm.read_step(self.fixture)
         recipe = pm.create_recipe(model, .7, allow_advanced=True, finer_factors=[.5], max_attempts=3,
-                                  max_nodes=1_000_000, max_work=5_000_000)
+                                  max_nodes=1_000_000, max_work=5_000_000,
+                                  warning_quality=1, minimum_quality=0)
         failures = [self.synthetic_error("geometry_error", "native-plc-cavity-material-refusal"),
                     self.synthetic_error("geometry_error", "native-plc-final-centroid-outside")]
         original = pm.CadModel.mesh
@@ -155,8 +164,67 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(item["options"]["max_nodes"], 1_000_000)
             self.assertEqual(item["options"]["max_work"], 5_000_000)
             self.assertEqual(item["options"]["assembly"], "preserve_parts")
+            self.assertEqual(item["options"]["warning_quality"], 1)
+            self.assertEqual(item["options"]["minimum_quality"], 0)
             self.assertGreaterEqual(item["seconds"], 0)
         self.assertGreaterEqual(result.report["seconds"], sum(item["seconds"] for item in attempts))
+
+    def test_quality_thresholds_persist_forward_and_legacy_recipes_keep_defaults(self):
+        model = pm.read_step(self.fixture)
+        minimum = self.baseline.report["quality"]["minimum"] / 2
+        recipe = pm.create_recipe(model, .7, warning_quality=1, minimum_quality=minimum,
+                                  allow_advanced=True, finer_factors=[.5], max_attempts=3)
+        saved = self.directory / "quality-recipe.json"
+        pm.save_recipe(model, recipe, saved)
+        loaded = pm.load_recipe(model, saved)
+        self.assertEqual(loaded["options"]["warning_quality"], 1)
+        self.assertEqual(loaded["options"]["minimum_quality"], minimum)
+        original, observed = pm.CadModel.mesh, []
+        def forwarded(actual_model, size, **options):
+            observed.append({key: options[key] for key in ("warning_quality", "minimum_quality")})
+            return original(actual_model, size, **options)
+        with patch.object(pm.CadModel, "mesh", autospec=True, side_effect=forwarded):
+            result = pm.run_recipe(model, loaded)
+        self.assert_valid(result.mesh)
+        self.assertTrue(result.mesh.report["quality_warning"])
+        self.assertEqual(observed, [{"warning_quality": 1, "minimum_quality": minimum}])
+        self.assertEqual(len(result.report["attempts"]), 1)
+        actual = result.report["attempts"][0]["options"]
+        self.assertEqual(actual["warning_quality"], 1)
+        self.assertEqual(actual["minimum_quality"], minimum)
+        # Recipe v1 originally had neither quality option. Loading adds only
+        # their disabled/default requests and does not alter native output.
+        legacy = copy.deepcopy(self.recipe)
+        for key in ("warning_quality", "minimum_quality"):
+            del legacy["options"][key]
+        old_path = self.directory / "legacy-quality-recipe.json"
+        old_path.write_text(json.dumps(legacy), encoding="utf-8")
+        restored = pm.load_recipe(self.model, old_path)
+        self.assertIsNone(restored["options"]["warning_quality"])
+        self.assertIsNone(restored["options"]["minimum_quality"])
+        replayed = pm.run_recipe(self.model, restored)
+        self.assertEqual(self.archive_bytes(replayed.mesh, "legacy-quality-default.paacsmesh"),
+                         self.archive_bytes(self.baseline, "quality-native-default.paacsmesh"))
+        self.assertEqual(legacy["options"].keys(), self.recipe["options"].keys() - {"warning_quality", "minimum_quality"})
+        for changed in (dict(legacy["options"], unknown_quality_option=.5),
+                        {key: value for key, value in legacy["options"].items() if key != "growth"}):
+            invalid = copy.deepcopy(legacy)
+            invalid["options"] = changed
+            old_path.write_text(json.dumps(invalid), encoding="utf-8")
+            with self.assertRaises(wf.WorkflowError):
+                pm.load_recipe(self.model, old_path)
+
+    def test_quality_threshold_validation_precedes_native_meshing(self):
+        with patch.object(pm.CadModel, "mesh") as calls:
+            for key in ("warning_quality", "minimum_quality"):
+                for value in (-.01, 1.01, float("nan"), float("inf"), True, "0.5"):
+                    with self.subTest(option=key, value=value), self.assertRaises(wf.WorkflowError):
+                        pm.create_recipe(self.model, .7, **{key: value})
+                for value in (None, 0, .5, 1):
+                    with self.subTest(option=key, value=value):
+                        recipe = pm.create_recipe(self.model, .7, **{key: value})
+                        self.assertEqual(recipe["options"][key], value)
+            self.assertEqual(calls.call_count, 0)
 
     def test_total_wall_budget_counts_preparation_failures_and_overruns(self):
         model = pm.read_step(self.fixture)

@@ -35,8 +35,9 @@ RECIPE_SCHEMA = "paacs-mesh-recipe-v1"
 DEFAULT_SOURCE_BYTES = 64 * 1024 * 1024
 _BUDGETS = ("max_nodes", "max_cells", "max_work", "max_output_bytes",
             "max_working_bytes", "max_audit_bytes")
+_QUALITY_FIELDS = ("warning_quality", "minimum_quality")
 _OPTION_FIELDS = {"size", "assembly", "workers", "validation_workers", "face_sizes",
-                  "volume_controls", "min_size", "growth", "native_sizing", *_BUDGETS}
+                  "volume_controls", "min_size", "growth", "native_sizing", *_QUALITY_FIELDS, *_BUDGETS}
 _FATAL_REASONS = {"invalid_request", "unsupported_body", "unresolved_body_interface",
                   "unsupported_control", "budget_exceeded", "cancelled", "allocation_failed",
                   "internal_error", "publication_checks_failed"}
@@ -105,7 +106,7 @@ def _error_summary(report, original_reason):
             options = attempt.get("options", {})
             if isinstance(options, dict):
                 item["options_summary"] = {key: _small(options.get(key)) for key in
-                                            ("size", "recovery", "assembly", *_BUDGETS)}
+                                            ("size", "recovery", "assembly", *_QUALITY_FIELDS, *_BUDGETS)}
             result["attempts"].append(item)
     return result
 
@@ -221,7 +222,10 @@ def _intent(model):
 
 
 def _options(values):
-    if not isinstance(values, dict) or set(values) != _OPTION_FIELDS:
+    # Recipe v1 predates the optional quality thresholds. Only those fields
+    # may be absent; prior required fields and unknown-field refusals remain.
+    required = _OPTION_FIELDS.difference(_QUALITY_FIELDS)
+    if not isinstance(values, dict) or not required <= values.keys() or values.keys() - _OPTION_FIELDS:
         raise ValueError("Recipe meshing options have unsupported or missing fields")
     result = {"size": _positive(values["size"], "size"), "assembly": values["assembly"],
               "workers": integer(values["workers"], "workers"),
@@ -238,6 +242,11 @@ def _options(values):
         result["min_size"] = number(result["min_size"], "min_size", minimum=0)
         if result["min_size"] > result["size"]:
             raise ValueError("min_size must not exceed global size")
+    for key in _QUALITY_FIELDS:
+        value = values.get(key)
+        result[key] = None if value is None else number(value, key, minimum=0)
+        if result[key] is not None and result[key] > 1:
+            raise ValueError(f"{key} must be between zero and one")
     for key in _BUDGETS:
         result[key] = None if values[key] is None else integer(values[key], key)
     result["face_sizes"], result["volume_controls"] = [], []
@@ -289,6 +298,7 @@ def _policy(values):
 
 def create_recipe(model, size, *, face_sizes=(), selected_face_sizes=(), volume_controls=(),
                   min_size=None, growth=1.3, native_sizing=None, assembly="preserve_parts",
+                  warning_quality=None, minimum_quality=None,
                   workers=1, validation_workers=1, max_nodes=None, max_cells=None,
                   max_work=None, max_output_bytes=None, max_working_bytes=None, max_audit_bytes=None,
                   allow_advanced=False, finer_factors=(), max_attempts=1, max_seconds=90,
@@ -298,6 +308,7 @@ def create_recipe(model, size, *, face_sizes=(), selected_face_sizes=(), volume_
     selected_face_sizes contains (FaceSelection, size) or (FaceSelection, size,
     growth) entries. Retry sizes are explicit fractions of the original global
     size; existing face/box/minimum controls and resource budgets are unchanged.
+    Optional warning and strict quality thresholds remain fixed across retries.
     """
     try:
         if not isinstance(model, CadModel):
@@ -324,6 +335,7 @@ def create_recipe(model, size, *, face_sizes=(), selected_face_sizes=(), volume_
         options = _options(dict(size=size, assembly=assembly, workers=workers,
             validation_workers=validation_workers, face_sizes=faces, volume_controls=boxes,
             min_size=min_size, growth=growth, native_sizing=native_sizing,
+            warning_quality=warning_quality, minimum_quality=minimum_quality,
             max_nodes=max_nodes, max_cells=max_cells, max_work=max_work,
             max_output_bytes=max_output_bytes, max_working_bytes=max_working_bytes, max_audit_bytes=max_audit_bytes))
         policy = _policy(dict(max_attempts=max_attempts, max_seconds=max_seconds, attempt_seconds=attempt_seconds,
@@ -443,7 +455,7 @@ def _retry_allowed(reason, report, route):
 
 
 def _native_options(options, size, recovery, seconds):
-    result = {key: options[key] for key in ("assembly", "workers", "validation_workers", "min_size", "growth", "native_sizing", *_BUDGETS)}
+    result = {key: options[key] for key in ("assembly", "workers", "validation_workers", "min_size", "growth", "native_sizing", *_QUALITY_FIELDS, *_BUDGETS)}
     result.update(size=size, recovery=recovery, max_seconds=seconds,
                   face_sizes=[_native.FaceSize(control["tag"], control["size"], growth=control["growth"])
                               for control in options["face_sizes"]],

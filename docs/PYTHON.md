@@ -251,7 +251,23 @@ has no deadline in this interface.
 `ExportError` is an `OSError` with the same fields. A refused mesh is not returned
 as a successful result. Reports include native boundary/connectivity audit,
 quality, per-body routes, CAD error and stage timings. Quality warnings remain
-distinct from validity failures.
+distinct from validity failures. The native default warning threshold is zero
+(disabled); `quality["warning_enabled"]` and `quality["warning_threshold"]` make
+that policy explicit. A false `quality_warning` alone is not a quality guarantee.
+
+```python
+mesh = model.mesh(0.3, warning_quality=.25)  # publish valid meshes with warnings
+print(mesh.report["quality"])
+mesh = model.mesh(0.3, warning_quality=.25, minimum_quality=.1)  # explicit strict target
+```
+
+Both thresholds are dimensionless values in `[0, 1]` for the reported subtet
+mean-ratio metric (ideal = 1). `warning_quality=0` disables preferred-quality
+warnings; `minimum_quality=0` retains the native validity requirements without
+adding a strict preferred-quality cutoff. Unset values preserve native defaults.
+The report also includes effective `minimum_required` and the requested values.
+Node, cell, work and cooperative time limits still apply when a strict target
+cannot be achieved. CLI equivalents are `--warning-quality` and `--minimum-quality`.
 
 ```python
 try:
@@ -381,7 +397,7 @@ recipe = pm.create_recipe(
     assembly="conforming", min_size=.15, growth=1.3,
     workers=1, validation_workers=1, max_work=100_000_000,
     allow_advanced=True, finer_factors=(.7,),
-    max_attempts=3, max_seconds=90,
+    max_attempts=3, max_seconds=90, warning_quality=.25,
 )
 pm.save_recipe(model, recipe, "housing.recipe.json")
 
