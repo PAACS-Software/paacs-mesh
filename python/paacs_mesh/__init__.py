@@ -50,10 +50,17 @@ from ._native import (  # noqa: E402: configure OCCT resources before loading it
 )
 from .cad import CadModel, FaceSelection, read_step  # noqa: E402
 from ._cad_common import IntentError, SelectionError  # noqa: E402
+from .preview import CadPreview  # noqa: E402
+from .workflow import (  # noqa: E402
+    WorkflowError, WorkflowResult, create_recipe, load_recipe, publish_result,
+    run_recipe, run_saved_recipe, save_recipe,
+)
 
 __all__ = [
     "BoxSize", "CadImportError", "CadModel", "ExportError", "FaceSize", "Mesh", "MeshingError", "read_step",
     "native_version", "FaceSelection", "SelectionError", "IntentError",
+    "CadPreview", "WorkflowError", "WorkflowResult", "create_recipe", "load_recipe",
+    "publish_result", "run_recipe", "run_saved_recipe", "save_recipe",
 ]
 
 try:

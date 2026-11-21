@@ -124,9 +124,11 @@ def _face_guard(record):
     return guard
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class FaceSelection:
     """Read-only face IDs owned by one imported model, with copied guards."""
+
+    __slots__ = ("_owner", "_identity", "_tags", "_body", "_query_json", "_guards_json")
 
     _owner: "CadModel"
     _identity: int
@@ -230,6 +232,12 @@ class CadModel:
     def mesh(self, size, **kwargs):
         self._assert_identity()
         return self._native.mesh(size, **kwargs)
+
+    def preview(self, selection=None, *, linear_deflection=.02, max_points=50000, max_triangles=100000):
+        """Return owned, tagged display geometry for visual selection checks."""
+        from .preview import preview_model
+        return preview_model(self, selection, linear_deflection=linear_deflection,
+                             max_points=max_points, max_triangles=max_triangles)
 
     def _records(self, kind, tags, *, topology=False):
         self._assert_identity()

@@ -146,8 +146,11 @@ Keep CAD dependencies optional in the C++ build and bundle the required runtime
 in STEP wheels. Publish wheels to PyPI after installation qualification.
 CAD inspection and source-bound semantic selections expose named groups and
 explicit geometric predicates, preserving original body identities and
-reporting ambiguous selections. Add a bounded inspect–select–mesh–audit workflow
-for automated callers, with reproducible recipes and explicit retry controls.
+reporting ambiguous selections. Bounded inspect–select–mesh–audit workflows
+capture reproducible recipes, explicit retry controls and attempt reports.
+Headless tagged previews support visual selection checks; project publication
+preserves source, intent, recipe and tagged exports together. Extend these
+functions with a thin automation adapter and richer interactive clients.
 
 **Qualification.** Install each wheel in a fresh virtual environment without a
 compiler or manually configured library paths. Compare its meshes, audits and

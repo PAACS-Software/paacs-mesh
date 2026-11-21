@@ -11,6 +11,7 @@
 
 #include "paacs/algo/Meshers.hpp"
 #include "paacs/geometry/OcctMesher.hpp"
+#include "paacs/geometry/OcctPreview.hpp"
 #include "paacs/sdk/MeshArchive.hpp"
 #include "paacs/sdk/Version.hpp"
 #include "paacs/sizing/RegionSizeField.hpp"
@@ -79,6 +80,13 @@ double positiveNumber(const py::object& value, const char* name) {
     const double number = finiteNumber(value, name);
     if (number <= 0)
         throw py::value_error(std::string(name) + " must be finite and positive");
+    return number;
+}
+
+double qualityThreshold(const py::object& value, const char* name) {
+    const double number = finiteNumber(value, name);
+    if (number < 0 || number > 1)
+        throw py::value_error(std::string(name) + " must be between zero and one");
     return number;
 }
 
@@ -275,6 +283,8 @@ struct MeshResult {
     std::string recovery;
     std::string requestedAssembly;
     SizingRequest sizing;
+    std::optional<double> requestedWarningQuality, requestedMinimumQuality;
+    double warningQuality = 0, minimumQuality = 0;
     unsigned workers = 1, validationWorkers = 1;
 
     std::vector<int> tags(int dimension) const {
@@ -330,6 +340,11 @@ struct MeshResult {
         quality["complete"] = q.complete;
         quality["valid"] = q.valid;
         quality["metric"] = "subtet_mean_ratio";
+        quality["warning_threshold"] = warningQuality;
+        quality["warning_enabled"] = warningQuality > 0;
+        quality["minimum_required"] = minimumQuality;
+        quality["requested_warning_threshold"] = py::cast(requestedWarningQuality);
+        quality["requested_minimum_required"] = py::cast(requestedMinimumQuality);
         quality["minimum"] = finiteValue(q.minimumQuality);
         quality["percentile_1"] = finiteValue(q.percentile1);
         quality["percentile_5"] = finiteValue(q.percentile5);
@@ -458,9 +473,19 @@ struct CadModel {
         const py::object& maxAuditBytes, const py::object& maxSeconds,
         const py::object& faceSizes, const py::object& volumeControls,
         const py::object& minimumSize, const py::object& growth,
-        const py::object& nativeSizing) {
+        const py::object& nativeSizing, const py::object& warningQuality,
+        const py::object& minimumQuality) {
         geo::NativeCadMeshOptions options;
         options.geometry.targetSize = positiveNumber(size, "size");
+        std::optional<double> requestedWarningQuality, requestedMinimumQuality;
+        if (!warningQuality.is_none()) {
+            requestedWarningQuality = qualityThreshold(warningQuality, "warning_quality");
+            options.geometry.warningElementQuality = *requestedWarningQuality;
+        }
+        if (!minimumQuality.is_none()) {
+            requestedMinimumQuality = qualityThreshold(minimumQuality, "minimum_quality");
+            options.geometry.minimumElementQuality = *requestedMinimumQuality;
+        }
         SizingRequest sizing;
         sizing.growth = growthNumber(growth, "growth");
         sizing.faces = copiedControls<FaceSize>(faceSizes, "face_sizes");
@@ -524,6 +549,10 @@ struct CadModel {
         result->recovery = recovery;
         result->requestedAssembly = assembly;
         result->sizing = std::move(sizing);
+        result->requestedWarningQuality = requestedWarningQuality;
+        result->requestedMinimumQuality = requestedMinimumQuality;
+        result->warningQuality = options.geometry.warningElementQuality;
+        result->minimumQuality = options.geometry.minimumElementQuality;
         result->workers = static_cast<unsigned>(nw);
         result->validationWorkers = static_cast<unsigned>(nv);
         { py::gil_scoped_release release;
@@ -619,6 +648,7 @@ std::unique_ptr<CadModel> readStep(const fs::path& path, const py::object& maxFi
 }
 
 #include "CadInspection.hpp"
+#include "CadPreview.hpp"
 
 } // namespace
 
@@ -692,6 +722,8 @@ PYBIND11_MODULE(_native, m) {
         })
         .def("_inspect_entities", &inspectEntities, py::arg("kind"), py::arg("tags"), py::kw_only(),
              py::arg("topology") = false, py::arg("max_uses") = 10000)
+        .def("_preview", &previewCad, py::kw_only(), py::arg("linear_deflection"),
+             py::arg("max_points") = py::int_(50000), py::arg("max_triangles") = py::int_(100000))
         .def("mesh", &CadModel::mesh, py::arg("size"), py::kw_only(),
              py::arg("recovery") = "standard", py::arg("assembly") = "preserve_parts",
              py::arg("workers") = py::int_(1), py::arg("validation_workers") = py::int_(1),
@@ -701,6 +733,7 @@ PYBIND11_MODULE(_native, m) {
              py::arg("max_seconds") = py::none(),
              py::arg("face_sizes") = py::none(), py::arg("volume_controls") = py::none(),
              py::arg("min_size") = py::none(), py::arg("growth") = py::float_(1.3),
-             py::arg("native_sizing") = py::none());
+             py::arg("native_sizing") = py::none(),
+             py::arg("warning_quality") = py::none(), py::arg("minimum_quality") = py::none());
     m.def("read_step", &readStep, py::arg("path"), py::kw_only(), py::arg("max_file_bytes") = py::none(), py::arg("names") = true, py::arg("retain_source") = false);
 }

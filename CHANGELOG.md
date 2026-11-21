@@ -13,6 +13,10 @@
   repaired dependencies, native CLI parity and independent artifact installs.
 - Inspect native CAD topology and geometry in Python, select faces by explicit
   predicates or representation names, and save guarded, source-bound groups.
+- Add tagged CAD display previews and bounded, source-bound meshing recipes,
+  with explicit diagnostic retries and atomic publication of project bundles.
+- Expose optional Python quality warning and strict thresholds, reporting their
+  effective policy and preserving the requested values through recipe retries.
 - Preserve Unicode file paths and full VTK coordinate precision, export both
   classification dimensions and tags, and publish VTK files atomically.
 
