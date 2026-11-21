@@ -45,13 +45,15 @@ def _configure_bundled_resources():
 _configure_bundled_resources()
 
 from ._native import (  # noqa: E402: configure OCCT resources before loading it
-    BoxSize, CadImportError, CadModel, ExportError, FaceSize, Mesh, MeshingError,
-    engine_version as native_version, read_step,
+    BoxSize, CadImportError, ExportError, FaceSize, Mesh, MeshingError,
+    engine_version as native_version,
 )
+from .cad import CadModel, FaceSelection, read_step  # noqa: E402
+from ._cad_common import IntentError, SelectionError  # noqa: E402
 
 __all__ = [
     "BoxSize", "CadImportError", "CadModel", "ExportError", "FaceSize", "Mesh", "MeshingError", "read_step",
-    "native_version",
+    "native_version", "FaceSelection", "SelectionError", "IntentError",
 ]
 
 try:
