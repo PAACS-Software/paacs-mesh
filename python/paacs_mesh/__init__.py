@@ -8,6 +8,12 @@ not constitute a globally non-overlapping material domain.
 Native import and mesh calls are serialized across models in this initial API.
 The active mesh job may use the requested internal workers. Its cooperative
 ``max_seconds`` deadline starts after it acquires the native operation gate.
+
+``FaceSize`` and ``BoxSize`` are read-only sizing controls. A control's unset
+growth inherits ``mesh(growth=...)``. Face and box controls select the native
+spatial sizing route by default, which currently requires one solid and an
+explicit ``assembly="conforming"`` request. ``native_sizing=False`` retains the
+legacy face-cap route; volume boxes require native spatial sizing.
 """
 
 # PAACS Mesh
@@ -35,12 +41,12 @@ def _configure_bundled_resources():
 _configure_bundled_resources()
 
 from ._native import (  # noqa: E402: configure OCCT resources before loading it
-    CadImportError, CadModel, ExportError, Mesh, MeshingError,
+    BoxSize, CadImportError, CadModel, ExportError, FaceSize, Mesh, MeshingError,
     engine_version as native_version, read_step,
 )
 
 __all__ = [
-    "CadImportError", "CadModel", "ExportError", "Mesh", "MeshingError", "read_step",
+    "BoxSize", "CadImportError", "CadModel", "ExportError", "FaceSize", "Mesh", "MeshingError", "read_step",
     "native_version",
 ]
 
