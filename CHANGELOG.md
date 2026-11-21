@@ -7,6 +7,8 @@
 - Build and test a Windows x64 CPython 3.12 wheel with the pinned CAD runtime.
 - Expose Python CAD face and box sizing, minimum field size and growth, with
   per-control overrides, request diagnostics and command-line controls.
+- Add optional NumPy mesh snapshots with typed connectivity, CAD classifications
+  and an extraction byte budget; preserve native mesh ownership and ordering.
 - Preserve Unicode file paths and full VTK coordinate precision, export both
   classification dimensions and tags, and publish VTK files atomically.
 

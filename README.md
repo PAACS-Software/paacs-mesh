@@ -76,6 +76,8 @@ wheels are built and tested in GitHub Actions; PyPI distribution and other
 platforms are planned.
 The [sizing guide](docs/PYTHON.md#face-sizing-volume-regions-and-growth) covers
 selected-face refinement, volume boxes, minimum size and growth controls.
+Optional [NumPy snapshots](docs/PYTHON.md#numpy-mesh-arrays) expose coordinates,
+typed connectivity and CAD classifications for solver and analysis workflows.
 
 ## Citation
 

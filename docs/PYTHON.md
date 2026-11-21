@@ -121,6 +121,82 @@ accepts `--native-sizing` and `--no-native-sizing`.
 The [Python sizing example](../examples/python_step_sizing/README.md) compares
 four requests on the same cylinder, with measured sizes and mesh sections.
 
+## NumPy mesh arrays
+
+NumPy is optional. Install it alongside the development wheel, or use the
+`numpy` extra when installing a wheel from a local directory:
+
+```powershell
+python -m pip install "numpy>=1.26.4,<3"
+python -m pip install --force-reinstall --find-links . "paacs-mesh[numpy]==1.2.0rc1"
+```
+
+Import, meshing and export continue to work without NumPy. Array extraction
+loads it on demand and gives an installation hint when it is absent.
+
+```python
+import numpy as np
+
+arrays = mesh.to_numpy()
+points = arrays["points"]
+tets = arrays["cells"]["tet4"]
+tet_points = points[tets["connectivity"]]
+body_1 = tets["connectivity"][tets["entity_tags"] == 1]
+
+triangles = arrays["cells"].get("tri3")
+if triangles is not None:
+    face_1 = triangles["connectivity"][triangles["entity_tags"] == 1]
+
+# Signed Tet4 volumes in mm^3, retaining the native node ordering.
+edges = tet_points[:, 1:] - tet_points[:, :1]
+volumes = np.einsum("ij,ij->i", edges[:, 0],
+                    np.cross(edges[:, 1], edges[:, 2])) / 6
+print(volumes.min(), volumes.sum())
+```
+
+The returned dictionary contains:
+
+| Key | dtype | Shape / meaning |
+|---|---|---|
+| `points` | `float64` | `(N, 3)`, coordinates in mm |
+| `node_entity_dimensions` | `int32` | `(N,)`, native owning entity dimension |
+| `node_entity_tags` | `int32` | `(N,)`, native owning entity tag |
+| `cells` | dictionary | One block per cell type present |
+| `units` | string | `"mm"` |
+
+Each cell block contains:
+
+| Key | dtype | Shape / meaning |
+|---|---|---|
+| `connectivity` | `int64` | `(M, nodes_per_cell)`, zero-based rows into `points` |
+| `entity_dimensions` | `int32` | `(M,)`, native cell entity dimensions |
+| `entity_tags` | `int32` | `(M,)`, native cell entity tags |
+| `cell_indices` | `int64` | `(M,)`, original zero-based native cell positions |
+
+Block names are `line2`, `line3`, `tri3`, `tri6`, `quad4`, `tet4`, `tet10`,
+`prism6`, `hex8` and `pyramid5`; absent types have no block. This describes
+the array format, rather than adding mesh families to the STEP interface.
+Rows within a block retain native order, connectivity and orientation.
+`cell_indices` maps grouped rows back to the original mixed cell order.
+Coordinates and nodes are never welded, including coincident assembly nodes.
+Node classification may refer to a vertex, edge, face or body; it is not a
+derived node-to-body assignment. Face and body tags remain model-local IDs.
+
+Each call makes independent, C-contiguous NumPy-owned copies. Arrays are
+initially read-only to catch accidental edits, and survive deletion of the mesh,
+model or input file. NumPy can re-enable writing to an owned array; doing so
+changes only that snapshot. It cannot edit the native mesh, its audit or later
+exports. Use `.copy()` when preparing writable solver data.
+
+`mesh.to_numpy(max_bytes=536_870_912)` defaults to a 512 MiB aggregate numeric
+array budget. The complete payload is checked before allocation; an exceeded
+limit raises `MemoryError`. The limit excludes Python object overhead and the
+already-owned native mesh, and is separate from meshing budgets. It does not
+bound process memory. No partially built snapshot is returned on failure.
+
+The [array example](../examples/python_mesh_arrays/README.md) computes volumes,
+selects a face and saves the arrays with their classifications.
+
 ## Recovery, assemblies and limits
 
 `model.mesh` accepts `recovery="standard"` or the opt-in `"advanced"` recovery
@@ -211,7 +287,7 @@ the C++ SDK headers and static libraries.
 
 ## Next milestones
 
-Extend this interface with NumPy mesh arrays, then macOS and Linux wheels.
+Qualify macOS and Linux wheels alongside the Windows distribution.
 CAD inspection, semantic selections and
 an inspect–select–mesh–audit loop build on those foundations. These features
 will use the native engine's controls and classification rather than a separate
