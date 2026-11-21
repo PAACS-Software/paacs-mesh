@@ -1,0 +1,56 @@
+# PAACS Mesh
+# Project author: Paul LeDewhurst
+# Copyright PAACS Software Ltd.
+# SPDX-License-Identifier: MPL-2.0
+
+[build-system]
+requires = ["scikit-build-core==1.1.2", "pybind11==3.1.0"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "paacs-mesh"
+dynamic = ["version"]
+description = "Native STEP import and Tet4 meshing with PAACS Mesh"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MPL-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Paul LeDewhurst" }]
+maintainers = [{ name = "PAACS Software Ltd." }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+]
+
+[project.urls]
+Homepage = "https://github.com/PAACS-Software/paacs-mesh"
+Issues = "https://github.com/PAACS-Software/paacs-mesh/issues"
+
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+cmake.version = ">=3.30,<4.5"
+cmake.build-type = "Release"
+wheel.packages = ["python/paacs_mesh"]
+install.components = ["Python"]
+build.targets = ["_native"]
+sdist.exclude = ["/build", "/out", "/evidence", "/.git", "/dist", "*.whl"]
+
+[tool.scikit-build.cmake.define]
+PAACS_BUILD_PYTHON = "ON"
+PAACS_WITH_OCCT = "ON"
+PAACS_PYTHON_BUILD_OCCT = "ON"
+PAACS_BUILD_CLI = "OFF"
+PAACS_BUILD_TESTS = "OFF"
+PAACS_BUILD_UI_BRIDGE = "OFF"
+PAACS_CXX_STANDARD = "23"
+PAACS_NATIVE_ARCH = "OFF"
+
+[[tool.dynamic-metadata]]
+provider = "scikit_build_core.metadata.regex"
+field = "version"
+input = "VERSION.txt"
+regex = '^(?P<value>\d+\.\d+\.\d+(?:[-a-zA-Z0-9.]+)?)\s*$'

@@ -14,6 +14,7 @@
 #include "paacs/sizing/SizeField.hpp"
 
 #include <set>
+#include <filesystem>
 
 namespace paacs::algo {
 
@@ -113,6 +114,10 @@ namespace paacs::io {
 // Legacy VTK writer (unstructured grid) - loads in ParaView for inspection.
 void writeVtk(const mesh::Mesh& m, const std::string& path,
               bool volumeOnly = false);
+// Native paths support Unicode filenames on Windows. Writes at full double
+// precision and publishes only after the complete file has closed successfully.
+void writeVtkFile(const mesh::Mesh& m, const std::filesystem::path& path,
+                  bool volumeOnly = false);
 // MSH 4.1 ASCII with entity blocks from mesh classification.
 void writeMsh(const mesh::Mesh& m, const std::string& path);
 } // namespace paacs::io

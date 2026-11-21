@@ -1067,11 +1067,12 @@ double exportedValue(double value) {
     double result=0.0;input>>result;return result;
 }
 ReloadMesh expectedReload(const mesh::Mesh& source,bool volumeOnly,
-                          bool classes) {
+                          bool classes,bool fullPrecision=false) {
     ReloadMesh out;out.nodes.reserve(static_cast<std::size_t>(source.nodeCount()));
     out.nodeClasses.reserve(static_cast<std::size_t>(source.nodeCount()));
     for(Index i=0;i<source.nodeCount();++i){const auto p=source.node(i);
-        out.nodes.push_back({exportedValue(p.x),exportedValue(p.y),exportedValue(p.z)});
+        out.nodes.push_back(fullPrecision?p:Vec3{
+            exportedValue(p.x),exportedValue(p.y),exportedValue(p.z)});
         out.nodeClasses.push_back(classes?source.nodeClass(i):mesh::Classification{});}
     for(Index i=0;i<source.cellCount();++i){const auto c=source.cell(i);
         if(volumeOnly&&c.type!=mesh::CellType::Tet10)continue;
@@ -1135,7 +1136,7 @@ void auditedHighOrderExport() {
     io::writeVtk(output,vtk,true);io::writeMsh(output,msh);
     const auto vtkRead=reloadHighOrderVtk(vtk),mshRead=reloadHighOrderMsh(msh);
     CHECK(vtkRead.has_value());CHECK(mshRead.has_value());
-    const auto vtkExpected=expectedReload(output,true,false);
+    const auto vtkExpected=expectedReload(output,true,false,true);
     const auto mshExpected=expectedReload(output,false,true);
     if(vtkRead){CHECK(sameReload(*vtkRead,vtkExpected));
         CHECK(tet10Boundary(*vtkRead)==tri6Boundary(mshExpected));

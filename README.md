@@ -67,6 +67,14 @@ box.
 - [Straight duct with Prism6 walls and a Tet4 core](examples/flow_hybrid_duct/README.md)
 - [SDK background jobs and the debug UI example](docs/UI_INTEGRATION.md)
 
+## Python
+
+An experimental [Python STEP interface](docs/PYTHON.md) imports STEP, generates
+audited Tet4 meshes and exports tagged VTK or native archives. Its first wheel
+targets Windows x64 and Python 3.12, with the CAD runtime bundled. Development
+wheels are built and tested in GitHub Actions; PyPI distribution and other
+platforms are planned.
+
 ## Citation
 
 If you use PAACS Mesh in your work, please cite the software using

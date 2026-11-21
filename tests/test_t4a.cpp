@@ -1433,15 +1433,15 @@ std::optional<ReloadedMesh> reloadMsh(const std::string& path) {
 }
 
 ReloadedMesh exportProjection(const mesh::Mesh& source,bool volumeOnly,
-                              bool nodeClasses) {
+                              bool nodeClasses,bool fullPrecision=false) {
     ReloadedMesh result;
     result.hasNodeClasses=nodeClasses;
     result.nodes.reserve(static_cast<std::size_t>(source.nodeCount()));
     result.nodeClasses.reserve(static_cast<std::size_t>(source.nodeCount()));
     for (Index i=0;i<source.nodeCount();++i) {
         const auto point=source.node(i);
-        result.nodes.push_back({exportedDouble(point.x),exportedDouble(point.y),
-                                exportedDouble(point.z)});
+        result.nodes.push_back(fullPrecision?point:Vec3{
+            exportedDouble(point.x),exportedDouble(point.y),exportedDouble(point.z)});
         result.nodeClasses.push_back(
             nodeClasses?source.nodeClass(i):mesh::Classification{});
     }
@@ -1551,7 +1551,7 @@ void auditedExport() {
     const auto mshReload=reloadMsh(msh);
     CHECK(vtkReload.has_value());
     CHECK(mshReload.has_value());
-    const auto vtkExpected=exportProjection(output,true,false);
+    const auto vtkExpected=exportProjection(output,true,false,true);
     const auto mshExpected=exportProjection(output,false,true);
     if (vtkReload) {
         CHECK(sameReloadNodes(*vtkReload,vtkExpected));

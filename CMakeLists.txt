@@ -26,6 +26,8 @@ if(PAACS_REQUIRE_GCC16 AND (NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CX
 endif()
 option(PAACS_BUILD_CLI "Build paacs-mesh" ON)
 option(PAACS_BUILD_UI_BRIDGE "Build optional C ABI shared library for UI bindings" OFF)
+option(PAACS_BUILD_PYTHON "Build optional Python STEP bindings" OFF)
+option(PAACS_PYTHON_BUILD_OCCT "Build the pinned shared OCCT SDK for Python" OFF)
 option(PAACS_BUILD_TESTS "Build all unit tests and retained probes" ${PROJECT_IS_TOP_LEVEL})
 option(PAACS_BUILD_EXTENDED_PROBES "Build retained topology allocation/rollback probes" OFF)
 option(PAACS_BUILD_BENCHMARKS "Build reproducible benchmarks" OFF)
@@ -123,6 +125,9 @@ target_compile_definitions(paacs_mesh PRIVATE
 file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/build-info-$<CONFIG>.txt" CONTENT
     "release=${PAACS_RELEASE_VERSION}\ncompiler=${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}\ncmake=${CMAKE_VERSION}\nstandard=${PAACS_CXX_STANDARD}\nconfiguration=$<CONFIG>\nflags=${CMAKE_CXX_FLAGS}\nstrict_fp=ON\nipo=${PAACS_ENABLE_IPO}\nnative=${PAACS_NATIVE_ARCH}\nsanitizer=${PAACS_SANITIZER}\nSee compile_commands.json for exact translation-unit flags.\n")
 if(PAACS_WITH_OCCT)
+    if(PAACS_BUILD_PYTHON AND PAACS_PYTHON_BUILD_OCCT)
+        include(cmake/python/OCCT.cmake)
+    endif()
     # OCCT's shipped version file uses exact-version compatibility even for
     # patch releases, so check the supported major after loading its config.
     find_package(OpenCASCADE REQUIRED CONFIG)
@@ -194,6 +199,12 @@ if(PAACS_BUILD_UI_BRIDGE)
     install(TARGETS paacs_ui EXPORT PAACSMeshTargets
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+endif()
+if(PAACS_BUILD_PYTHON)
+    if(NOT PAACS_WITH_OCCT)
+        message(FATAL_ERROR "PAACS_BUILD_PYTHON requires PAACS_WITH_OCCT=ON")
+    endif()
+    add_subdirectory(python)
 endif()
 if(PAACS_BUILD_TESTS)
     enable_testing()

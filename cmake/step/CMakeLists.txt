@@ -10,9 +10,9 @@ include(ExternalProject)
 enable_testing()
 
 set(PAACS_STEP_JOBS 4 CACHE STRING "Parallel jobs for the OCCT and PAACS builds")
+option(PAACS_STEP_BUILD_TOOLS "Build and test the PAACS STEP tools after OCCT" ON)
 get_filename_component(paacs_source "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
-set(occt_version 8.0.1)
-string(REPLACE "." "_" occt_tag "V${occt_version}")
+include("${paacs_source}/cmake/OCCTVersion.cmake")
 set(occt_install "${CMAKE_CURRENT_BINARY_DIR}/occt")
 set(bin_dir "${CMAKE_CURRENT_BINARY_DIR}/bin")
 
@@ -39,11 +39,11 @@ endif()
 # The toolkits below and their OCCT-declared dependencies form the STEP SDK.
 # OCCT builds in its own CMake project and is installed as shared libraries.
 ExternalProject_Add(occt
-    URL "https://codeload.github.com/Open-Cascade-SAS/OCCT/tar.gz/${occt_tag}"
-    URL_HASH SHA512=bbe7099071cbf5397940ebc6e66ec05f8023d5e5aae6142870e14b93aa6f8f94c30980ef421e717f0fbfbc23b3520c3ccfe8a939c4caba3ccbf325060e26eb52
+    URL "${PAACS_OCCT_URL}"
+    URL_HASH "SHA512=${PAACS_OCCT_SHA512}"
     TLS_VERIFY ON
     DOWNLOAD_DIR "${CMAKE_CURRENT_BINARY_DIR}/downloads"
-    DOWNLOAD_NAME "occt-${occt_version}.tar.gz"
+    DOWNLOAD_NAME "occt-${PAACS_OCCT_VERSION}.tar.gz"
     INSTALL_DIR "${occt_install}"
     LIST_SEPARATOR "|"
     CMAKE_ARGS
@@ -73,6 +73,10 @@ ExternalProject_Add(occt
     USES_TERMINAL_DOWNLOAD ON
     USES_TERMINAL_BUILD ON
 )
+
+if(NOT PAACS_STEP_BUILD_TOOLS)
+    return()
+endif()
 
 ExternalProject_Add(paacs
     DEPENDS occt
