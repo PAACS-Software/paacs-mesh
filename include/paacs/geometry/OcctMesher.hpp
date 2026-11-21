@@ -124,7 +124,9 @@ struct NativeCadMeshOptions {
     bool useAdaptiveTetRecovery = false;
     // Try a discrete fill followed by local original-CAD cavity repair.
     bool useLiveMaterialRecovery = false;
-    // Try bounded, boundary-preserving Tet4 quality improvement on native pieces.
+    // Try bounded, boundary-preserving Tet4 quality improvement on native pieces
+    // and after spatial sizing. The latter has an independent postfill budget;
+    // it does not reduce the insertion budget or change the prescribed surface.
     bool improveNativeTetQuality = false;
     // Synchronous diagnostics on the calling thread. Stage names and
     // diagnostics are string literals; a null observer disables tracing.

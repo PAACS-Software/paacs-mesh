@@ -19,6 +19,7 @@
 #include "OcctTetQuality.hpp"
 #include "OcctLiveCavity.hpp"
 #include "OcctLocalDelaunay.hpp"
+#include "OcctDelaunayMeshQuality.hpp"
 #include "OcctTrimmedRayWitness.hpp"
 #include "OcctInwardSites.hpp"
 #include "OcctShellProximity.hpp"
@@ -433,7 +434,8 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                  std::min(o.maximumNodes,std::uint64_t(mesh.nodeCount())+outputGrowth),
                  std::min(frontCells,std::uint64_t(mesh.countCells(mesh::CellType::Tet4))+outputGrowth),
                  availableBytes-used-witnessBytes,o.targetSize,
-                 spatialSizing&&sites.empty()&& !deferMaterial?&*sizeField:nullptr},
+                 spatialSizing&&sites.empty()&& !deferMaterial?&*sizeField:nullptr,
+                 options.improveNativeTetQuality},
                  [&](Vec3 p){return deferMaterial||native(p);},
                  [&](Vec3 p){return deferMaterial||admitLocalCentroid(p);},tick,material,qualityEdits);
         };
@@ -660,6 +662,35 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             out.localDelaunayRefinementNodes=localInsert(completed,{}, {},
                 !spatialSizing||improveQuality?&out.localDelaunayQualityEdits:nullptr);
             refinement.finish(out.localDelaunayRefinementNodes||out.localDelaunayQualityEdits?"refined":"unchanged");
+        }
+        if(spatialSizing&&options.improveNativeTetQuality){
+            OcctStageTrace optimization("volume_quality",tag);
+            const auto queries=out.nativeQueries<maximumSpacedCandidateQueries?
+                std::min<std::uint64_t>(3000,(maximumSpacedCandidateQueries-out.nativeQueries)/4):0;
+            // Leave a conservative work share for the mandatory final audits.
+            // Include native callback charges in this optional stage's share.
+            const auto reserve=1024*(std::uint64_t(completed.nodeCount())+
+                std::uint64_t(completed.countCells(mesh::CellType::Tet4)));
+            const auto room=remaining();
+            const auto budget=room>reserve?std::min<std::uint64_t>(2'000'000,(room-reserve)/8):0;
+            const auto beganQuality=out.workUsed;
+            const auto qualityTick=[&](std::uint64_t n){
+                const auto used=out.workUsed-beganQuality;
+                if(used>budget||n>budget-used)throw OcctDelaunayQualityLimit{};
+                tick(n);
+            };
+            const auto bytes=std::uint64_t(completed.nodeCount())*(sizeof(Vec3)+sizeof(mesh::Classification))+
+                std::uint64_t(completed.cellCount())*sizeof(mesh::Cell)+
+                std::uint64_t(completed.connectivityCount())*sizeof(Index);
+            const auto outputGrowth=bytes<o.maximumOutputBytes?
+                (o.maximumOutputBytes-bytes)/(sizeof(mesh::Cell)+4*sizeof(Index)):0;
+            const auto retainedQuality=strictAdmissions.retainedPayloadBytes();
+            out.localDelaunayQualityEdits+=improveOcctDelaunayMeshQuality(completed,
+                budget,queries,std::min(frontCells,
+                    std::uint64_t(completed.countCells(mesh::CellType::Tet4))+outputGrowth),
+                retainedQuality<availableBytes?availableBytes-retainedQuality:0,
+                native,nativeCentroid,qualityTick);
+            optimization.finish(out.localDelaunayQualityEdits?"improved":"unchanged");
         }
         trace.next("cad_validation");
         for(Index i=0;i<completed.nodeCount();++i)if(completed.nodeClass(i).dim==3)need(native(completed.node(i)),NativeCadMeshReason::GeometryError,"native-plc-final-interior-node-outside");

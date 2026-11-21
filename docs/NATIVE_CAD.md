@@ -55,10 +55,18 @@ The `plot` command uses exact intersections of the stored Tet4 cells.
 | `--recovery-mode advanced` | Try bounded native edge and face recovery on routes that reach a certified shell. The default is `standard`. |
 | `--local-partition-recovery`, `--adaptive-tet-recovery` | Enable optional bounded recovery routes. |
 | `--curvature-points-per-turn N` | Enable curvature-based surface sizing on eligible native routes. |
+| `--improve-tet-quality` | Try bounded quality improvement on native pieces and after spatial sizing, keeping the prescribed surface fixed. |
 | `--independent-parts` | Mesh supported bodies separately and report material interference. The result certifies each part individually. |
 | `--max-work`, `--max-working-bytes` | Set work and temporary storage limits. |
 | `--warning-quality`, `--min-quality` | Report a weak mesh or require a strict quality floor. |
 | `--trace-native-stages` | Record active stages and diagnostics on standard error. |
+
+The optional spatial Tet4 quality pass uses edge swaps and partial interior-node
+movements. It preserves CAD boundary coordinates and tags, and retains the native
+geometry and validity checks. Its separate work and query limits can leave weak
+cells unresolved; inspect the quality distribution rather than assuming the
+switch meets a requested quality floor. `volume_quality` appears in the stage
+trace when this pass is requested.
 
 The default material checks reject exterior tetrahedron centroids. On eligible
 Tet4 recovery routes, `--allow-centroids-within-chord-tolerance` applies a

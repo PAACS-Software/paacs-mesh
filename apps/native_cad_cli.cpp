@@ -95,6 +95,7 @@ int runNativeCadCli(int argc,char** argv) {
             <<",\"trimmed_ray_witnesses\":"<<(options.useTrimmedRayWitnesses?"true":"false")
             <<",\"local_delaunay_refinement\":"<<(options.useLocalDelaunayRefinement?"true":"false")
             <<",\"improve_surface_spacing\":"<<(options.improveNativeSurfaceSpacing?"true":"false")
+            <<",\"improve_tet_quality\":"<<(options.improveNativeTetQuality?"true":"false")
             <<",\"regular_surface_front\":"<<(options.useRegularSurfaceFront?"true":"false")
             <<",\"improve_regular_quality\":"<<(options.regularMeshQualityEnabled()?"true":"false")
             <<",\"maximum_edge_recovery_steiner_candidates\":"<<options.maximumEdgeRecoverySteinerCandidates
