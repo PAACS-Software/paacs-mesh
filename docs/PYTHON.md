@@ -341,6 +341,124 @@ export even when the original file has been deleted. This increases retained
 memory by the input size. Input/topology and metadata-output budgets do not
 impose a hard process-memory limit on the CAD parser.
 
+## Preview selections without a GUI
+
+```python
+bore = model.select_faces(surface="cylinder", radius=2.5, expect=1)
+preview = model.preview(bore, linear_deflection=.02)
+preview.write_svg("housing-selection.svg", title="Housing bore wall")
+display = preview.to_dict()
+```
+
+The preview contains owned points, triangles and imported face tags. Selected
+faces are gold in the SVG. It tessellates a deep CAD copy, checks the source
+snapshot for changes, and leaves the geometry used by the mesher intact. It is
+display geometry, not a conforming surface mesh or a validity/error certificate.
+`linear_deflection` uses millimetres. `max_points` and `max_triangles` bound the
+returned arrays; serialized display data is limited to 8 MiB. Those limits do
+not impose a hard runtime or memory limit on the CAD tessellator.
+
+SVG is a headless selection aid. Its orthographic painter ordering can be
+approximate for interlocking parts or intersecting display triangles; label
+anchors have a separate bounded depth test. A 3D application can consume the
+same tagged display arrays for interactive inspection.
+
+## Reproducible, bounded meshing workflows
+
+Recipes capture source identity, companion groups, sizing controls, worker and
+resource limits, and an explicit retry policy. They use the same native mesher
+and validity checks as `CadModel.mesh()`.
+
+```python
+model = pm.read_step("housing.step", retain_source=True)
+bore = model.select_faces(surface="cylinder", radius=2.5, expect=1)
+model.define_group("bore_wall", bore, group_id="housing-bore-wall")
+
+recipe = pm.create_recipe(
+    model, 1.0,
+    selected_face_sizes=[(bore, .2)],
+    volume_controls=[pm.BoxSize([-3, -3, 0], [3, 3, 5], .3)],
+    assembly="conforming", min_size=.15, growth=1.3,
+    workers=1, validation_workers=1, max_work=100_000_000,
+    allow_advanced=True, finer_factors=(.7,),
+    max_attempts=3, max_seconds=90,
+)
+pm.save_recipe(model, recipe, "housing.recipe.json")
+
+try:
+    result = pm.run_recipe(model, recipe)
+    print(result.report["attempts"])
+    pm.publish_result(result, "housing-run-001")
+except pm.WorkflowError as error:
+    print(error.stage, error.reason, error.report)
+```
+
+The default is one standard attempt. Additional attempts need an explicit
+`max_attempts` and an enabled alternative. Advanced recovery is eligible only
+for diagnosed seed/cavity/material recovery failures. A finer attempt needs an
+eligible surface, CAD error or size/quality failure. Unknown failures, exhausted
+budgets, cancellation, allocation failures, unresolved interfaces and unsupported
+controls stop the workflow. Assembly policy is preserved; interference is
+reported rather than silently fusing parts. Quality warnings can accompany a
+valid native result and do not trigger an extra attempt by themselves.
+
+`finer_factors` are strictly decreasing fractions of the original global size.
+They change only that global size. Existing face/box controls, growth, minimum
+size, assembly policy and resource budgets remain unchanged. A candidate below
+`min_size` is skipped and recorded. This is not a claim that every achieved mesh
+edge becomes uniformly smaller.
+
+Every native attempt records its exact options, trigger, elapsed time and full
+native report, including failures, while the diagnostics fit the 8 MiB report
+budget. If that budget is exhausted, the workflow stops with `report_budget`,
+records the attempted work and explicitly marks omitted or summarized data;
+it does not relabel a successful native mesh as invalid. Reports distinguish
+independent validated
+parts from a globally conforming domain. A workflow cannot turn an incomplete
+or refused native mesh into a successful result.
+
+`run_recipe()` times validation, preparation, queueing and all retries after the
+caller has imported the model. For import-inclusive timing, use
+`run_saved_recipe("housing.recipe.json", "housing.step")`. The source path must
+be supplied explicitly; a recipe's display name is never opened as a path.
+The total deadline is cooperative: queue waits and CAD calls can overrun it.
+The remaining time is checked before each attempt and passed to the native
+operation; any overrun remains visible in the report. Node, cell, work and
+memory/output budgets apply per attempt. Publication is separate and timed
+separately.
+
+`publish_result()` stages six files in a sibling directory and publishes them
+together with an exclusive atomic rename:
+
+- `source.step`: the exact import-time bytes, verified against the source hash;
+- `intent.json`: captured group IDs, queries and property guards;
+- `recipe.json`: controls and retry policy;
+- `mesh.paacsmesh` and `mesh.vtk`: native tagged exports;
+- `report.json`: all attempts, native audits and publication metadata.
+
+An existing destination is refused, including an empty directory or symlink.
+Export or publication failures leave the owned result usable and previous
+outputs intact. Filesystems without exclusive atomic directory rename are
+refused. The default embedded-source limit is 64 MiB. Ordinary imports need the
+original source to remain unchanged; `retain_source=True` keeps its exact bytes
+for later export. Companion groups are captured when the recipe is created, so
+later edits to a live model's group dictionary do not change the recipe.
+
+```python
+reopened = pm.read_step("housing-run-001/source.step",
+                        intent="housing-run-001/intent.json")
+saved = pm.load_recipe(reopened, "housing-run-001/recipe.json")
+again = pm.run_recipe(reopened, saved)
+```
+
+Recipes and intent files reject edited sources or incompatible kernel/tag
+schemes. Rebind and visually confirm selections explicitly before creating a
+new recipe for a changed design.
+
+Pin the source commit or qualified wheel checksum when comparing runs. Recipes
+record inputs and engine/kernel versions; different builds or platforms may
+produce different meshes. Every replay reruns the native validity checks.
+
 ## Build and qualify a wheel
 
 Windows builds require Visual Studio 2022 C++ build tools and CPython 3.12 x64.
@@ -404,5 +522,6 @@ the C++ SDK headers and static libraries.
 ## Next milestones
 
 Extend the qualified platform and Python-version matrix.
-A bounded inspect–select–mesh–audit workflow will build on the native controls,
-source-bound selections and mesh classification.
+Extend the qualified workflow and selection tools for remote automation.
+A thin tool adapter can build on the bounded Python functions without replacing
+the native engine or its validity checks.

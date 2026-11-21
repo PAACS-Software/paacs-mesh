@@ -80,6 +80,8 @@ Optional [NumPy snapshots](docs/PYTHON.md#numpy-mesh-arrays) expose coordinates,
 typed connectivity and CAD classifications for solver and analysis workflows.
 [CAD inspection and selections](docs/PYTHON.md#inspect-cad-and-select-faces)
 support geometric predicates, representation names and guarded saved groups.
+Headless selection previews and [bounded recipes](docs/PYTHON.md#reproducible-bounded-meshing-workflows)
+support automated callers, with explicit recovery choices and recorded audits.
 
 ## Citation
 
