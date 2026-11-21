@@ -23,12 +23,15 @@
 #include <cmath>
 #include <condition_variable>
 #include <filesystem>
+#include <fstream>
 #include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <set>
+#include <stdexcept>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -266,6 +269,7 @@ struct MeshResult {
     mesh::Mesh value;
     geo::NativeCadMeshOutcome outcome;
     fs::path source;
+    std::string sourceSha256;
     double importSeconds = 0;
     double requestedSize = 0;
     std::string recovery;
@@ -289,6 +293,7 @@ struct MeshResult {
         r["reason"] = geo::nativeCadMeshReasonName(outcome.reason);
         r["mesh_published"] = outcome.published;
         r["source_path"] = utf8(source);
+        r["source_sha256"] = sourceSha256;
         r["units"] = "mm";
         r["requested_size"] = requestedSize;
         r["recovery"] = recovery;
@@ -426,8 +431,10 @@ struct MeshResult {
 };
 
 struct CadModel {
+    std::shared_ptr<const std::string> snapshot;
     geo::NativeCadImportOutcome imported;
     fs::path source;
+    std::string sourceSha256;
     double importSeconds = 0;
 
     std::vector<int> faceTags() const {
@@ -511,6 +518,7 @@ struct CadModel {
         }
         auto result = std::make_unique<MeshResult>();
         result->source = source;
+        result->sourceSha256 = sourceSha256;
         result->importSeconds = importSeconds;
         result->requestedSize = options.geometry.targetSize;
         result->recovery = recovery;
@@ -548,22 +556,70 @@ struct CadModel {
     }
 };
 
-std::unique_ptr<CadModel> readStep(const fs::path& path, const py::object& maxFileBytes) {
+
+// The source identity covers the exact immutable bytes passed to the parser.
+// Read in bounded chunks; a caller-supplied large limit does not eagerly
+// allocate that amount. Hashing uses Python's standard SHA-256 implementation.
+std::unique_ptr<CadModel> readStep(const fs::path& path, const py::object& maxFileBytes,
+                                  bool names, bool retainSource) {
     auto result = std::make_unique<CadModel>();
     result->source = checkedPath(path);
     geo::NativeCadImportOptions options;
     if (!maxFileBytes.is_none()) options.maximumFileBytes = positiveInteger(maxFileBytes, "max_file_bytes");
+    options.retainRepresentationNames = names;
+    auto snapshot = std::make_shared<std::string>();
+    const auto start = std::chrono::steady_clock::now();
     { py::gil_scoped_release release;
-      std::lock_guard lock(nativeOperationMutex);
-      const auto start = std::chrono::steady_clock::now();
-      result->imported = geo::importOcctCad(result->source, options);
-      result->importSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+      result->imported.reason = geo::CadImportReason::FileUnavailable;
+      std::error_code fileError;
+      const auto advertisedBytes = fs::file_size(result->source, fileError);
+      if (!fileError) result->imported.fileBytes = advertisedBytes;
+      if (!fileError && advertisedBytes > options.maximumFileBytes)
+          result->imported.reason = geo::CadImportReason::FileBudget;
+      std::ifstream input;
+      if (!fileError && advertisedBytes <= options.maximumFileBytes)
+          input.open(result->source, std::ios::binary);
+      if (input.is_open()) {
+          std::array<char, 65536> buffer;
+          bool budget = false;
+          while (input) {
+              input.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+              const auto count = static_cast<std::size_t>(input.gcount());
+              if (count > options.maximumFileBytes - snapshot->size()) {
+                  budget = true;
+                  break;
+              }
+              snapshot->append(buffer.data(), count);
+          }
+          result->imported.fileBytes = snapshot->size();
+          if (budget) result->imported.reason = geo::CadImportReason::FileBudget;
+          else if (!input.bad()) result->imported.reason = geo::CadImportReason::None;
+      }
     }
-    if (!result->imported.imported())
-        fail(importError, "import", geo::cadImportReasonName(result->imported.reason),
-             importReport(result->imported, result->source, result->importSeconds));
+    if (result->imported.reason == geo::CadImportReason::None) {
+        auto hash = py::module_::import("hashlib").attr("sha256")();
+        for (std::size_t offset = 0; offset < snapshot->size(); offset += 65536)
+            hash.attr("update")(py::bytes(snapshot->data() + offset,
+                std::min<std::size_t>(65536, snapshot->size() - offset)));
+        result->sourceSha256 = hash.attr("hexdigest")().cast<std::string>();
+        { py::gil_scoped_release release;
+          std::lock_guard lock(nativeOperationMutex);
+          result->imported = geo::importOcctStepData(
+              std::span<const char>(snapshot->data(), snapshot->size()), utf8(result->source), options);
+        }
+    }
+    result->importSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+    if (!result->imported.imported()) {
+        auto report = importReport(result->imported, result->source, result->importSeconds);
+        if (!result->sourceSha256.empty()) report["source_sha256"] = result->sourceSha256;
+        fail(importError, "import", geo::cadImportReasonName(result->imported.reason), std::move(report));
+    }
+    if (retainSource) result->snapshot = std::move(snapshot);
     return result;
 }
+
+#include "CadInspection.hpp"
+
 } // namespace
 
 PYBIND11_MODULE(_native, m) {
@@ -608,10 +664,34 @@ PYBIND11_MODULE(_native, m) {
         .def("write_archive", &MeshResult::writeArchive, py::arg("path"));
     py::class_<CadModel>(m, "CadModel")
         .def_property_readonly("info", [](const CadModel& model) {
-            return importReport(model.imported, model.source, model.importSeconds);
+            auto report = importReport(model.imported, model.source, model.importSeconds);
+            report["source_sha256"] = model.sourceSha256;
+            report["kernel_version"] = geo::occtKernelVersion();
+            report["representation_names"] = namesSummary(*model.imported.model);
+            return report;
         })
         .def_property_readonly("face_tags", &CadModel::faceTags)
         .def_property_readonly("body_tags", &CadModel::bodyTags)
+        .def_property_readonly("edge_tags", [](const CadModel& model) {
+            std::vector<int> tags;
+            for (const auto* entity : model.imported.model->edges()) tags.push_back(entity->tag());
+            std::sort(tags.begin(), tags.end());
+            return tags;
+        })
+        .def_property_readonly("vertex_tags", [](const CadModel& model) {
+            std::vector<int> tags;
+            for (const auto* entity : model.imported.model->vertices()) tags.push_back(entity->tag());
+            std::sort(tags.begin(), tags.end());
+            return tags;
+        })
+        .def_property_readonly("model_identity", [](const CadModel& model) { return model.imported.model->identity(); })
+        .def_property_readonly("source_sha256", [](const CadModel& model) { return model.sourceSha256; })
+        .def_property_readonly("kernel_version", [](const CadModel&) { return geo::occtKernelVersion(); })
+        .def_property_readonly("_source_bytes", [](const CadModel& model) -> py::object {
+            return model.snapshot ? py::object(py::bytes(*model.snapshot)) : py::object(py::none());
+        })
+        .def("_inspect_entities", &inspectEntities, py::arg("kind"), py::arg("tags"), py::kw_only(),
+             py::arg("topology") = false, py::arg("max_uses") = 10000)
         .def("mesh", &CadModel::mesh, py::arg("size"), py::kw_only(),
              py::arg("recovery") = "standard", py::arg("assembly") = "preserve_parts",
              py::arg("workers") = py::int_(1), py::arg("validation_workers") = py::int_(1),
@@ -622,5 +702,5 @@ PYBIND11_MODULE(_native, m) {
              py::arg("face_sizes") = py::none(), py::arg("volume_controls") = py::none(),
              py::arg("min_size") = py::none(), py::arg("growth") = py::float_(1.3),
              py::arg("native_sizing") = py::none());
-    m.def("read_step", &readStep, py::arg("path"), py::kw_only(), py::arg("max_file_bytes") = py::none());
+    m.def("read_step", &readStep, py::arg("path"), py::kw_only(), py::arg("max_file_bytes") = py::none(), py::arg("names") = true, py::arg("retain_source") = false);
 }

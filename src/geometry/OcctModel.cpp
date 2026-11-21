@@ -28,6 +28,17 @@
 #include <NCollection_Sequence.hxx>
 #include <Precision.hxx>
 #include <STEPControl_Reader.hxx>
+#include <StepRepr_RepresentationItem.hxx>
+#include <StepShape_Edge.hxx>
+#include <StepShape_Face.hxx>
+#include <StepShape_SolidModel.hxx>
+#include <StepShape_Vertex.hxx>
+#include <Standard_Version.hxx>
+#include <TCollection_HAsciiString.hxx>
+#include <TransferBRep.hxx>
+#include <Transfer_TransientProcess.hxx>
+#include <XSControl_TransferReader.hxx>
+#include <XSControl_WorkSession.hxx>
 #include <Standard_Failure.hxx>
 #include <Standard_OutOfMemory.hxx>
 #include <TCollection_AsciiString.hxx>
@@ -40,7 +51,10 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <cstddef>
+#include <istream>
 #include <limits>
+#include <streambuf>
 #include <numeric>
 #include <optional>
 #include <stdexcept>
@@ -93,6 +107,144 @@ void require(bool good, CadImportReason reason = CadImportReason::InvalidShape) 
     if (!good)
         throw Stop{reason};
 }
+
+bool validImportLimits(const NativeCadImportOptions& options) noexcept {
+    return options.maximumSolids > 0 && options.maximumFaces > 0 && options.maximumEdges > 0 &&
+           options.maximumVertices > 0 && options.maximumUses > 0;
+}
+TopoDS_Shape transferredStep(STEPControl_Reader& reader, NativeCadImportOutcome& out) {
+    reader.SetSystemLengthUnit(1.);
+    out.millimetresPerModelUnit = 1.;
+    NCollection_Sequence<TCollection_AsciiString> length, angle, solidAngle;
+    reader.FileUnits(length, angle, solidAngle);
+    for (int i = 1; i <= length.Length(); ++i)
+        out.sourceLengthUnits.emplace_back(length(i).ToCString());
+    require(reader.TransferRoots() > 0, CadImportReason::ParseFailed);
+    const auto shape = reader.OneShape();
+    require(!shape.IsNull(), CadImportReason::ParseFailed);
+    return shape;
+}
+// std::streambuf's get-area interface takes char*, but an input-only stream
+// only reads this area. The immutable caller snapshot is never copied or written.
+class StepSpanBuffer final : public std::streambuf {
+  public:
+    explicit StepSpanBuffer(std::span<const char> data) {
+        auto* first = const_cast<char*>(data.data());
+        setg(first, first, first + data.size());
+    }
+};
+struct SourceNameCandidates {
+    ShapeMap shapes;
+    std::vector<std::vector<std::string>> names;
+    OcctSourceNameSummary summary;
+};
+int sourceItemDimension(const occ::handle<StepRepr_RepresentationItem>& item) {
+    if (item->IsKind(STANDARD_TYPE(StepShape_Vertex))) return 0;
+    if (item->IsKind(STANDARD_TYPE(StepShape_Edge))) return 1;
+    if (item->IsKind(STANDARD_TYPE(StepShape_Face))) return 2;
+    if (item->IsKind(STANDARD_TYPE(StepShape_SolidModel))) return 3;
+    return -1;
+}
+int namedShapeDimension(const TopoDS_Shape& shape) noexcept {
+    if (shape.IsNull()) return -1;
+    switch (shape.ShapeType()) {
+    case TopAbs_VERTEX: return 0;
+    case TopAbs_EDGE: return 1;
+    case TopAbs_FACE: return 2;
+    case TopAbs_SOLID: return 3;
+    default: return -1;
+    }
+}
+SourceNameCandidates sourceNamesFromTransfer(const STEPControl_Reader& reader,
+                                            const TopoDS_Shape& root,
+                                            const NativeCadImportOptions& options) {
+    SourceNameCandidates result;
+    if (!options.retainRepresentationNames) return result;
+    auto& summary = result.summary;
+    summary.requested = true;
+    summary.reason = OcctSourceNameReason::None;
+    try {
+        const auto& session = reader.WS();
+        if (session.IsNull() || session->TransferReader().IsNull() ||
+            session->TransferReader()->TransientProcess().IsNull()) {
+            summary.reason = OcctSourceNameReason::TransferUnavailable;
+            return result;
+        }
+        const auto& process = session->TransferReader()->TransientProcess();
+        // Do not retain intermediate shapes that are absent from the final root.
+        ShapeMap topology;
+        TopExp::MapShapes(root, topology);
+        const int mapped = process->NbMapped();
+        for (std::int64_t ordinal = 1; ordinal <= mapped; ++ordinal) {
+            const int i = static_cast<int>(ordinal);
+            if (summary.mappingsVisited >= options.maximumNameMappings) {
+                summary.reason = OcctSourceNameReason::BudgetExceeded;
+                break;
+            }
+            ++summary.mappingsVisited;
+            const auto item = occ::down_cast<StepRepr_RepresentationItem>(process->Mapped(i));
+            if (item.IsNull() || item->Name().IsNull() || item->Name()->Length() == 0) continue;
+            ++summary.namedMappings;
+            const auto shape = TransferBRep::ShapeResult(process->MapItem(i));
+            const int sourceDimension = sourceItemDimension(item);
+            const int shapeDimension = namedShapeDimension(shape);
+            const int dimension = sourceDimension >= 0 ? sourceDimension : shapeDimension;
+            if (shapeDimension < 0 ||
+                (sourceDimension >= 0 && sourceDimension != shapeDimension) ||
+                topology.FindIndex(shape) == 0) {
+                ++summary.unmatchedNamedMappings;
+                if (dimension >= 0)
+                    ++summary.unmatchedByDimension[static_cast<std::size_t>(dimension)];
+                else ++summary.unsupportedNamedMappings;
+                continue;
+            }
+            // IsSame is the existing tag-map authority: placement is retained,
+            // orientation uses remain separate topology records. IsPartner is
+            // deliberately not a fallback for repeated assembly instances.
+            const int slot = result.shapes.Add(shape);
+            if (result.names.size() < static_cast<std::size_t>(slot))
+                result.names.resize(static_cast<std::size_t>(slot));
+            auto& names = result.names[static_cast<std::size_t>(slot - 1)];
+            const auto& text = item->Name()->String();
+            const std::string_view candidate(text.ToCString(), static_cast<std::size_t>(text.Length()));
+            if (std::any_of(names.begin(), names.end(), [&](const std::string& name) {
+                    return std::string_view(name.data(), name.size()) == candidate;
+                })) continue;
+            if (names.size() >= options.maximumNamesPerEntity ||
+                candidate.size() > options.maximumNameBytes - summary.candidateBytes) {
+                summary.reason = OcctSourceNameReason::BudgetExceeded;
+                break;
+            }
+            names.emplace_back(candidate);
+            summary.candidateBytes += candidate.size();
+            ++summary.candidateNames;
+        }
+        summary.complete = summary.reason == OcctSourceNameReason::None;
+    } catch (const Standard_OutOfMemory&) {
+        throw std::bad_alloc{};
+    } catch (const Standard_Failure&) {
+        summary.reason = OcctSourceNameReason::KernelFailure;
+    }
+    for (auto& names : result.names) std::sort(names.begin(), names.end());
+    return result;
+}
+OcctSurfaceType inspectedSurfaceType(GeomAbs_SurfaceType type) noexcept {
+    switch (type) {
+    case GeomAbs_Plane: return OcctSurfaceType::Plane;
+    case GeomAbs_Cylinder: return OcctSurfaceType::Cylinder;
+    case GeomAbs_Cone: return OcctSurfaceType::Cone;
+    case GeomAbs_Sphere: return OcctSurfaceType::Sphere;
+    case GeomAbs_Torus: return OcctSurfaceType::Torus;
+    case GeomAbs_BezierSurface: return OcctSurfaceType::Bezier;
+    case GeomAbs_BSplineSurface: return OcctSurfaceType::BSpline;
+    case GeomAbs_SurfaceOfRevolution: return OcctSurfaceType::Revolution;
+    case GeomAbs_SurfaceOfExtrusion: return OcctSurfaceType::Extrusion;
+    case GeomAbs_OffsetSurface: return OcctSurfaceType::Offset;
+    case GeomAbs_OtherSurface: return OcctSurfaceType::Other;
+    }
+    return OcctSurfaceType::Unknown;
+}
+
 template <class T> const T *lookup(const std::vector<std::unique_ptr<T>> &v, int tag) noexcept {
     return tag > 0 && static_cast<std::size_t>(tag) <= v.size() ? v[tag - 1].get() : nullptr;
 }
@@ -528,6 +680,68 @@ struct OcctModel::Impl {
     std::vector<std::vector<OcctFaceOwner>> owners;
     std::vector<OcctSurfaceDescriptor> descriptors;
     std::vector<Pcurve> pcurves;
+    std::vector<std::optional<Vec3>> volumeCentroids;
+    std::vector<OcctPropertyReason> volumeCentroidReasons;
+    std::vector<std::vector<int>> edgeAdjacentFaces;
+    std::vector<std::vector<std::string>> vertexNames, edgeNames, faceNames, solidNames;
+    OcctSourceNameSummary namesSummary;
+    void applyNames(SourceNameCandidates candidates) {
+        namesSummary = candidates.summary;
+        if (!namesSummary.requested) return;
+        const auto apply = [&](const ShapeMap& map, auto& entities, auto& output) {
+            output.resize(static_cast<std::size_t>(map.Extent()));
+            for (int tag = 1; tag <= map.Extent(); ++tag) {
+                const int source = candidates.shapes.FindIndex(map(tag));
+                if (source == 0) continue;
+                auto& names = output[static_cast<std::size_t>(tag - 1)];
+                names = std::move(candidates.names[static_cast<std::size_t>(source - 1)]);
+                if (names.empty()) continue;
+                ++namesSummary.namedEntities;
+                if (names.size() > 1) ++namesSummary.ambiguousEntities;
+                else if (namesSummary.complete)
+                    entities[static_cast<std::size_t>(tag - 1)]->setName(names.front());
+            }
+        };
+        apply(vertexMap, vertices, vertexNames);
+        apply(edgeMap, edges, edgeNames);
+        apply(faceMap, faces, faceNames);
+        apply(solidMap, solids, solidNames);
+    }
+    void admit(const NativeCadImportOptions& options, NativeCadImportOutcome& out) {
+        ShapeMap solidsInRoot, facesInRoot, edgesInRoot, verticesInRoot;
+        TopExp::MapShapes(root, TopAbs_SOLID, solidsInRoot);
+        TopExp::MapShapes(root, TopAbs_FACE, facesInRoot);
+        TopExp::MapShapes(root, TopAbs_EDGE, edgesInRoot);
+        TopExp::MapShapes(root, TopAbs_VERTEX, verticesInRoot);
+        out.solids = solidsInRoot.Extent();
+        out.faces = facesInRoot.Extent();
+        out.edges = edgesInRoot.Extent();
+        out.vertices = verticesInRoot.Extent();
+        require(out.solids > 0, CadImportReason::UnsupportedSolidCount);
+        require(out.solids <= options.maximumSolids && out.faces <= options.maximumFaces &&
+                    out.edges <= options.maximumEdges && out.vertices <= options.maximumVertices,
+                CadImportReason::TopologyBudget);
+        ShapeMap ownedFaces, ownedEdges, ownedVertices;
+        for (int i = 1; i <= solidsInRoot.Extent(); ++i) {
+            TopExp::MapShapes(solidsInRoot(i), TopAbs_FACE, ownedFaces);
+            TopExp::MapShapes(solidsInRoot(i), TopAbs_EDGE, ownedEdges);
+            TopExp::MapShapes(solidsInRoot(i), TopAbs_VERTEX, ownedVertices);
+        }
+        out.auxiliaryFaces = facesInRoot.Extent() - ownedFaces.Extent();
+        out.auxiliaryEdges = edgesInRoot.Extent() - ownedEdges.Extent();
+        out.auxiliaryVertices = verticesInRoot.Extent() - ownedVertices.Extent();
+        const bool auxiliary = out.auxiliaryFaces || out.auxiliaryEdges || out.auxiliaryVertices;
+        require(!auxiliary || options.retainAuxiliaryGeometry);
+        require(BRepCheck_Analyzer(root).IsValid());
+        build(options);
+        out.auxiliaryGeometryRetained = auxiliary;
+        for (const auto& descriptor : descriptors)
+            if (descriptor.kind != SurfaceKind::Plane) ++out.curvedFaces;
+        for (const auto& edge : edges)
+            if (edge->kind() != CurveKind::Line && edge->length() > 0) ++out.curvedEdges;
+        for (const double volume : volumes) out.cadVolume += volume;
+        require(std::isfinite(out.cadVolume));
+    }
     void build(const NativeCadImportOptions &options) {
         TopExp::MapShapes(root, TopAbs_VERTEX, vertexMap);
         TopExp::MapShapes(root, TopAbs_EDGE, edgeMap);
@@ -554,6 +768,7 @@ struct OcctModel::Impl {
         }
         std::uint64_t useCount = 0;
         owners.resize(faceMap.Extent());
+        edgeAdjacentFaces.resize(static_cast<std::size_t>(edgeMap.Extent()));
         for (int i = 1; i <= faceMap.Extent(); ++i) {
             const auto face = TopoDS::Face(faceMap(i));
             const auto outer = BRepTools::OuterWire(face);
@@ -599,6 +814,8 @@ struct OcctModel::Impl {
                                              Precision::Confusion();
                     pcurves.push_back({useCount, tag, i, pf, pl, use.firstParameter,
                                        use.lastParameter, tolerance, std::move(pc)});
+                    auto& adjacent = edgeAdjacentFaces[static_cast<std::size_t>(tag - 1)];
+                    if (adjacent.empty() || adjacent.back() != i) adjacent.push_back(i);
                     w.edges.push_back(use);
                     tags.push_back(tag);
                 }
@@ -645,6 +862,16 @@ struct OcctModel::Impl {
             const double volume = std::abs(props.Mass());
             require(std::isfinite(volume) && volume > 0);
             volumes.push_back(volume);
+            std::optional<Vec3> centroid;
+            auto centroidReason = OcctPropertyReason::None;
+            try {
+                const auto measured = vec(props.CentreOfMass());
+                if (finite(measured)) centroid = measured;
+                else centroidReason = OcctPropertyReason::NonfiniteResult;
+            } catch (const Standard_OutOfMemory&) { throw std::bad_alloc{}; }
+            catch (const Standard_Failure&) { centroidReason = OcctPropertyReason::KernelFailure; }
+            volumeCentroids.push_back(centroid);
+            volumeCentroidReasons.push_back(centroidReason);
             solidTolerances.push_back(tolerance);
             bodyUses.push_back(std::move(uses));
             solids.push_back(std::make_unique<NativeSolid>(i, solid, std::move(tags), tolerance));
@@ -694,6 +921,126 @@ double OcctModel::volume(int tag) const noexcept {
                ? impl_->volumes[tag - 1]
                : nan();
 }
+
+const char* occtKernelVersion() noexcept { return OCC_VERSION_COMPLETE; }
+const char* occtSurfaceTypeName(OcctSurfaceType type) noexcept {
+    switch (type) {
+    case OcctSurfaceType::Unknown: return "unknown";
+    case OcctSurfaceType::Plane: return "plane";
+    case OcctSurfaceType::Cylinder: return "cylinder";
+    case OcctSurfaceType::Cone: return "cone";
+    case OcctSurfaceType::Sphere: return "sphere";
+    case OcctSurfaceType::Torus: return "torus";
+    case OcctSurfaceType::Bezier: return "bezier";
+    case OcctSurfaceType::BSpline: return "bspline";
+    case OcctSurfaceType::Revolution: return "revolution";
+    case OcctSurfaceType::Extrusion: return "extrusion";
+    case OcctSurfaceType::Offset: return "offset";
+    case OcctSurfaceType::Other: return "other";
+    }
+    return "unknown";
+}
+const char* occtPropertyReasonName(OcctPropertyReason reason) noexcept {
+    switch (reason) {
+    case OcctPropertyReason::None: return "none";
+    case OcctPropertyReason::KernelFailure: return "kernel_failure";
+    case OcctPropertyReason::NonfiniteResult: return "nonfinite_result";
+    }
+    return "unknown";
+}
+const char* occtSourceNameReasonName(OcctSourceNameReason reason) noexcept {
+    switch (reason) {
+    case OcctSourceNameReason::Disabled: return "disabled";
+    case OcctSourceNameReason::None: return "none";
+    case OcctSourceNameReason::UnavailableSource: return "unavailable_source";
+    case OcctSourceNameReason::TransferUnavailable: return "transfer_unavailable";
+    case OcctSourceNameReason::BudgetExceeded: return "budget_exceeded";
+    case OcctSourceNameReason::KernelFailure: return "kernel_failure";
+    }
+    return "unknown";
+}
+std::optional<OcctFaceProperties> OcctModel::faceProperties(int tag, double relativeAreaTolerance) const {
+    if (!(std::isfinite(relativeAreaTolerance) && relativeAreaTolerance > 0 &&
+          relativeAreaTolerance <= 1e-3))
+        throw std::invalid_argument("relativeAreaTolerance must be finite and in (0, 0.001]");
+    const auto* geometry = face(tag);
+    if (!geometry) return std::nullopt;
+    const auto shape = TopoDS::Face(impl_->faceMap(tag));
+    OcctFaceProperties result;
+    result.faceTag = tag;
+    bool kernelFailure = false, invalidMetric = false;
+    const auto query = [&](const auto& operation) {
+        try { operation(); }
+        catch (const Standard_OutOfMemory&) { throw std::bad_alloc{}; }
+        catch (const Standard_Failure&) { kernelFailure = true; }
+    };
+    query([&] {
+        result.surfaceType = inspectedSurfaceType(BRepAdaptor_Surface(shape, false).GetType());
+    });
+    query([&] {
+        Bnd_Box bounds;
+        BRepBndLib::AddOptimal(shape, bounds, false, false);
+        if (bounds.IsVoid() || bounds.IsOpen()) { invalidMetric = true; return; }
+        OcctBounds measured;
+        bounds.Get(measured.lower.x, measured.lower.y, measured.lower.z,
+                   measured.upper.x, measured.upper.y, measured.upper.z);
+        if (!finite(measured.lower) || !finite(measured.upper) ||
+            measured.lower.x > measured.upper.x || measured.lower.y > measured.upper.y ||
+            measured.lower.z > measured.upper.z) { invalidMetric = true; return; }
+        result.bounds = measured;
+    });
+    query([&] {
+        GProp_GProps properties;
+        const double error = BRepGProp::SurfaceProperties(shape, properties, relativeAreaTolerance, false);
+        const double area = properties.Mass();
+        const auto centroid = vec(properties.CentreOfMass());
+        if (std::isfinite(area) && area > 0) result.area = area;
+        else invalidMetric = true;
+        if (finite(centroid) && result.area) result.areaCentroid = centroid;
+        else invalidMetric = true;
+        if (std::isfinite(error) && error >= 0) result.areaRelativeErrorEstimate = error;
+        else invalidMetric = true;
+    });
+    if (result.surfaceType == OcctSurfaceType::Plane) {
+        query([&] {
+            Vec2 lower, upper;
+            geometry->paramBounds(lower, upper);
+            // A plane's normal is constant. This is not an assertion that
+            // the UV midpoint lies inside a trimmed face or outside its holes.
+            const auto normal = geometry->normalAt({std::midpoint(lower.u, upper.u),
+                                                     std::midpoint(lower.v, upper.v)});
+            if (finite(normal) && normal.norm() > 0) result.planeReferenceNormal = normal;
+            else invalidMetric = true;
+        });
+    }
+    result.reason = kernelFailure ? OcctPropertyReason::KernelFailure
+                                 : invalidMetric ? OcctPropertyReason::NonfiniteResult
+                                                 : OcctPropertyReason::None;
+    return result;
+}
+std::optional<OcctSolidProperties> OcctModel::solidProperties(int tag) const {
+    const auto* geometry = solid(tag);
+    if (!geometry) return std::nullopt;
+    OcctSolidProperties result;
+    result.solidTag = tag;
+    geometry->bbox(result.bounds.lower, result.bounds.upper);
+    result.volume = volume(tag);
+    result.volumeCentroid = impl_->volumeCentroids[static_cast<std::size_t>(tag - 1)];
+    result.reason = impl_->volumeCentroidReasons[static_cast<std::size_t>(tag - 1)];
+    return result;
+}
+std::span<const std::string> OcctModel::sourceNames(int dimension, int tag) const noexcept {
+    if (dimension == 0) return row(impl_->vertexNames, tag);
+    if (dimension == 1) return row(impl_->edgeNames, tag);
+    if (dimension == 2) return row(impl_->faceNames, tag);
+    if (dimension == 3) return row(impl_->solidNames, tag);
+    return {};
+}
+OcctSourceNameSummary OcctModel::sourceNameSummary() const noexcept { return impl_->namesSummary; }
+std::span<const int> OcctModel::edgeFaces(int tag) const noexcept {
+    return row(impl_->edgeAdjacentFaces, tag);
+}
+
 std::span<const OcctFaceUse> OcctModel::faceUses(int tag) const noexcept {
     return row(impl_->bodyUses, tag);
 }
@@ -783,9 +1130,7 @@ NativeCadImportOutcome importOcctCad(const std::filesystem::path &path,
     try {
         require(options.format == CadFileFormat::Step || options.format == CadFileFormat::Brep,
                 CadImportReason::InvalidRequest);
-        require(options.maximumSolids > 0 && options.maximumFaces > 0 && options.maximumEdges > 0 &&
-                    options.maximumVertices > 0 && options.maximumUses > 0,
-                CadImportReason::InvalidRequest);
+        require(validImportLimits(options), CadImportReason::InvalidRequest);
         std::error_code error;
         out.fileBytes = std::filesystem::file_size(path, error);
         require(!error, CadImportReason::FileUnavailable);
@@ -793,73 +1138,69 @@ NativeCadImportOutcome importOcctCad(const std::filesystem::path &path,
         const auto utf8 = path.u8string();
         const std::string filename(utf8.begin(), utf8.end());
         auto impl = std::make_unique<OcctModel::Impl>();
+        SourceNameCandidates names;
         if (options.format == CadFileFormat::Step) {
             STEPControl_Reader reader;
-            require(reader.ReadFile(filename.c_str()) == IFSelect_RetDone,
-                    CadImportReason::ParseFailed);
-            reader.SetSystemLengthUnit(1.);
-            out.millimetresPerModelUnit = 1.;
-            NCollection_Sequence<TCollection_AsciiString> length, angle, solidAngle;
-            reader.FileUnits(length, angle, solidAngle);
-            for (int i = 1; i <= length.Length(); ++i)
-                out.sourceLengthUnits.emplace_back(length(i).ToCString());
-            require(reader.TransferRoots() > 0, CadImportReason::ParseFailed);
-            impl->root = reader.OneShape();
+            require(reader.ReadFile(filename.c_str()) == IFSelect_RetDone, CadImportReason::ParseFailed);
+            impl->root = transferredStep(reader, out);
+            names = sourceNamesFromTransfer(reader, impl->root, options);
         } else {
             BRep_Builder builder;
-            require(BRepTools::Read(impl->root, filename.c_str(), builder),
-                    CadImportReason::ParseFailed);
+            require(BRepTools::Read(impl->root, filename.c_str(), builder), CadImportReason::ParseFailed);
+            if (options.retainRepresentationNames) {
+                names.summary.requested = true;
+                names.summary.reason = OcctSourceNameReason::UnavailableSource;
+            }
         }
         require(!impl->root.IsNull(), CadImportReason::ParseFailed);
-        ShapeMap solids, faces, edges, vertices;
-        TopExp::MapShapes(impl->root, TopAbs_SOLID, solids);
-        TopExp::MapShapes(impl->root, TopAbs_FACE, faces);
-        TopExp::MapShapes(impl->root, TopAbs_EDGE, edges);
-        TopExp::MapShapes(impl->root, TopAbs_VERTEX, vertices);
-        out.solids = solids.Extent();
-        out.faces = faces.Extent();
-        out.edges = edges.Extent();
-        out.vertices = vertices.Extent();
-        require(out.solids > 0, CadImportReason::UnsupportedSolidCount);
-        require(out.solids <= options.maximumSolids && out.faces <= options.maximumFaces &&
-                    out.edges <= options.maximumEdges && out.vertices <= options.maximumVertices,
-                CadImportReason::TopologyBudget);
-        ShapeMap ownedFaces, ownedEdges, ownedVertices;
-        for (int i = 1; i <= solids.Extent(); ++i) {
-            TopExp::MapShapes(solids(i), TopAbs_FACE, ownedFaces);
-            TopExp::MapShapes(solids(i), TopAbs_EDGE, ownedEdges);
-            TopExp::MapShapes(solids(i), TopAbs_VERTEX, ownedVertices);
-        }
-        out.auxiliaryFaces=faces.Extent()-ownedFaces.Extent();
-        out.auxiliaryEdges=edges.Extent()-ownedEdges.Extent();
-        out.auxiliaryVertices=vertices.Extent()-ownedVertices.Extent();
-        const bool auxiliary=out.auxiliaryFaces||out.auxiliaryEdges||out.auxiliaryVertices;
-        require(!auxiliary||options.retainAuxiliaryGeometry);
-        require(BRepCheck_Analyzer(impl->root).IsValid());
-        impl->build(options);
-        out.auxiliaryGeometryRetained=auxiliary;
-        for (const auto &d : impl->descriptors)
-            if (d.kind != SurfaceKind::Plane)
-                ++out.curvedFaces;
-        for (const auto &e : impl->edges)
-            if (e->kind() != CurveKind::Line && e->length() > 0)
-                ++out.curvedEdges;
-        for (double volume : impl->volumes)
-            out.cadVolume += volume;
-        require(std::isfinite(out.cadVolume));
+        impl->admit(options, out);
+        impl->applyNames(std::move(names));
         out.model = std::unique_ptr<OcctModel>(new OcctModel(std::move(impl)));
         out.reason = CadImportReason::None;
-    } catch (const Stop &stop) {
-        out.reason = stop.reason;
-    } catch (const std::bad_alloc &) {
-        out.reason = CadImportReason::AllocationFailed;
-    } catch (const Standard_OutOfMemory &) {
-        out.reason = CadImportReason::AllocationFailed;
-    } catch (const Standard_Failure &) {
-        out.reason = CadImportReason::KernelFailure;
-    } catch (...) {
-        out.reason = CadImportReason::KernelFailure;
-    }
+    } catch (const Stop &stop) { out.reason = stop.reason; }
+    catch (const std::bad_alloc &) { out.reason = CadImportReason::AllocationFailed; }
+    catch (const Standard_OutOfMemory &) { out.reason = CadImportReason::AllocationFailed; }
+    catch (const Standard_Failure &) { out.reason = CadImportReason::KernelFailure; }
+    catch (...) { out.reason = CadImportReason::KernelFailure; }
+    return out;
+}
+NativeCadImportOutcome importOcctStepData(std::span<const char> data,
+                                         std::string_view sourceName,
+                                         const NativeCadImportOptions& options) noexcept {
+    NativeCadImportOutcome out;
+    try {
+        require(options.format == CadFileFormat::Step && validImportLimits(options),
+                CadImportReason::InvalidRequest);
+        require(!sourceName.empty() && sourceName.find('\0') == std::string_view::npos,
+                CadImportReason::InvalidRequest);
+        require(data.size() <= (std::numeric_limits<std::uint64_t>::max)() &&
+                    data.size() <= static_cast<std::size_t>((std::numeric_limits<std::ptrdiff_t>::max)()),
+                CadImportReason::FileBudget);
+        out.fileBytes = static_cast<std::uint64_t>(data.size());
+        require(out.fileBytes <= options.maximumFileBytes, CadImportReason::FileBudget);
+        require(!data.empty(), CadImportReason::ParseFailed);
+        const std::string filename(sourceName);
+        StepSpanBuffer buffer(data);
+        std::istream stream(&buffer);
+        auto impl = std::make_unique<OcctModel::Impl>();
+        SourceNameCandidates names;
+        {
+            STEPControl_Reader reader;
+            require(reader.ReadStream(filename.c_str(), stream) == IFSelect_RetDone,
+                    CadImportReason::ParseFailed);
+            impl->root = transferredStep(reader, out);
+            names = sourceNamesFromTransfer(reader, impl->root, options);
+        }
+        require(!impl->root.IsNull(), CadImportReason::ParseFailed);
+        impl->admit(options, out);
+        impl->applyNames(std::move(names));
+        out.model = std::unique_ptr<OcctModel>(new OcctModel(std::move(impl)));
+        out.reason = CadImportReason::None;
+    } catch (const Stop& stop) { out.reason = stop.reason; }
+    catch (const std::bad_alloc&) { out.reason = CadImportReason::AllocationFailed; }
+    catch (const Standard_OutOfMemory&) { out.reason = CadImportReason::AllocationFailed; }
+    catch (const Standard_Failure&) { out.reason = CadImportReason::KernelFailure; }
+    catch (...) { out.reason = CadImportReason::KernelFailure; }
     return out;
 }
 const TopoDS_Shape &detail::OcctModelAccess::shape(const OcctModel &model) noexcept {
@@ -869,30 +1210,22 @@ NativeCadImportOutcome detail::OcctModelAccess::fromShape(const TopoDS_Shape& sh
                                                         const NativeCadImportOptions& options) noexcept {
     NativeCadImportOutcome out;
     try {
-        require(!shape.IsNull()&&options.maximumSolids>0&&options.maximumFaces>0&&options.maximumEdges>0&&
-                options.maximumVertices>0&&options.maximumUses>0,CadImportReason::InvalidRequest);
-        ShapeMap solids,faces,edges,vertices,ownedFaces,ownedEdges,ownedVertices;
-        TopExp::MapShapes(shape,TopAbs_SOLID,solids);TopExp::MapShapes(shape,TopAbs_FACE,faces);
-        TopExp::MapShapes(shape,TopAbs_EDGE,edges);TopExp::MapShapes(shape,TopAbs_VERTEX,vertices);
-        out.solids=solids.Extent();out.faces=faces.Extent();out.edges=edges.Extent();out.vertices=vertices.Extent();
-        require(out.solids>0,CadImportReason::UnsupportedSolidCount);
-        require(out.solids<=options.maximumSolids&&out.faces<=options.maximumFaces&&out.edges<=options.maximumEdges&&
-                out.vertices<=options.maximumVertices,CadImportReason::TopologyBudget);
-        for(int i=1;i<=solids.Extent();++i){TopExp::MapShapes(solids(i),TopAbs_FACE,ownedFaces);
-            TopExp::MapShapes(solids(i),TopAbs_EDGE,ownedEdges);TopExp::MapShapes(solids(i),TopAbs_VERTEX,ownedVertices);}
-        out.auxiliaryFaces=faces.Extent()-ownedFaces.Extent();out.auxiliaryEdges=edges.Extent()-ownedEdges.Extent();
-        out.auxiliaryVertices=vertices.Extent()-ownedVertices.Extent();
-        const bool auxiliary=out.auxiliaryFaces||out.auxiliaryEdges||out.auxiliaryVertices;
-        require(!auxiliary||options.retainAuxiliaryGeometry);
-        require(BRepCheck_Analyzer(shape).IsValid());
-        auto impl=std::make_unique<OcctModel::Impl>();impl->root=shape;impl->build(options);
-        out.auxiliaryGeometryRetained=auxiliary;
-        for(const auto& d:impl->descriptors)if(d.kind!=SurfaceKind::Plane)++out.curvedFaces;
-        for(const auto& e:impl->edges)if(e->kind()!=CurveKind::Line&&e->length()>0)++out.curvedEdges;
-        for(double volume:impl->volumes)out.cadVolume+=volume;require(std::isfinite(out.cadVolume));
-        out.model=std::unique_ptr<OcctModel>(new OcctModel(std::move(impl)));out.reason=CadImportReason::None;
-    }catch(const Stop& stop){out.reason=stop.reason;}catch(const Standard_OutOfMemory&){out.reason=CadImportReason::AllocationFailed;}
-     catch(const std::bad_alloc&){out.reason=CadImportReason::AllocationFailed;}catch(...){out.reason=CadImportReason::KernelFailure;}
+        require(!shape.IsNull() && validImportLimits(options), CadImportReason::InvalidRequest);
+        auto impl = std::make_unique<OcctModel::Impl>();
+        impl->root = shape;
+        impl->admit(options, out);
+        if (options.retainRepresentationNames) {
+            SourceNameCandidates names;
+            names.summary.requested = true;
+            names.summary.reason = OcctSourceNameReason::UnavailableSource;
+            impl->applyNames(std::move(names));
+        }
+        out.model = std::unique_ptr<OcctModel>(new OcctModel(std::move(impl)));
+        out.reason = CadImportReason::None;
+    } catch (const Stop& stop) { out.reason = stop.reason; }
+    catch (const Standard_OutOfMemory&) { out.reason = CadImportReason::AllocationFailed; }
+    catch (const std::bad_alloc&) { out.reason = CadImportReason::AllocationFailed; }
+    catch (...) { out.reason = CadImportReason::KernelFailure; }
     return out;
 }
 TopoDS_Solid detail::OcctModelAccess::solid(const OcctModel &model, int tag) {
