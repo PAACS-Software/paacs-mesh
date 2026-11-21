@@ -5,7 +5,10 @@
 
 #pragma once
 #include "paacs/geometry/OcctImport.hpp"
+#include <array>
+#include <optional>
 #include <span>
+#include <string_view>
 
 namespace paacs::geo {
 namespace detail {
@@ -43,6 +46,54 @@ struct OcctSurfaceDescriptor {
     bool periodicU = false, periodicV = false;
     CadOrientation orientation = CadOrientation::Forward;
 };
+// Inspection categories are independent of SurfaceKind, whose existing values
+// remain the mesher's analytic capability contract.
+enum class OcctSurfaceType : std::uint8_t {
+    Unknown, Plane, Cylinder, Cone, Sphere, Torus, Bezier, BSpline,
+    Revolution, Extrusion, Offset, Other
+};
+enum class OcctPropertyReason : std::uint8_t { None, KernelFailure, NonfiniteResult };
+struct OcctBounds {
+    Vec3 lower{}, upper{};
+};
+struct OcctFaceProperties {
+    int faceTag = -1;
+    OcctSurfaceType surfaceType = OcctSurfaceType::Unknown;
+    OcctPropertyReason reason = OcctPropertyReason::None;
+    std::optional<OcctBounds> bounds;
+    std::optional<double> area, areaRelativeErrorEstimate;
+    // Area centroids need not lie on the face or inside its trimmed region.
+    std::optional<Vec3> areaCentroid;
+    // Constant plane normal in the existing shared GFace orientation.
+    // Multiply by a nonzero faceOwners() sense for a selected body's normal.
+    std::optional<Vec3> planeReferenceNormal;
+};
+struct OcctSolidProperties {
+    int solidTag = -1;
+    OcctBounds bounds;
+    double volume = 0;
+    std::optional<Vec3> volumeCentroid;
+    OcctPropertyReason reason = OcctPropertyReason::None;
+};
+enum class OcctSourceNameReason : std::uint8_t {
+    Disabled, None, UnavailableSource, TransferUnavailable, BudgetExceeded, KernelFailure
+};
+struct OcctSourceNameSummary {
+    bool requested = false, complete = false;
+    OcctSourceNameReason reason = OcctSourceNameReason::Disabled;
+    std::uint64_t mappingsVisited = 0, namedMappings = 0, unmatchedNamedMappings = 0;
+    // Vertex/edge/face/solid source names that could not be matched to final
+    // placed topology. Generic shell/compound/geometry names are separate so
+    // an unrelated unsupported name does not invalidate a face-name query.
+    std::array<std::uint64_t, 4> unmatchedByDimension{};
+    std::uint64_t unsupportedNamedMappings = 0;
+    std::uint64_t candidateNames = 0, candidateBytes = 0;
+    std::uint64_t namedEntities = 0, ambiguousEntities = 0;
+};
+const char* occtKernelVersion() noexcept;
+const char* occtSurfaceTypeName(OcctSurfaceType type) noexcept;
+const char* occtPropertyReasonName(OcctPropertyReason reason) noexcept;
+const char* occtSourceNameReasonName(OcctSourceNameReason reason) noexcept;
 struct NativeCadImportOptions {
     CadFileFormat format = CadFileFormat::Step;
     std::uint64_t maximumFileBytes = 64ULL * 1024 * 1024;
@@ -52,6 +103,13 @@ struct NativeCadImportOptions {
     // Explicitly retain valid standalone document faces/edges/vertices in the
     // immutable model. Only solid-owned geometry participates in volume meshes.
     bool retainAuxiliaryGeometry = false;
+    // Optional names of directly shape-backed STEP representation items.
+    // Product names, colors and assembly paths are outside this scope.
+    bool retainRepresentationNames = false;
+    // Bounds on visited transfer mappings and unique candidate UTF-8 bytes;
+    // these do not cap parser allocations or total process memory.
+    std::uint64_t maximumNameMappings = 2'000'000, maximumNamesPerEntity = 64;
+    std::uint64_t maximumNameBytes = 4ULL * 1024 * 1024;
 };
 struct NativeCadImportOutcome;
 
@@ -73,6 +131,21 @@ class OcctModel final : public Model {
     std::uint64_t identity() const noexcept;
     double tolerance(int dimension, int tag) const noexcept;
     double volume(int solidTag) const noexcept;
+    // Invalid tags return nullopt. Integration uses the trimmed CAD surface,
+    // not a mesh triangulation; unavailable metrics carry a reason. Allocation
+    // failures propagate, as with the other native geometry queries.
+    std::optional<OcctFaceProperties> faceProperties(int faceTag,
+                                                   double relativeAreaTolerance = 1e-8) const;
+    std::optional<OcctSolidProperties> solidProperties(int solidTag) const;
+    // Candidate names are copied from exact placed transfer-shape matches.
+    // Conflicts remain multiple candidates. Entity::name() is populated only
+    // when extraction is complete and this entity has one unique candidate.
+    // The span remains valid for the model lifetime. "complete" means that
+    // this supported transfer-name scan finished, not complete XDE metadata.
+    std::span<const std::string> sourceNames(int dimension, int tag) const noexcept;
+    OcctSourceNameSummary sourceNameSummary() const noexcept;
+    // Sorted unique face tags sharing an edge, cached during topology build.
+    std::span<const int> edgeFaces(int edgeTag) const noexcept;
     std::span<const OcctFaceUse> faceUses(int solidTag) const noexcept;
     std::span<const OcctFaceOwner> faceOwners(int faceTag) const noexcept;
     std::span<const OcctWireUse> boundaryUses(int faceTag) const noexcept;
@@ -89,6 +162,8 @@ class OcctModel final : public Model {
     friend struct detail::OcctModelAccess;
     friend NativeCadImportOutcome importOcctCad(const std::filesystem::path &,
                                                 const NativeCadImportOptions &) noexcept;
+    friend NativeCadImportOutcome importOcctStepData(std::span<const char>, std::string_view,
+                                                     const NativeCadImportOptions &) noexcept;
 };
 struct NativeCadImportOutcome {
     std::unique_ptr<OcctModel> model;
@@ -109,4 +184,13 @@ struct NativeCadImportOutcome {
 // Bounds apply to the input/topology receipt, not OCCT parser allocations.
 NativeCadImportOutcome importOcctCad(const std::filesystem::path &path,
                                      const NativeCadImportOptions &options = {}) noexcept;
+// Parse an immutable caller-owned STEP snapshot. Only the synchronous call
+// borrows the bytes; no source-buffer pointers escape into the returned model.
+// sourceName is a nonempty UTF-8 diagnostic/context name and need not exist.
+// The source byte count obeys maximumFileBytes. As for file imports, the bound
+// does not cap OCCT parser allocations. Geometry admission and units match the
+// path importer; this overload does not request healing or repair.
+NativeCadImportOutcome importOcctStepData(std::span<const char> data,
+                                         std::string_view sourceName = "memory.step",
+                                         const NativeCadImportOptions &options = {}) noexcept;
 } // namespace paacs::geo

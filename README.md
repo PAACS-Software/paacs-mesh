@@ -78,6 +78,8 @@ The [sizing guide](docs/PYTHON.md#face-sizing-volume-regions-and-growth) covers
 selected-face refinement, volume boxes, minimum size and growth controls.
 Optional [NumPy snapshots](docs/PYTHON.md#numpy-mesh-arrays) expose coordinates,
 typed connectivity and CAD classifications for solver and analysis workflows.
+[CAD inspection and selections](docs/PYTHON.md#inspect-cad-and-select-faces)
+support geometric predicates, representation names and guarded saved groups.
 
 ## Citation
 
