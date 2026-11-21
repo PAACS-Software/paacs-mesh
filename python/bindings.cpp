@@ -11,6 +11,7 @@
 
 #include "paacs/algo/Meshers.hpp"
 #include "paacs/geometry/OcctMesher.hpp"
+#include "paacs/geometry/OcctPreview.hpp"
 #include "paacs/sdk/MeshArchive.hpp"
 #include "paacs/sdk/Version.hpp"
 #include "paacs/sizing/RegionSizeField.hpp"
@@ -619,6 +620,7 @@ std::unique_ptr<CadModel> readStep(const fs::path& path, const py::object& maxFi
 }
 
 #include "CadInspection.hpp"
+#include "CadPreview.hpp"
 
 } // namespace
 
@@ -692,6 +694,8 @@ PYBIND11_MODULE(_native, m) {
         })
         .def("_inspect_entities", &inspectEntities, py::arg("kind"), py::arg("tags"), py::kw_only(),
              py::arg("topology") = false, py::arg("max_uses") = 10000)
+        .def("_preview", &previewCad, py::kw_only(), py::arg("linear_deflection"),
+             py::arg("max_points") = py::int_(50000), py::arg("max_triangles") = py::int_(100000))
         .def("mesh", &CadModel::mesh, py::arg("size"), py::kw_only(),
              py::arg("recovery") = "standard", py::arg("assembly") = "preserve_parts",
              py::arg("workers") = py::int_(1), py::arg("validation_workers") = py::int_(1),

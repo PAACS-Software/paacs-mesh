@@ -50,10 +50,12 @@ from ._native import (  # noqa: E402: configure OCCT resources before loading it
 )
 from .cad import CadModel, FaceSelection, read_step  # noqa: E402
 from ._cad_common import IntentError, SelectionError  # noqa: E402
+from .preview import CadPreview  # noqa: E402
 
 __all__ = [
     "BoxSize", "CadImportError", "CadModel", "ExportError", "FaceSize", "Mesh", "MeshingError", "read_step",
     "native_version", "FaceSelection", "SelectionError", "IntentError",
+    "CadPreview",
 ]
 
 try:
