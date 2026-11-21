@@ -74,6 +74,8 @@ audited Tet4 meshes and exports tagged VTK or native archives. Its first wheel
 targets Windows x64 and Python 3.12, with the CAD runtime bundled. Development
 wheels are built and tested in GitHub Actions; PyPI distribution and other
 platforms are planned.
+The [sizing guide](docs/PYTHON.md#face-sizing-volume-regions-and-growth) covers
+selected-face refinement, volume boxes, minimum size and growth controls.
 
 ## Citation
 

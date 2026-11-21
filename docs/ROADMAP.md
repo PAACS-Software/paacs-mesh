@@ -132,9 +132,10 @@ the solver's quantity of interest.
 ## 8. Distribute the engine through Python
 
 The first [Python interface](PYTHON.md) wraps native STEP import, audited Tet4
-meshing and tagged export. Its development wheel targets Windows x64 and
-CPython 3.12. Extend it with combined face and volume sizing, growth and NumPy
-node, connectivity and classification arrays. Expose additional native controls
+meshing and tagged export, with combined face and box sizing, minimum size and
+growth on the supported single-solid route. Its development wheel targets
+Windows x64 and CPython 3.12. Extend it with NumPy node, connectivity and
+classification arrays. Expose additional native controls
 and cancellation without introducing a separate meshing implementation.
 
 Provide prebuilt wheels for supported Windows, macOS and Linux configurations.

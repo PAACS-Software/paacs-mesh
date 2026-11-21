@@ -5,6 +5,8 @@
 - Add an optional Python interface for native STEP import, audited Tet4 meshing,
   assembly interference reports and tagged VTK/archive export.
 - Build and test a Windows x64 CPython 3.12 wheel with the pinned CAD runtime.
+- Expose Python CAD face and box sizing, minimum field size and growth, with
+  per-control overrides, request diagnostics and command-line controls.
 - Preserve Unicode file paths and full VTK coordinate precision, export both
   classification dimensions and tags, and publish VTK files atomically.
 
