@@ -19,6 +19,7 @@ struct LocalDelaunayLimits {
     std::uint64_t work, queries, nodes, tets, workingBytes;
     double size;
     const OcctSpatialSizing* field = nullptr;
+    bool improveSpatialQuality = false;
 };
 
 // Only used on an embedded, oriented Tet4 fill of a single original solid.
@@ -35,6 +36,7 @@ std::size_t insertOcctDelaunaySites(mesh::Mesh& mesh, std::span<const Vec3> supp
     using bnd::tet_facet_detail::outwardFace;
     constexpr std::size_t cavityLimit = 64, maximumRefinementNodes = 1024;
     const bool sizing = supports.empty();
+    const double minimumConeShape = sizing && limits.field && limits.improveSpatialQuality ? 1e-6 : 0.;
     const bool optimize = sizing && qualityEdits;
     if (qualityEdits) *qualityEdits=0;
     const auto maximumInsertions = sizing ? maximumRefinementNodes : supports.size();
@@ -101,6 +103,12 @@ std::size_t insertOcctDelaunaySites(mesh::Mesh& mesh, std::span<const Vec3> supp
         live.vertices.push_back({p,std::uint64_t(staged)+1});
         const auto acceptable = [&] {
             if (!live.valid(patch,std::nullopt,staged)) return false;
+            if (minimumConeShape>0.) {
+                for (const auto& cell:patch.added) {
+                    live.charge(4);
+                    if (!(shape(cell)>=minimumConeShape)) return false;
+                }
+            }
             if (!admitted.empty()) {
                 double minimum=1.;
                 for (const auto id:patch.removed) minimum=std::min(minimum,shape(live.cells[id]));
@@ -253,7 +261,8 @@ std::size_t insertOcctDelaunaySites(mesh::Mesh& mesh, std::span<const Vec3> supp
             }
             const auto insertAt = [&](std::size_t start, Vec3 p, bool localPatch, bool updateQueue) {
                 std::size_t owner=Complex::noCell;
-                auto patch=buildOcctDelaunayCavity(live,start,p,cavityLimit,owner,!localPatch);
+                auto patch=buildOcctDelaunayCavity(live,start,p,cavityLimit,owner,!localPatch,
+                                                   minimumConeShape);
                 if (!patch) return false;
                 const auto background=fieldSize(p);
                 const auto size=limits.field?background:interpolate(owner,p);
