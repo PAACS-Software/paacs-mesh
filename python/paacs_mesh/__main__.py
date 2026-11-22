@@ -30,6 +30,8 @@ def main(argv=None):
                         help="size-field growth, at least 1 (default: 1.3)")
     parser.add_argument("--native-sizing", action=argparse.BooleanOptionalAction, default=None,
                         help="force spatial sizing or retain legacy cap sizing; automatic with controls")
+    parser.add_argument("--advancing-interior-front", action=argparse.BooleanOptionalAction, default=None,
+                        help="select advancing initial Tet4 placement or the legacy constructor; automatic by default")
     parser.add_argument("--max-work", type=int, help="native meshing and validation work budget")
     parser.add_argument("--max-seconds", type=float, help="cooperative native cancellation deadline")
     parser.add_argument("--warning-quality", type=float,
@@ -46,6 +48,7 @@ def main(argv=None):
                           face_sizes=face_sizes, volume_controls=volume_controls,
                           min_size=args.min_size, growth=args.growth,
                           native_sizing=args.native_sizing, max_work=args.max_work,
+                          advancing_interior_front=args.advancing_interior_front,
                           max_seconds=args.max_seconds, warning_quality=args.warning_quality,
                           minimum_quality=args.minimum_quality)
         mesh.write(args.output)

@@ -36,8 +36,9 @@ DEFAULT_SOURCE_BYTES = 64 * 1024 * 1024
 _BUDGETS = ("max_nodes", "max_cells", "max_work", "max_output_bytes",
             "max_working_bytes", "max_audit_bytes")
 _QUALITY_FIELDS = ("warning_quality", "minimum_quality")
+_PLACEMENT_FIELDS = ("advancing_interior_front",)
 _OPTION_FIELDS = {"size", "assembly", "workers", "validation_workers", "face_sizes",
-                  "volume_controls", "min_size", "growth", "native_sizing", *_QUALITY_FIELDS, *_BUDGETS}
+                  "volume_controls", "min_size", "growth", "native_sizing", *_QUALITY_FIELDS, *_PLACEMENT_FIELDS, *_BUDGETS}
 _FATAL_REASONS = {"invalid_request", "unsupported_body", "unresolved_body_interface",
                   "unsupported_control", "budget_exceeded", "cancelled", "allocation_failed",
                   "internal_error", "publication_checks_failed"}
@@ -222,9 +223,9 @@ def _intent(model):
 
 
 def _options(values):
-    # Recipe v1 predates the optional quality thresholds. Only those fields
-    # may be absent; prior required fields and unknown-field refusals remain.
-    required = _OPTION_FIELDS.difference(_QUALITY_FIELDS)
+    # Recipe v1 predates optional quality and initial-placement choices.
+    # Missing optional choices retain automatic defaults; unknown fields fail.
+    required = _OPTION_FIELDS.difference(_QUALITY_FIELDS, _PLACEMENT_FIELDS)
     if not isinstance(values, dict) or not required <= values.keys() or values.keys() - _OPTION_FIELDS:
         raise ValueError("Recipe meshing options have unsupported or missing fields")
     result = {"size": _positive(values["size"], "size"), "assembly": values["assembly"],
@@ -232,6 +233,9 @@ def _options(values):
               "validation_workers": integer(values["validation_workers"], "validation_workers"),
               "growth": number(values["growth"], "growth", minimum=1),
               "native_sizing": values["native_sizing"], "min_size": values["min_size"]}
+    result["advancing_interior_front"] = values.get("advancing_interior_front")
+    if result["advancing_interior_front"] is not None:
+        boolean(result["advancing_interior_front"], "advancing_interior_front")
     if result["assembly"] not in ("preserve_parts", "conforming"):
         raise ValueError("assembly must be preserve_parts or conforming")
     if result["workers"] > 1024 or result["validation_workers"] > 8:
@@ -298,7 +302,7 @@ def _policy(values):
 
 def create_recipe(model, size, *, face_sizes=(), selected_face_sizes=(), volume_controls=(),
                   min_size=None, growth=1.3, native_sizing=None, assembly="preserve_parts",
-                  warning_quality=None, minimum_quality=None,
+                  warning_quality=None, minimum_quality=None, advancing_interior_front=None,
                   workers=1, validation_workers=1, max_nodes=None, max_cells=None,
                   max_work=None, max_output_bytes=None, max_working_bytes=None, max_audit_bytes=None,
                   allow_advanced=False, finer_factors=(), max_attempts=1, max_seconds=90,
@@ -336,6 +340,7 @@ def create_recipe(model, size, *, face_sizes=(), selected_face_sizes=(), volume_
             validation_workers=validation_workers, face_sizes=faces, volume_controls=boxes,
             min_size=min_size, growth=growth, native_sizing=native_sizing,
             warning_quality=warning_quality, minimum_quality=minimum_quality,
+            advancing_interior_front=advancing_interior_front,
             max_nodes=max_nodes, max_cells=max_cells, max_work=max_work,
             max_output_bytes=max_output_bytes, max_working_bytes=max_working_bytes, max_audit_bytes=max_audit_bytes))
         policy = _policy(dict(max_attempts=max_attempts, max_seconds=max_seconds, attempt_seconds=attempt_seconds,
@@ -455,7 +460,7 @@ def _retry_allowed(reason, report, route):
 
 
 def _native_options(options, size, recovery, seconds):
-    result = {key: options[key] for key in ("assembly", "workers", "validation_workers", "min_size", "growth", "native_sizing", *_QUALITY_FIELDS, *_BUDGETS)}
+    result = {key: options[key] for key in ("assembly", "workers", "validation_workers", "min_size", "growth", "native_sizing", *_QUALITY_FIELDS, *_PLACEMENT_FIELDS, *_BUDGETS)}
     result.update(size=size, recovery=recovery, max_seconds=seconds,
                   face_sizes=[_native.FaceSize(control["tag"], control["size"], growth=control["growth"])
                               for control in options["face_sizes"]],
