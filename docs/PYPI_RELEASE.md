@@ -33,11 +33,14 @@ reserve its name beforehand. See [PyPI's setup instructions](https://docs.pypi.o
 2. Create the new version tag and publish its GitHub release. For example,
    `VERSION.txt` containing `1.2.0-rc.2` requires tag `v1.2.0-rc.2`.
 3. Run **Publish Python package** from `main`, providing that release tag. The
-   tag must identify the same main revision selected for the workflow. A version
-   bump or tag move after qualification requires a new build.
+   annotated tag must identify a commit on the history of the selected main
+   revision. The tagged `VERSION.txt` determines the package version. Keep
+   `qualified-run-id` empty for a new build.
 
-The workflow resolves one immutable commit and uses it for every producer and
-consumer checkout. It builds three repaired wheels and tests them on separate
+The workflow resolves one immutable release commit and uses it for every producer
+and consumer checkout. Release operations run from the selected main revision,
+which can contain a later packaging fix without changing the tagged engine.
+It builds three repaired wheels and tests them on separate
 clean runners, without a configured OCCT SDK. Installation tests exercise import,
 meshing, controls, tags, exports, optional NumPy versions and the installed command.
 
@@ -52,6 +55,30 @@ Publishing. It does not skip existing PyPI filenames or replace published files.
 After upload, a separate job verifies all three index hashes and performs a fresh,
 hash-pinned install from PyPI, then imports, meshes, exports and runs the command.
 That job can be rerun independently if index propagation delays the first check.
+
+## Resume after an assembly failure
+
+If all seven qualification jobs passed but assembly failed before source assets
+or wheels were published, a packaging fix can reuse those exact artifacts.
+Merge the fix, then run **Publish Python package** from `main` with the unchanged
+release tag and the previous publication run's numeric `qualified-run-id`.
+Do not move the release tag or rebuild a different engine under that version.
+
+Preparation verifies that the previous run is a completed `workflow_dispatch`
+of this repository's publication workflow on `main`, at the tagged source
+commit. Its preparation and all seven qualification jobs must have passed;
+assembly must have failed and source publication, PyPI upload and index checks
+must have been skipped. A version already present on PyPI cannot be resumed.
+All six builder/consumer artifacts must be unexpired and have GitHub SHA-256
+digests. Downloads bind their immutable artifact IDs as well as the run ID.
+
+Only new qualification is skipped. Assembly still checks the original wheel
+and source hashes, exact clean source receipts, independent consumer tests,
+metadata and native parity. Corrected release scripts run from the new workflow
+revision while reading the original tag's version and OCCT pin. Source assets,
+Trusted Publishing and the fresh PyPI installation then use the usual gates.
+An attempted upload or incomplete qualification requires a separate diagnosis;
+this resume option does not retry or overwrite published package files.
 
 ## Installation
 

@@ -8,11 +8,17 @@ on:
   workflow_dispatch:
     inputs:
       release-tag:
-        description: Published GitHub release tag at this main revision, for example v1.2.0-rc.2
+        description: Published immutable release tag on main, for example v1.2.0-rc.2
         required: true
+        type: string
+      qualified-run-id:
+        description: Optional completed publication run whose seven qualification jobs passed before assembly failed
+        required: false
+        default: ''
         type: string
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: pypi-paacs-mesh
   cancel-in-progress: false
@@ -21,7 +27,11 @@ jobs:
     if: github.repository == 'PAACS-Software/paacs-mesh' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     outputs:
-      source-sha: ${{ steps.source.outputs.sha }}
+      source-sha: ${{ steps.source.outputs.source-sha }}
+      artifact-run-id: ${{ steps.source.outputs.artifact-run-id }}
+      reuse-qualified: ${{ steps.source.outputs.reuse-qualified }}
+      builder-artifact-ids: ${{ steps.source.outputs.builder-artifact-ids }}
+      consumer-artifact-ids: ${{ steps.source.outputs.consumer-artifact-ids }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -31,35 +41,35 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install packaging==25.0
-      - name: Verify release tag, version and source revision
+      - name: Verify release source and any previous qualification
         id: source
-        env:
-          RELEASE_TAG: ${{ inputs.release-tag }}
-          EXPECTED_SHA: ${{ github.sha }}
-        run: |
-          python scripts/prepare_python_release.py preflight --tag "$RELEASE_TAG" --expected-sha "$EXPECTED_SHA"
-          echo "sha=$EXPECTED_SHA" >> "$GITHUB_OUTPUT"
-      - name: Require the matching published GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.release-tag }}
-        run: |
-          gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft' > release-draft.txt
-          test "$(cat release-draft.txt)" = false
+          WORKFLOW_SHA: ${{ github.sha }}
+          QUALIFIED_RUN_ID: ${{ inputs.qualified-run-id }}
+        run: python scripts/check_python_release_run.py --tag "$RELEASE_TAG" --workflow-sha "$WORKFLOW_SHA" --qualified-run-id "$QUALIFIED_RUN_ID"
 
   qualify:
     needs: prepare
+    if: needs.prepare.outputs.reuse-qualified != 'true'
     uses: ./.github/workflows/python-wheel.yml
     with:
       source-ref: ${{ needs.prepare.outputs.source-sha }}
 
   assemble:
     needs: [prepare, qualify]
+    if: always() && needs.prepare.result == 'success' && (needs.qualify.result == 'success' || (needs.prepare.outputs.reuse-qualified == 'true' && needs.qualify.result == 'skipped'))
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
           ref: ${{ needs.prepare.outputs.source-sha }}
+          path: build/release-source
           persist-credentials: false
       - uses: actions/setup-python@v6
         with:
@@ -67,17 +77,23 @@ jobs:
       - run: python -m pip install packaging==25.0 twine==6.2.0
       - uses: actions/download-artifact@v6
         with:
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.prepare.outputs.artifact-run-id }}
+          artifact-ids: ${{ needs.prepare.outputs.builder-artifact-ids }}
           pattern: paacs-mesh-cp312-*
           path: release-builders
       - uses: actions/download-artifact@v6
         with:
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.prepare.outputs.artifact-run-id }}
+          artifact-ids: ${{ needs.prepare.outputs.consumer-artifact-ids }}
           pattern: paacs-mesh-installed-*
           path: release-consumers
       - name: Verify all builders and clean consumers from the same source
         env:
           EXPECTED_SHA: ${{ needs.prepare.outputs.source-sha }}
         run: |
-          python scripts/prepare_python_release.py assemble --builders release-builders --consumers release-consumers --expected-sha "$EXPECTED_SHA" --output build/python-release
+          python scripts/prepare_python_release.py assemble --source build/release-source --builders release-builders --consumers release-consumers --expected-sha "$EXPECTED_SHA" --output build/python-release
           python -m twine check --strict build/python-release/dist/*.whl
       - uses: actions/upload-artifact@v6
         with:
@@ -97,13 +113,14 @@ jobs:
 
   source-release:
     needs: [prepare, assemble]
+    if: always() && needs.prepare.result == 'success' && needs.assemble.result == 'success'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.prepare.outputs.source-sha }}
+          ref: ${{ github.sha }}
           persist-credentials: false
       - uses: actions/setup-python@v6
         with:
@@ -123,6 +140,7 @@ jobs:
 
   publish:
     needs: [prepare, assemble, source-release]
+    if: always() && needs.prepare.result == 'success' && needs.assemble.result == 'success' && needs.source-release.result == 'success'
     runs-on: ubuntu-24.04
     environment:
       name: pypi
@@ -133,7 +151,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.prepare.outputs.source-sha }}
+          ref: ${{ github.sha }}
           persist-credentials: false
       - uses: actions/setup-python@v6
         with:
@@ -158,11 +176,17 @@ jobs:
 
   verify-index:
     needs: [prepare, publish]
+    if: always() && needs.prepare.result == 'success' && needs.publish.result == 'success'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
           ref: ${{ needs.prepare.outputs.source-sha }}
+          path: build/release-source
           persist-credentials: false
       - uses: actions/setup-python@v6
         with:
@@ -172,7 +196,7 @@ jobs:
           name: paacs-mesh-release-manifest
           path: release-proof
       - name: Verify index hashes and import, mesh and export after pip install
-        run: python scripts/check_pypi_release.py --manifest release-proof/release-manifest.json --fixture tests/fixtures/cad/cylinder.step --output build/pypi-install
+        run: python scripts/check_pypi_release.py --manifest release-proof/release-manifest.json --fixture build/release-source/tests/fixtures/cad/cylinder.step --output build/pypi-install
       - uses: actions/upload-artifact@v6
         with:
           name: paacs-mesh-index-install
