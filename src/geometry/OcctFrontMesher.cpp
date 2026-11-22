@@ -162,7 +162,8 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             const auto constraints=bnd::detail::recoverTetConstraints(sites,{3,tag},
                 constraintWork,options.maximumPrimitiveWorkingBytes/2,
                 std::min(frontCells,maximumSeedTets),o.cancellation,seed,
-                std::min<std::uint64_t>(64,o.maximumNodes-std::uint64_t(sites.nodeCount())));
+                std::min<std::uint64_t>(64,o.maximumNodes-std::uint64_t(sites.nodeCount())),
+                false,true,options.useAdvancingInteriorFront);
             out.constraintRecovery={constraints.diagnostic,constraints.candidateCells,
                 constraints.missingEdgesBefore,constraints.missingFacesBefore,
                 constraints.missingEdgesAfter,constraints.missingFacesAfter,constraints.patches,
@@ -207,6 +208,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 if(options.useAdvancingInteriorFront){
                     OcctInitialPointFrontLimits limits;
                     limits.work=siteBudget;limits.queries=12'000;limits.sites=std::size_t(siteCap);
+                    limits.cancellation=o.cancellation;
                     limits.workingBytes=std::min<std::uint64_t>(128ULL*1024*1024,
                         options.maximumPrimitiveWorkingBytes-retained);
                     OcctInitialPointFrontReport built;
@@ -218,6 +220,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                             classifier.Perform(gp_Pnt(p.x,p.y,p.z),tol);
                             return classifier.State()==TopAbs_IN;
                         },siteCharge,&built);
+                    need(!built.cancelled,NativeCadMeshReason::Cancelled,"cancelled");
                     auto& report=out.initialFront;
                     report.diagnostic=built.budgetLimited?"budget_limited":!built.initialized?
                         "unavailable":built.frontClosed?"front_closed":"stalled";
@@ -255,6 +258,8 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                         },siteCharge);
                 }
             }
+            }catch(const OcctInitialConstructionCancelled&){
+                throw Stop{NativeCadMeshReason::Cancelled,"cancelled"};
             }catch(const SiteLimit&){
                 // This optional preparation leaves the original shell intact.
             }catch(const std::bad_alloc&){
@@ -283,6 +288,12 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
         }else if(spaceSurface||options.recoveryMode==NativeCadRecoveryMode::Advanced)
             buildConstraintSeed(boundary,pendingRecovery);
         const bool usesConstraintSeed=pendingRecovery.cellCount()!=0;
+        if(options.useAdvancingInteriorFront&&!usesConstraintSeed){
+            const std::string_view diagnostic=out.constraintRecovery.diagnostic;
+            need(diagnostic!="construction_budget"&&diagnostic!="work_budget"&&
+                 diagnostic!="storage_budget"&&diagnostic!="admission_budget",
+                 NativeCadMeshReason::BudgetExceeded,"native-plc-constraint-construction-budget");
+        }
         need(!spaceSurface||usesConstraintSeed,NativeCadMeshReason::MeshingFailed,"spaced-surface-constraint-seed-refused");
         const bool reuseStrictAdmissions=(options.useAdaptiveTetRecovery||spaceSurface)&&usesConstraintSeed&&
             options.maximumNativeValidationThreads==1&&!options.allowCentroidsWithinChordTolerance;

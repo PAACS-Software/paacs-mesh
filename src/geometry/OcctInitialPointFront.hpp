@@ -14,6 +14,7 @@
 #include "paacs/mesh/Quality.hpp"
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <deque>
@@ -23,7 +24,9 @@
 #include <set>
 #include <stdexcept>
 #include <tuple>
+#include <type_traits>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace paacs::geo::detail {
@@ -37,9 +40,10 @@ struct OcctInitialPointFrontLimits {
     std::size_t maximumDelaunayCavityCells=0;
     bool enableAuxiliaryCompaction=true;
     bool requireManifoldFront=false;
+    const std::atomic_bool* cancellation=nullptr;
 };
 struct OcctInitialPointFrontReport {
-    bool initialized=false,budgetLimited=false,frontClosed=false;
+    bool initialized=false,budgetLimited=false,frontClosed=false,cancelled=false;
     std::uint64_t workUsed=0,nativeQueries=0,candidates=0;
     std::size_t sites=0,seedCones=0,reusedApices=0,propagatedFaceAccepted=0;
     std::size_t originalFaceActivations=0,propagatedFaceActivations=0,deepSites=0;
@@ -47,6 +51,7 @@ struct OcctInitialPointFrontReport {
     std::size_t remainingFrontFaces=0,queueRounds=0,maximumDepth=0;
     double minimumConeMeanRatio=1.,minimumConeScaledJacobian=1.;
     bool auxiliaryInitialized=false;
+    std::uint64_t auxiliaryBootstrapWork=0,auxiliaryBootstrapPeakTemporaryBytes=0;
     std::size_t auxiliaryEvaluations=0,auxiliaryUnavailable=0,auxiliaryQualityRejects=0;
     std::size_t auxiliaryInvalidRejects=0,auxiliaryCommits=0;
     std::size_t auxiliaryComparisonPlans=0,auxiliaryComparisonCommits=0,auxiliaryRankedCommits=0;
@@ -102,6 +107,7 @@ inline double meanSize(double a,double b) {
 // AdmitNode must certify strict material IN. It is used for temporary cone
 // centroids as well as each new point. Input is immutable on every refusal or
 // external callback exception. Internal budget stops return admitted points.
+// Observed cancellation throws the private stop before returning a mesh.
 template<class SizeField,class AdmitNode,class Charge>
 mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
     const SizeField& field,double baseTarget,mesh::Classification region,
@@ -113,7 +119,17 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
     using Face=Front::Face;
     mesh::Mesh result=boundary;
     OcctInitialPointFrontReport out;
-    const auto done=[&]() {if(report)*report=out;return result;};
+    static_assert(std::is_nothrow_move_assignable_v<OcctInitialPointFrontReport>);
+    const auto done=[&]() -> mesh::Mesh {
+        // Moving a Mesh can allocate on supported standard libraries. Deliver
+        // observed cancellation before returning any mesh, even if the token
+        // has since been reset. Moving the diagnostic itself is non-throwing.
+        const bool cancelled=out.cancelled;
+        if(report)*report=std::move(out);
+        if(cancelled)throw OcctInitialConstructionCancelled{};
+        return std::move(result);
+    };
+    if(limits.cancellation&&limits.cancellation->load()){out.cancelled=true;return done();}
     if(region.dim!=3||!(baseTarget>0.)||!std::isfinite(baseTarget)||!boundary.nodeCount())return done();
     const auto siteCap=std::min<std::size_t>(limits.sites,1024);
     const auto coneCap=std::min<std::size_t>(limits.cones,4096);
@@ -130,10 +146,16 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
         std::uint64_t(stateCap)*4096;
     if(payload>limits.workingBytes){out.budgetLimited=true;return done();}
     struct Limit {};
-    const auto tick=[&](std::uint64_t n=1) {
+    const auto account=[&](std::uint64_t n=1) {
         if(out.workUsed>limits.work||n>limits.work-out.workUsed)throw Limit{};
         charge(n);out.workUsed+=n;
     };
+    const auto checkCancellation=[&](){
+        if(out.cancelled||(limits.cancellation&&limits.cancellation->load())){
+            out.cancelled=true;throw OcctInitialConstructionCancelled{};
+        }
+    };
+    const auto tick=[&](std::uint64_t n=1){checkCancellation();account(n);};
     const auto sizeAt=[&](Vec3 p) {
         tick(field.queryWork());const auto h=field.eval(p);
         if(!(h>0.)||!std::isfinite(h)||h>baseTarget*(1+1e-12))
@@ -236,14 +258,26 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
         const auto auxiliaryCells=std::min<std::uint64_t>(65'536,
             (auxiliaryBytes-32ULL*1024*1024)/8192);
         OcctInitialDelaunayScorer auxiliary;
-        if(!auxiliary.initialize(boundary,region,std::size_t(auxiliaryCells),auxiliaryBytes,tick,
-            materialWitness,limits.maximumDelaunayCavityCells)){
+        bool initialized=false;
+        try{
+            initialized=auxiliary.initialize(boundary,region,std::size_t(auxiliaryCells),auxiliaryBytes,account,
+                materialWitness,limits.maximumDelaunayCavityCells,limits.work-out.workUsed,limits.cancellation);
+        }catch(const OcctInitialConstructionCancelled&){
+            out.auxiliaryBootstrapWork=auxiliary.bootstrapWork;
+            out.auxiliaryBootstrapPeakTemporaryBytes=auxiliary.bootstrapPeakTemporaryBytes;
+            out.cancelled=true;throw;
+        }
+        out.auxiliaryBootstrapWork=auxiliary.bootstrapWork;
+        out.auxiliaryBootstrapPeakTemporaryBytes=auxiliary.bootstrapPeakTemporaryBytes;
+        out.cancelled=out.cancelled||auxiliary.cancelled;
+        if(!initialized){
             out.budgetLimited=true;return done();
         }
         auxiliary.compactionEnabled=limits.enableAuxiliaryCompaction;
         out.auxiliaryInitialized=true;
         const auto syncAuxiliary=[&](){
             out.budgetLimited=out.budgetLimited||auxiliary.budgetLimited;
+            out.cancelled=out.cancelled||auxiliary.cancelled;
             out.auxiliaryScorerEvaluations=auxiliary.evaluations;
             out.auxiliaryFullCertifications=auxiliary.fullCertifications;
             out.auxiliaryCertificationRefusals=auxiliary.certificationRefusals;
@@ -445,6 +479,8 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
             if(front.front.empty())break;
         }
         out.frontClosed=front.front.empty();
+        checkCancellation();
+    }catch(const OcctInitialConstructionCancelled&){out.cancelled=true;
     }catch(const Limit&){out.budgetLimited=true;}
     out.remainingFrontFaces=front.front.size();
     if(out.sites>=siteCap&&!out.frontClosed)out.budgetLimited=true;

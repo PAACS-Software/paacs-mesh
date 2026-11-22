@@ -5,6 +5,7 @@
 
 #include "OcctInitialPointFront.hpp"
 #include <array>
+#include <atomic>
 #include <bit>
 #include <cmath>
 #include <iostream>
@@ -342,8 +343,65 @@ void exerciseCompaction(){
         <<" attempts="<<scorer.compactionAttempts<<" native="<<native<<'\n';
 }
 
+void exerciseBoundedBootstrapAndCancellation(){
+    using Scorer=OcctInitialDelaunayScorer;
+    const auto source=compactionCube(),unchanged=source;
+    constexpr std::size_t cells=512;
+    const auto preparation=std::uint64_t(source.nodeCount()+source.cellCount());
+    const auto importReserve=std::uint64_t(source.nodeCount()+8)+12*cells;
+    for(unsigned which=0;which<3;++which){
+        Scorer scorer;std::uint64_t charged=0;
+        const auto work=which==0?preparation+importReserve+1:1'000'000;
+        const auto capacity=which==1?std::size_t(1):cells;
+        const auto bytes=which==2?10ULL*1024*1024:64ULL*1024*1024;
+        const bool initialized=scorer.initialize(source,{3,7},capacity,bytes,
+            [&](std::uint64_t n){check(n<=work-charged,"bounded bootstrap overcharged work");charged+=n;},
+            {},0,work);
+        check(!initialized&&scorer.budgetLimited&&!scorer.cancelled&&
+            scorer.complexForDiagnostics().vertices.empty()&&scorer.acceptedSites()==0,
+            "bounded bootstrap refusal imported a partial candidate");
+        check(charged==preparation+scorer.bootstrapWork&&scorer.bootstrapWork<=scorer.bootstrapWorkLimit&&
+            scorer.bootstrapPeakTemporaryBytes<=scorer.bootstrapTemporaryLimitBytes,
+            "bounded bootstrap work was omitted or counted twice");
+        if(which==0)check(scorer.bootstrapWork<=1&&scorer.bootstrapPeakTemporaryBytes>=4ULL*1024*1024,
+            "tiny bootstrap work cap did not stop the online bounded constructor");
+        if(which==2)check(scorer.bootstrapTemporaryLimitBytes<4ULL*1024*1024,
+            "small-memory fixture did not exercise the bounded workspace refusal");
+        originalPrefix(unchanged,source);
+    }
+    // The final preparation charge arms cancellation. The bounded constructor
+    // observes it, then the accounting callback resets the atomic before the
+    // initializer can react. The observed Cancelled outcome must remain sticky.
+    std::atomic_bool cancellation{false};std::uint64_t preparationCharges=0,charged=0;
+    bool reset=false,caught=false;Scorer cancelled;
+    try{
+        (void)cancelled.initialize(source,{3,7},cells,64ULL*1024*1024,
+            [&](std::uint64_t n){
+                charged+=n;
+                if(n==1&&++preparationCharges==preparation)cancellation.store(true);
+                if(n==0&&cancellation.load()){cancellation.store(false);reset=true;}
+            },{},0,1'000'000,&cancellation);
+    }catch(const OcctInitialConstructionCancelled&){caught=true;}
+    check(caught&&reset&&!cancellation.load()&&cancelled.cancelled&&
+        !cancelled.initialized()&&cancelled.complexForDiagnostics().vertices.empty()&&charged==preparation,
+        "resetting the atomic erased a bounded bootstrap cancellation");
+    OcctInitialPointFrontLimits limits;limits.cancellation=&cancellation;
+    cancellation.store(true);OcctInitialPointFrontReport report;std::uint64_t calls=0;
+    const UniformField field;
+    bool cancelledBeforeReturn=false;
+    try{(void)appendOcctInitialPointFrontSites(source,field,field.h,{3,7},limits,
+        [&](Vec3){++calls;return true;},[](std::uint64_t){},&report);
+    }catch(const OcctInitialConstructionCancelled&){cancelledBeforeReturn=true;}
+    cancellation.store(false);originalPrefix(unchanged,source);
+    check(cancelledBeforeReturn&&report.cancelled&&!report.auxiliaryInitialized&&
+        report.sites==0&&calls==0,
+        "cancelled initial construction was mistaken for a successful fallback");
+    std::cout<<"bounded initial bootstrap refusals and sticky cancellation passed\n";
+}
+
 }
 int main(){try{
     exerciseUniformFront();exerciseRefusals();exerciseCompleteConflictCavity();exerciseCompaction();
+    exerciseBoundedBootstrapAndCancellation();
     std::cout<<"initial volume points, complete conflict cavities and transactional guards passed\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

@@ -14,6 +14,7 @@
 #include "paacs/mesh/Quality.hpp"
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <functional>
@@ -27,10 +28,20 @@
 
 namespace paacs::geo::detail {
 
+struct OcctInitialConstructionCancelled {};
+
 class OcctInitialDelaunayScorer {
 public:
+    OcctInitialDelaunayScorer()=default;
+    OcctInitialDelaunayScorer(const OcctInitialDelaunayScorer&)=delete;
+    OcctInitialDelaunayScorer& operator=(const OcctInitialDelaunayScorer&)=delete;
+    OcctInitialDelaunayScorer(OcctInitialDelaunayScorer&&)=delete;
+    OcctInitialDelaunayScorer& operator=(OcctInitialDelaunayScorer&&)=delete;
     bool budgetLimited=false;
+    mutable bool cancelled=false;
     bool compactionEnabled=true;
+    std::uint64_t bootstrapWork=0,bootstrapPeakTemporaryBytes=0;
+    std::uint64_t bootstrapWorkLimit=0,bootstrapTemporaryLimitBytes=0;
     std::uint64_t evaluations=0,fullCertifications=0,certificationRefusals=0;
     std::uint64_t scoreStateRejects=0,scoreSizeRejects=0,scoreMappingRejects=0;
     std::uint64_t scoreLocateMisses=0,scoreCavityUnavailable=0,scoreStorageRejects=0,scorePositiveRejects=0;
@@ -63,7 +74,10 @@ public:
     bool initialize(const mesh::Mesh& boundary,mesh::Classification region,
         std::size_t maximumStoredCells,std::uint64_t workingBytes,
         std::function<void(std::uint64_t)> charge,
-        std::function<bool(Vec3)> materialWitness={},std::size_t maximumCavityCells=0) {
+        std::function<bool(Vec3)> materialWitness={},std::size_t maximumCavityCells=0,
+        std::uint64_t maximumBootstrapWork=4'000'000,
+        const std::atomic_bool* cancellation=nullptr) {
+        cancellation_=cancellation;checkCancellation();
         if(initialized_||region.dim!=3||boundary.nodeCount()<4||!maximumStoredCells)return false;
         // Zero means a complete connected conflict cavity, bounded by the
         // admitted numerical complex and charged work. A nonzero cap is an
@@ -78,13 +92,25 @@ public:
         if(!maximumStoredCells){budgetLimited=true;return false;}
         workingBytes_=workingBytes;fixedBytes_=fixed;
         charge_=std::move(charge);materialWitness_=std::move(materialWitness);
+        auto remainingBootstrapWork=maximumBootstrapWork;
+        const auto accountInitialization=[&](std::uint64_t n=1){
+            if(n>remainingBootstrapWork){budgetLimited=true;return false;}
+            // Accounting a completed bounded attempt must not forget its work
+            // when its cancellation token has since been reset by a caller.
+            if(charge_)charge_(n);
+            remainingBootstrapWork-=n;return true;
+        };
+        const auto initializationTick=[&](std::uint64_t n=1){
+            checkCancellation();return accountInitialization(n);
+        };
         live_.walkConstraints=true;live_.maximumStoredCells=maximumStoredCells;
-        live_.chargeWork=charge_;
+        live_.chargeWork=[this](std::uint64_t n){tick(n);};
         originalNodes_=ns;
         std::vector<Vec3> points(boundary.nodes().begin(),boundary.nodes().end());
         auto lo=points.front(),hi=lo;
         for(const auto p:points){
-            tick();if(!finite(p))return false;
+            if(!initializationTick())return false;
+            if(!finite(p))return false;
             lo={std::min(lo.x,p.x),std::min(lo.y,p.y),std::min(lo.z,p.z)};
             hi={std::max(hi.x,p.x),std::max(hi.y,p.y),std::max(hi.z,p.z)};
         }
@@ -96,33 +122,58 @@ public:
             if(!finite(p))return false;points.push_back(p);
         }
         for(Index i=0;i<boundary.cellCount();++i){
-            tick();if(boundary.cell(i).type!=mesh::CellType::Tri3)return false;
+            if(!initializationTick())return false;
+            if(boundary.cell(i).type!=mesh::CellType::Tri3)return false;
             const auto* v=boundary.cellNodes(i);
             if(std::any_of(v,v+3,[&](Index id){return id<0||std::size_t(id)>=ns;}))return false;
             const Face f{Vertex(v[0]),Vertex(v[1]),Vertex(v[2])};
             if(!sourceFaces_.emplace(Complex::key(f),f).second)return false;
         }
-        auto built=algo::buildTetCandidate(points);
+        // Reserve exact mapping/positive-import accounting before granting the
+        // remaining work to construction. The online builder covers all of its
+        // retries, canonicalization and validation; never run an unbounded retry.
+        const auto importReserve=std::uint64_t(points.size())+12*std::uint64_t(maximumStoredCells);
+        if(importReserve>=remainingBootstrapWork){budgetLimited=true;return false;}
+        algo::TetCandidateBuildLimits buildLimits;
+        buildLimits.maxWork=remainingBootstrapWork-importReserve;
+        buildLimits.maxCells=maximumStoredCells;
+        // Caller input points and source/mapping envelopes are already retained
+        // in fixedBytes_; the core's temporary model includes its own workspace.
+        buildLimits.maxTemporaryBytes=workingBytes-fixed;
+        buildLimits.cancellation=cancellation_;
+        bootstrapWorkLimit=buildLimits.maxWork;bootstrapTemporaryLimitBytes=buildLimits.maxTemporaryBytes;
+        auto built=algo::buildTetCandidate(points,buildLimits);
         const auto& m=built.metrics;
-        tick(m.construction.conflictInsphereTests+m.construction.conflictOrientationTests+
-            m.validationFaceUses+m.validationHullTests+m.candidateCells+m.discardedCandidateWork);
+        bootstrapWork=m.boundedWork;bootstrapPeakTemporaryBytes=m.boundedPeakTemporaryBytes;
+        if(built.reason==algo::TetCandidateReason::Cancelled)cancelled=true;
+        if(!accountInitialization(m.boundedWork))return false;
+        if(cancelled)throw OcctInitialConstructionCancelled{};
+        if(built.reason==algo::TetCandidateReason::BudgetExceeded){budgetLimited=true;return false;}
         if(built.reason==algo::TetCandidateReason::AllocationFailed)throw std::bad_alloc{};
         if(!built.built()||built.candidate->points.size()!=points.size())return false;
-        if(m.candidateCells>maximumStoredCells||m.constructionCandidateConservativeBytes>workingBytes){
+        // Construction scratch has gone away, but the returned candidate and
+        // imported numerical complex overlap until this method returns.
+        const auto retainedImportBytes=4096*std::uint64_t(maximumStoredCells);
+        if(m.candidateCells>maximumStoredCells||
+            m.candidateAccountedBytes>buildLimits.maxTemporaryBytes-retainedImportBytes){
             budgetLimited=true;return false;
         }
         live_.vertices.reserve(ns+1032);auxToFront_.reserve(ns+1032);
         relevance_.reserve(maximumStoredCells);
         for(std::size_t i=0;i<points.size();++i){
-            tick();live_.vertices.push_back({points[i],std::uint64_t(i)+1});
+            if(!initializationTick())return false;
+            live_.vertices.push_back({points[i],std::uint64_t(i)+1});
             auxToFront_.push_back(i<ns?Vertex(i):bnd::kInvalidTetFacetVertex);
         }
         for(const auto& src:built.candidate->cells){
             Cell cell{{},0,region};
             for(unsigned j=0;j<4;++j)
                 cell.vertices[j]=Vertex(built.candidate->pointToInput[src.vertices[j]]);
-            if(!positive(cell))return false;
-            live_.insert(cell);relevance_.push_back(0);
+            if(!initializationTick(12))return false;
+            const auto& v=cell.vertices;
+            if(predicates::orient3dFiltered(live_.vertices[v[0]].position,live_.vertices[v[1]].position,
+                live_.vertices[v[2]].position,live_.vertices[v[3]].position)!=predicates::Sign::Positive)return false;
+            live_.insert(cell,false);relevance_.push_back(0);
         }
         activeCells_=live_.cells.size();peakStoredCells=live_.cells.size();
         initialized_=true;return true;
@@ -315,7 +366,7 @@ public:
             throw std::logic_error("auxiliary compaction live count mismatch");
         next.index.rebuild(next.cells.size(),[&](std::size_t id){return next.cellBoxes[id];},chargeCompaction);
         chargeCompaction(11*stored); // Retire old cell/index/owner allocations.
-        next.chargeWork=charge_; // No captured staging callback may survive.
+        next.chargeWork=[this](std::uint64_t n){tick(n);}; // No staging capture may survive.
         // Every allocation and charged operation precedes this noexcept commit.
         live_=std::move(next);relevance_.swap(relevance);
         ++planEpoch_;++compactions;deadCellsReclaimed+=dead;compactionRequested_=false;
@@ -334,10 +385,16 @@ private:
     std::uint64_t generation_=0;
     std::uint64_t planEpoch_=0;
     std::uint64_t workingBytes_=0,fixedBytes_=0;
+    const std::atomic_bool* cancellation_=nullptr;
     std::size_t activeCells_=0;
     bool compactionRequested_=false,compactionBlocked_=false;
     bool initialized_=false;
-    void tick(std::uint64_t n=1)const{if(charge_)charge_(n);}
+    void checkCancellation()const{
+        if(cancelled||(cancellation_&&cancellation_->load())){
+            cancelled=true;throw OcctInitialConstructionCancelled{};
+        }
+    }
+    void tick(std::uint64_t n=1)const{checkCancellation();if(charge_)charge_(n);}
     static bool finite(Vec3 p){return std::isfinite(p.x)&&std::isfinite(p.y)&&std::isfinite(p.z);}
     static bool equal(Vec3 a,Vec3 b){return a.x==b.x&&a.y==b.y&&a.z==b.z;}
     bool guard(const Cell& cell)const{

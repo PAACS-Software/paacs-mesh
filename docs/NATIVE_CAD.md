@@ -96,6 +96,9 @@ Fresh positions are ranked using neighbour separation and the actual connected
 conflict cavity in a persistent auxiliary Delaunay triangulation. Cavity discovery
 can visit the complete admitted complex; a small fixed cell count must not bias
 which point positions are considered. Work and storage still bound the search.
+The auxiliary constructor and subsequent constraint-seed constructor check work,
+temporary payload, cell limits and cancellation during construction. Their
+internal retries share each constructor's remaining allowance.
 The selected patch must pass the full topology and survivor checks before any
 insertion. Exact source-surface and temporary-cell intersection checks, strict
 native point admission and original body identity are retained.
