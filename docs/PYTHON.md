@@ -66,6 +66,9 @@ python -m paacs_mesh part.step part.vtk --size 0.7
 
 Installed wheels also provide the `paacs-mesh` command with the same arguments.
 
+For paginated CAD inspection, capability discovery, saved recipe execution and
+human/JSON diagnostic summaries, see [inspection and diagnostics](AGENT_WORKFLOW.md).
+
 ### Initial interior placement
 
 Compatible single-solid Tet4 requests automatically construct wall sites before
@@ -96,8 +99,9 @@ provides `--advancing-interior-front` and `--no-advancing-interior-front`.
 
 The [publishing workflow](../.github/workflows/publish-python.yml) prepares the
 three repaired CPython 3.12 wheels and requires fresh installed-wheel consumers
-from the same source commit. PyPI Trusted Publishing is configured; until the
-first qualified upload, use the workflow artifacts described above.
+from the same source commit. The qualified release candidate is available on
+PyPI through Trusted Publishing; development artifacts remain available for
+testing changes before the next qualified release.
 The [release guide](PYPI_RELEASE.md) records that setup
 and the publication checks.
 
