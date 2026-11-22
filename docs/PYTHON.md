@@ -1,7 +1,7 @@
 # Python STEP interface
 
 The Python distribution calls the C++ STEP importer and Tet4 mesher in process.
-Development wheels target **CPython 3.12** on these platforms:
+Wheels target **CPython 3.12** on these platforms:
 
 | System | Architecture | Compatibility target |
 |---|---|---|
@@ -12,12 +12,20 @@ Development wheels target **CPython 3.12** on these platforms:
 Each repaired wheel contains the shared CAD libraries and runtime dependencies.
 Installation needs Python and pip, with no compiler, OCCT SDK or `PATH` setup.
 
-Wheels are development artifacts from the
+Install the release candidate in a Python 3.12 environment:
+
+```sh
+python -m pip install --pre paacs-mesh
+```
+
+For a fixed version, use `python -m pip install paacs-mesh==1.2.0rc2`.
+See [package releases](PYPI_RELEASE.md) for the qualification and publication
+process.
+
+Development wheels are also available from the
 [Python STEP wheel workflow](../.github/workflows/python-wheel.yml). Choose the
-artifact matching the system and architecture above.
-This interface has not been published to PyPI. Download and extract the workflow
-artifact, then install its `.whl` file in a Python 3.12 environment. For example,
-on Windows:
+artifact matching the system and architecture above, extract it and install its
+`.whl` file. For example, on Windows:
 
 ```powershell
 python -m pip install --force-reinstall --only-binary=:all: .\paacs_mesh-1.2.0rc2-cp312-cp312-win_amd64.whl
