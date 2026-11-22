@@ -5,7 +5,9 @@
 # SPDX-License-Identifier: MPL-2.0
 
 import hashlib
+import io
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -15,6 +17,7 @@ import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import prepare_python_release as release
+import check_pypi_release as index_release
 
 
 class PythonReleaseTests(unittest.TestCase):
@@ -146,6 +149,44 @@ class PythonReleaseTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 release.publish_sources(assets, "v1.2.0-rc.2", self.sha)
             self.assertEqual(calls.call_count, 1)
+
+    def test_index_install_resolves_relative_output_before_changing_child_cwd(self):
+        manifest = self.assemble()
+        fixture = self.root / "cylinder.step"
+        fixture.write_bytes(b"owned fixture; meshing subprocess is mocked")
+        response = {"urls": [{"filename": name, "packagetype": "bdist_wheel",
+                              "digests": {"sha256": digest}}
+                             for name, digest in manifest["wheels"].items()]}
+        relative_output = Path("build/index-install")
+        expected_output = (self.root / relative_output).resolve()
+        expected_environment = expected_output / "environment"
+        previous_cwd = Path.cwd()
+        try:
+            os.chdir(self.root)
+            with patch.object(sys, "argv", ["check_pypi_release.py", "--manifest",
+                    str(self.output / "release-manifest.json"), "--fixture", str(fixture),
+                    "--output", str(relative_output)]), \
+                    patch.object(index_release, "urlopen", return_value=io.BytesIO(json.dumps(response).encode())), \
+                    patch.object(index_release.venv, "EnvBuilder") as builder, \
+                    patch.object(index_release.subprocess, "run") as processes, \
+                    patch.object(sys, "stdout", new=io.StringIO()):
+                builder.return_value.create.side_effect = lambda path: Path(path).mkdir(parents=True)
+                index_release.main()
+                builder.return_value.create.assert_called_once_with(expected_environment)
+                self.assertEqual(processes.call_count, 3)
+                for call in processes.call_args_list:
+                    self.assertTrue(Path(call.args[0][0]).is_absolute())
+                    self.assertTrue(Path(call.kwargs["cwd"]).is_absolute())
+                    self.assertEqual(Path(call.kwargs["cwd"]), expected_environment)
+                install = processes.call_args_list[0].args[0]
+                requirement = Path(install[install.index("-r") + 1])
+                self.assertTrue(requirement.is_absolute())
+                self.assertEqual(requirement, expected_environment / "release.txt")
+                self.assertEqual(requirement.read_text().count("--hash=sha256:"), 3)
+                self.assertEqual((expected_environment / "cylinder.step").read_bytes(), fixture.read_bytes())
+                self.assertTrue((expected_output / "index-validation.json").is_file())
+        finally:
+            os.chdir(previous_cwd)
 
 
 if __name__ == "__main__":

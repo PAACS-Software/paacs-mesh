@@ -26,6 +26,7 @@ def main():
     parser.add_argument("--fixture", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    args.output = args.output.resolve()
     if args.output.exists():
         raise RuntimeError("Refusing to overwrite an existing index-install test")
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
