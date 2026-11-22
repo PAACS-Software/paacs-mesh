@@ -102,7 +102,8 @@ def main():
             raise RuntimeError(f"advancing interior front did not report audited construction: {advancing}")
         initial = run("uniform_initial_interior_front", "cylinder.step",
                       ("--advancing-interior-front", "--max-work", "100000000",
-                       "--max-chord-error", ".008660254037844387", "--min-quality", "0"),
+                       "--max-chord-error", ".008660254037844387", "--min-quality", "0",
+                       "--warning-quality", ".25"),
                       success=True)
         initial_body = initial["bodies"][0]
         seed = initial_body.get("initial_front", {})
@@ -113,6 +114,10 @@ def main():
                 or seed.get("delaunay_commits") != seed.get("nodes")
                 or seed.get("full_certifications", 0) < seed.get("delaunay_commits", 0)
                 or seed.get("maximum_planned_cavity", 0) <= 64
+                or seed.get("compactions", 0) == 0 or seed.get("retired_cells_reclaimed", 0) == 0
+                or seed.get("storage_rejections") != 0
+                or not 0 < seed.get("compaction_peak_modeled_bytes", 0) <= seed.get("auxiliary_working_bytes", 0)
+                or initial.get("quality_percentile_1", 0) < .25
                 or initial_body.get("interior_front", {}).get("diagnostic") != "not_attempted"):
             raise RuntimeError(f"uniform initial construction did not run independently: {initial}")
         run("advancing_front_independent_parts_refused", "assembly.step",

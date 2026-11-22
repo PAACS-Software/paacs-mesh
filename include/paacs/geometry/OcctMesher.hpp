@@ -180,6 +180,10 @@ struct NativeCadInitialFrontReport {
     std::uint64_t delaunayEvaluations=0,delaunayCommits=0,fullCertifications=0;
     // A zero cavityLimit selects the complete admitted numerical complex.
     std::uint64_t cavityUnavailable=0,cavityLimit=0,maximumPlannedCavity=0,maximumAcceptedCavity=0;
+    std::uint64_t storageRejections=0,compactions=0,retiredCellsReclaimed=0,compactionWork=0;
+    std::uint64_t auxiliaryStoredCells=0,auxiliaryLiveCells=0,auxiliaryStoredPeak=0,auxiliaryStorageCapacity=0;
+    // Modeled auxiliary payload during compaction, not peak process RSS.
+    std::uint64_t compactionPeakModeledBytes=0,auxiliaryWorkingBytes=0;
     double seconds=0;
 };
 struct NativeCadBodyMeshReport {

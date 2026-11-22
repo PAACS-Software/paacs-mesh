@@ -234,6 +234,16 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                     report.cavityLimit=built.auxiliaryCavityLimit;
                     report.maximumPlannedCavity=built.auxiliaryMaximumPlannedCavity;
                     report.maximumAcceptedCavity=built.auxiliaryMaximumAcceptedCavity;
+                    report.storageRejections=built.auxiliaryScoreStorageRejects+built.auxiliaryCommitStorageRejects;
+                    report.compactions=built.auxiliaryCompactions;
+                    report.retiredCellsReclaimed=built.auxiliaryDeadCellsReclaimed;
+                    report.compactionWork=built.auxiliaryCompactionWork;
+                    report.auxiliaryStoredCells=built.auxiliaryStoredCells;
+                    report.auxiliaryLiveCells=built.auxiliaryLiveCells;
+                    report.auxiliaryStoredPeak=built.auxiliaryStoredPeak;
+                    report.auxiliaryStorageCapacity=built.auxiliaryStorageCapacity;
+                    report.compactionPeakModeledBytes=built.auxiliaryMaximumCompactionModeledBytes;
+                    report.auxiliaryWorkingBytes=built.auxiliaryWorkingBytes;
                 }else{
                     sites=appendOcctInteriorSites(boundary,*sizeField,mesh::Classification{3,tag},
                         std::size_t(siteCap),[&](Vec3 p){

@@ -100,6 +100,12 @@ The selected patch must pass the full topology and survivor checks before any
 insertion. Exact source-surface and temporary-cell intersection checks, strict
 native point admission and original body identity are retained.
 
+Retired auxiliary tetrahedra are reclaimed between candidate batches. Compaction
+copies the live connectivity and cached material classification without moving
+points or retriangulating. It keeps the admitted storage capacity and stages the
+replacement within the same working allowance. Old candidate plans are invalid
+after the cell indices change; a failed staged rebuild leaves the old mesh intact.
+
 Only the accepted point coordinates enter ordinary constrained construction.
 Temporary front cells and the auxiliary triangulation are not published material
 meshes or coverage certificates. Rebuilding and recovering constraints can change
@@ -110,6 +116,9 @@ The body receipt's `initial_front` object records initial sites, reused apices,
 propagated faces, complete-cavity sizes, certification work, queries and elapsed
 time. A zero `cavity_limit` means automatic discovery of the complete admitted
 cavity. Propagation depth describes ancestry, not distance from the CAD surface.
+Storage rejections, compaction counts and reclaimed-cell counts distinguish
+memory pressure from geometric refusals. `compaction_peak_modeled_bytes` estimates
+the auxiliary payload; it is not a process-memory measurement.
 `budget_limited` or `stalled` can retain admitted sites with unresolved construction.
 Inspect the achieved sizes and quality; there is no certificate for every edge
 length, growth ratio or global minimum quality.

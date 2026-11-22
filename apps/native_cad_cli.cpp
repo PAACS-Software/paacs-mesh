@@ -198,6 +198,16 @@ int runNativeCadCli(int argc,char** argv) {
                 <<",\"cavity_limit\":"<<b.initialFront.cavityLimit
                 <<",\"maximum_planned_cavity\":"<<b.initialFront.maximumPlannedCavity
                 <<",\"maximum_accepted_cavity\":"<<b.initialFront.maximumAcceptedCavity
+                <<",\"storage_rejections\":"<<b.initialFront.storageRejections
+                <<",\"compactions\":"<<b.initialFront.compactions
+                <<",\"retired_cells_reclaimed\":"<<b.initialFront.retiredCellsReclaimed
+                <<",\"compaction_work\":"<<b.initialFront.compactionWork
+                <<",\"auxiliary_stored_cells\":"<<b.initialFront.auxiliaryStoredCells
+                <<",\"auxiliary_live_cells\":"<<b.initialFront.auxiliaryLiveCells
+                <<",\"auxiliary_stored_peak\":"<<b.initialFront.auxiliaryStoredPeak
+                <<",\"auxiliary_storage_capacity\":"<<b.initialFront.auxiliaryStorageCapacity
+                <<",\"compaction_peak_modeled_bytes\":"<<b.initialFront.compactionPeakModeledBytes
+                <<",\"auxiliary_working_bytes\":"<<b.initialFront.auxiliaryWorkingBytes
                 <<",\"seconds\":"<<b.initialFront.seconds<<"}"
                 <<",\"interior_front\":{\"diagnostic\":\""<<b.interiorFrontDiagnostic
                 <<"\",\"nodes\":"<<b.interiorFrontNodes<<",\"candidates\":"<<b.interiorFrontCandidates
