@@ -11,6 +11,8 @@
 // mutating caller-owned mesh state.
 
 #include <array>
+#include <atomic>
+#include <limits>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -51,7 +53,9 @@ enum class TetCandidateReason : std::uint8_t {
     InvalidClassification,
     WorkspaceImportFailed,
     AllocationFailed,
-    ConstructionFailed
+    ConstructionFailed,
+    BudgetExceeded,
+    Cancelled
 };
 
 struct TetCandidateCell {
@@ -91,6 +95,10 @@ struct TetCandidateMetrics {
     // Known canonicalization/validation visits reported by a discarded
     // candidate attempt. Its Delaunay work is retained separately above.
     std::uint64_t discardedCandidateWork = 0;
+    // Present only for the additive bounded constructor. Work spans every
+    // discarded/retry attempt; payload is a conservative modeled peak.
+    std::uint64_t boundedWork = 0;
+    std::uint64_t boundedPeakTemporaryBytes = 0;
 };
 
 static_assert(std::is_standard_layout_v<TetCandidateMetrics>);
@@ -136,6 +144,22 @@ TetCandidateValidation validateTetCandidate(
 // validates its complete finite output. No caller-owned state is mutated.
 TetCandidateBuildOutcome buildTetCandidate(
     const std::vector<Vec3>& points) noexcept;
+
+struct TetCandidateBuildLimits {
+    std::uint64_t maxWork = (std::numeric_limits<std::uint64_t>::max)();
+    // Live finite construction cells and final candidate cells. Symbolic hull
+    // cells are admitted against temporary payload, not this finite-cell cap.
+    std::uint64_t maxCells = (std::numeric_limits<std::uint64_t>::max)();
+    // Includes a fixed 4 MiB exact-predicate/workspace envelope, vector
+    // growth overlap, raw output, canonicalization and validation payload.
+    std::uint64_t maxTemporaryBytes = (std::numeric_limits<std::uint64_t>::max)();
+    const std::atomic_bool* cancellation = nullptr;
+};
+
+// Serial, online-bounded construction. Stop outcomes never publish a partial
+// candidate. The caller's input storage is excluded from the payload model.
+TetCandidateBuildOutcome buildTetCandidate(
+    const std::vector<Vec3>& points, const TetCandidateBuildLimits& limits) noexcept;
 
 std::uint64_t tetCandidateAccountedBytes(
     const TetCandidate& candidate) noexcept;

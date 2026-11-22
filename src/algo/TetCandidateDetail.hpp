@@ -11,6 +11,7 @@
 // unstamped endpoint/classification list to the partial-import policy.
 
 #include "paacs/algo/TetCandidate.hpp"
+#include "paacs/algo/detail/TetConstructionBudget.hpp"
 
 namespace paacs::algo::tet_candidate_detail {
 
@@ -19,6 +20,9 @@ namespace paacs::algo::tet_candidate_detail {
 // ordering stay intact. This is a bounded retry of a rejected candidate.
 std::vector<Tet> delaunay3DExactInputCoordinates(
     const std::vector<Vec3>&, Delaunay3DStats*);
+std::vector<Tet> delaunay3DBounded(
+    const std::vector<Vec3>&, Delaunay3DStats*,
+    detail::TetConstructionBudget&, bool exactCoordinates);
 std::uint64_t measuredDelaunayConstructionWork(const Delaunay3DStats&) noexcept;
 void retainDiscardedDelaunayAttempt(Delaunay3DStats& accepted,
                                     const Delaunay3DStats& discarded) noexcept;

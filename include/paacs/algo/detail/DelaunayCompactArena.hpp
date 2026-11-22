@@ -6,6 +6,7 @@
 #pragma once
 
 #include "paacs/core/Types.hpp"
+#include "paacs/algo/detail/TetConstructionBudget.hpp"
 
 #include <algorithm>
 #include <array>
@@ -77,6 +78,13 @@ public:
     CompactTetArena(CompactTetArena&&) noexcept = default;
     CompactTetArena& operator=(CompactTetArena&&) noexcept = default;
 
+    void setConstructionBudget(TetConstructionBudget* budget, Vertex infinity) noexcept {
+        budget_=budget; infinity_=infinity;
+        hot_.setConstructionBudget(budget); state_.setConstructionBudget(budget);
+        links_.setConstructionBudget(budget); freeList_.setConstructionBudget(budget);
+        versions_.setConstructionBudget(budget);
+    }
+
     void reserveSlots(std::size_t slots) {
         if (slots > static_cast<std::size_t>(kMaximumPackedSlot) + 1U)
             throw CompactEnvelopeExceeded(
@@ -92,6 +100,7 @@ public:
         // zero upward, avoiding both allocation and value-initialization of
         // every HotTet.
         activeSlots_ = 0;
+        finiteLive_ = 0;
         freeList_.clear();
         liveHead_ = kInvalidSlot;
         liveTail_ = kInvalidSlot;
@@ -112,6 +121,10 @@ public:
 
     PAACS_DELAUNAY_ALWAYS_INLINE Slot allocate(
         const std::array<Vertex, 4>& vertices) {
+        if (budget_) {
+            budget_->step();
+            if (vertices[3] != infinity_) budget_->cells(finiteLive_+1);
+        }
         Slot slot = kInvalidSlot;
         if (!freeList_.empty()) {
             slot = freeList_.back();
@@ -143,6 +156,7 @@ public:
 
         bumpVersion(slot);
         ++liveCount_;
+        if (budget_ && vertices[3] != infinity_) ++finiteLive_;
         if (liveCount_ > peakLive_) peakLive_ = liveCount_;
         ++totalCreated_;
         return slot;
@@ -153,6 +167,10 @@ public:
             throw std::logic_error(
                 "CompactTetArena::free: invalid or already-free slot");
 
+        if (budget_) {
+            budget_->step();
+            if (hot_[slot].vertices[3] != infinity_) --finiteLive_;
+        }
         const Slot previous = links_[slot].previous;
         const Slot next = links_[slot].next;
         if (previous != kInvalidSlot) links_[previous].next = next;
@@ -231,9 +249,11 @@ public:
         setNeighbour(b, faceB, a, faceA);
     }
 
-    void beginEpoch() noexcept {
+    void beginEpoch() {
         ++epoch_;
         if (epoch_ == 0 || epoch_ > kEpochMask) {
+            // Rare epoch wrap clears retained storage as one admitted chunk.
+            if (budget_) budget_->step(state_.size());
             for (std::uint32_t& state : state_) state &= kAliveBit;
             epoch_ = 1;
         }
@@ -258,7 +278,7 @@ public:
     }
     void disableVersions() noexcept {
         versionsEnabled_ = false;
-        std::vector<std::uint32_t>().swap(versions_);
+        versions_.releaseStorage();
     }
     [[nodiscard]] bool versionsEnabled() const noexcept { return versionsEnabled_; }
     [[nodiscard]] std::uint32_t version(Slot slot) const noexcept {
@@ -295,17 +315,20 @@ private:
     static constexpr std::uint32_t kAliveBit = 0x80000000U;
     static constexpr std::uint32_t kEpochMask = 0x7fffffffU;
 
-    std::vector<HotTet> hot_;
+    ConstructionVector<HotTet> hot_;
     struct LiveLinks {
         Slot previous = kInvalidSlot;
         Slot next = kInvalidSlot;
     };
     static_assert(sizeof(LiveLinks) == 8);
 
-    std::vector<std::uint32_t> state_;
-    std::vector<LiveLinks> links_;
-    std::vector<Slot> freeList_;
-    std::vector<std::uint32_t> versions_;
+    ConstructionVector<std::uint32_t> state_;
+    ConstructionVector<LiveLinks> links_;
+    ConstructionVector<Slot> freeList_;
+    ConstructionVector<std::uint32_t> versions_;
+    TetConstructionBudget* budget_ = nullptr;
+    Vertex infinity_ = 0;
+    std::uint64_t finiteLive_ = 0;
     bool versionsEnabled_ = false;
     Slot activeSlots_ = 0;
     Slot liveHead_ = kInvalidSlot;

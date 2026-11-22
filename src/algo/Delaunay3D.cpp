@@ -52,6 +52,8 @@ using predicates::Sign;
 using Arena = detail::CompactTetArena;
 using Slot = Arena::Slot;
 using Vertex = Arena::Vertex;
+using Budget = detail::TetConstructionBudget;
+using detail::constructionStep;
 
 constexpr int kFace[4][3] = {{1, 2, 3}, {0, 3, 2}, {0, 1, 3}, {0, 2, 1}};
 
@@ -132,6 +134,7 @@ struct PendingSide {
 
 class ShellEdgePairTable {
 public:
+    void setConstructionBudget(Budget* budget) noexcept { budget_=budget; slots_.setConstructionBudget(budget); }
     enum class Result : std::uint8_t { First, Second, Third };
 
     void begin(std::size_t expected) {
@@ -141,7 +144,7 @@ public:
         mask_ = slots_.size() - 1U;
         unmatched_ = 0;
         if (++epoch_ == 0 || epoch_ > kEpochMask) {
-            for (auto& slot : slots_) slot.stamp = 0;
+            for (auto& slot : slots_) { constructionStep(budget_); slot.stamp = 0; }
             epoch_ = 1;
         }
     }
@@ -149,7 +152,7 @@ public:
     template <bool CollectDetailed>
     [[nodiscard]] Result insert(const PendingSide& value,
                                 PendingSide& first,
-                                std::uint64_t& probes) noexcept {
+                                std::uint64_t& probes) {
         const std::uint64_t edgeKey =
             (static_cast<std::uint64_t>(value.e0) << 32U) |
             static_cast<std::uint64_t>(value.e1);
@@ -159,6 +162,7 @@ public:
         hashed ^= hashed >> 33U;
         std::size_t position = static_cast<std::size_t>(hashed) & mask_;
         for (;;) {
+            constructionStep(budget_);
             detailCount<CollectDetailed>(probes);
             SlotRecord& slot = slots_[position];
             const std::uint32_t slotEpoch = slot.stamp & kEpochMask;
@@ -204,7 +208,8 @@ private:
     };
     static_assert(sizeof(SlotRecord) == 16);
 
-    std::vector<SlotRecord> slots_;
+    detail::ConstructionVector<SlotRecord> slots_;
+    Budget* budget_ = nullptr;
     std::uint32_t epoch_ = 0;
     std::size_t mask_ = 0;
     std::size_t unmatched_ = 0;
@@ -220,6 +225,7 @@ struct ShellFace {
 
 class UniqueTetTable {
 public:
+    void setConstructionBudget(Budget* budget) noexcept { budget_=budget; slots_.setConstructionBudget(budget); }
     void begin(std::size_t expected) {
         std::size_t capacity = 8;
         const std::size_t target = expected + expected / 2U + 1U;
@@ -227,18 +233,19 @@ public:
         if (slots_.size() < capacity) slots_.resize(capacity);
         mask_ = slots_.size() - 1U;
         if (++epoch_ == 0) {
-            for (auto& slot : slots_) slot.epoch = 0;
+            for (auto& slot : slots_) { constructionStep(budget_); slot.epoch = 0; }
             epoch_ = 1;
         }
     }
 
     bool insert(const std::array<Vertex, 4>& vertices,
-                const std::vector<Tet>& output) noexcept {
+                const std::vector<Tet>& output) {
         const std::uint64_t fullHash = unorderedHash(vertices);
         const std::uint16_t fingerprint = static_cast<std::uint16_t>(
             (fullHash >> 32U) ^ fullHash);
         std::size_t position = static_cast<std::size_t>(fullHash) & mask_;
         for (;;) {
+            constructionStep(budget_);
             SlotRecord& slot = slots_[position];
             if (slot.epoch != epoch_) {
                 slot.epoch = epoch_;
@@ -293,29 +300,35 @@ private:
         return sum ^ ((xored << 29U) | (xored >> 35U));
     }
 
-    std::vector<SlotRecord> slots_;
+    detail::ConstructionVector<SlotRecord> slots_;
+    Budget* budget_ = nullptr;
     std::uint16_t epoch_ = 0;
     std::size_t mask_ = 0;
 };
 
-void stableRadixMorton(const std::vector<std::uint64_t>& keys,
-                       std::vector<Vertex>& order,
-                       std::vector<Vertex>& scratch) {
+void stableRadixMorton(const detail::ConstructionVector<std::uint64_t>& keys,
+                       detail::ConstructionVector<Vertex>& order,
+                       detail::ConstructionVector<Vertex>& scratch, Budget* budget = nullptr) {
     const std::size_t count = order.size();
     scratch.resize(count);
-    std::vector<Vertex>* input = &order;
-    std::vector<Vertex>* output = &scratch;
+    detail::ConstructionVector<Vertex>* input = &order;
+    detail::ConstructionVector<Vertex>* output = &scratch;
     for (unsigned shift = 0; shift < 64U; shift += 8U) {
+        constructionStep(budget);
         std::array<std::size_t, 256> offsets{};
-        for (Vertex index : *input)
+        for (Vertex index : *input) {
+            constructionStep(budget);
             ++offsets[(keys[index] >> shift) & 0xffU];
+        }
         std::size_t running = 0;
         for (std::size_t& value : offsets) {
+            constructionStep(budget);
             const std::size_t size = value;
             value = running;
             running += size;
         }
         for (Vertex index : *input) {
+            constructionStep(budget);
             const std::size_t bucket = (keys[index] >> shift) & 0xffU;
             (*output)[offsets[bucket]++] = index;
         }
@@ -533,21 +546,30 @@ private:
 };
 
 struct DelaunayWorkspace::Impl {
-    std::vector<Vec3> normalized;
-    std::vector<std::uint64_t> mortonKeys;
-    std::vector<Vertex> order;
-    std::vector<Vertex> orderScratch;
+    detail::ConstructionVector<Vec3> normalized;
+    detail::ConstructionVector<std::uint64_t> mortonKeys;
+    detail::ConstructionVector<Vertex> order;
+    detail::ConstructionVector<Vertex> orderScratch;
     Arena arena;
-    std::vector<Slot> bad;
-    std::vector<Slot> stack;
-    std::vector<Slot> work;
-    std::vector<Slot> stillBad;
-    std::vector<ShellFace> shell;
+    detail::ConstructionVector<Slot> bad;
+    detail::ConstructionVector<Slot> stack;
+    detail::ConstructionVector<Slot> work;
+    detail::ConstructionVector<Slot> stillBad;
+    detail::ConstructionVector<ShellFace> shell;
     ShellEdgePairTable pairTable;
     UniqueTetTable uniqueTable;
-    std::vector<std::uint8_t> usedPoints;
-    std::vector<SpecCandidate> parallelCandidates;
+    detail::ConstructionVector<std::uint8_t> usedPoints;
+    detail::ConstructionVector<SpecCandidate> parallelCandidates;
     bool completedRun = false;
+    void setConstructionBudget(Budget* budget, Vertex infinity) noexcept {
+        normalized.setConstructionBudget(budget); mortonKeys.setConstructionBudget(budget);
+        order.setConstructionBudget(budget); orderScratch.setConstructionBudget(budget);
+        bad.setConstructionBudget(budget); stack.setConstructionBudget(budget);
+        work.setConstructionBudget(budget); stillBad.setConstructionBudget(budget);
+        shell.setConstructionBudget(budget); usedPoints.setConstructionBudget(budget);
+        pairTable.setConstructionBudget(budget); uniqueTable.setConstructionBudget(budget);
+        arena.setConstructionBudget(budget,infinity);
+    }
 
     [[nodiscard]] std::uint64_t retainedBytes() const noexcept {
         return normalized.capacity() * sizeof(Vec3) +
@@ -590,7 +612,15 @@ template <bool CollectDetailed, bool ExactInputCoordinates = false>
 std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                                  DelaunayWorkspace::Impl& ws,
                                  const Delaunay3DOptions& options,
-                                 Delaunay3DStats& st) {
+                                 Delaunay3DStats& st, Budget* budget = nullptr,
+                                 std::uint64_t* outputAdmission = nullptr) {
+    constructionStep(budget,0);
+    auto orient = [&](const Vec3& a,const Vec3& b,const Vec3& c,const Vec3& d) {
+        constructionStep(budget); return predicates::orient3dFiltered(a,b,c,d);
+    };
+    auto insphere = [&](const Vec3& a,const Vec3& b,const Vec3& c,const Vec3& d,const Vec3& e) {
+        constructionStep(budget); return predicates::insphereFiltered(a,b,c,d,e);
+    };
     const Clock::time_point totalBegin = Clock::now();
     st = Delaunay3DStats{};
     st.inputPoints = static_cast<std::uint64_t>(pts.size());
@@ -615,6 +645,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
     std::vector<Tet> output;
     std::uint64_t nonFinite = 0;
     for (const Vec3& point : pts) {
+        constructionStep(budget);
         if (!std::isfinite(point.x) || !std::isfinite(point.y) ||
             !std::isfinite(point.z))
             ++nonFinite;
@@ -638,11 +669,13 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
 
     const Vertex n = static_cast<Vertex>(pts.size());
     const Vertex infinity = n;
+    if (budget) ws.setConstructionBudget(budget,infinity);
 
     const Clock::time_point orderingBegin = Clock::now();
     Vec3 low{1e300, 1e300, 1e300};
     Vec3 high{-1e300, -1e300, -1e300};
     for (const Vec3& point : pts) {
+        constructionStep(budget);
         low.x = std::min(low.x, point.x);
         low.y = std::min(low.y, point.y);
         low.z = std::min(low.z, point.z);
@@ -665,6 +698,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
     ws.mortonKeys.resize(n);
     ws.order.resize(n);
     for (Vertex index = 0; index < n; ++index) {
+        constructionStep(budget);
         const Vec3 normalized = (pts[index] - middle) * inverseSpan;
         Vec3 ordering = normalized;
         if constexpr (ExactInputCoordinates) {
@@ -702,12 +736,22 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
     const double quietNan = std::numeric_limits<double>::quiet_NaN();
     ws.normalized[infinity] = {quietNan, quietNan, quietNan};
 #if PAACS_DELAUNAY_USE_RADIX
-    stableRadixMorton(ws.mortonKeys, ws.order, ws.orderScratch);
+    stableRadixMorton(ws.mortonKeys, ws.order, ws.orderScratch,budget);
 #else
-    std::stable_sort(ws.order.begin(), ws.order.end(),
-                     [&](Vertex a, Vertex b) {
-                         return ws.mortonKeys[a] < ws.mortonKeys[b];
-                     });
+    if (budget) {
+        // Tie on original index reproduces the stable Morton order without
+        // std::stable_sort's implementation-dependent temporary allocation.
+        std::sort(ws.order.begin(),ws.order.end(),[&](Vertex a,Vertex b) {
+            constructionStep(budget);
+            return ws.mortonKeys[a]!=ws.mortonKeys[b] ?
+                ws.mortonKeys[a]<ws.mortonKeys[b] : a<b;
+        });
+    } else {
+        std::stable_sort(ws.order.begin(), ws.order.end(),
+                         [&](Vertex a, Vertex b) {
+                             return ws.mortonKeys[a] < ws.mortonKeys[b];
+                         });
+    }
 #endif
     st.normalizationOrderSeconds =
         secondsBetween(orderingBegin, Clock::now());
@@ -723,7 +767,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
     // point.  Reserving seven slots per point avoids the geometric-capacity
     // overshoot of five parallel vectors without imposing a hard envelope;
     // harder inputs can still grow normally.
-    if (static_cast<std::uint64_t>(n) * 7ULL <=
+    if (!budget && static_cast<std::uint64_t>(n) * 7ULL <=
         static_cast<std::uint64_t>(Arena::kMaximumPackedSlot) + 1ULL)
         arena.reserveSlots(static_cast<std::size_t>(n) * 7U + 32U);
     ws.bad.clear();
@@ -741,11 +785,12 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                               Vertex d) -> Slot {
         std::array<Vertex, 4> vertices{a, b, c, d};
         for (int local = 0; local < 3; ++local) {
+            constructionStep(budget);
             if (vertices[local] == infinity)
                 std::swap(vertices[local], vertices[3]);
         }
         if (vertices[3] != infinity) {
-            const Sign orientation = predicates::orient3dFiltered(
+            const Sign orientation = orient(
                 points[vertices[0]], points[vertices[1]], points[vertices[2]],
                 points[vertices[3]]);
             if (orientation == Sign::Negative)
@@ -781,6 +826,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
          index < ws.order.size() &&
          bootstrapB == std::numeric_limits<Vertex>::max();
          ++index) {
+        constructionStep(budget);
         detailCount<CollectDetailed>(st.bootstrapDistinctTests);
         const Vec3& candidate = points[ws.order[index]];
         const Vec3& first = points[bootstrapA];
@@ -794,12 +840,14 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
          i < ws.order.size() &&
          bootstrapD == std::numeric_limits<Vertex>::max();
          ++i) {
+        constructionStep(budget);
         for (std::size_t j = i + 1U;
              j < ws.order.size() &&
              bootstrapD == std::numeric_limits<Vertex>::max();
              ++j) {
+            constructionStep(budget);
             detailCount<CollectDetailed>(st.bootstrapOrientationTests);
-            if (predicates::orient3dFiltered(points[bootstrapA], points[bootstrapB],
+            if (orient(points[bootstrapA], points[bootstrapB],
                                      points[ws.order[i]],
                                      points[ws.order[j]]) != Sign::Zero) {
                 bootstrapC = ws.order[i];
@@ -821,6 +869,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
         makeGenericTet(bootstrapA, bootstrapB, bootstrapC, bootstrapD);
     std::array<Slot, 4> infiniteCells{};
     for (int face = 0; face < 4; ++face) {
+        constructionStep(budget);
         const auto& vertices = arena.hot(bootstrap).vertices;
         infiniteCells[face] = makeGenericTet(
             vertices[kFace[face][0]], vertices[kFace[face][1]],
@@ -831,6 +880,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
     auto sideFace = [&](Slot tet, Vertex edge0, Vertex edge1) {
         const auto& vertices = arena.hot(tet).vertices;
         for (int face = 0; face < 3; ++face) {
+            constructionStep(budget);
             const Vertex x = vertices[kFace[face][0]];
             const Vertex y = vertices[kFace[face][1]];
             const Vertex z = vertices[kFace[face][2]];
@@ -843,11 +893,14 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
         return -1;
     };
     for (int first = 0; first < 4; ++first) {
+        constructionStep(budget);
         for (int second = first + 1; second < 4; ++second) {
+            constructionStep(budget);
             std::array<Vertex, 2> shared{};
             int count = 0;
             const auto& bootstrapVertices = arena.hot(bootstrap).vertices;
             for (Vertex vertex : bootstrapVertices) {
+                constructionStep(budget);
                 if (vertex != bootstrapVertices[first] &&
                     vertex != bootstrapVertices[second])
                     shared[count++] = vertex;
@@ -873,7 +926,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
         const auto& tet = arena.hot(slot);
         if (tet.vertices[3] != infinity) {
             detailCount<CollectDetailed>(st.conflictInsphereTests);
-            return predicates::insphereFiltered(
+            return insphere(
                        points[tet.vertices[0]], points[tet.vertices[1]],
                        points[tet.vertices[2]], points[tet.vertices[3]],
                        point) != Sign::Negative;
@@ -886,32 +939,32 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
         const Vertex witness = finiteTet.vertices[witnessFace];
         detailCount<CollectDetailed>(st.reciprocalFaceScansAvoided);
         detailCount<CollectDetailed>(st.conflictOrientationTests, 2);
-        const Sign witnessOrientation = predicates::orient3dFiltered(
+        const Sign witnessOrientation = orient(
             points[tet.vertices[0]], points[tet.vertices[1]],
             points[tet.vertices[2]], points[witness]);
-        const Sign pointOrientation = predicates::orient3dFiltered(
+        const Sign pointOrientation = orient(
             points[tet.vertices[0]], points[tet.vertices[1]],
             points[tet.vertices[2]], point);
         if (pointOrientation == witnessOrientation) return false;
         if (pointOrientation != Sign::Zero) return true;
         detailCount<CollectDetailed>(st.conflictInsphereTests);
         if (witnessOrientation == Sign::Positive) {
-            return predicates::insphereFiltered(
+            return insphere(
                        points[tet.vertices[0]], points[tet.vertices[1]],
                        points[tet.vertices[2]], points[witness], point) !=
                    Sign::Negative;
         }
-        return predicates::insphereFiltered(
+        return insphere(
                    points[tet.vertices[0]], points[tet.vertices[2]],
                    points[tet.vertices[1]], points[witness], point) !=
                Sign::Negative;
     };
 
     auto commitPreparedCavity = [&](Vertex pointIndex,
-                                    const std::vector<Slot>& badCells,
-                                    const std::vector<ShellFace>& shellFaces)
+                                    const auto& badCells,
+                                    const auto& shellFaces)
                                     -> Slot {
-        for (Slot slot : badCells) arena.free(slot);
+        for (Slot slot : badCells) { constructionStep(budget); arena.free(slot); }
 
         ws.pairTable.begin(shellFaces.size() * 3U);
         detailMaximum<CollectDetailed>(
@@ -919,6 +972,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
             static_cast<std::uint64_t>(ws.pairTable.capacity()));
         Slot firstNew = Arena::kInvalidSlot;
         for (const ShellFace& face : shellFaces) {
+            constructionStep(budget);
             Slot newTet = Arena::kInvalidSlot;
             int pointFace = -1;
             if (face.directFiniteWinding) {
@@ -929,6 +983,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                 newTet = makeGenericTet(face.f0, face.f1, face.f2, pointIndex);
                 const auto& vertices = arena.hot(newTet).vertices;
                 for (int local = 0; local < 4; ++local) {
+                    constructionStep(budget);
                     if (vertices[local] == pointIndex) {
                         pointFace = local;
                         break;
@@ -964,6 +1019,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                                 std::min(face.f0, face.f1),
                                 std::max(face.f0, face.f1)}};
                 for (const PendingSide& side : sides) {
+                    constructionStep(budget);
                     PendingSide first{};
                     detailCount<CollectDetailed>(st.shellEdgePairInsertions);
                     const auto result = ws.pairTable.insert<CollectDetailed>(
@@ -980,10 +1036,12 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
 #endif
             const auto& vertices = arena.hot(newTet).vertices;
             for (int sideFaceIndex = 0; sideFaceIndex < 4; ++sideFaceIndex) {
+                constructionStep(budget);
                 if (sideFaceIndex == pointFace) continue;
                 std::array<Vertex, 2> edge{};
                 int edgeCount = 0;
                 for (int local = 0; local < 3; ++local) {
+                    constructionStep(budget);
                     const Vertex vertex =
                         vertices[kFace[sideFaceIndex][local]];
                     if (vertex != pointIndex) edge[edgeCount++] = vertex;
@@ -1044,6 +1102,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                 -a02*a11*a20, -a01*a10*a22, -a00*a12*a21};
             long double value = 0.0L, magnitude = 0.0L;
             for (long double term : terms) {
+                constructionStep(budget);
                 value += term;
                 magnitude += std::abs(term);
             }
@@ -1091,7 +1150,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
             ++candidate.predicateCalls;
             const auto& tet = arena.hot(slot);
             if (tet.vertices[3] != infinity) {
-                return predicates::insphereFiltered(
+                return insphere(
                            points[tet.vertices[0]], points[tet.vertices[1]],
                            points[tet.vertices[2]], points[tet.vertices[3]],
                            point) != Sign::Negative;
@@ -1104,22 +1163,22 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
             const auto& finiteTet = arena.hot(finite);
             const Vertex witness = finiteTet.vertices[witnessFace];
             candidate.predicateCalls += 2;
-            const Sign witnessOrientation = predicates::orient3dFiltered(
+            const Sign witnessOrientation = orient(
                 points[tet.vertices[0]], points[tet.vertices[1]],
                 points[tet.vertices[2]], points[witness]);
-            const Sign pointOrientation = predicates::orient3dFiltered(
+            const Sign pointOrientation = orient(
                 points[tet.vertices[0]], points[tet.vertices[1]],
                 points[tet.vertices[2]], point);
             if (pointOrientation == witnessOrientation) return false;
             if (pointOrientation != Sign::Zero) return true;
             ++candidate.predicateCalls;
             if (witnessOrientation == Sign::Positive) {
-                return predicates::insphereFiltered(
+                return insphere(
                            points[tet.vertices[0]], points[tet.vertices[1]],
                            points[tet.vertices[2]], points[witness], point) !=
                        Sign::Negative;
             }
-            return predicates::insphereFiltered(
+            return insphere(
                        points[tet.vertices[0]], points[tet.vertices[2]],
                        points[tet.vertices[1]], points[witness], point) !=
                    Sign::Negative;
@@ -1133,6 +1192,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
             4ULL * static_cast<std::uint64_t>(arena.slotCount()) + 64ULL;
         for (std::uint64_t step = 0;
              current != Arena::kInvalidSlot && step < maximumSteps; ++step) {
+            constructionStep(budget);
             readSlot(current);
             const auto& tet = arena.hot(current);
             if (tet.vertices[3] == infinity) {
@@ -1146,11 +1206,12 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
             int bestFace = -1;
             double bestValue = -1e300;
             for (int face = 0; face < 4; ++face) {
+                constructionStep(budget);
                 ++candidate.predicateCalls;
                 const Vec3& f0 = points[tet.vertices[kFace[face][0]]];
                 const Vec3& f1 = points[tet.vertices[kFace[face][1]]];
                 const Vec3& f2 = points[tet.vertices[kFace[face][2]]];
-                if (predicates::orient3dFiltered(f0, f1, f2, point) !=
+                if (orient(f0, f1, f2, point) !=
                     Sign::Positive)
                     continue;
                 const double heuristic = orientHeur(f0, f1, f2, point);
@@ -1172,6 +1233,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
             readSlot(located);
             bool duplicate = false;
             for (Vertex vertex : arena.hot(located).vertices) {
+                constructionStep(budget);
                 if (vertex == infinity) continue;
                 const Vec3& existing = points[vertex];
                 duplicate = duplicate ||
@@ -1187,6 +1249,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
         Slot seed = located;
         if (seed == Arena::kInvalidSlot) {
             for (Slot slot = 0; slot < arena.slotCount(); ++slot) {
+                constructionStep(budget);
                 if (!arena.alive(slot)) continue;
                 if (localConflicts(slot)) {
                     seed = slot;
@@ -1207,12 +1270,14 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
         scratch.stack.push_back(seed);
         scratch.markVisited(seed);
         while (!scratch.stack.empty()) {
+            constructionStep(budget);
             const Slot slot = scratch.stack.back();
             scratch.stack.pop_back();
             candidate.cavity.push_back(slot);
             ++candidate.cavityVisits;
             readSlot(slot);
             for (int face = 0; face < 4; ++face) {
+                constructionStep(budget);
                 const Slot neighbour = arena.neighbour(
                     slot, static_cast<std::uint32_t>(face));
                 if (neighbour == Arena::kInvalidSlot ||
@@ -1228,6 +1293,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
             readSlot(slot);
             const auto& tet = arena.hot(slot);
             for (int face = 0; face < 4; ++face) {
+                constructionStep(budget);
                 const Slot neighbour = arena.neighbour(
                     slot, static_cast<std::uint32_t>(face));
                 if (neighbour != Arena::kInvalidSlot &&
@@ -1239,7 +1305,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                 if (f0 == infinity || f1 == infinity || f2 == infinity)
                     continue;
                 ++candidate.predicateCalls;
-                const Sign pointOrientation = predicates::orient3dFiltered(
+                const Sign pointOrientation = orient(
                     points[f0], points[f1], points[f2], point);
                 if (tet.vertices[3] != infinity) {
                     if (pointOrientation != Sign::Negative) return false;
@@ -1253,7 +1319,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                     const auto& finiteTet = arena.hot(neighbour);
                     const Vertex witness = finiteTet.vertices[witnessFace];
                     ++candidate.predicateCalls;
-                    const Sign witnessOrientation = predicates::orient3dFiltered(
+                    const Sign witnessOrientation = orient(
                         points[f0], points[f1], points[f2], points[witness]);
                     if (pointOrientation == Sign::Zero ||
                         pointOrientation == witnessOrientation)
@@ -1269,11 +1335,13 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                                         arena.hot(slot).vertices[3] == infinity;
         if (candidate.touchesInfinity) {
             for (Slot slot : candidate.cavity) {
+                constructionStep(budget);
                 if (arena.hot(slot).vertices[3] == infinity)
                     scratch.work.push_back(slot);
             }
             bool resurrected = false;
             while (!scratch.work.empty()) {
+                constructionStep(budget);
                 const Slot slot = scratch.work.back();
                 scratch.work.pop_back();
                 if (!scratch.isVisited(slot)) continue;
@@ -1281,6 +1349,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                 scratch.unmark(slot);
                 resurrected = true;
                 for (int face = 0; face < 4; ++face) {
+                    constructionStep(budget);
                     const Slot neighbour = arena.neighbour(
                         slot, static_cast<std::uint32_t>(face));
                     if (neighbour != Arena::kInvalidSlot &&
@@ -1291,6 +1360,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
             if (resurrected) {
                 scratch.filtered.clear();
                 for (Slot slot : candidate.cavity) {
+                    constructionStep(budget);
                     if (scratch.isVisited(slot)) scratch.filtered.push_back(slot);
                 }
                 candidate.cavity.assign(scratch.filtered.begin(),
@@ -1307,10 +1377,12 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
         candidate.writes.reserve(candidate.cavity.size() + 16U);
         for (Slot slot : candidate.cavity) scratch.recordWrite(slot, candidate);
         for (Slot slot : candidate.cavity) {
+            constructionStep(budget);
             readSlot(slot);
             const auto& tet = arena.hot(slot);
             const bool finiteOwner = tet.vertices[3] != infinity;
             for (int face = 0; face < 4; ++face) {
+                constructionStep(budget);
                 const Slot neighbour = arena.neighbour(
                     slot, static_cast<std::uint32_t>(face));
                 if (neighbour != Arena::kInvalidSlot &&
@@ -1356,6 +1428,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
             -std::numeric_limits<long double>::infinity(),
             -std::numeric_limits<long double>::infinity()};
         for (const ShellFace& face : candidate.shell) {
+            constructionStep(budget);
             long double radius2 = std::numeric_limits<long double>::infinity();
             if (face.directFiniteWinding) {
                 radius2 = replacementInfluenceRadius2(
@@ -1373,6 +1446,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                 static_cast<long double>(origin.y),
                 static_cast<long double>(origin.z)};
             for (int axis = 0; axis < 3; ++axis) {
+                constructionStep(budget);
                 candidate.influenceMin[axis] =
                     std::min(candidate.influenceMin[axis], q[axis] - radius);
                 candidate.influenceMax[axis] =
@@ -1383,15 +1457,17 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
 
     auto versionsUnchanged = [&](const SpecCandidate& candidate) {
         for (const VersionedRead& read : candidate.reads) {
+            constructionStep(budget);
             if (arena.version(read.slot) != read.version) return false;
         }
         return true;
     };
 
-    auto writeReadIntersect = [](const std::vector<Slot>& writes,
+    auto writeReadIntersect = [budget](const std::vector<Slot>& writes,
                                      const std::vector<VersionedRead>& reads) {
         std::size_t wi = 0, ri = 0;
         while (wi < writes.size() && ri < reads.size()) {
+            constructionStep(budget);
             if (writes[wi] < reads[ri].slot) ++wi;
             else if (reads[ri].slot < writes[wi]) ++ri;
             else return true;
@@ -1415,6 +1491,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
             return false;
         }
         for (std::size_t i = 0; i < earlier.shell.size(); ++i) {
+            constructionStep(budget);
             const ShellFace& face = earlier.shell[i];
             // A finite shell replacement is exactly
             // {f0, f1, insertedPoint, f2} in the compact direct path.
@@ -1431,7 +1508,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                 continue;
             }
             ++st.parallelHazardPredicateTests;
-            if (predicates::insphereFiltered(
+            if (insphere(
                     points[face.f0], points[face.f1],
                     points[earlier.pointIndex], points[face.f2], p) !=
                 Sign::Negative)
@@ -1454,6 +1531,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                        seeded.end();
             };
             while (nextRank < ws.order.size()) {
+                constructionStep(budget);
                 while (nextRank < ws.order.size() &&
                        isBootstrapVertex(ws.order[nextRank]))
                     ++nextRank;
@@ -1463,6 +1541,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                 std::size_t scanRank = nextRank;
                 while (scanRank < ws.order.size() &&
                        packetCount < packetCapacity) {
+                    constructionStep(budget);
                     if (!isBootstrapVertex(ws.order[scanRank]))
                         packetRanks[packetCount++] = scanRank;
                     ++scanRank;
@@ -1482,6 +1561,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                 accepted.reserve(packetCount);
                 bool blocked = false;
                 for (std::size_t i = 0; i < packetCount; ++i) {
+                    constructionStep(budget);
                     SpecCandidate& candidate = ws.parallelCandidates[i];
                     if (candidate.status == SpecCandidateStatus::Ready)
                         ++st.parallelReadyObservations;
@@ -1497,6 +1577,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                     }
                     bool equivalent = true;
                     for (std::size_t earlierIndex : accepted) {
+                        constructionStep(budget);
                         ++st.parallelConflictPairChecks;
                         const SpecCandidate& earlier =
                             ws.parallelCandidates[earlierIndex];
@@ -1529,6 +1610,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                 const Clock::time_point commitBegin = Clock::now();
                 std::size_t committed = 0U;
                 for (std::size_t i : accepted) {
+                    constructionStep(budget);
                     SpecCandidate& candidate = ws.parallelCandidates[i];
                     ++st.speculativeCandidates;
                     st.speculativePredicateCalls += candidate.predicateCalls;
@@ -1563,6 +1645,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                 // skipping bootstrap vertices but never crossing an unresolved
                 // candidate.
                 for (std::size_t k = 0; k < committed; ++k) {
+                    constructionStep(budget);
                     do { ++nextRank; }
                     while (nextRank < ws.order.size() &&
                            isBootstrapVertex(ws.order[nextRank]));
@@ -1591,8 +1674,11 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
         extremeSeeds.reserve(192U);
         constexpr int kDirectionRadius = 2;
         for (int dx = -kDirectionRadius; dx <= kDirectionRadius; ++dx) {
+            constructionStep(budget);
             for (int dy = -kDirectionRadius; dy <= kDirectionRadius; ++dy) {
+                constructionStep(budget);
                 for (int dz = -kDirectionRadius; dz <= kDirectionRadius; ++dz) {
+                    constructionStep(budget);
                     if (dx == 0 && dy == 0 && dz == 0) continue;
                     const int gcdXY = std::gcd(std::abs(dx), std::abs(dy));
                     const int gcdXYZ = std::gcd(gcdXY, std::abs(dz));
@@ -1600,6 +1686,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                     double best = -std::numeric_limits<double>::infinity();
                     Vertex bestVertex = 0;
                     for (Vertex vertex = 0; vertex < n; ++vertex) {
+                        constructionStep(budget);
                         const Vec3& q = points[vertex];
                         const double projection =
                             static_cast<double>(dx) * q.x +
@@ -1624,6 +1711,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
             extremeSeeds.end());
         std::vector<std::uint8_t> preinsertedRank(ws.order.size(), 0U);
         for (Vertex pointIndex : extremeSeeds) {
+            constructionStep(budget);
             const std::size_t rank = pointRank[pointIndex];
             if (std::find(seeded.begin(), seeded.end(), pointIndex) != seeded.end()) {
                 preinsertedRank[rank] = 1U;
@@ -1657,6 +1745,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
         hullPlanes.reserve(512U);
         for (Slot slot = arena.liveHead(); slot != Arena::kInvalidSlot;
              slot = arena.nextLive(slot)) {
+            constructionStep(budget);
             if (!isInfinite(slot)) continue;
             const auto& tet = arena.hot(slot);
             const std::uint32_t finiteRef = arena.neighbourRef(slot, 3U);
@@ -1664,7 +1753,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
             if (finite == Arena::kInvalidSlot) continue;
             const std::uint32_t witnessFace = Arena::neighbourFace(finiteRef);
             const Vertex witness = arena.hot(finite).vertices[witnessFace];
-            const Sign witnessOrientation = predicates::orient3dFiltered(
+            const Sign witnessOrientation = orient(
                 points[tet.vertices[0]], points[tet.vertices[1]],
                 points[tet.vertices[2]], points[witness]);
             if (witnessOrientation == Sign::Zero)
@@ -1681,7 +1770,8 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                 return;
             const Vertex pointIndex = ws.order[rank];
             for (const HullPlane& face : hullPlanes) {
-                const Sign side = predicates::orient3dFiltered(
+                constructionStep(budget);
+                const Sign side = orient(
                     points[face.f0], points[face.f1], points[face.f2],
                     points[pointIndex]);
                 if (side != face.witnessOrientation) {
@@ -1693,6 +1783,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
         st.parallelHullPrepassSeconds =
             secondsBetween(hullBegin, Clock::now());
         for (std::size_t rank = 0; rank < ws.order.size(); ++rank) {
+            constructionStep(budget);
             if (preinsertedRank[rank] != 0U ||
                 std::find(seeded.begin(), seeded.end(), ws.order[rank]) !=
                     seeded.end())
@@ -1745,8 +1836,11 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
             return (iz * kGridDim + iy) * kGridDim + ix;
         };
         for (std::size_t iz = 0; iz < kGridDim; ++iz) {
+            constructionStep(budget);
             for (std::size_t iy = 0; iy < kGridDim; ++iy) {
+                constructionStep(budget);
                 for (std::size_t ix = 0; ix < kGridDim; ++ix) {
+                    constructionStep(budget);
                     const std::size_t cell =
                         (iz * kGridDim + iy) * kGridDim + ix;
                     const std::size_t color =
@@ -1757,6 +1851,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
         }
         std::vector<std::uint8_t> doneRank(ws.order.size(), 0U);
         for (std::size_t rank = 0; rank < ws.order.size(); ++rank) {
+            constructionStep(budget);
             if (preinsertedRank[rank] != 0U ||
                 std::find(seeded.begin(), seeded.end(), ws.order[rank]) !=
                     seeded.end()) {
@@ -1774,16 +1869,19 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
         std::uint32_t selectedWriteEpoch = 0U;
 
         for (std::size_t color = 0; color < colorCells.size(); ++color) {
+            constructionStep(budget);
             std::size_t pendingInColor = 0U;
             for (std::uint16_t cell : colorCells[color])
                 pendingInColor += binRanks[cell].size();
             std::size_t scanStart = 0U;
             while (pendingInColor != 0U) {
+                constructionStep(budget);
                 ++st.parallelRounds;
                 std::size_t packetCount = 0U;
                 const auto& cells = colorCells[color];
                 for (std::size_t scan = 0;
                      scan < cells.size() && packetCount < packetCapacity; ++scan) {
+                    constructionStep(budget);
                     const std::size_t ci = (scanStart + scan) % cells.size();
                     const std::uint16_t cell = cells[ci];
                     if (binCursor[cell] >= binRanks[cell].size()) continue;
@@ -1817,6 +1915,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                 std::vector<std::size_t> accepted;
                 accepted.reserve(packetCount);
                 for (std::size_t i = 0; i < packetCount; ++i) {
+                    constructionStep(budget);
                     SpecCandidate& candidate = ws.parallelCandidates[i];
                     if (candidate.status == SpecCandidateStatus::Ready) {
                         ++st.parallelReadyObservations;
@@ -1834,6 +1933,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                         continue;
                     bool independent = true;
                     for (Slot slot : candidate.writes) {
+                        constructionStep(budget);
                         if (slot < selectedWriteMarks.size() &&
                             selectedWriteMarks[slot] == selectedWriteEpoch) {
                             independent = false;
@@ -1843,6 +1943,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                     }
                     if (!independent) continue;
                     for (std::size_t earlierIndex : accepted) {
+                        constructionStep(budget);
                         ++st.parallelConflictPairChecks;
                         const SpecCandidate& earlier =
                             ws.parallelCandidates[earlierIndex];
@@ -1858,6 +1959,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                     prepareInfluence(candidate);
                     accepted.push_back(i);
                     for (Slot slot : candidate.writes) {
+                        constructionStep(budget);
                         if (slot < selectedWriteMarks.size())
                             selectedWriteMarks[slot] = selectedWriteEpoch;
                     }
@@ -1876,6 +1978,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
 
                 const Clock::time_point commitBegin = Clock::now();
                 for (std::size_t i : accepted) {
+                    constructionStep(budget);
                     const std::size_t rank = packetRanks[i];
                     if (rank >= ws.order.size() || doneRank[rank] != 0U)
                         continue;
@@ -1912,6 +2015,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
         }
     } else {
     for (Vertex orderIndex = 0; orderIndex < n; ++orderIndex) {
+        constructionStep(budget);
         const Vertex pointIndex = ws.order[orderIndex];
         if (std::find(seeded.begin(), seeded.end(), pointIndex) != seeded.end())
             continue;
@@ -1924,6 +2028,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
             4ULL * static_cast<std::uint64_t>(arena.slotCount()) + 64ULL;
         for (std::uint64_t step = 0;
              current != Arena::kInvalidSlot && step < maximumSteps; ++step) {
+            constructionStep(budget);
             detailCount<CollectDetailed>(st.walkCellVisits);
             const auto& tet = arena.hot(current);
             if (isInfinite(current)) {
@@ -1937,11 +2042,12 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
             int bestFace = -1;
             double bestValue = -1e300;
             for (int face = 0; face < 4; ++face) {
+                constructionStep(budget);
                 detailCount<CollectDetailed>(st.walkOrientationTests);
                 const Vec3& f0 = points[tet.vertices[kFace[face][0]]];
                 const Vec3& f1 = points[tet.vertices[kFace[face][1]]];
                 const Vec3& f2 = points[tet.vertices[kFace[face][2]]];
-                if (predicates::orient3dFiltered(f0, f1, f2, point) !=
+                if (orient(f0, f1, f2, point) !=
                     Sign::Positive)
                     continue;
                 const double heuristic = orientHeur(f0, f1, f2, point);
@@ -1961,6 +2067,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
         if (located != Arena::kInvalidSlot) {
             bool duplicate = false;
             for (Vertex vertex : arena.hot(located).vertices) {
+                constructionStep(budget);
                 if (vertex == infinity) continue;
                 const Vec3& existing = points[vertex];
                 duplicate = duplicate ||
@@ -1981,6 +2088,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
         if (seed == Arena::kInvalidSlot) {
             ++st.walkFallbackScans;
             for (Slot slot = 0; slot < arena.slotCount(); ++slot) {
+                constructionStep(budget);
                 if (!arena.alive(slot)) continue;
                 detailCount<CollectDetailed>(st.fallbackCellTests);
                 if (conflicts(slot, point)) {
@@ -2000,11 +2108,13 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
         arena.beginEpoch();
         arena.markVisited(seed);
         while (!ws.stack.empty()) {
+            constructionStep(budget);
             const Slot slot = ws.stack.back();
             ws.stack.pop_back();
             ws.bad.push_back(slot);
             detailCount<CollectDetailed>(st.cavityCellVisits);
             for (int face = 0; face < 4; ++face) {
+                constructionStep(budget);
                 detailCount<CollectDetailed>(st.cavityNeighbourVisits);
                 const Slot neighbour = arena.neighbour(
                     slot, static_cast<std::uint32_t>(face));
@@ -2021,6 +2131,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
             detailCount<CollectDetailed>(st.trimCellVisits);
             const auto& tet = arena.hot(slot);
             for (int face = 0; face < 4; ++face) {
+                constructionStep(budget);
                 const Slot neighbour = arena.neighbour(
                     slot, static_cast<std::uint32_t>(face));
                 if (neighbour != Arena::kInvalidSlot &&
@@ -2032,7 +2143,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                 if (f0 == infinity || f1 == infinity || f2 == infinity)
                     continue;
                 detailCount<CollectDetailed>(st.trimOrientationTests);
-                const Sign pointOrientation = predicates::orient3dFiltered(
+                const Sign pointOrientation = orient(
                     points[f0], points[f1], points[f2], point);
                 if (tet.vertices[3] != infinity) {
                     if (pointOrientation != Sign::Negative) return false;
@@ -2046,7 +2157,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                     const Vertex witness = finiteTet.vertices[witnessFace];
                     detailCount<CollectDetailed>(st.reciprocalFaceScansAvoided);
                     detailCount<CollectDetailed>(st.trimOrientationTests);
-                    const Sign witnessOrientation = predicates::orient3dFiltered(
+                    const Sign witnessOrientation = orient(
                         points[f0], points[f1], points[f2], points[witness]);
                     if (pointOrientation == Sign::Zero ||
                         pointOrientation == witnessOrientation)
@@ -2058,6 +2169,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
 
         bool touchesInfinity = false;
         for (Slot slot : ws.bad) {
+            constructionStep(budget);
             touchesInfinity = touchesInfinity || isInfinite(slot);
         }
         if (!touchesInfinity) {
@@ -2076,10 +2188,12 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
             ws.work.clear();
             ws.work.reserve(ws.bad.size());
             for (Slot slot : ws.bad) {
+                constructionStep(budget);
                 if (isInfinite(slot)) ws.work.push_back(slot);
             }
             bool resurrected = false;
             while (!ws.work.empty()) {
+                constructionStep(budget);
                 const Slot slot = ws.work.back();
                 ws.work.pop_back();
                 if (!arena.visited(slot)) continue;
@@ -2088,6 +2202,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                 resurrected = true;
                 detailCount<CollectDetailed>(st.cavityTrimResurrections);
                 for (int face = 0; face < 4; ++face) {
+                    constructionStep(budget);
                     const Slot neighbour = arena.neighbour(
                         slot, static_cast<std::uint32_t>(face));
                     if (neighbour != Arena::kInvalidSlot &&
@@ -2099,6 +2214,7 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                 ws.stillBad.clear();
                 ws.stillBad.reserve(ws.bad.size());
                 for (Slot slot : ws.bad) {
+                    constructionStep(budget);
                     if (arena.visited(slot)) ws.stillBad.push_back(slot);
                 }
                 ws.bad.swap(ws.stillBad);
@@ -2114,9 +2230,11 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
 
         ws.shell.clear();
         for (Slot slot : ws.bad) {
+            constructionStep(budget);
             const auto& tet = arena.hot(slot);
             const bool finiteOwner = tet.vertices[3] != infinity;
             for (int face = 0; face < 4; ++face) {
+                constructionStep(budget);
                 const Slot neighbour = arena.neighbour(
                     slot, static_cast<std::uint32_t>(face));
                 if (neighbour != Arena::kInvalidSlot &&
@@ -2147,9 +2265,11 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
     const Clock::time_point auditBegin = Clock::now();
     bool adjacencyOkay = true;
     for (Slot slot = 0; slot < arena.slotCount() && adjacencyOkay; ++slot) {
+        constructionStep(budget);
         if (!arena.alive(slot)) continue;
         const auto& tet = arena.hot(slot);
         for (int face = 0; face < 4; ++face) {
+            constructionStep(budget);
             detailCount<CollectDetailed>(st.adjacencyAuditFaceVisits);
             const std::uint32_t reference =
                 tet.neighbours[static_cast<std::size_t>(face)];
@@ -2189,12 +2309,20 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
     std::size_t finiteCount = 0;
     for (Slot slot = arena.liveHead(); slot != Arena::kInvalidSlot;
          slot = arena.nextLive(slot)) {
+        constructionStep(budget);
         if (arena.hot(slot).vertices[3] != infinity) ++finiteCount;
+    }
+    if (budget) {
+        budget->cells(finiteCount);
+        const auto admitted=Budget::product(finiteCount,2U*sizeof(Tet));
+        budget->admit(admitted);
+        if (outputAdmission) *outputAdmission=admitted;
     }
     output.reserve(finiteCount);
     ws.uniqueTable.begin(finiteCount);
     for (Slot slot = arena.liveHead(); slot != Arena::kInvalidSlot;
          slot = arena.nextLive(slot)) {
+        constructionStep(budget);
         const auto& compactVertices = arena.hot(slot).vertices;
         if (compactVertices[3] == infinity) continue;
         if (!ws.uniqueTable.insert(compactVertices, output)) {
@@ -2207,9 +2335,16 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                               static_cast<Index>(compactVertices[3])}});
     }
 #else
+    if (budget) {
+        const auto admitted=Budget::product(arena.slotCount(),256U);
+        budget->admit(admitted);
+        if (outputAdmission) *outputAdmission=admitted;
+        output.reserve(arena.slotCount());
+    }
     std::vector<std::pair<std::array<Vertex, 4>, std::uint32_t>> keyed;
     for (Slot slot = arena.liveHead(); slot != Arena::kInvalidSlot;
          slot = arena.nextLive(slot)) {
+        constructionStep(budget);
         const auto& vertices = arena.hot(slot).vertices;
         if (vertices[3] == infinity) continue;
         keyed.push_back({canonical4(vertices),
@@ -2219,17 +2354,21 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
                               static_cast<Index>(vertices[2]),
                               static_cast<Index>(vertices[3])}});
     }
-    std::sort(keyed.begin(), keyed.end());
+    std::sort(keyed.begin(), keyed.end(),[budget](const auto& a,const auto& b) {
+        constructionStep(budget); return a<b;
+    });
     std::vector<Tet> deduplicated;
     deduplicated.reserve(output.size());
     std::vector<std::uint8_t> keep(output.size(), 1U);
     for (std::size_t index = 1; index < keyed.size(); ++index) {
+        constructionStep(budget);
         if (keyed[index].first == keyed[index - 1].first) {
             keep[keyed[index].second] = 0U;
             st.duplicateTetDetected = true;
         }
     }
     for (std::size_t index = 0; index < output.size(); ++index) {
+        constructionStep(budget);
         if (keep[index] != 0U) deduplicated.push_back(output[index]);
     }
     output.swap(deduplicated);
@@ -2252,12 +2391,15 @@ std::vector<Tet> compactDelaunay(const std::vector<Vec3>& pts,
     if (!output.empty()) {
         ws.usedPoints.assign(n, 0U);
         for (const Tet& tet : output) {
+            constructionStep(budget);
             for (Index vertex : tet.v)
                 ws.usedPoints[static_cast<std::size_t>(vertex)] = 1U;
         }
         std::uint64_t usedCount = 0;
-        for (std::uint8_t used : ws.usedPoints)
+        for (std::uint8_t used : ws.usedPoints) {
+            constructionStep(budget);
             usedCount += static_cast<std::uint64_t>(used != 0U);
+        }
         if (usedCount < st.pointsInserted) {
             st.auditPassed = false;
             throw std::logic_error(
@@ -2355,6 +2497,53 @@ void retainDiscardedDelaunayAttempt(Delaunay3DStats& accepted,const Delaunay3DSt
     accepted.finalizationSeconds+=discarded.finalizationSeconds;
     accepted.totalSeconds+=discarded.totalSeconds;
 }
+std::vector<Tet> delaunay3DBounded(
+    const std::vector<Vec3>& points,Delaunay3DStats* stats,
+    detail::TetConstructionBudget& budget,bool exactCoordinates) {
+    DelaunayWorkspace::Impl workspace;
+    Delaunay3DOptions options;
+    options.collectDetailedOperationCounts=true;
+    auto audit=[&](const std::vector<Tet>& cells) {
+        bool positive=true;
+        for (const auto& tet:cells) {
+            budget.step();
+            ++stats->originalOrientationAuditTests;
+            if (predicates::orient3d(points[tet.v[0]],points[tet.v[1]],points[tet.v[2]],points[tet.v[3]])!=Sign::Positive) {
+                positive=false; break;
+            }
+        }
+        return positive;
+    };
+    std::uint64_t outputAdmission=0;
+    try {
+        auto result=exactCoordinates ?
+            compactDelaunay<true,true>(points,workspace,options,*stats,&budget,&outputAdmission) :
+            compactDelaunay<true>(points,workspace,options,*stats,&budget,&outputAdmission);
+        if (!audit(result)) {
+            if (exactCoordinates)
+                throw std::logic_error("delaunay3D: bounded original-coordinate audit failed");
+            const auto discarded=*stats;
+            // The output admission is released before its storage/retry.
+            budget.release(outputAdmission);
+            outputAdmission=0;
+            std::vector<Tet>{}.swap(result);
+            try {
+                result=compactDelaunay<true,true>(points,workspace,options,*stats,&budget,&outputAdmission);
+                if (!audit(result))
+                    throw std::logic_error("delaunay3D: bounded original-coordinate retry audit failed");
+            } catch (...) {
+                retainDiscardedDelaunayAttempt(*stats,discarded); throw;
+            }
+            retainDiscardedDelaunayAttempt(*stats,discarded);
+        }
+        if (exactCoordinates) stats->originalCoordinateRetryUsed=true;
+        return result;
+    } catch (const detail::CompactEnvelopeExceeded&) {
+        // A bounded call must never escape into the legacy unbounded arena.
+        throw detail::TetConstructionStopped{false};
+    }
+}
+
 std::vector<Tet> delaunay3DExactInputCoordinates(const std::vector<Vec3>& points,Delaunay3DStats* stats) {
     DelaunayWorkspace::Impl workspace;
     Delaunay3DOptions serial;serial.collectDetailedOperationCounts=true;

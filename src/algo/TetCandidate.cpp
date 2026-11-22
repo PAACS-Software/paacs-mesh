@@ -49,6 +49,8 @@ TetAuthoritativeResult& TetAuthoritativeResult::operator=(
 namespace {
 
 using predicates::Sign;
+using Budget = detail::TetConstructionBudget;
+using detail::constructionStep;
 
 constexpr int kTetFace[4][3] = {
     {1, 2, 3}, {0, 3, 2}, {0, 1, 3}, {0, 2, 1}};
@@ -173,15 +175,18 @@ void appendFaceUses(std::vector<FaceUse>& uses, const TetCandidateCell& cell, In
         uses.push_back({faceKey(directedFace(cell,side)),owner,side});
 }
 
-void sortFaceUses(std::vector<FaceUse>& uses) {
-    std::sort(uses.begin(),uses.end(),[](const FaceUse& a,const FaceUse& b) {
+void sortFaceUses(std::vector<FaceUse>& uses, Budget* budget = nullptr) {
+    std::sort(uses.begin(),uses.end(),[budget](const FaceUse& a,const FaceUse& b) {
+        constructionStep(budget);
         return std::tie(a.key,a.cell,a.localFace)<std::tie(b.key,b.cell,b.localFace);
     });
 }
 
-std::size_t nextFace(const std::vector<FaceUse>& uses,std::size_t first) {
+std::size_t nextFace(const std::vector<FaceUse>& uses,std::size_t first, Budget* budget=nullptr) {
     auto end=first+1;
-    while (end<uses.size() && uses[end].key==uses[first].key) ++end;
+    while (end<uses.size() && uses[end].key==uses[first].key) {
+        constructionStep(budget); ++end;
+    }
     return end;
 }
 
@@ -210,8 +215,9 @@ std::uint64_t tetCandidateAccountedBytes(
 
 static TetCandidateValidation validateTetCandidateImpl(
     const TetCandidate& candidate, std::uint64_t& hullTests,
-    const std::vector<FaceUse>* constructedUses=nullptr) noexcept {
+    const std::vector<FaceUse>* constructedUses=nullptr, Budget* budget=nullptr) noexcept {
     try {
+        constructionStep(budget,0);
         const std::size_t pointCount = candidate.points.size();
         const std::size_t cellCount = candidate.cells.size();
         if (pointCount < 4 || cellCount == 0)
@@ -219,6 +225,7 @@ static TetCandidateValidation validateTetCandidateImpl(
 
         Vec3 lo=candidate.points.front(), hi=lo;
         for (std::size_t i = 0; i < pointCount; ++i) {
+            constructionStep(budget);
             if (!finite(candidate.points[i]))
                 return invalid(TetCandidateReason::NonfiniteInput,
                                static_cast<Index>(i));
@@ -233,8 +240,10 @@ static TetCandidateValidation validateTetCandidateImpl(
         if (candidate.pointToInput.size() != pointCount ||
             candidate.inputToPoint.empty())
             return invalid(TetCandidateReason::InvalidPointMapping);
+        constructionStep(budget,pointCount);
         std::vector<bool> mapped(pointCount, false);
         for (std::size_t i = 0; i < candidate.inputToPoint.size(); ++i) {
+            constructionStep(budget);
             const Index point = candidate.inputToPoint[i];
             if (point < 0 || static_cast<std::size_t>(point) >= pointCount)
                 return invalid(TetCandidateReason::InvalidPointMapping,
@@ -242,6 +251,7 @@ static TetCandidateValidation validateTetCandidateImpl(
             mapped[static_cast<std::size_t>(point)] = true;
         }
         for (std::size_t point = 0; point < pointCount; ++point) {
+            constructionStep(budget);
             const Index input = candidate.pointToInput[point];
             if (input < 0 ||
                 static_cast<std::size_t>(input) >=
@@ -252,7 +262,10 @@ static TetCandidateValidation validateTetCandidateImpl(
                                static_cast<Index>(point));
         }
 
+        constructionStep(budget,pointCount);
+        constructionStep(budget,cellCount);
         std::vector<bool> used(pointCount, false);
+        constructionStep(budget,0);
         std::vector<bool> sourceOrdinals(cellCount, false);
         std::vector<FaceUse> validationUses;
         if (!constructedUses && cellCount<=validationUses.max_size()/4)
@@ -260,9 +273,11 @@ static TetCandidateValidation validateTetCandidateImpl(
         CellKey previous{};
         bool havePrevious = false;
         for (std::size_t ci = 0; ci < cellCount; ++ci) {
+            constructionStep(budget);
             const auto& cell = candidate.cells[ci];
             std::array<Index, 4> distinct = cell.vertices;
             for (const Index vertex : distinct) {
+                constructionStep(budget);
                 if (vertex < 0 ||
                     static_cast<std::size_t>(vertex) >= pointCount)
                     return invalid(TetCandidateReason::InvalidCellIndex,
@@ -297,17 +312,20 @@ static TetCandidateValidation validateTetCandidateImpl(
             sourceOrdinals[static_cast<std::size_t>(cell.sourceOrdinal)] = true;
             if (!constructedUses) appendFaceUses(validationUses,cell,static_cast<Index>(ci));
         }
-        for (std::size_t i = 0; i < used.size(); ++i)
+        for (std::size_t i = 0; i < used.size(); ++i) {
+            constructionStep(budget);
             if (!used[i])
                 return invalid(TetCandidateReason::MissingRequiredPoint,
                                static_cast<Index>(i));
+        }
 
-        if (!constructedUses) sortFaceUses(validationUses);
+        if (!constructedUses) sortFaceUses(validationUses,budget);
         const auto& uses=constructedUses?*constructedUses:validationUses;
         std::size_t boundaryCount=0;
         std::uint64_t interiorFaces = 0;
         for (std::size_t first=0;first<uses.size();) {
-            const auto end=nextFace(uses,first);
+            constructionStep(budget);
+            const auto end=nextFace(uses,first,budget);
             const auto& a=uses[first];
             const auto& cellA=candidate.cells[static_cast<std::size_t>(a.cell)];
             if (end-first>2)
@@ -340,17 +358,22 @@ static TetCandidateValidation validateTetCandidateImpl(
             return invalid(TetCandidateReason::BoundaryExtractionMismatch);
 
         // The Tet dual must be connected.
+        constructionStep(budget,cellCount);
         std::vector<bool> reached(cellCount, false);
+        constructionStep(budget,0);
         std::queue<Index> queue;
         reached[0] = true;
+        constructionStep(budget,0);
         queue.push(0);
         std::size_t reachedCount = 0;
         while (!queue.empty()) {
+            constructionStep(budget);
             const Index cell = queue.front();
             queue.pop();
             ++reachedCount;
             for (const Index neighbour :
                  candidate.cells[static_cast<std::size_t>(cell)].neighbours) {
+                constructionStep(budget);
                 if (neighbour == kInvalidIndex) continue;
                 if (neighbour < 0 ||
                     static_cast<std::size_t>(neighbour) >= cellCount)
@@ -360,6 +383,7 @@ static TetCandidateValidation validateTetCandidateImpl(
                     static_cast<std::size_t>(neighbour);
                 if (!reached[neighbourIndex]) {
                     reached[neighbourIndex] = true;
+                    constructionStep(budget,0);
                     queue.push(neighbour);
                 }
             }
@@ -373,18 +397,25 @@ static TetCandidateValidation validateTetCandidateImpl(
         std::map<Edge, std::vector<std::pair<Index, Index>>> boundaryEdges;
         std::set<Index> boundaryVertices;
         const auto outside=[&](Vec3 a, Vec3 b, Vec3 c, Vec3 point) {
+            constructionStep(budget);
             ++hullTests;
             return predicates::orient3d(a,b,c,point)==Sign::Positive;
         };
         for (std::size_t fi = 0; fi < candidate.boundaryFaces.size(); ++fi) {
+            constructionStep(budget);
             const auto& face = candidate.boundaryFaces[fi].vertices;
-            for (const Index vertex : face) boundaryVertices.insert(vertex);
+            for (const Index vertex : face) {
+                constructionStep(budget); boundaryVertices.insert(vertex);
+            }
             for (int edge = 0; edge < 3; ++edge) {
+                constructionStep(budget);
                 const Index a = face[static_cast<std::size_t>(edge)];
                 const Index b = face[static_cast<std::size_t>((edge + 1) % 3)];
                 Edge key{std::min(a, b), std::max(a, b)};
-                boundaryEdges[key].push_back(
-                    {static_cast<Index>(fi), a < b ? 1 : -1});
+                constructionStep(budget,0);
+                auto& owners=boundaryEdges[key];
+                constructionStep(budget,0);
+                owners.push_back({static_cast<Index>(fi), a < b ? 1 : -1});
             }
             const auto a=candidate.points[static_cast<std::size_t>(face[0])];
             const auto b=candidate.points[static_cast<std::size_t>(face[1])];
@@ -394,12 +425,14 @@ static TetCandidateValidation validateTetCandidateImpl(
             // If a synthetic corner is outside, test the actual point set.
             bool boxInside=true;
             for (unsigned corner=0; corner<8 && boxInside; ++corner) {
+                constructionStep(budget);
                 const Vec3 p{corner&1 ? hi.x : lo.x, corner&2 ? hi.y : lo.y,
                              corner&4 ? hi.z : lo.z};
                 boxInside=!outside(a,b,c,p);
             }
             if (boxInside) continue;
             for (std::size_t pi = 0; pi < pointCount; ++pi) {
+                constructionStep(budget);
                 const Index point = static_cast<Index>(pi);
                 if (point == face[0] || point == face[1] || point == face[2])
                     continue;
@@ -408,14 +441,18 @@ static TetCandidateValidation validateTetCandidateImpl(
                                    static_cast<Index>(fi));
             }
         }
+        constructionStep(budget,candidate.boundaryFaces.size());
         std::vector<std::vector<Index>> boundaryAdj(
             candidate.boundaryFaces.size());
         for (const auto& [edge, owners] : boundaryEdges) {
+            constructionStep(budget);
             (void)edge;
             if (owners.size() != 2 || owners[0].second == owners[1].second)
                 return invalid(TetCandidateReason::BoundaryTopologyInvalid);
+            constructionStep(budget,0);
             boundaryAdj[static_cast<std::size_t>(owners[0].first)].push_back(
                 owners[1].first);
+            constructionStep(budget,0);
             boundaryAdj[static_cast<std::size_t>(owners[1].first)].push_back(
                 owners[0].first);
         }
@@ -425,21 +462,27 @@ static TetCandidateValidation validateTetCandidateImpl(
             static_cast<std::int64_t>(candidate.boundaryFaces.size());
         if (euler != 2)
             return invalid(TetCandidateReason::BoundaryTopologyInvalid);
+        constructionStep(budget,candidate.boundaryFaces.size());
         std::vector<bool> boundaryReached(candidate.boundaryFaces.size(), false);
+        constructionStep(budget,0);
         std::queue<Index> boundaryQueue;
         boundaryReached[0] = true;
+        constructionStep(budget,0);
         boundaryQueue.push(0);
         std::size_t boundaryReachedCount = 0;
         while (!boundaryQueue.empty()) {
+            constructionStep(budget);
             const Index face = boundaryQueue.front();
             boundaryQueue.pop();
             ++boundaryReachedCount;
             for (const Index neighbour :
                  boundaryAdj[static_cast<std::size_t>(face)]) {
+                constructionStep(budget);
                 const auto neighbourIndex =
                     static_cast<std::size_t>(neighbour);
                 if (!boundaryReached[neighbourIndex]) {
                     boundaryReached[neighbourIndex] = true;
+                    constructionStep(budget,0);
                     boundaryQueue.push(neighbour);
                 }
             }
@@ -450,6 +493,8 @@ static TetCandidateValidation validateTetCandidateImpl(
         (void)interiorFaces;
         return TetCandidateValidation{true, TetCandidateReason::None,
                                       kInvalidIndex};
+    } catch (const detail::TetConstructionStopped& stop) {
+        return invalid(stop.cancelled ? TetCandidateReason::Cancelled : TetCandidateReason::BudgetExceeded);
     } catch (const std::bad_alloc&) {
         return invalid(TetCandidateReason::AllocationFailed);
     } catch (...) {
@@ -463,19 +508,29 @@ TetCandidateValidation validateTetCandidate(const TetCandidate& candidate) noexc
 }
 
 static TetCandidateBuildOutcome buildTetCandidateAttempt(
-    const std::vector<Vec3>& input, bool exactCoordinates) noexcept {
+    const std::vector<Vec3>& input, bool exactCoordinates, Budget* budget=nullptr) noexcept {
+    // Raw output and fixed candidate/validation envelopes are local to an
+    // attempt. Traversal work and the high-water mark remain cumulative.
+    struct MemoryScope {
+        Budget* budget; std::uint64_t before;
+        ~MemoryScope() { if (budget) budget->bytes=before; }
+    } memoryScope{budget,budget ? budget->bytes : 0};
     TetCandidateBuildOutcome outcome;
     outcome.metrics.inputPoints = input.size();
     try {
-        for (std::size_t i = 0; i < input.size(); ++i)
+        constructionStep(budget,0);
+        for (std::size_t i = 0; i < input.size(); ++i) {
+            constructionStep(budget);
             if (!finite(input[i])) {
                 outcome.status = TetCandidateStatus::Rejected;
                 outcome.reason = TetCandidateReason::NonfiniteInput;
                 return outcome;
             }
+        }
 
         auto& construction=outcome.metrics.construction;
-        std::vector<Tet> raw=exactCoordinates?
+        std::vector<Tet> raw=budget ?
+            tet_candidate_detail::delaunay3DBounded(input,&construction,*budget,exactCoordinates) : exactCoordinates?
             tet_candidate_detail::delaunay3DExactInputCoordinates(input,&construction):delaunay3D(input,&construction);
         if (raw.empty()) {
             outcome.status = TetCandidateStatus::Rejected;
@@ -483,18 +538,36 @@ static TetCandidateBuildOutcome buildTetCandidateAttempt(
             return outcome;
         }
 
+        if (budget) {
+            budget->cells(raw.size());
+            // Canonical vectors, all face uses, validation bitsets/queues,
+            // boundary maps/sets and per-edge owner/adjacency vectors, with
+            // conservative node and geometric-growth slack. Raw output was
+            // admitted by Delaunay and remains charged during this overlap.
+            budget->admit(sizeof(TetCandidate)+8192U);
+            budget->admit(Budget::product(input.size(),256U));
+            budget->admit(Budget::product(raw.size(),4096U));
+            // Reserve slot-initialization work before vector/bitset growth.
+            budget->step(Budget::product(input.size(),4U));
+            budget->step(Budget::product(raw.size(),16U));
+        }
+        constructionStep(budget,0);
         auto candidate = std::make_unique<TetCandidate>();
         candidate->metrics.inputPoints = input.size();
         candidate->metrics.construction = construction;
         candidate->metrics.originalCoordinateRetryUsed=construction.originalCoordinateRetryUsed;
         if(construction.originalCoordinateRetryUsed&&!exactCoordinates)
             candidate->metrics.initialCoordinateFailure=TetCandidateReason::NonPositiveOrientation;
+        constructionStep(budget,0);
         candidate->inputToPoint.resize(input.size(), kInvalidIndex);
 
+        constructionStep(budget,0);
         std::vector<Index> order(input.size());
-        for (std::size_t i = 0; i < input.size(); ++i)
-            order[i] = static_cast<Index>(i);
+        for (std::size_t i = 0; i < input.size(); ++i) {
+            constructionStep(budget); order[i] = static_cast<Index>(i);
+        }
         std::sort(order.begin(), order.end(), [&](Index a, Index b) {
+            constructionStep(budget);
             const Vec3& pa = input[static_cast<std::size_t>(a)];
             const Vec3& pb = input[static_cast<std::size_t>(b)];
             if (pointLess(pa, pb)) return true;
@@ -502,20 +575,26 @@ static TetCandidateBuildOutcome buildTetCandidateAttempt(
             return a < b;
         });
         for (const Index inputIndex : order) {
+            constructionStep(budget);
             const Vec3& point = input[static_cast<std::size_t>(inputIndex)];
             if (candidate->points.empty() ||
                 !pointEqual(candidate->points.back(), point)) {
+                constructionStep(budget,0);
                 candidate->points.push_back(point);
+                constructionStep(budget,0);
                 candidate->pointToInput.push_back(inputIndex);
             }
             candidate->inputToPoint[static_cast<std::size_t>(inputIndex)] =
                 static_cast<Index>(candidate->points.size() - 1);
         }
 
+        constructionStep(budget,0);
         candidate->cells.reserve(raw.size());
         for (std::size_t source = 0; source < raw.size(); ++source) {
+            constructionStep(budget);
             TetCandidateCell cell;
             for (int i = 0; i < 4; ++i) {
+                constructionStep(budget);
                 const Index inputIndex = raw[source].v[static_cast<std::size_t>(i)];
                 if (inputIndex < 0 ||
                     static_cast<std::size_t>(inputIndex) >= input.size()) {
@@ -540,7 +619,8 @@ static TetCandidateBuildOutcome buildTetCandidateAttempt(
             candidate->cells.push_back(cell);
         }
         std::sort(candidate->cells.begin(), candidate->cells.end(),
-                  [](const TetCandidateCell& a, const TetCandidateCell& b) {
+                  [budget](const TetCandidateCell& a, const TetCandidateCell& b) {
+                      constructionStep(budget);
                       const CellKey ak = cellKey(a);
                       const CellKey bk = cellKey(b);
                       if (ak != bk) return ak < bk;
@@ -548,16 +628,21 @@ static TetCandidateBuildOutcome buildTetCandidateAttempt(
                   });
 
         std::vector<FaceUse> uses;
+        constructionStep(budget,0);
         if (candidate->cells.size()<=uses.max_size()/4)
             uses.reserve(candidate->cells.size()*4);
-        for (std::size_t i=0;i<candidate->cells.size();++i)
+        for (std::size_t i=0;i<candidate->cells.size();++i) {
+            constructionStep(budget);
             appendFaceUses(uses,candidate->cells[i],static_cast<Index>(i));
-        sortFaceUses(uses);
+        }
+        sortFaceUses(uses,budget);
         for (std::size_t first=0;first<uses.size();) {
-            const auto end=nextFace(uses,first);
+            constructionStep(budget);
+            const auto end=nextFace(uses,first,budget);
             const auto& a=uses[first];
             auto& cellA=candidate->cells[static_cast<std::size_t>(a.cell)];
             if (end-first==1) {
+                constructionStep(budget,0);
                 candidate->boundaryFaces.push_back(
                     {directedFace(cellA,a.localFace),a.cell,a.localFace});
             } else if (end-first==2) {
@@ -583,12 +668,13 @@ static TetCandidateBuildOutcome buildTetCandidateAttempt(
             static_cast<std::uint64_t>(raw.capacity() * sizeof(Tet));
 
         const TetCandidateValidation validation =
-            validateTetCandidateImpl(*candidate,candidate->metrics.validationHullTests,&uses);
+            validateTetCandidateImpl(*candidate,candidate->metrics.validationHullTests,&uses,budget);
         outcome.metrics=candidate->metrics;
         if (!validation.valid) {
             outcome.reason = validation.reason;
             return outcome;
         }
+        constructionStep(budget,0);
         candidate->metrics.identityComplete = true;
         candidate->metrics.adjacencyComplete = true;
         candidate->metrics.boundaryComplete = true;
@@ -597,6 +683,10 @@ static TetCandidateBuildOutcome buildTetCandidateAttempt(
         outcome.candidate = std::move(candidate);
         outcome.status = TetCandidateStatus::Built;
         outcome.reason = TetCandidateReason::None;
+        return outcome;
+    } catch (const detail::TetConstructionStopped& stop) {
+        outcome.metrics.originalCoordinateRetryUsed=outcome.metrics.construction.originalCoordinateRetryUsed;
+        outcome.reason=stop.cancelled ? TetCandidateReason::Cancelled : TetCandidateReason::BudgetExceeded;
         return outcome;
     } catch (const std::bad_alloc&) {
         outcome.metrics.originalCoordinateRetryUsed=outcome.metrics.construction.originalCoordinateRetryUsed;
@@ -609,8 +699,9 @@ static TetCandidateBuildOutcome buildTetCandidateAttempt(
     }
 }
 
-TetCandidateBuildOutcome buildTetCandidate(const std::vector<Vec3>& input) noexcept {
-    auto initial=buildTetCandidateAttempt(input,false);
+static TetCandidateBuildOutcome buildTetCandidateImpl(
+    const std::vector<Vec3>& input,Budget* budget) noexcept {
+    auto initial=buildTetCandidateAttempt(input,false,budget);
     if(initial.built())return initial;
     bool retry=false;
     switch(initial.reason){
@@ -626,7 +717,7 @@ TetCandidateBuildOutcome buildTetCandidate(const std::vector<Vec3>& input) noexc
         default:break;
     }
     if(!retry)return initial;
-    auto exact=buildTetCandidateAttempt(input,true);
+    auto exact=buildTetCandidateAttempt(input,true,budget);
     tet_candidate_detail::retainDiscardedDelaunayAttempt(exact.metrics.construction,initial.metrics.construction);
     exact.metrics.originalCoordinateRetryUsed=true;
     exact.metrics.initialCoordinateFailure=initial.reason;
@@ -638,6 +729,32 @@ TetCandidateBuildOutcome buildTetCandidate(const std::vector<Vec3>& input) noexc
         saturatingAdd(exact.metrics.discardedCandidateWork,visits);
     if(exact.candidate)exact.candidate->metrics=exact.metrics;
     return exact;
+}
+
+TetCandidateBuildOutcome buildTetCandidate(const std::vector<Vec3>& input) noexcept {
+    return buildTetCandidateImpl(input,nullptr);
+}
+
+TetCandidateBuildOutcome buildTetCandidate(
+    const std::vector<Vec3>& input,const TetCandidateBuildLimits& limits) noexcept {
+    Budget budget{limits.maxWork,limits.maxCells,limits.maxTemporaryBytes,limits.cancellation};
+    TetCandidateBuildOutcome outcome;
+    outcome.metrics.inputPoints=input.size();
+    try {
+        budget.step(0);
+        // Existing exact-insphere scratch uses seven retained double vectors.
+        // A term has at most 2*24*192+8 components; the accumulator has four
+        // such terms. Four MiB covers these vectors, their growth overlap,
+        // fixed predicate arrays and the private construction workspace.
+        budget.admit(4U*1024U*1024U);
+        outcome=buildTetCandidateImpl(input,&budget);
+    } catch (const detail::TetConstructionStopped& stop) {
+        outcome.reason=stop.cancelled ? TetCandidateReason::Cancelled : TetCandidateReason::BudgetExceeded;
+    }
+    outcome.metrics.boundedWork=budget.work;
+    outcome.metrics.boundedPeakTemporaryBytes=budget.peakBytes;
+    if (outcome.candidate) outcome.candidate->metrics=outcome.metrics;
+    return outcome;
 }
 
 static TetHandoffOutcome importTetCandidateImpl(

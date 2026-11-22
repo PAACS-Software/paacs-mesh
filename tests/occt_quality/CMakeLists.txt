@@ -61,8 +61,12 @@ if(WIN32)
 endif()
 
 enable_testing()
-foreach(name IN ITEMS delaunay_cavity delaunay_quality delaunay_recone interior_sites interior_front initial_point_front)
-    add_executable(${name} "${paacs_source}/tests/occt_${name}.cpp")
+foreach(name IN ITEMS delaunay_cavity delaunay_quality delaunay_recone interior_sites interior_front initial_point_front tet_candidate_limits)
+    if(name STREQUAL "tet_candidate_limits")
+        add_executable(${name} "${paacs_source}/tests/${name}.cpp")
+    else()
+        add_executable(${name} "${paacs_source}/tests/occt_${name}.cpp")
+    endif()
     target_include_directories(${name} PRIVATE
         "${paacs_source}/include" "${paacs_source}/src/geometry")
     target_include_directories(${name} SYSTEM PRIVATE ${OpenCASCADE_INCLUDE_DIR})
@@ -75,13 +79,21 @@ foreach(name IN ITEMS delaunay_cavity delaunay_quality delaunay_recone interior_
         target_compile_options(${name} PRIVATE -fexperimental-library)
         target_link_options(${name} PRIVATE -fexperimental-library)
     endif()
-    target_link_libraries(${name} PRIVATE qualified_occt qualified_mesh Threads::Threads
-        TKernel TKMath TKG2d TKG3d TKGeomBase TKBRep TKGeomAlgo TKTopAlgo TKPrim TKBO TKBool TKMesh TKXSBase TKDESTEP)
-    add_test(NAME paacs.occt.${name} COMMAND ${name})
-    set_tests_properties(paacs.occt.${name} PROPERTIES TIMEOUT 120 LABELS "occt;quality;regression")
+    if(name STREQUAL "tet_candidate_limits")
+        target_link_libraries(${name} PRIVATE qualified_mesh Threads::Threads)
+        add_test(NAME paacs.core.${name} COMMAND ${name})
+        set_tests_properties(paacs.core.${name} PROPERTIES TIMEOUT 120 LABELS "core;hardening")
+    else()
+        target_link_libraries(${name} PRIVATE qualified_occt qualified_mesh Threads::Threads
+            TKernel TKMath TKG2d TKG3d TKGeomBase TKBRep TKGeomAlgo TKTopAlgo TKPrim TKBO TKBool TKMesh TKXSBase TKDESTEP)
+        add_test(NAME paacs.occt.${name} COMMAND ${name})
+        set_tests_properties(paacs.occt.${name} PROPERTIES TIMEOUT 120 LABELS "occt;quality;regression")
+    endif()
     if(WIN32)
-        set_tests_properties(paacs.occt.${name} PROPERTIES
-            ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${paacs_occt_prefix}/bin")
+        if(NOT name STREQUAL "tet_candidate_limits")
+            set_tests_properties(paacs.occt.${name} PROPERTIES
+                ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${paacs_occt_prefix}/bin")
+        endif()
         if(paacs_crt_dlls)
             add_custom_command(TARGET ${name} POST_BUILD
                 COMMAND "${CMAKE_COMMAND}" -E copy_if_different

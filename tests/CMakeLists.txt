@@ -4,6 +4,15 @@
 # SPDX-License-Identifier: MPL-2.0
 
 find_package(Boost 1.74 CONFIG QUIET)
+add_executable(paacs-tet-candidate-limits tet_candidate_limits.cpp)
+target_link_libraries(paacs-tet-candidate-limits PRIVATE PAACS::mesh)
+if(MSVC)
+    target_compile_options(paacs-tet-candidate-limits PRIVATE /fp:strict)
+else()
+    target_compile_options(paacs-tet-candidate-limits PRIVATE -fno-fast-math -ffp-contract=off)
+endif()
+add_test(NAME paacs.core.tet_candidate_limits COMMAND paacs-tet-candidate-limits)
+set_tests_properties(paacs.core.tet_candidate_limits PROPERTIES TIMEOUT 120 LABELS "core;hardening")
 add_executable(paacs-tet-coordinate-authority tet_coordinate_authority.cpp)
 target_link_libraries(paacs-tet-coordinate-authority PRIVATE PAACS::mesh)
 add_test(NAME paacs.core.tet_coordinate_authority COMMAND paacs-tet-coordinate-authority)
