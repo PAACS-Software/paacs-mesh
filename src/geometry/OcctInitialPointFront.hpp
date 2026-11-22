@@ -140,7 +140,8 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
         out.budgetLimited=true;return done();
     }
     // Conservative admission for copied source/result, two AABB indices,
-    // boundary BVH, node hash/scales, occupied cones and all queue/front states.
+    // boundary BVH, node hash/scales (including one exclusion double per node),
+    // occupied cones and all queue/front states.
     const auto payload=8ULL*1024*1024+std::uint64_t(ns+siteCap)*2048+
         std::uint64_t(nf)*4096+std::uint64_t(coneCap)*4096+
         std::uint64_t(stateCap)*4096;
@@ -185,6 +186,7 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
     front.chargeWork=tick;front.interiorAdmission=native;front.centroidAdmission=native;
     front.vertices.reserve(ns+siteCap);front.cells.reserve(coneCap);front.cellBoxes.reserve(coneCap);
     std::vector<std::size_t> depths;depths.reserve(ns+siteCap);
+    std::vector<double> exclusionScales;exclusionScales.reserve(ns+siteCap);
     std::unordered_map<Key,std::vector<Vertex>,Hash> buckets;
     const auto origin=boundary.node(0);
     const auto width=separationFactor*baseTarget;
@@ -196,12 +198,17 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
             key[j]=std::int64_t(std::floor(a[j]));
         }return key;
     };
-    const auto separated=[&](Vec3 p,double h) {
+    const auto separated=[&](Vec3 p,double birth,double requested) {
         const auto k=keyAt(p);
         for(int x=-1;x<=1;++x)for(int y=-1;y<=1;++y)for(int z=-1;z<=1;++z){
             tick();const auto it=buckets.find({k[0]+x,k[1]+y,k[2]+z});
             if(it==buckets.end())continue;
-            for(auto v:it->second){tick();const auto radius=separationFactor*std::min(h,out.effectiveScales[v]);
+            for(auto v:it->second){tick();
+                // Fixed boundary geometry keeps the original birth-scale rule.
+                // Interior pairs pack against their requested field sizes, so
+                // a finer geometric birth step cannot leave permanent clusters.
+                const auto h=v<ns?birth:requested;
+                const auto radius=separationFactor*std::min(h,exclusionScales[v]);
                 if((front.vertices[v].position-p).norm()<radius)return false;}
         }return true;
     };
@@ -248,6 +255,7 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
             auto& edges=incident[i];std::ranges::sort(edges,[&](double a,double b){tick();return a<b;});
             const auto local=edges[edges.size()/2];
             out.effectiveScales.push_back(std::min(sizeAt(p),local));
+            exclusionScales.push_back(out.effectiveScales.back());
             front.vertices.push_back({p,std::uint64_t(i)+1});depths.push_back(0);
             buckets[keyAt(p)].push_back(Vertex(i));
         }
@@ -354,15 +362,18 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
             // all three new edges can equal h.
             const auto height=r2<h*h?std::min(std::sqrt(h*h-r2),std::sqrt(2./3.)*h):std::sqrt(2./3.)*h;
             struct Candidate {
-                Vec3 point;Vertex vertex;double scale,score,mean,jacobian;bool fresh;
+                Vec3 point;Vertex vertex;double scale,requestedSize,score,mean,jacobian;bool fresh;
                 std::optional<OcctInitialDelaunayScorer::Plan> auxiliaryPlan;
             };
             std::vector<Candidate> candidates;
             const auto offer=[&](Vec3 p,Vertex vertex,bool fresh){
                 tick();if(out.candidates>=limits.candidates)throw Limit{};++out.candidates;
                 if(!finite(p))return;
-                const auto scale=fresh?std::min(sizeAt(p),h):out.effectiveScales[vertex];
-                if(fresh&&!separated(p,scale)){++out.spacingRejects;return;}
+                // Reuse this one field sample for both geometric construction
+                // and persistent interior exclusion; no extra CAD query.
+                const auto requested=fresh?sizeAt(p):out.effectiveScales[vertex];
+                const auto scale=fresh?std::min(requested,h):out.effectiveScales[vertex];
+                if(fresh&&!separated(p,scale,requested)){++out.spacingRejects;return;}
                 const std::array q{a,c,b,p};const auto measured=shape(q);
                 if(measured.mean<.01||measured.jacobian<1e-6){++out.shapeRejects;return;}
                 const std::array scales{out.effectiveScales[f[0]],out.effectiveScales[f[2]],out.effectiveScales[f[1]],scale};
@@ -394,7 +405,7 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
                     if(!plan->qualityAdmissible){++out.auxiliaryQualityRejects;return;}
                     if(plan->available)rankedScore=plan->score/(1+error/6.);
                 }
-                candidates.push_back({p,vertex,scale,rankedScore,measured.mean,measured.jacobian,fresh,std::move(plan)});
+                candidates.push_back({p,vertex,scale,requested,rankedScore,measured.mean,measured.jacobian,fresh,std::move(plan)});
             };
             for(const auto [distance,vertex]:nearby(center,2.5*lengths[2],f)){
                 (void)distance;offer(front.vertices[vertex].position,vertex,false);
@@ -465,7 +476,8 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
                 if(depth>1)++out.propagatedFaceAccepted;
                 if(candidate.fresh){
                     result.addNode(candidate.point,region);++out.sites;
-                    out.effectiveScales.push_back(candidate.scale);depths.push_back(depth);
+                    out.effectiveScales.push_back(candidate.scale);
+                    exclusionScales.push_back(candidate.requestedSize);depths.push_back(depth);
                     buckets[keyAt(candidate.point)].push_back(candidate.vertex);
                     out.maximumDepth=std::max(out.maximumDepth,depth);if(depth>1)++out.deepSites;
                 }else ++out.reusedApices;

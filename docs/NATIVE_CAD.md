@@ -92,6 +92,14 @@ newly exposed faces. Step lengths follow actual neighbouring edges and grow
 toward the requested size, rather than launching a long connection from a small
 surface triangle. Existing points can be reused where advancing regions meet.
 
+Initial sites use their requested size-field values for separation from other
+interior sites. A small launch step near the surface does not permanently give
+an interior point a smaller exclusion radius. Distances to fixed boundary nodes
+retain the local surface scale, so the original fine boundary can be respected.
+For a uniform request, initial interior pairs remain at least `0.65 * size`
+apart. Constraint recovery can subsequently add geometry-required points; this
+initial-site rule is not a minimum-edge guarantee for the final mesh.
+
 Fresh positions are ranked using neighbour separation and the actual connected
 conflict cavity in a persistent auxiliary Delaunay triangulation. Cavity discovery
 can visit the complete admitted complex; a small fixed cell count must not bias

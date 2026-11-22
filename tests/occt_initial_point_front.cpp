@@ -85,6 +85,8 @@ void exerciseUniformFront(){
         for(Index j=0;j<i;++j)check((p-result.node(j)).norm()+1e-13>=
             .65*std::min(report.effectiveScales[i],report.effectiveScales[j]),
             "initial point violates separation from an earlier live vertex");
+        for(Index j=source.nodeCount();j<i;++j)check((p-result.node(j)).norm()+1e-13>=.65*field.h,
+            "two accepted interior sites violate requested-field separation");
     }
     check(deepest>=field.h,"topological propagation never reached one requested size into the volume");
     const auto again=appendOcctInitialPointFrontSites(source,field,field.h,{3,7},limits,
@@ -93,6 +95,27 @@ void exerciseUniformFront(){
     for(Index i=0;i<result.nodeCount();++i)check(bits(again.node(i))==bits(result.node(i)),"initial point is not deterministic");
     std::cout<<"uniform initial front: sites="<<report.sites<<" deep="<<report.deepSites
         <<" physicalDepth="<<deepest<<" work="<<charged<<'\n';
+}
+void exerciseFineBoundaryInteriorExclusion(){
+    const auto source=cubeSurface();const UniformField field{.8};
+    OcctInitialPointFrontLimits limits;limits.sites=64;limits.cones=384;
+    OcctInitialPointFrontReport report;
+    const auto result=appendOcctInitialPointFrontSites(source,field,field.h,{3,7},limits,
+        [](Vec3 p){return std::abs(p.x)<1&&std::abs(p.y)<1&&std::abs(p.z)<1;},
+        [](std::uint64_t){},&report);
+    originalPrefix(source,result);
+    check(report.auxiliaryInitialized&&report.sites>=2,
+        "fine fixed boundary did not produce an interior-pair fixture");
+    bool finerBirth=false;
+    for(Index i=source.nodeCount();i<result.nodeCount();++i){
+        finerBirth=finerBirth||report.effectiveScales[i]<field.h;
+        for(Index j=0;j<source.nodeCount();++j)check((result.node(i)-result.node(j)).norm()+1e-13>=
+            .65*std::min(report.effectiveScales[i],report.effectiveScales[j]),
+            "requested packing changed the geometric boundary exclusion contract");
+        for(Index j=source.nodeCount();j<i;++j)check((result.node(i)-result.node(j)).norm()+1e-13>=.65*field.h,
+            "a fine boundary birth radius persisted between interior sites");
+    }
+    check(finerBirth,"fixture did not exercise geometry finer than the requested field");
 }
 void exerciseRefusals(){
     const auto source=cubeSurface();const UniformField field;
@@ -401,7 +424,7 @@ void exerciseBoundedBootstrapAndCancellation(){
 
 }
 int main(){try{
-    exerciseUniformFront();exerciseRefusals();exerciseCompleteConflictCavity();exerciseCompaction();
+    exerciseUniformFront();exerciseFineBoundaryInteriorExclusion();exerciseRefusals();exerciseCompleteConflictCavity();exerciseCompaction();
     exerciseBoundedBootstrapAndCancellation();
     std::cout<<"initial volume points, complete conflict cavities and transactional guards passed\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
