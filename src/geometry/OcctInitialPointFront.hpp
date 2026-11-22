@@ -35,6 +35,7 @@ struct OcctInitialPointFrontLimits {
     // Zero admits the complete connected conflict cavity within live storage/work.
     // A nonzero value is an explicit private diagnostic/test cap.
     std::size_t maximumDelaunayCavityCells=0;
+    bool enableAuxiliaryCompaction=true;
     bool requireManifoldFront=false;
 };
 struct OcctInitialPointFrontReport {
@@ -56,6 +57,11 @@ struct OcctInitialPointFrontReport {
     std::uint64_t auxiliaryCommitStateRejects=0,auxiliaryCommitStorageRejects=0;
     std::uint64_t auxiliaryCommitPositiveRejects=0,auxiliaryCommitValidityRejects=0,auxiliaryCommitSurvivorRejects=0;
     std::size_t auxiliaryCavityLimit=0,auxiliaryMaximumPlannedCavity=0,auxiliaryMaximumAcceptedCavity=0;
+    std::uint64_t auxiliaryCompactionAttempts=0,auxiliaryCompactions=0;
+    std::uint64_t auxiliaryDeadCellsReclaimed=0,auxiliaryCompactionWork=0;
+    std::uint64_t auxiliaryMaximumCompactionModeledBytes=0,auxiliaryWorkingBytes=0;
+    std::size_t auxiliaryStoredPeak=0,auxiliaryStoredCells=0,auxiliaryLiveCells=0;
+    std::size_t auxiliaryStorageCapacity=0;
     std::size_t auxiliaryWitnessQueries=0,auxiliaryWitnessOutside=0;
     std::uint64_t auxiliaryRelevantRemoved=0,auxiliaryRelevantAdded=0;
     std::uint64_t auxiliaryUnclassifiedRemoved=0,auxiliaryUnclassifiedAdded=0;
@@ -201,6 +207,7 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
     std::deque<Face> queue,propagationQueue;
     std::set<Face> originalFaceKeys;
     std::map<Face,std::size_t> attemptedAt;
+    std::map<Face,std::size_t> compactionRetryAtSite;
     try {
         std::vector<std::vector<double>> incident(ns);
         for(Index i=0;i<boundary.cellCount();++i){
@@ -233,6 +240,7 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
             materialWitness,limits.maximumDelaunayCavityCells)){
             out.budgetLimited=true;return done();
         }
+        auxiliary.compactionEnabled=limits.enableAuxiliaryCompaction;
         out.auxiliaryInitialized=true;
         const auto syncAuxiliary=[&](){
             out.budgetLimited=out.budgetLimited||auxiliary.budgetLimited;
@@ -254,6 +262,16 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
             out.auxiliaryCavityLimit=auxiliary.cavityLimit;
             out.auxiliaryMaximumPlannedCavity=auxiliary.maximumPlannedCavity;
             out.auxiliaryMaximumAcceptedCavity=auxiliary.maximumAcceptedCavity;
+            out.auxiliaryCompactionAttempts=auxiliary.compactionAttempts;
+            out.auxiliaryCompactions=auxiliary.compactions;
+            out.auxiliaryDeadCellsReclaimed=auxiliary.deadCellsReclaimed;
+            out.auxiliaryCompactionWork=auxiliary.compactionWork;
+            out.auxiliaryMaximumCompactionModeledBytes=auxiliary.maximumCompactionModeledBytes;
+            out.auxiliaryWorkingBytes=auxiliary.workingBytes();
+            out.auxiliaryStorageCapacity=auxiliary.storageCapacity();
+            out.auxiliaryStoredPeak=auxiliary.peakStoredCells;
+            out.auxiliaryStoredCells=auxiliary.storedCells();
+            out.auxiliaryLiveCells=auxiliary.liveCells();
         };
         const auto rebuild=[&](){
             ++out.queueRounds;
@@ -267,6 +285,11 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
         };
         rebuild();auto roundStart=front.cells.size();
         while(!propagationQueue.empty()||!queue.empty()||front.cells.size()!=roundStart){
+            // Prior candidate vectors have been destroyed. Compact only here,
+            // before any point/Plan for the next face is staged.
+            try{(void)auxiliary.prepareForBatch();}
+            catch(...){syncAuxiliary();throw;}
+            syncAuxiliary();
             if(propagationQueue.empty()&&queue.empty()){
                 roundStart=front.cells.size();rebuild();
                 if(propagationQueue.empty()&&queue.empty())break;
@@ -344,6 +367,24 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
             }
             if(out.sites<siteCap)for(const auto factor:std::array{1.,.85,1.15})
                 offer(center-n*(height*factor/std::sqrt(n2)),Vertex(front.vertices.size()),true);
+            if(auxiliary.compactionRequested()){
+                // Storage history must not remove a better fresh proposal and
+                // thereby bias this face toward a worse fresh/reused apex.
+                // Discard the ENTIRE batch before any occupancy/native commit.
+                candidates.clear();
+                const auto sites=auxiliary.acceptedSites();
+                const auto retried=compactionRetryAtSite.find(key);
+                if(retried!=compactionRetryAtSite.end()&&retried->second==sites){
+                    // At most one forced storage retry per face and accepted-
+                    // point generation. Genuine live-capacity pressure remains
+                    // an explicit budget limit instead of a retry loop.
+                    out.budgetLimited=true;continue;
+                }
+                if(compactionRetryAtSite.size()>=stateCap&&!compactionRetryAtSite.contains(key))throw Limit{};
+                compactionRetryAtSite[key]=sites;
+                attemptedAt.erase(key);propagationQueue.push_front(key);
+                continue;
+            }
             std::stable_sort(candidates.begin(),candidates.end(),[&](const Candidate& x,const Candidate& y){
                 tick();
                 // Site construction is the purpose of this stage. Existing

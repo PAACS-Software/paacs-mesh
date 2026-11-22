@@ -9,6 +9,7 @@
 #include <cmath>
 #include <iostream>
 #include <map>
+#include <new>
 #include <numbers>
 #include <stdexcept>
 
@@ -184,8 +185,165 @@ void exerciseCompleteConflictCavity(){
     std::cout<<"complete initial cavity: removed="<<plan->patch.removed.size()<<" added="<<plan->patch.added.size()
         <<" work="<<work<<'\n';
 }
+using Scorer=OcctInitialDelaunayScorer;
+using Complex=Scorer::Complex;
+using Front=Scorer::Front;
+mesh::Mesh compactionCube(){
+    mesh::Mesh source;std::map<std::array<int,3>,Index> ids;
+    const auto vertex=[&](std::array<int,3> p){
+        if(const auto i=ids.find(p);i!=ids.end())return i->second;
+        const auto id=source.addNode({double(p[0]),double(p[1]),double(p[2])},{0,int(ids.size()+1)});
+        ids.emplace(p,id);return id;
+    };
+    for(unsigned axis=0;axis<3;++axis)for(int sign:std::array{-1,1}){
+        std::array<Index,4> q{};const std::array u{-1,1,1,-1},v{-1,-1,1,1};
+        for(unsigned i=0;i<4;++i){std::array<int,3> p{};p[axis]=sign;
+            p[(axis+1)%3]=u[i];p[(axis+2)%3]=v[i];q[i]=vertex(p);}
+        std::array<Index,3> a{q[0],q[1],q[2]},b{q[0],q[2],q[3]};
+        if(sign<0){std::swap(a[1],a[2]);std::swap(b[1],b[2]);}
+        source.addCell(mesh::CellType::Tri3,a,{2,int(2*axis+(sign>0?2:1))});
+        source.addCell(mesh::CellType::Tri3,b,{2,int(2*axis+(sign>0?2:1))});
+    }return source;
+}
+struct Snapshot {
+    std::vector<std::array<std::uint64_t,4>> vertices;
+    std::vector<std::array<std::uint64_t,13>> raw;
+    std::vector<std::array<std::uint64_t,7>> live;
+    std::vector<std::array<std::uint64_t,5>> faces,edges;
+    std::vector<Scorer::Vertex> mapping;
+    std::vector<std::size_t> anchors;
+    std::uint64_t epoch=0;std::size_t accepted=0;
+    bool operator==(const Snapshot&)const=default;
+};
+Snapshot snapshot(const Scorer& scorer){
+    Snapshot out;const auto& c=scorer.complexForDiagnostics();
+    const auto& relevance=scorer.relevanceForDiagnostics();
+    check(relevance.size()==c.cells.size(),"relevance does not cover stored cells");
+    for(const auto& vertex:c.vertices){const auto p=bits(vertex.position);
+        out.vertices.push_back({p[0],p[1],p[2],vertex.sequence});}
+    for(std::size_t id=0;id<c.cells.size();++id){
+        const auto& cell=c.cells[id];std::array<std::uint64_t,13> raw{};unsigned at=0;
+        for(auto v:cell.vertices)raw[at++]=v;
+        raw[at++]=cell.sequence;raw[at++]=cell.classification.dim;raw[at++]=cell.classification.tag;
+        raw[at++]=c.alive[id];raw[at++]=relevance[id];
+        for(auto next:c.neighbours[id])raw[at++]=next;
+        out.raw.push_back(raw);
+        if(c.alive[id])out.live.push_back({cell.vertices[0],cell.vertices[1],cell.vertices[2],cell.vertices[3],
+            std::uint64_t(cell.classification.dim),std::uint64_t(cell.classification.tag),relevance[id]});
+    }
+    for(const auto& [key,owners]:c.faces)for(auto owner:owners)
+        out.faces.push_back({key[0],key[1],key[2],owner,0});
+    for(const auto& [key,owners]:c.edges)for(auto owner:owners)
+        out.edges.push_back({key[0],key[1],owner,0,0});
+    out.mapping=scorer.auxiliaryToFront();out.anchors=c.vertexCell;
+    out.epoch=scorer.planEpoch();out.accepted=scorer.acceptedSites();return out;
+}
+void coherent(const Scorer& scorer){
+    const auto& c=scorer.complexForDiagnostics();
+    check(c.cells.size()==c.neighbours.size()&&c.cells.size()==c.alive.size()&&
+        c.cells.size()==c.cellBoxes.size(),"compacted parallel cell tables differ");
+    std::size_t alive=0;
+    for(std::size_t id=0;id<c.cells.size();++id)if(c.alive[id]){
+        ++alive;const auto& cell=c.cells[id];const auto& v=cell.vertices;
+        check(predicates::orient3d(c.vertices[v[0]].position,c.vertices[v[1]].position,
+            c.vertices[v[2]].position,c.vertices[v[3]].position)==predicates::Sign::Positive,
+            "compaction changed exact cell orientation");
+        check(cell.classification==mesh::Classification{3,7},"compaction changed body classification");
+        const auto bounds=c.bounds(v);
+        check(bits(bounds.lo)==bits(c.cellBoxes[id].lo)&&bits(bounds.hi)==bits(c.cellBoxes[id].hi),
+            "compacted cell box no longer encloses its exact vertices");
+        const auto keys=Complex::faceKeys(cell);
+        for(unsigned side=0;side<4;++side){const auto next=c.neighbours[id][side];
+            if(next==Complex::noCell)continue;
+            check(next<c.cells.size()&&c.alive[next],"compacted adjacency points to a retired cell");
+            const auto other=Complex::faceKeys(c.cells[next]);
+            const auto found=std::ranges::find(other,keys[side]);
+            check(found!=other.end()&&c.neighbours[next][std::size_t(found-other.begin())]==id,
+                "compacted adjacency is not reciprocal across the same face");
+        }
+    }
+    check(alive==scorer.liveCells(),"compacted live count differs from live table");
+    for(const auto& [key,owners]:c.faces){
+        check(!owners.empty()&&owners.size()<=2,"compacted face incidence is nonmanifold");
+        for(auto id:owners){check(id<c.cells.size()&&c.alive[id],"face owner retained a tombstone");
+            const auto keys=Complex::faceKeys(c.cells[id]);
+            check(std::ranges::find(keys,key)!=keys.end(),"face owner has different vertices");}
+    }
+    for(std::size_t v=0;v<c.vertexCell.size();++v){const auto id=c.vertexCell[v];
+        check(id<c.cells.size()&&c.alive[id]&&std::ranges::find(c.cells[id].vertices,v)!=c.cells[id].vertices.end(),
+            "compacted point anchor is not an incident live cell");}
+}
+
+void exerciseCompaction(){
+    const auto source=compactionCube();Front front;
+    for(const auto p:source.nodes())front.vertices.push_back({p,front.vertices.size()+1});
+    for(Index i=0;i<source.cellCount();++i){const auto* v=source.cellNodes(i);
+        front.boundary.push_back({Scorer::Vertex(v[0]),Scorer::Vertex(v[1]),Scorer::Vertex(v[2])});}
+    check(front.initialize(),"owned cube source refused");
+    enum class Failure{None,Work,Allocation};Failure failure=Failure::None;
+    unsigned imports=0;std::uint64_t charged=0,native=0;
+    const auto charge=[&](std::uint64_t n){
+        if(failure!=Failure::None&&n==11&&++imports==2){
+            if(failure==Failure::Allocation)throw std::bad_alloc{};
+            throw std::runtime_error("partial-clone-work-stop");
+        }check(n<=100'000'000-charged,"compaction test work bound exceeded");charged+=n;
+    };
+    const auto inside=[&](Vec3 p){++native;return std::abs(p.x)<1&&std::abs(p.y)<1&&std::abs(p.z)<1;};
+    front.chargeWork=charge;front.interiorAdmission=inside;front.centroidAdmission=inside;
+    Scorer scorer;check(scorer.initialize(source,{3,7},512,32ULL*1024*1024,charge,inside,0),
+        "compaction scorer initialization failed");
+    const auto capacity=scorer.storageCapacity();const auto admittedBytes=scorer.workingBytes();
+    const auto first=Scorer::Vertex(front.vertices.size());front.vertices.push_back({{},first+1});
+    bnd::TetFacetCell occupancy;
+    check(front.valid(Front::Front{front.boundary[0]},first,occupancy),"first occupancy cone refused");
+    auto initial=scorer.score({},front);check(initial&&scorer.commit(*initial,first),"first auxiliary edit refused");
+    front.insert(occupancy);
+    check(scorer.storedCells()>scorer.liveCells(),"fixture has no retired auxiliary cells");
+    const Vec3 point{.35,.1,.1};const auto second=Scorer::Vertex(front.vertices.size());
+    front.vertices.push_back({point,second+1});
+    auto stale=scorer.score(point,front);front.vertices.pop_back();
+    check(stale&&stale->generation==scorer.planEpoch(),"stale-plan fixture could not be staged");
+    const auto before=snapshot(scorer);const auto queries=native;
+    const auto workBefore=charged,compactionBefore=scorer.compactionWork;
+    for(auto mode:std::array{Failure::Work,Failure::Allocation}){
+        failure=mode;imports=0;bool threw=false;
+        try{(void)scorer.prepareForBatch(true);}
+        catch(const std::bad_alloc&){check(mode==Failure::Allocation,"unexpected allocation exception");threw=true;}
+        catch(const std::runtime_error&){check(mode==Failure::Work,"unexpected work exception");threw=true;}
+        failure=Failure::None;
+        check(threw&&imports==2&&snapshot(scorer)==before,
+            "partially constructed compaction clone changed the old complex/cache/epoch");
+    }
+    check(scorer.compactions==0&&scorer.prepareForBatch(true),"forced compaction did not complete");
+    const auto after=snapshot(scorer);
+    check(after.vertices==before.vertices&&after.mapping==before.mapping&&after.live==before.live,
+        "compaction changed point identities, oriented live cells, body or relevance cache");
+    check(after.accepted==before.accepted&&after.epoch==before.epoch+1&&
+        scorer.storedCells()==scorer.liveCells()&&scorer.compactions==1&&
+        scorer.deadCellsReclaimed==before.raw.size()-before.live.size(),"compaction lifetime counters are inconsistent");
+    check(scorer.storageCapacity()==capacity&&scorer.workingBytes()==admittedBytes&&
+        scorer.maximumCompactionModeledBytes>0&&scorer.maximumCompactionModeledBytes<=admittedBytes,
+        "compaction raised capacity or exceeded its admitted modeled payload");
+    check(native==queries&&charged-workBefore==scorer.compactionWork-compactionBefore,
+        "compaction repeated native classification or escaped work accounting");
+    coherent(scorer);
+    check(!scorer.commit(*stale,second)&&snapshot(scorer)==after,
+        "pre-compaction plan survived cell-ID renumbering");
+    front.vertices.push_back({point,second+1});
+    auto fresh=scorer.score(point,front);
+    check(fresh&&fresh->generation==scorer.planEpoch()&&
+        front.valid(Front::Front{front.boundary[2]},second,occupancy)&&scorer.commit(*fresh,second),
+        "fresh post-compaction query/occupancy/selected admission failed");
+    front.insert(occupancy);coherent(scorer);
+    check(scorer.acceptedSites()==2,"compaction altered accepted-point generation");
+    const auto disabled=snapshot(scorer);scorer.compactionEnabled=false;
+    check(!scorer.prepareForBatch(true)&&snapshot(scorer)==disabled,"disabled compaction changed state");
+    std::cout<<"compaction PASS reclaimed="<<scorer.deadCellsReclaimed<<" work="<<scorer.compactionWork
+        <<" attempts="<<scorer.compactionAttempts<<" native="<<native<<'\n';
+}
+
 }
 int main(){try{
-    exerciseUniformFront();exerciseRefusals();exerciseCompleteConflictCavity();
+    exerciseUniformFront();exerciseRefusals();exerciseCompleteConflictCavity();exerciseCompaction();
     std::cout<<"initial volume points, complete conflict cavities and transactional guards passed\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

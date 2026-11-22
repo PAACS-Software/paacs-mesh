@@ -21,6 +21,7 @@
 #include <map>
 #include <new>
 #include <optional>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -29,12 +30,16 @@ namespace paacs::geo::detail {
 class OcctInitialDelaunayScorer {
 public:
     bool budgetLimited=false;
+    bool compactionEnabled=true;
     std::uint64_t evaluations=0,fullCertifications=0,certificationRefusals=0;
     std::uint64_t scoreStateRejects=0,scoreSizeRejects=0,scoreMappingRejects=0;
     std::uint64_t scoreLocateMisses=0,scoreCavityUnavailable=0,scoreStorageRejects=0,scorePositiveRejects=0;
     std::uint64_t commitStateRejects=0,commitStorageRejects=0,commitPositiveRejects=0;
     std::uint64_t commitValidityRejects=0,commitSurvivorRejects=0;
     std::size_t cavityLimit=0,maximumPlannedCavity=0,maximumAcceptedCavity=0;
+    std::uint64_t compactionAttempts=0,compactions=0,deadCellsReclaimed=0,compactionWork=0;
+    std::uint64_t maximumCompactionModeledBytes=0;
+    std::size_t peakStoredCells=0;
     using Complex=bnd::detail::BistellarComplex;
     using Front=bnd::detail::PlcGiftWrapping;
     using Vertex=bnd::TetFacetVertexId;
@@ -71,6 +76,7 @@ public:
         maximumStoredCells=std::min<std::size_t>(maximumStoredCells,
             std::size_t((workingBytes-fixed)/8192));
         if(!maximumStoredCells){budgetLimited=true;return false;}
+        workingBytes_=workingBytes;fixedBytes_=fixed;
         charge_=std::move(charge);materialWitness_=std::move(materialWitness);
         live_.walkConstraints=true;live_.maximumStoredCells=maximumStoredCells;
         live_.chargeWork=charge_;
@@ -118,6 +124,7 @@ public:
             if(!positive(cell))return false;
             live_.insert(cell);relevance_.push_back(0);
         }
+        activeCells_=live_.cells.size();peakStoredCells=live_.cells.size();
         initialized_=true;return true;
     }
 
@@ -148,7 +155,8 @@ public:
         if(!patch){++scoreCavityUnavailable;return {};}
         maximumPlannedCavity=std::max(maximumPlannedCavity,patch->removed.size());
         if(patch->added.size()>live_.maximumStoredCells-live_.cells.size()){
-            budgetLimited=true;++scoreStorageRejects;return {};
+            if(compactionEnabled&&live_.cells.size()>activeCells_)compactionRequested_=true;else budgetLimited=true;
+            ++scoreStorageRejects;return {};
         }
         live_.vertices.push_back({site,std::uint64_t(staged)+1});
         try{
@@ -156,7 +164,7 @@ public:
                 ++scorePositiveRejects;live_.vertices.pop_back();return {};
             }
             Plan plan;plan.patch=std::move(*patch);plan.point=site;
-            plan.generation=generation_;plan.stagedAux=staged;plan.valid=true;
+            plan.generation=planEpoch_;plan.stagedAux=staged;plan.valid=true;
             for(const auto id:plan.patch.removed){
                 const auto state=oldRelevance(id,sourceFront);
                 if(state==3){++plan.guardRemoved;continue;}
@@ -197,13 +205,14 @@ public:
     // Call after sourceFront.valid/native admission and before sourceFront's
     // insert. Any bounded-work refusal precedes auxiliary topology mutation.
     bool commit(const Plan& plan,Vertex frontPointId) {
-        if(!initialized_||!plan.valid||plan.generation!=generation_||
+        if(!initialized_||!plan.valid||plan.generation!=planEpoch_||
             plan.stagedAux!=live_.vertices.size()||frontPointId!=live_.vertices.size()-8||
             plan.addedRelevance.size()!=plan.patch.added.size()){
             ++commitStateRejects;return false;
         }
         if(plan.patch.added.size()>live_.maximumStoredCells-live_.cells.size()){
-            budgetLimited=true;++commitStorageRejects;return false;
+            if(compactionEnabled&&live_.cells.size()>activeCells_)compactionRequested_=true;else budgetLimited=true;
+            ++commitStorageRejects;return false;
         }
         live_.vertices.push_back({plan.point,std::uint64_t(plan.stagedAux)+1});
         bool applied=false;
@@ -229,15 +238,89 @@ public:
             catch(...){live_.chargeWork=std::move(work);throw;}
             auxToFront_.push_back(frontPointId);
             relevance_.insert(relevance_.end(),plan.addedRelevance.begin(),plan.addedRelevance.end());
+            activeCells_=activeCells_-patch.removed.size()+patch.added.size();
+            peakStoredCells=std::max(peakStoredCells,live_.cells.size());
             maximumAcceptedCavity=std::max(maximumAcceptedCavity,patch.removed.size());
-            ++generation_;return true;
+            ++generation_;++planEpoch_;return true;
         }catch(...){if(!applied)live_.vertices.pop_back();throw;}
     }
 
     bool initialized()const noexcept{return initialized_;}
     std::size_t storedCells()const noexcept{return live_.cells.size();}
+    std::size_t liveCells()const noexcept{return activeCells_;}
+    std::uint64_t workingBytes()const noexcept{return workingBytes_;}
+    std::size_t storageCapacity()const noexcept{return live_.maximumStoredCells;}
     std::size_t acceptedSites()const noexcept{return std::size_t(generation_);}
     const std::vector<Vertex>& auxiliaryToFront()const noexcept{return auxToFront_;}
+    const Complex& complexForDiagnostics()const noexcept{return live_;}
+    const std::vector<unsigned char>& relevanceForDiagnostics()const noexcept{return relevance_;}
+    std::uint64_t planEpoch()const noexcept{return planEpoch_;}
+    bool compactionRequested()const noexcept {
+        return compactionEnabled&&!compactionBlocked_&&compactionRequested_&&live_.cells.size()>activeCells_;
+    }
+
+    bool compactionPending()const noexcept {
+        if(!compactionEnabled||!initialized_||compactionBlocked_||live_.cells.size()<=activeCells_)return false;
+        const auto stored=live_.cells.size(),dead=stored-activeCells_;
+        return compactionRequested_||
+            (stored>live_.maximumStoredCells*3/4&&dead>=std::max<std::size_t>(64,stored/8));
+    }
+
+    // Caller runs this between face batches, before any candidate Plan exists.
+    // Force is a private diagnostic/test control; it never raises capacity.
+    bool prepareForBatch(bool force=false) {
+        if(!compactionEnabled||!initialized_||compactionBlocked_||live_.cells.size()<=activeCells_||
+            (!force&&!compactionPending()))return false;
+        ++compactionAttempts;
+        constexpr std::uint64_t perComplexCell=4096;
+        using FaceValue=std::pair<const Face,std::set<std::size_t>>;
+        using EdgeValue=std::pair<const Complex::Edge,std::set<std::size_t>>;
+        // Modeled payload, not process RSS. This unprotected auxiliary complex
+        // has at most 4 face keys, 6 edge keys and 10 owner-set entries per cell.
+        // Include 2x vector capacity, 4 BVH nodes/order slots, four pointer links
+        // and 64 allocator/alignment bytes per tree allocation, plus scratch.
+        constexpr auto modeledCell=2*(sizeof(Cell)+sizeof(unsigned char)+sizeof(Complex::Box)+
+            sizeof(std::array<std::size_t,4>))+4*(sizeof(Complex::Box)+4*sizeof(std::size_t))+
+            4*(sizeof(FaceValue)+4*sizeof(void*)+64)+6*(sizeof(EdgeValue)+4*sizeof(void*)+64)+
+            10*(sizeof(std::size_t)+4*sizeof(void*)+64)+512;
+        static_assert(modeledCell<=perComplexCell,"auxiliary compaction payload model");
+        static_assert(std::is_nothrow_move_assignable_v<Complex>,"atomic auxiliary compaction move");
+        const auto stored=live_.cells.size(),dead=stored-activeCells_;
+        // The admitted 8192/cell envelope reserves 4096/cell for each complex.
+        // Old capacity remains reserved while the staged live-only copy exists.
+        const auto peak=fixedBytes_+perComplexCell*(live_.maximumStoredCells+activeCells_);
+        if(peak>workingBytes_){budgetLimited=true;compactionBlocked_=true;return false;}
+        maximumCompactionModeledBytes=std::max(maximumCompactionModeledBytes,peak);
+        if(!live_.protectedFaces.empty()||!live_.protectedEdges.empty()||
+            !live_.requiredFaces.empty()||!live_.requiredEdges.empty())
+            throw std::logic_error("auxiliary compaction requires unprotected numerical complex");
+        const auto chargeCompaction=[&](std::uint64_t n=1){tick(n);compactionWork+=n;};
+        Complex next;
+        next.maximumStoredCells=live_.maximumStoredCells;
+        next.useLookahead=live_.useLookahead;next.walkConstraints=live_.walkConstraints;next.profile=live_.profile;
+        next.metrics=live_.metrics;next.edgeWalks=live_.edgeWalks;
+        next.facetWalks=live_.facetWalks;next.walkFallbacks=live_.walkFallbacks;
+        next.chargeWork=chargeCompaction;
+        chargeCompaction(live_.vertices.size());next.vertices=live_.vertices;
+        next.cells.reserve(activeCells_);next.alive.reserve(activeCells_);
+        next.cellBoxes.reserve(activeCells_);next.neighbours.reserve(activeCells_);
+        std::vector<unsigned char> relevance;relevance.reserve(activeCells_);
+        for(std::size_t id=0;id<stored;++id){
+            chargeCompaction();if(!live_.alive[id])continue;
+            // insert renumbers cell sequences/IDs but keeps the exact ordered
+            // vertex quartet and classification. Point IDs/sequences never move.
+            next.insert(live_.cells[id]);relevance.push_back(relevance_[id]);
+        }
+        if(next.cells.size()!=activeCells_||relevance.size()!=activeCells_)
+            throw std::logic_error("auxiliary compaction live count mismatch");
+        next.index.rebuild(next.cells.size(),[&](std::size_t id){return next.cellBoxes[id];},chargeCompaction);
+        chargeCompaction(11*stored); // Retire old cell/index/owner allocations.
+        next.chargeWork=charge_; // No captured staging callback may survive.
+        // Every allocation and charged operation precedes this noexcept commit.
+        live_=std::move(next);relevance_.swap(relevance);
+        ++planEpoch_;++compactions;deadCellsReclaimed+=dead;compactionRequested_=false;
+        return true;
+    }
 
 private:
     Complex live_;
@@ -249,6 +332,10 @@ private:
     std::vector<unsigned char> relevance_;
     std::size_t originalNodes_=0;
     std::uint64_t generation_=0;
+    std::uint64_t planEpoch_=0;
+    std::uint64_t workingBytes_=0,fixedBytes_=0;
+    std::size_t activeCells_=0;
+    bool compactionRequested_=false,compactionBlocked_=false;
     bool initialized_=false;
     void tick(std::uint64_t n=1)const{if(charge_)charge_(n);}
     static bool finite(Vec3 p){return std::isfinite(p.x)&&std::isfinite(p.y)&&std::isfinite(p.z);}
