@@ -72,6 +72,78 @@ class PythonReleaseTests(unittest.TestCase):
             self.assemble()
         self.assertFalse(self.output.exists(), "A failed gate left a publication set")
 
+    def use_qualified_dual_linux_wheel(self):
+        directory = self.builders / release.ARTIFACTS["linux-x86_64"]
+        original = next(directory.glob("*.whl"))
+        wheel = original.with_name(
+            "paacs_mesh-1.2.0rc2-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl")
+        original.rename(wheel)
+        with zipfile.ZipFile(wheel, "a") as archive:
+            archive.writestr("paacs_mesh-1.2.0rc2.dist-info/WHEEL",
+                "Wheel-Version: 1.0\nRoot-Is-Purelib: false\n"
+                "Tag: cp312-cp312-manylinux_2_27_x86_64\n"
+                "Tag: cp312-cp312-manylinux_2_28_x86_64\n")
+        for path in (directory / "wheel-validation.json",
+                     self.consumers / "paacs-mesh-installed-linux-x86_64/consumer-validation.json"):
+            record = release.load(path)
+            record.update(wheel=wheel.name, sha256=release.sha256(wheel))
+            release.write(path, record)
+        return wheel
+
+    def test_actual_reviewed_dual_linux_filename_passes_full_assembly(self):
+        wheel = self.use_qualified_dual_linux_wheel()
+        manifest = self.assemble()
+        self.assertEqual(manifest["wheels"][wheel.name], release.sha256(wheel))
+        self.assertEqual(len(manifest["wheels"]), 3)
+        self.assertEqual(release.sha256(self.output / "dist" / wheel.name), release.sha256(wheel))
+        release.verify(manifest, self.output / "dist", self.sha)
+
+    def test_linux_tags_require_expected_policy_and_only_reviewed_architecture(self):
+        original = next((self.builders / release.ARTIFACTS["linux-x86_64"]).glob("*.whl"))
+        for tags in ("manylinux_2_27_x86_64", "manylinux_2_28_aarch64",
+                     "manylinux_2_28_x86_64.manylinux_2_29_x86_64",
+                     "manylinux_2_26_x86_64.manylinux_2_28_x86_64",
+                     "manylinux_2_28_x86_64.manylinux_2_28_aarch64",
+                     "manylinux_2_28_x86_64.win_amd64"):
+            with self.subTest(tags=tags):
+                candidate = self.root / f"paacs_mesh-1.2.0rc2-cp312-cp312-{tags}.whl"
+                candidate.write_bytes(original.read_bytes())
+                with self.assertRaises(RuntimeError):
+                    release.wheel_metadata(candidate, release.Version("1.2.0rc2"), "linux-x86_64")
+
+    def test_dual_linux_tags_do_not_relax_python_abi_name_version_or_build(self):
+        original = next((self.builders / release.ARTIFACTS["linux-x86_64"]).glob("*.whl"))
+        dual = "manylinux_2_27_x86_64.manylinux_2_28_x86_64"
+        for prefix in ("paacs_mesh-1.2.0rc2-cp311-cp312", "paacs_mesh-1.2.0rc2-cp312-cp311",
+                       "paacs_mesh-1.2.0rc2-cp311.cp312-cp312", "paacs_mesh-1.2.0rc2-cp312-abi3.cp312",
+                       "paacs_mesh-1.2.0rc3-cp312-cp312", "other_project-1.2.0rc2-cp312-cp312",
+                       "paacs_mesh-1.2.0rc2-1-cp312-cp312"):
+            with self.subTest(prefix=prefix):
+                candidate = self.root / f"{prefix}-{dual}.whl"
+                candidate.write_bytes(original.read_bytes())
+                with self.assertRaises(RuntimeError):
+                    release.wheel_metadata(candidate, release.Version("1.2.0rc2"), "linux-x86_64")
+
+    def test_windows_and_macos_platform_tags_remain_exact(self):
+        for platform in ("windows-x86_64", "macos-arm64"):
+            original = next((self.builders / release.ARTIFACTS[platform]).glob("*.whl"))
+            candidate = self.root / original.name.replace(".whl", ".manylinux_2_28_x86_64.whl")
+            candidate.write_bytes(original.read_bytes())
+            with self.subTest(platform=platform), self.assertRaises(RuntimeError):
+                release.wheel_metadata(candidate, release.Version("1.2.0rc2"), platform)
+
+    def test_dual_linux_wheel_keeps_builder_and_consumer_hash_gates(self):
+        wheel = self.use_qualified_dual_linux_wheel()
+        original = wheel.read_bytes()
+        wheel.write_bytes(original + b"changed after qualification")
+        self.assert_gate_refuses()
+        wheel.write_bytes(original)
+        path = self.consumers / "paacs-mesh-installed-linux-x86_64/consumer-validation.json"
+        record = release.load(path)
+        record["sha256"] = "0" * 64
+        release.write(path, record)
+        self.assert_gate_refuses()
+
     def test_three_qualified_wheels_and_matching_source_are_staged_separately(self):
         manifest = self.assemble()
         self.assertEqual(len(list((self.output / "dist").iterdir())), 3)

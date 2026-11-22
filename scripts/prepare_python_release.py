@@ -105,9 +105,15 @@ def check_source(receipt: dict, expected: str):
 
 def wheel_metadata(path: Path, version: Version, platform: str):
     name, parsed, build, tags = parse_wheel_filename(path.name)
+    expected_platform = PLATFORM_TAGS[platform]
+    allowed_platforms = {expected_platform}
+    if platform == "linux-x86_64":
+        allowed_platforms.add("manylinux_2_27_x86_64")
+    platforms = {t.platform for t in tags}
     if (canonicalize_name(name) != "paacs-mesh" or parsed != version or build
             or not tags or any(t.interpreter != "cp312" or t.abi != "cp312"
-                               or t.platform != PLATFORM_TAGS[platform] for t in tags)):
+                               for t in tags)
+            or expected_platform not in platforms or not platforms <= allowed_platforms):
         raise RuntimeError("Wheel name, version or CPython/platform tags differ from the qualified release")
     with zipfile.ZipFile(path) as archive:
         metadata = [n for n in archive.namelist() if n.endswith(".dist-info/METADATA")]
