@@ -298,6 +298,120 @@ void coherent(const Scorer& scorer){
             "compacted point anchor is not an incident live cell");}
 }
 
+mesh::Mesh tetraSurface(){
+    mesh::Mesh source;
+    for(const auto p:std::array{Vec3{0,0,0},Vec3{1,0,0},Vec3{0,1,0},Vec3{0,0,1}})
+        source.addNode(p,{0,int(source.nodeCount()+1)});
+    const Scorer::Cell cell{{0,1,2,3},0,{3,7}};
+    for(unsigned side=0;side<4;++side){const auto f=bnd::tet_facet_detail::outwardFace(cell,side);
+        source.addCell(mesh::CellType::Tri3,std::array<Index,3>{f[0],f[1],f[2]},{2,int(side+1)});}
+    return source;
+}
+Front sourceFront(const mesh::Mesh& source){
+    Front front;
+    for(const auto p:source.nodes())front.vertices.push_back({p,front.vertices.size()+1});
+    for(Index i=0;i<source.cellCount();++i){const auto* v=source.cellNodes(i);
+        front.boundary.push_back({Scorer::Vertex(v[0]),Scorer::Vertex(v[1]),Scorer::Vertex(v[2])});}
+    check(front.initialize(),"inheritance source front refused");return front;
+}
+void exerciseCanonicalOwnerScope(){
+    const auto source=tetraSurface();auto front=sourceFront(source);
+    check(!front.initialOwnerCanonical,"generic front enabled an owner-only canonical shortcut");
+    const auto apex=Scorer::Vertex(front.vertices.size());
+    front.vertices.push_back({{.125,.125,.125},front.vertices.size()+1});
+    const auto f=front.boundary.front();const Scorer::Cell cone{{f[0],f[2],f[1],apex},0,{3,7}};
+    const auto bounds=front.box(cone.vertices);
+    check(front.boundaryAccepts(cone,bounds,0),"canonical contact fixture refused valid geometry");
+    const auto sequence=front.vertices.back().sequence;
+    front.vertices.back().sequence=front.vertices[apex-1].sequence;
+    check(!front.boundaryAccepts(cone,bounds,0),"default contact path accepted a noncanonical vertex table");
+    front.vertices.back().sequence=sequence;
+    check(front.boundaryAccepts(cone,bounds,0),"restored canonical contact fixture remained invalid");
+}
+void exerciseMaterialInheritance(){
+    const auto source=tetraSurface();auto front=sourceFront(source);
+    const auto inside=[](Vec3 p){return p.x>0&&p.y>0&&p.z>0&&p.x+p.y+p.z<1;};
+    front.interiorAdmission=inside;front.centroidAdmission=inside;
+    Scorer scorer;check(scorer.initialize(source,{3,7},512,32ULL*1024*1024,[](std::uint64_t){},inside),
+        "material inheritance initialization failed");
+    const Vec3 point{.125,.125,.125};const auto apex=Scorer::Vertex(front.vertices.size());
+    front.vertices.push_back({point,front.vertices.size()+1});Scorer::Cell occupancy;
+    check(front.valid(Front::Front{front.boundary.front()},apex,occupancy),"material inheritance occupancy refused");
+    auto plan=scorer.score(point,front);
+    check(plan&&plan->materialInherited&&plan->patch.removed.size()==1,
+        "interior source tetrahedron did not inherit its material classification");
+    const auto before=snapshot(scorer);const auto removed=plan->patch.removed.front();
+    auto& relevance=const_cast<std::vector<unsigned char>&>(scorer.relevanceForDiagnostics());
+    relevance[removed]=2;const auto changed=snapshot(scorer);
+    check(!scorer.commit(*plan,apex)&&snapshot(scorer)==changed,
+        "changed removed material cache was trusted by inherited commit");
+    relevance[removed]=1;auto stale=*plan;++stale.generation;
+    check(!scorer.commit(stale,apex)&&snapshot(scorer)==before,"changed plan epoch escaped admission");
+    // Mutable provisional cache metadata must not become committed truth.
+    std::fill(plan->addedRelevance.begin(),plan->addedRelevance.end(),4);
+    check(scorer.commit(*plan,apex),"certified inherited material patch refused");
+    const auto& cached=scorer.relevanceForDiagnostics();
+    for(std::size_t i=before.raw.size();i<cached.size();++i)
+        check(cached[i]==1,"inherited commit trusted mutable added relevance metadata");
+    coherent(scorer);front.insert(occupancy);
+    check(!scorer.commit(*plan,apex),"accepted inherited plan remained current");
+}
+void exerciseInheritedSourceBarrier(){
+    const auto source=tetraSurface();auto front=sourceFront(source);Scorer scorer;
+    check(scorer.initialize(source,{3,7},512,32ULL*1024*1024,[](std::uint64_t){}),
+        "source barrier scorer initialization failed");
+    // Controlled fault injection through the existing const diagnostic views:
+    // give both sides of one original source facet a cached material label.
+    auto& live=const_cast<Complex&>(scorer.complexForDiagnostics());
+    Complex replacement;replacement.vertices=live.vertices;replacement.vertices[4].position={0,0,-1};
+    replacement.walkConstraints=true;replacement.maximumStoredCells=live.maximumStoredCells;
+    replacement.chargeWork=live.chargeWork;
+    replacement.insert({{0,1,2,3},0,{3,7}});replacement.insert({{0,2,1,4},0,{3,7}});
+    live=std::move(replacement);
+    auto& relevance=const_cast<std::vector<unsigned char>&>(scorer.relevanceForDiagnostics());relevance.assign(2,1);
+    const Vec3 point{.25,.25,0};const auto apex=Scorer::Vertex(front.vertices.size());
+    front.vertices.push_back({point,front.vertices.size()+1});auto plan=scorer.score(point,front);
+    check(plan&&plan->patch.removed.size()==2&&!plan->materialInherited&&plan->guardAdded>0,
+        "internal original source facet did not fall back to complete source contacts");
+    auto forged=*plan;forged.materialInherited=true;
+    forged.addedRelevance.assign(forged.patch.added.size(),1);forged.patch.convexBipyramid=true;
+    const auto before=snapshot(scorer);const auto certifications=scorer.fullCertifications;
+    check(!scorer.commit(forged,apex)&&snapshot(scorer)==before&&scorer.fullCertifications==certifications,
+        "mutable inherited plan erased an internal original source facet");
+    auto changedRemoved=forged;changedRemoved.patch.removed.resize(1);
+    const auto validityRejects=scorer.commitValidityRejects;
+    check(!scorer.commit(changedRemoved,apex)&&snapshot(scorer)==before&&
+        scorer.commitValidityRejects==validityRejects+1,
+        "changed removed set bypassed full selected patch certification");
+    live.alive[1]=0;const auto retired=snapshot(scorer);
+    check(!scorer.commit(forged,apex)&&snapshot(scorer)==retired,
+        "retired removed cell was trusted by inherited commit");
+    live.alive[1]=1;
+}
+void exerciseConicSurvivorAdmission(){
+    const auto source=tetraSurface();auto front=sourceFront(source);Scorer scorer;
+    check(scorer.initialize(source,{3,7},512,32ULL*1024*1024,[](std::uint64_t){}),
+        "conic survivor scorer initialization failed");
+    auto& live=const_cast<Complex&>(scorer.complexForDiagnostics());
+    Complex replacement;replacement.vertices=live.vertices;
+    // A disconnected survivor with distinct identities occupies the same tetrahedron.
+    // The local positive shell check passes; exact survivor contacts must refuse it.
+    for(unsigned i=0;i<4;++i)replacement.vertices[4+i].position=source.node(i);
+    replacement.walkConstraints=true;replacement.maximumStoredCells=live.maximumStoredCells;
+    replacement.chargeWork=live.chargeWork;
+    replacement.insert({{0,1,2,3},0,{3,7}});replacement.insert({{4,5,6,7},0,{3,7}});
+    live=std::move(replacement);
+    auto& relevance=const_cast<std::vector<unsigned char>&>(scorer.relevanceForDiagnostics());relevance={1,3};
+    const Vec3 point{.125,.125,.125};const auto apex=Scorer::Vertex(front.vertices.size());
+    front.vertices.push_back({point,front.vertices.size()+1});auto plan=scorer.score(point,front);
+    check(plan&&plan->materialInherited&&plan->patch.removed==std::vector<std::size_t>{0},
+        "conic survivor fixture did not isolate its local replacement");
+    plan->patch.convexBipyramid=true;
+    const auto before=snapshot(scorer);const auto rejects=scorer.commitSurvivorRejects;
+    check(!scorer.commit(*plan,apex)&&snapshot(scorer)==before&&scorer.commitSurvivorRejects==rejects+1,
+        "mutable bipyramid flag bypassed conic pair/survivor certification");
+}
+
 void exerciseCompaction(){
     const auto source=compactionCube();Front front;
     for(const auto p:source.nodes())front.vertices.push_back({p,front.vertices.size()+1});
@@ -425,6 +539,7 @@ void exerciseBoundedBootstrapAndCancellation(){
 }
 int main(){try{
     exerciseUniformFront();exerciseFineBoundaryInteriorExclusion();exerciseRefusals();exerciseCompleteConflictCavity();exerciseCompaction();
+    exerciseCanonicalOwnerScope();exerciseMaterialInheritance();exerciseInheritedSourceBarrier();exerciseConicSurvivorAdmission();
     exerciseBoundedBootstrapAndCancellation();
     std::cout<<"initial volume points, complete conflict cavities and transactional guards passed\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

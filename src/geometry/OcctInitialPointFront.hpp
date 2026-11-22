@@ -260,6 +260,9 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
             buckets[keyAt(p)].push_back(Vertex(i));
         }
         if(!front.initialize())return done();
+        // This owner keeps the initialized table fixed except for finite points
+        // appended with sequence ID+1 and temporary removals of its last entry.
+        front.initialOwnerCanonical=true;
         out.initialized=true;
         if(limits.workingBytes<=payload+32ULL*1024*1024){out.budgetLimited=true;return done();}
         const auto auxiliaryBytes=limits.workingBytes-payload;

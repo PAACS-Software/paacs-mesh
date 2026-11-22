@@ -24,6 +24,7 @@
 #include <optional>
 #include <type_traits>
 #include <utility>
+#include <unordered_set>
 #include <vector>
 
 namespace paacs::geo::detail {
@@ -62,6 +63,7 @@ public:
         std::uint64_t generation=0;
         Vertex stagedAux=bnd::kInvalidTetFacetVertex;
         bool valid=false,certified=false,available=false,comparisonAvailable=false,qualityAdmissible=true;
+        bool materialInherited=false;
         double addedMinMean=1.,addedMinJac=1.,removedMinMean=1.,removedMinJac=1.,score=0.;
         std::size_t removedPoor10=0,removedPoor25=0,addedPoor10=0,addedPoor25=0;
         std::size_t relevantRemoved=0,relevantAdded=0,guardRemoved=0,guardAdded=0;
@@ -225,8 +227,14 @@ public:
                 plan.removedMinJac=std::min(plan.removedMinJac,q.second);
                 plan.removedPoor10+=q.first<.1;plan.removedPoor25+=q.first<.25;
             }
+            // Positive cones over the complete cavity shell replace the same
+            // material union. Internal original source facets must also survive;
+            // otherwise retain the complete per-cell source-contact checks.
+            plan.materialInherited=!plan.patch.removed.empty()&&
+                plan.relevantRemoved==plan.patch.removed.size()&&!plan.guardRemoved&&
+                !plan.unclassifiedRemoved&&materialInheritanceAdmissible(plan.patch);
             for(const auto& cell:plan.patch.added){
-                const auto state=newRelevance(cell,sourceFront,staged,stagedFront);
+                const unsigned char state=plan.materialInherited?1:newRelevance(cell,sourceFront,staged,stagedFront);
                 plan.addedRelevance.push_back(state);
                 if(state==3){++plan.guardAdded;continue;}
                 if(state!=1){++plan.unclassifiedAdded;continue;}
@@ -265,10 +273,18 @@ public:
             if(compactionEnabled&&live_.cells.size()>activeCells_)compactionRequested_=true;else budgetLimited=true;
             ++commitStorageRejects;return false;
         }
+        // Plans are mutable values. Recheck the actual removed set before its
+        // material classification can be inherited by the certified replacement.
+        if(plan.materialInherited&&!materialInheritanceAdmissible(plan.patch)){
+            ++commitStateRejects;return false;
+        }
         live_.vertices.push_back({plan.point,std::uint64_t(plan.stagedAux)+1});
         bool applied=false;
         try{
             auto patch=plan.patch;
+            // This planner emits cone patches, never the separate bistellar
+            // bipyramid certificate that bypasses pair/survivor admission.
+            patch.convexBipyramid=false;
             ++fullCertifications;
             for(const auto& cell:patch.added)if(!positive(cell)){
                 ++certificationRefusals;++commitPositiveRejects;
@@ -288,7 +304,8 @@ public:
             try{live_.apply(patch);applied=true;live_.chargeWork=std::move(work);}
             catch(...){live_.chargeWork=std::move(work);throw;}
             auxToFront_.push_back(frontPointId);
-            relevance_.insert(relevance_.end(),plan.addedRelevance.begin(),plan.addedRelevance.end());
+            if(plan.materialInherited)relevance_.insert(relevance_.end(),patch.added.size(),1);
+            else relevance_.insert(relevance_.end(),plan.addedRelevance.begin(),plan.addedRelevance.end());
             activeCells_=activeCells_-patch.removed.size()+patch.added.size();
             peakStoredCells=std::max(peakStoredCells,live_.cells.size());
             maximumAcceptedCavity=std::max(maximumAcceptedCavity,patch.removed.size());
@@ -397,6 +414,28 @@ private:
     void tick(std::uint64_t n=1)const{checkCancellation();if(charge_)charge_(n);}
     static bool finite(Vec3 p){return std::isfinite(p.x)&&std::isfinite(p.y)&&std::isfinite(p.z);}
     static bool equal(Vec3 a,Vec3 b){return a.x==b.x&&a.y==b.y&&a.z==b.z;}
+    bool materialInheritanceAdmissible(const Complex::Proposal& patch)const{
+        if(patch.removed.empty())return false;
+        std::unordered_set<std::size_t> removed;
+        tick(patch.removed.size());removed.reserve(patch.removed.size());
+        for(const auto id:patch.removed){
+            tick();
+            if(id>=live_.alive.size()||!live_.alive[id]||id>=relevance_.size()||
+                relevance_[id]!=1||!removed.insert(id).second)return false;
+        }
+        // Two individually admissible old cells can touch opposite sides of an
+        // original source facet. Erasing that internal facet would not preserve
+        // its source-contact barrier, so inheritance must fall back to contacts.
+        for(const auto id:patch.removed)for(unsigned side=0;side<4;++side){
+            tick();const auto face=Complex::key(bnd::tet_facet_detail::outwardFace(live_.cells[id],side));
+            if(!sourceFaces_.contains(face))continue;
+            const auto owner=live_.faces.find(face);if(owner==live_.faces.end())return false;
+            unsigned oldOwners=0;
+            for(const auto cell:owner->second){tick();oldOwners+=removed.contains(cell);}
+            if(oldOwners>1)return false;
+        }
+        return true;
+    }
     bool guard(const Cell& cell)const{
         return std::ranges::any_of(cell.vertices,[&](Vertex v){return v>=originalNodes_&&v<originalNodes_+8;});
     }
