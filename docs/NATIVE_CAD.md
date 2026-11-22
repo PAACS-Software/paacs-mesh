@@ -87,10 +87,13 @@ size and quality distributions, since bounded runs can leave weak cells unresolv
 `--advancing-interior-front` selects the native size-field route for a single
 Tet4 solid. It constructs initial interior points **before** constrained volume
 meshing, including for a uniform global-size request with no face or box controls.
-An advancing front starts at the fixed surface triangles and prioritizes its
-newly exposed faces. Step lengths follow actual neighbouring edges and grow
-toward the requested size, rather than launching a long connection from a small
-surface triangle. Existing points can be reused where advancing regions meet.
+A first sweep constructs wall sites from the fixed surface triangles. Step
+lengths follow actual neighbouring edges and grow toward the requested size.
+A persistent Delaunay queue then proposes sites in the largest remaining
+interior gaps, relative to the requested size, before resuming the exposed-face
+front. Existing points can be reused where
+advancing regions meet. These stages construct the initial point cloud; they
+do not add a refinement region or change the prescribed size field.
 
 Initial sites use their requested size-field values for separation from other
 interior sites. A small launch step near the surface does not permanently give
@@ -107,9 +110,21 @@ which point positions are considered. Work and storage still bound the search.
 The auxiliary constructor and subsequent constraint-seed constructor check work,
 temporary payload, cell limits and cancellation during construction. Their
 internal retries share each constructor's remaining allowance.
-The selected patch must pass the full topology and survivor checks before any
-insertion. Exact source-surface and temporary-cell intersection checks, strict
-native point admission and original body identity are retained.
+The selected patch must pass topology and embedding checks before any insertion.
+For the owned auxiliary complex, an exact local shell proof certifies a complete
+positive cone fan and its contacts with the surviving mesh. Unsupported patches
+retain the full pair and survivor checks. This avoids quadratic comparisons
+between cones that share the inserted point. Exact source-surface checks, native
+point admission and original body identity are retained. Cached material states
+can be inherited only when the replacement preserves the same union and no
+internal original source facet is erased.
+
+Gap candidates use the current tetrahedral circumcentres, source-surface
+clearance and all-known-point separation. Exact ray parity against the original
+surface and strict native admission reject cavities and exterior points.
+The queue updates only cells changed by an insertion, discards retired entries
+lazily and rebuilds after compaction. Its storage is reserved inside the existing
+working allowance; it does not trigger a full triangulation after each point.
 
 Retired auxiliary tetrahedra are reclaimed between candidate batches. Compaction
 copies the live connectivity and cached material classification without moving
@@ -127,6 +142,12 @@ The body receipt's `initial_front` object records initial sites, reused apices,
 propagated faces, complete-cavity sizes, certification work, queries and elapsed
 time. A zero `cavity_limit` means automatic discovery of the complete admitted
 cavity. Propagation depth describes ancestry, not distance from the CAD surface.
+`wall_nodes` and `void_nodes` distinguish the first sweep from gap placement;
+closure may supply additional sites. `source_sweep_complete` records whether
+every original source face was visited. `void_queue_exhausted` is not a coverage
+certificate: candidates can be refused by geometric or quality guards.
+`maximum_unresolved_void_ratio` also includes historical refused candidates
+that later insertions may have repaired.
 Storage rejections, compaction counts and reclaimed-cell counts distinguish
 memory pressure from geometric refusals. `compaction_peak_modeled_bytes` estimates
 the auxiliary payload; it is not a process-memory measurement.

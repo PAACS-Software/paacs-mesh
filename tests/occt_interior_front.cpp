@@ -616,7 +616,11 @@ void exercisePublicNativeFront() {
         body.nativeCentroidThreads==1&&body.nativeCentroidSourceGuard&&body.centroidOutsideDistanceLimit==0.&&
         body.maximumOutsideCentroidDistance==0.&&body.centroidsWithinChordTolerance==0.,
         "advancing front lost strict original-body native centroid coverage");
-    check(body.initialFront.nodes>0&&body.initialFront.propagatedActivations>0&&
+    std::cout<<"production initial placement: sites="<<body.initialFront.nodes
+        <<" wall="<<body.initialFront.wallNodes<<" void="<<body.initialFront.voidNodes
+        <<" sourceComplete="<<body.initialFront.sourceSweepComplete
+        <<" diagnostic="<<body.initialFront.diagnostic<<'\n';
+    check(body.initialFront.nodes>0&&body.initialFront.sourceActivations>0&&body.initialFront.wallNodes>0&&
         body.initialFront.delaunayCommits==body.initialFront.nodes&&
         body.initialFront.fullCertifications>=body.initialFront.delaunayCommits&&
         body.initialFront.work>0&&body.initialFront.queries>0,

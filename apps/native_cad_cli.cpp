@@ -184,6 +184,11 @@ int runNativeCadCli(int argc,char** argv) {
                 <<",\"local_delaunay_quality_edits\":"<<b.localDelaunayQualityEdits
                 <<",\"initial_front\":{\"diagnostic\":\""<<b.initialFront.diagnostic
                 <<"\",\"nodes\":"<<b.initialFront.nodes<<",\"candidates\":"<<b.initialFront.candidates
+                <<",\"wall_nodes\":"<<b.initialFront.wallNodes<<",\"void_nodes\":"<<b.initialFront.voidNodes
+                <<",\"void_candidates\":"<<b.initialFront.voidCandidates
+                <<",\"source_sweep_complete\":"<<(b.initialFront.sourceSweepComplete?"true":"false")
+                <<",\"void_queue_exhausted\":"<<(b.initialFront.voidQueueExhausted?"true":"false")
+                <<",\"maximum_unresolved_void_ratio\":"<<b.initialFront.maximumUnresolvedVoidRatio
                 <<",\"work\":"<<b.initialFront.work<<",\"queries\":"<<b.initialFront.queries
                 <<",\"cones\":"<<b.initialFront.cones<<",\"reused_apices\":"<<b.initialFront.reusedApices
                 <<",\"source_activations\":"<<b.initialFront.sourceActivations

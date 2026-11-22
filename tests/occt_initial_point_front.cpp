@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 #include "OcctInitialPointFront.hpp"
+#include "PlcVoidGeometry.hpp"
 #include <array>
 #include <atomic>
 #include <bit>
@@ -56,7 +57,7 @@ void originalPrefix(const mesh::Mesh& a,const mesh::Mesh& b){
 }
 void exerciseUniformFront(){
     const auto source=cubeSurface();const UniformField field;
-    OcctInitialPointFrontLimits limits;limits.sites=96;limits.cones=384;
+    OcctInitialPointFrontLimits limits;limits.sites=192;limits.cones=384;limits.work=16'000'000;
     OcctInitialPointFrontReport report;std::uint64_t charged=0,native=0;
     const auto inside=[&](Vec3 p){++native;return std::abs(p.x)<1&&std::abs(p.y)<1&&std::abs(p.z)<1;};
     const auto result=appendOcctInitialPointFrontSites(source,field,field.h,{3,7},limits,inside,
@@ -67,8 +68,12 @@ void exerciseUniformFront(){
         "initial site bypassed full auxiliary patch admission");
     check(report.auxiliaryComparisonCommits<=report.auxiliaryRankedCommits&&
         report.auxiliaryRankedCommits<=report.sites,"auxiliary quality availability accounting failed");
-    check(report.deepSites>0&&report.propagatedFaceAccepted>0&&report.maximumDepth>1,
-        "initial construction did not propagate beyond source faces");
+    check(report.sourcePhaseCompleted&&report.sourcePhaseSites>0&&report.bulkSites>0&&
+        report.sourcePhaseSites+report.bulkSites<=report.sites&&report.bulkCandidates>=report.bulkSites,
+        "initial source wave did not hand its point cloud to bulk placement");
+    check(std::isfinite(report.bulkMaximumUnresolvedRatio)&&report.bulkMaximumUnresolvedRatio>=0.,
+        "remaining bulk-potential diagnostic is not finite");
+    check(report.propagatedFaceAccepted>0,"closure did not advance a parked propagated face");
     check(report.reusedApices>0&&report.seedCones<=limits.cones&&report.sites<=limits.sites&&
         report.candidates<=limits.candidates,"front closure or construction limits failed");
     check(report.workUsed==charged&&charged<=limits.work&&report.nativeQueries==native&&native<=limits.queries,
@@ -88,12 +93,18 @@ void exerciseUniformFront(){
         for(Index j=source.nodeCount();j<i;++j)check((p-result.node(j)).norm()+1e-13>=.65*field.h,
             "two accepted interior sites violate requested-field separation");
     }
-    check(deepest>=field.h,"topological propagation never reached one requested size into the volume");
+    check(deepest>=field.h,"initial points never reached one requested size into the volume");
+    OcctInitialPointFrontReport repeated;
     const auto again=appendOcctInitialPointFrontSites(source,field,field.h,{3,7},limits,
-        [](Vec3 p){return std::abs(p.x)<1&&std::abs(p.y)<1&&std::abs(p.z)<1;},[](std::uint64_t){});
+        [](Vec3 p){return std::abs(p.x)<1&&std::abs(p.y)<1&&std::abs(p.z)<1;},[](std::uint64_t){},&repeated);
     check(again.nodeCount()==result.nodeCount(),"initial point count is not deterministic");
     for(Index i=0;i<result.nodeCount();++i)check(bits(again.node(i))==bits(result.node(i)),"initial point is not deterministic");
-    std::cout<<"uniform initial front: sites="<<report.sites<<" deep="<<report.deepSites
+    check(repeated.sourcePhaseCompleted==report.sourcePhaseCompleted&&repeated.sourcePhaseSites==report.sourcePhaseSites&&
+        repeated.bulkSites==report.bulkSites&&repeated.bulkCandidates==report.bulkCandidates&&
+        repeated.bulkQueueExhausted==report.bulkQueueExhausted&&
+        repeated.bulkMaximumUnresolvedRatio==report.bulkMaximumUnresolvedRatio,
+        "source/bulk phase report is not deterministic");
+    std::cout<<"uniform initial front: sites="<<report.sites<<" source="<<report.sourcePhaseSites<<" bulk="<<report.bulkSites
         <<" physicalDepth="<<deepest<<" work="<<charged<<'\n';
 }
 void exerciseFineBoundaryInteriorExclusion(){
@@ -313,6 +324,54 @@ Front sourceFront(const mesh::Mesh& source){
     for(Index i=0;i<source.cellCount();++i){const auto* v=source.cellNodes(i);
         front.boundary.push_back({Scorer::Vertex(v[0]),Scorer::Vertex(v[1]),Scorer::Vertex(v[2])});}
     check(front.initialize(),"inheritance source front refused");return front;
+}
+void exercisePlcVoidGeometry(){
+    const auto source=cubeSurface();auto front=sourceFront(source);
+    const auto vertices=front.vertices;
+    const auto boundary=front.boundary;
+    const auto sourceFlags=front.sourceVertex;const auto fixed=front.fixedVertexCount;
+    std::uint64_t work=0;PlcVoidGeometry plc(front,[&](std::uint64_t n){work+=n;});
+    using Inclusion=PlcVoidGeometry::Inclusion;
+    for(const auto p:std::array{Vec3{},Vec3{.3,-.2,.7},Vec3{-.8,.8,-.8}})
+        check(plc.inside(p)==Inclusion::Inside,"exact PLC ray missed strict material");
+    check(std::abs(plc.clearance({},10.)-1.)<1e-13&&plc.clearance({},.4)==.4,
+        "source clearance or upper clamp is incorrect");
+    check(plc.clearance({1.2,0,0},10.)>0.&&plc.inside({1.2,0,0})==Inclusion::Outside,
+        "positive source clearance was mistaken for material inclusion");
+    check(plc.inside({1,0,0})==Inclusion::Ambiguous,
+        "an exact source-boundary point received strict material parity");
+    check(std::abs(pointTriangleDistanceSquared({.25,.25,2},{0,0,0},{1,0,0},{0,1,0})-4.)<1e-13&&
+        std::abs(pointTriangleDistanceSquared({2,0,0},{0,0,0},{1,0,0},{0,1,0})-1.)<1e-13,
+        "source triangle distance missed a face or vertex nearest point");
+    auto hollow=source;const auto inner=compactionCube();const auto offset=hollow.nodeCount();
+    for(auto p:inner.nodes())hollow.addNode(p*.25,{0,20});
+    for(Index i=0;i<inner.cellCount();++i){const auto* v=inner.cellNodes(i);
+        hollow.addCell(mesh::CellType::Tri3,std::array<Index,3>{offset+v[0],offset+v[2],offset+v[1]},{2,20});}
+    auto hollowFront=sourceFront(hollow);PlcVoidGeometry hollowPlc(hollowFront);
+    check(hollowPlc.clearance({},2.)>0.&&hollowPlc.inside({})==Inclusion::Outside,
+        "positive-clearance enclosed void was classified as material");
+    check(hollowPlc.inside({.7,.1,.1})==Inclusion::Inside,"material around an enclosed void was rejected");
+    auto tetra=sourceFront(tetraSurface());PlcVoidGeometry tetraPlc(tetra);
+    check(tetraPlc.inside({.6,.6,0})==Inclusion::Outside,
+        "supporting-plane extension was treated as an ambiguous source contact");
+    mesh::Mesh oblique;
+    const auto transform=[](Vec3 p){return Vec3{3+p.x+.25*p.y,-2+p.y+.5*p.z,5+p.z};};
+    for(Index i=0;i<source.nodeCount();++i)oblique.addNode(transform(source.node(i)),source.nodeClass(i));
+    for(Index i=0;i<source.cellCount();++i){const auto* v=source.cellNodes(i);
+        oblique.addCell(mesh::CellType::Tri3,std::array<Index,3>{v[0],v[1],v[2]},source.cell(i).onEntity);}
+    auto obliqueFront=sourceFront(oblique);PlcVoidGeometry obliquePlc(obliqueFront);
+    check(obliquePlc.inside(transform({.3,-.2,.7}))==Inclusion::Inside&&
+        obliquePlc.inside(transform({1.2,0,0}))==Inclusion::Outside,
+        "PLC inclusion changed under an oblique affine source transform");
+    unsigned calls=0;bool stopped=false;
+    PlcVoidGeometry bounded(front,[&](std::uint64_t){if(++calls>=5)throw std::runtime_error("PLC-query-work-stop");});
+    try{(void)bounded.inside({});}catch(const std::runtime_error&){stopped=true;}
+    check(stopped,"source query swallowed an external work exception");
+    check(work>0,"source query work was not charged");
+    check(front.vertices.size()==vertices.size()&&front.boundary==boundary&&front.sourceVertex==sourceFlags&&
+        front.fixedVertexCount==fixed&&front.cells.empty(),"source query changed source identities or occupancy");
+    for(std::size_t i=0;i<vertices.size();++i)check(bits(front.vertices[i].position)==bits(vertices[i].position)&&
+        front.vertices[i].sequence==vertices[i].sequence,"source query changed a stored coordinate or sequence");
 }
 void exerciseCanonicalOwnerScope(){
     const auto source=tetraSurface();auto front=sourceFront(source);
@@ -649,6 +708,7 @@ void exerciseCertificateTransactions(){
 }
 int main(){try{
     exerciseUniformFront();exerciseFineBoundaryInteriorExclusion();exerciseRefusals();exerciseCompleteConflictCavity();exerciseCompaction();
+    exercisePlcVoidGeometry();
     exerciseCanonicalOwnerScope();exerciseMaterialInheritance();exerciseInheritedSourceBarrier();exerciseConicSurvivorAdmission();
     exerciseBoundedBootstrapAndCancellation();
     exerciseCertificateDegeneracies();exerciseActualPatchCertification();

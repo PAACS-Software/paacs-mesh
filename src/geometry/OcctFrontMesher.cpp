@@ -225,6 +225,11 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                     report.diagnostic=built.budgetLimited?"budget_limited":!built.initialized?
                         "unavailable":built.frontClosed?"front_closed":"stalled";
                     report.nodes=built.sites;report.candidates=built.candidates;
+                    report.wallNodes=built.sourcePhaseSites;report.voidNodes=built.bulkSites;
+                    report.voidCandidates=built.bulkCandidates;
+                    report.sourceSweepComplete=built.sourcePhaseCompleted;
+                    report.voidQueueExhausted=built.bulkQueueExhausted;
+                    report.maximumUnresolvedVoidRatio=built.bulkMaximumUnresolvedRatio;
                     report.cones=built.seedCones;report.reusedApices=built.reusedApices;
                     report.sourceActivations=built.originalFaceActivations;
                     report.propagatedActivations=built.propagatedFaceActivations;

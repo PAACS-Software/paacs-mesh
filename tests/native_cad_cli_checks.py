@@ -95,7 +95,8 @@ def main():
         front = advancing["bodies"][0].get("interior_front", {})
         placement = advancing["bodies"][0].get("initial_front", {})
         if (advancing.get("advancing_interior_front") is not True or advancing.get("audit_valid") is not True
-                or placement.get("nodes", 0) == 0 or placement.get("propagated_activations", 0) == 0
+                or placement.get("nodes", 0) == 0 or placement.get("source_activations", 0) == 0
+                or placement.get("wall_nodes", 0) == 0
                 or front.get("nodes", 0) == 0
                 or front.get("front_advances", 0) + front.get("void_activations", 0) == 0
                 or front.get("diagnostic") not in {"targets_satisfied", "targets_unmet", "budget_limited"}):
@@ -111,6 +112,12 @@ def main():
                 or initial.get("improve_tet_quality") is not False
                 or initial.get("audit_valid") is not True
                 or seed.get("nodes", 0) == 0 or seed.get("propagated_activations", 0) == 0
+                or seed.get("source_sweep_complete") is not True
+                or seed.get("wall_nodes", 0) == 0 or seed.get("void_nodes", 0) == 0
+                or seed.get("wall_nodes", 0) + seed.get("void_nodes", 0) > seed.get("nodes", 0)
+                or seed.get("void_candidates", 0) < seed.get("void_nodes", 0)
+                or not isinstance(seed.get("void_queue_exhausted"), bool)
+                or seed.get("maximum_unresolved_void_ratio", -1) < 0
                 or seed.get("delaunay_commits") != seed.get("nodes")
                 or seed.get("full_certifications", 0) < seed.get("delaunay_commits", 0)
                 or seed.get("maximum_planned_cavity", 0) <= 64

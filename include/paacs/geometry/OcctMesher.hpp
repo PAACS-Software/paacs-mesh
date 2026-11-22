@@ -174,6 +174,11 @@ struct NativeCadRegionRecoveryReport {
 struct NativeCadInitialFrontReport {
     const char* diagnostic="not_attempted";
     std::uint64_t nodes=0,candidates=0,work=0,queries=0;
+    std::uint64_t wallNodes=0,voidNodes=0,voidCandidates=0;
+    // Queue exhaustion is not a coverage certificate: refused candidates can
+    // remain. The unresolved ratio also includes historical refusals.
+    bool sourceSweepComplete=false,voidQueueExhausted=false;
+    double maximumUnresolvedVoidRatio=0;
     std::uint64_t cones=0,reusedApices=0,sourceActivations=0,propagatedActivations=0;
     // Propagation ancestry is not a physical distance from the CAD boundary.
     std::uint64_t propagatedSites=0,maximumDepth=0,remainingFaces=0;
