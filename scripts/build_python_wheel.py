@@ -41,6 +41,19 @@ PLATFORM_TAGS = {
 }
 
 
+def source_revision(source: Path) -> dict:
+    """Record source identity; unversioned developer builds cannot be published."""
+    try:
+        def git(*args):
+            return subprocess.check_output(["git", "-c", "safe.directory=" + source.resolve().as_posix(),
+                                           "-C", str(source), *args],
+                                           text=True, stderr=subprocess.DEVNULL).strip()
+        return {"commit": git("rev-parse", "HEAD"), "tree": git("rev-parse", "HEAD^{tree}"),
+                "clean": not git("status", "--porcelain", "--untracked-files=normal")}
+    except (OSError, subprocess.CalledProcessError):
+        return {"commit": None, "tree": None, "clean": False}
+
+
 def host_platform(*, building: bool = False) -> str:
     if (sys.implementation.name != "cpython" or sys.version_info[:2] != (3, 12)
             or struct.calcsize("P") != 8):
@@ -304,6 +317,10 @@ def installed_smoke(source: Path, wheel: Path, build_dir: Path) -> list[dict]:
     venv.EnvBuilder(with_pip=True, clear=True).create(environment)
     python = environment / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
     run([str(python), "-m", "pip", "install", "--no-index", "--no-deps", str(wheel)], cwd=environment)
+    console = environment / ("Scripts/paacs-mesh.exe" if sys.platform == "win32" else "bin/paacs-mesh")
+    if not console.is_file():
+        raise RuntimeError("The installed package omits the paacs-mesh command")
+    run([str(console), "--help"], cwd=environment, env=isolated_environment(environment))
     fixture = environment / "cylinder.step"
     shutil.copyfile(source / "tests/fixtures/cad/cylinder.step", fixture)
     shutil.copyfile(source / "tests/fixtures/cad/assembly.step", environment / "assembly.step")
@@ -421,6 +438,7 @@ def main() -> None:
     runtime = runtime_directory(args.vc_runtime_dir) if sys.platform == "win32" else None
     prepare_native_runtime(native_cli, sdk, runtime)
     wheel, receipt = repair_wheel(wheels[0], sdk, output, source, runtime)
+    receipt["source_revision"] = source_revision(source)
     if current_platform == "linux-x86_64":
         receipt["minimum_glibc"] = "2.28"
         receipt["build_image"] = os.environ.get("PAACS_MANYLINUX_IMAGE")

@@ -1,0 +1,180 @@
+# PAACS Mesh
+# Project author: Paul LeDewhurst
+# Copyright PAACS Software Ltd.
+# SPDX-License-Identifier: MPL-2.0
+
+name: Publish Python package
+on:
+  workflow_dispatch:
+    inputs:
+      release-tag:
+        description: Published GitHub release tag at this main revision, for example v1.2.0-rc.2
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: pypi-paacs-mesh
+  cancel-in-progress: false
+jobs:
+  prepare:
+    if: github.repository == 'PAACS-Software/paacs-mesh' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    outputs:
+      source-sha: ${{ steps.source.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install packaging==25.0
+      - name: Verify release tag, version and source revision
+        id: source
+        env:
+          RELEASE_TAG: ${{ inputs.release-tag }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          python scripts/prepare_python_release.py preflight --tag "$RELEASE_TAG" --expected-sha "$EXPECTED_SHA"
+          echo "sha=$EXPECTED_SHA" >> "$GITHUB_OUTPUT"
+      - name: Require the matching published GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release-tag }}
+        run: |
+          gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft' > release-draft.txt
+          test "$(cat release-draft.txt)" = false
+
+  qualify:
+    needs: prepare
+    uses: ./.github/workflows/python-wheel.yml
+    with:
+      source-ref: ${{ needs.prepare.outputs.source-sha }}
+
+  assemble:
+    needs: [prepare, qualify]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.source-sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install packaging==25.0 twine==6.2.0
+      - uses: actions/download-artifact@v6
+        with:
+          pattern: paacs-mesh-cp312-*
+          path: release-builders
+      - uses: actions/download-artifact@v6
+        with:
+          pattern: paacs-mesh-installed-*
+          path: release-consumers
+      - name: Verify all builders and clean consumers from the same source
+        env:
+          EXPECTED_SHA: ${{ needs.prepare.outputs.source-sha }}
+        run: |
+          python scripts/prepare_python_release.py assemble --builders release-builders --consumers release-consumers --expected-sha "$EXPECTED_SHA" --output build/python-release
+          python -m twine check --strict build/python-release/dist/*.whl
+      - uses: actions/upload-artifact@v6
+        with:
+          name: paacs-mesh-pypi-wheels
+          path: build/python-release/dist/*.whl
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v6
+        with:
+          name: paacs-mesh-release-manifest
+          path: build/python-release/release-manifest.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v6
+        with:
+          name: paacs-mesh-release-assets
+          path: build/python-release/release-assets/*
+          if-no-files-found: error
+
+  source-release:
+    needs: [prepare, assemble]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.source-sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install packaging==25.0
+      - uses: actions/download-artifact@v6
+        with:
+          name: paacs-mesh-release-assets
+          path: release-assets
+      - name: Attach matching source and qualification receipts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.release-tag }}
+          EXPECTED_SHA: ${{ needs.prepare.outputs.source-sha }}
+        run: python scripts/prepare_python_release.py source-assets --tag "$RELEASE_TAG" --dist release-assets --expected-sha "$EXPECTED_SHA"
+
+  publish:
+    needs: [prepare, assemble, source-release]
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi
+      url: https://pypi.org/p/paacs-mesh
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.source-sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install packaging==25.0
+      - uses: actions/download-artifact@v6
+        with:
+          name: paacs-mesh-pypi-wheels
+          path: dist
+      - uses: actions/download-artifact@v6
+        with:
+          name: paacs-mesh-release-manifest
+          path: release-proof
+      - name: Recheck the exact files selected for publication
+        env:
+          EXPECTED_SHA: ${{ needs.prepare.outputs.source-sha }}
+        run: python scripts/prepare_python_release.py verify --manifest release-proof/release-manifest.json --dist dist --expected-sha "$EXPECTED_SHA"
+      - name: Publish qualified wheels through PyPI Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+
+  verify-index:
+    needs: [prepare, publish]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.source-sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v6
+        with:
+          name: paacs-mesh-release-manifest
+          path: release-proof
+      - name: Verify index hashes and import, mesh and export after pip install
+        run: python scripts/check_pypi_release.py --manifest release-proof/release-manifest.json --fixture tests/fixtures/cad/cylinder.step --output build/pypi-install
+      - uses: actions/upload-artifact@v6
+        with:
+          name: paacs-mesh-index-install
+          path: build/pypi-install/index-validation.json
+          if-no-files-found: error

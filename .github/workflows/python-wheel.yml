@@ -17,17 +17,41 @@ on:
       - 'scripts/build_python_wheel.py'
       - 'scripts/check_python_wheel.py'
       - 'scripts/check_python_parity.py'
+      - 'scripts/prepare_python_release.py'
+      - 'scripts/check_pypi_release.py'
+      - 'scripts/tests/**'
       - 'tests/fixtures/cad/*.step'
       - '.github/workflows/python-wheel.yml'
+      - '.github/workflows/publish-python.yml'
   push:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      source-ref:
+        description: Immutable source commit selected by the release workflow
+        required: false
+        default: ''
+        type: string
 permissions:
   contents: read
 env:
   # Verified registry manifest bytes and linux/amd64 config on 2026-11-21.
   PAACS_MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_x86_64@sha256:55a36963bc0504cdf004011001c1072306402f0b8b83be5a5eba7068f93eec53
 jobs:
+  release-assembly-checks:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source-ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install packaging==25.0
+      - run: python -m unittest discover -s scripts/tests -p test_python_release.py -v
+
   windows-cp312:
     runs-on: windows-2022
     timeout-minutes: 90
@@ -35,6 +59,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          ref: ${{ inputs.source-ref || github.sha }}
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -59,6 +84,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          ref: ${{ inputs.source-ref || github.sha }}
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -81,6 +107,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          ref: ${{ inputs.source-ref || github.sha }}
       - name: Build and qualify inside the pinned manylinux 2.28 image
         shell: bash
         run: |
@@ -122,6 +149,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          ref: ${{ inputs.source-ref || github.sha }}
       - uses: actions/setup-python@v6
         if: runner.os != 'Linux'
         with:
@@ -130,10 +158,10 @@ jobs:
       - uses: actions/download-artifact@v6
         with:
           name: ${{ matrix.artifact }}
-          path: artifacts
+          path: build/python-wheel-artifacts
       - name: Install and test on a fresh Windows or macOS runner
         if: runner.os != 'Linux'
-        run: python scripts/check_python_wheel.py --artifact-dir artifacts
+        run: python scripts/check_python_wheel.py --artifact-dir build/python-wheel-artifacts
       - name: Install and test in a fresh manylinux 2.28 container
         if: runner.os == 'Linux'
         shell: bash
@@ -141,7 +169,7 @@ jobs:
           docker run --rm -v "$PWD:/project" -w /project \
             "$PAACS_MANYLINUX_IMAGE" bash -euc '
               export PATH="/opt/python/cp312-cp312/bin:$PATH"
-              python scripts/check_python_wheel.py --artifact-dir artifacts
+              python scripts/check_python_wheel.py --artifact-dir build/python-wheel-artifacts
             '
       - name: Save independent installation result
         uses: actions/upload-artifact@v6

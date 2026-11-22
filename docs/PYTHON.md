@@ -20,7 +20,7 @@ artifact, then install its `.whl` file in a Python 3.12 environment. For example
 on Windows:
 
 ```powershell
-python -m pip install --force-reinstall --only-binary=:all: .\paacs_mesh-1.2.0rc1-cp312-cp312-win_amd64.whl
+python -m pip install --force-reinstall --only-binary=:all: .\paacs_mesh-1.2.0rc2-cp312-cp312-win_amd64.whl
 ```
 
 Development artifacts can share the candidate version; `--force-reinstall`
@@ -55,6 +55,43 @@ The same operation is available from the command line:
 ```powershell
 python -m paacs_mesh part.step part.vtk --size 0.7
 ```
+
+Installed wheels also provide the `paacs-mesh` command with the same arguments.
+
+### Initial interior placement
+
+Compatible single-solid Tet4 requests automatically construct wall sites before
+filling interior gaps. The default assembly policy still preserves parts. Multi-part
+assemblies and other specialized routes retain their existing constructors.
+
+`advancing_interior_front=None` selects this automatic policy. Set it to `False`
+to use the previous initial constructor, or `True` to explicitly request the new
+single-solid route with `assembly="conforming"`:
+
+```python
+mesh = model.mesh(.3, advancing_interior_front=False)
+mesh = model.mesh(.3, assembly="conforming", advancing_interior_front=True)
+```
+
+`native_sizing=False` retains legacy cap sizing and disables automatic interior
+placement. Combining it with `advancing_interior_front=True` is contradictory and
+raises `ValueError`. A saved recipe records the initial-placement choice; older
+recipes without this optional field retain automatic selection.
+
+The report's `requested_advancing_interior_front` records the caller's choice.
+Each body's `initial_front` reports actual wall/gap nodes, work, candidates and
+remaining targets. An automatic fallback is recorded separately in
+`initial_front_fallback`; it does not claim the new constructor ran. The CLI
+provides `--advancing-interior-front` and `--no-advancing-interior-front`.
+
+## Package distribution
+
+The [publishing workflow](../.github/workflows/publish-python.yml) prepares the
+three repaired CPython 3.12 wheels and requires fresh installed-wheel consumers
+from the same source commit. PyPI Trusted Publishing is configured; until the
+first qualified upload, use the workflow artifacts described above.
+The [release guide](PYPI_RELEASE.md) records that setup
+and the publication checks.
 
 ## Face sizing, volume regions and growth
 
@@ -99,8 +136,9 @@ the logical work budget for the spatial route.
 present. Set `native_sizing=True` to use that route even without controls, for
 example when comparing a uniform baseline against a refined mesh. Set it to
 `False` to retain the existing analytic end-cap sizing on supported cylinders
-and tubes; box controls require spatial sizing. Calls without controls retain
-the existing route selection and defaults.
+and tubes; box controls require spatial sizing. Calls without controls use the
+automatic initial-placement policy on compatible single-solid Tet4 requests;
+`advancing_interior_front=False` selects the previous initial constructor.
 
 `min_size` clamps the requested field, rather than imposing a minimum on every
 produced edge. Curvature, boundary recovery and connectivity can require smaller
@@ -137,7 +175,7 @@ NumPy is optional. Install it alongside the development wheel, or use the
 
 ```powershell
 python -m pip install "numpy>=1.26.4,<3"
-python -m pip install --force-reinstall --find-links . "paacs-mesh[numpy]==1.2.0rc1"
+python -m pip install --force-reinstall --find-links . "paacs-mesh[numpy]==1.2.0rc2"
 ```
 
 Import, meshing and export continue to work without NumPy. Array extraction

@@ -1,7 +1,16 @@
 # Changelog
 
-## Unreleased
+## 1.2.0-rc.2
 
+- Construct initial native Tet4 wall sites before filling interior gaps, with
+  automatic selection for compatible single-solid requests and explicit on/off
+  controls in C++, Python and the STEP command line.
+- Reuse source-contact classifications and certify complete local cavities
+  without repeating all cone-pair comparisons; retain exact admission checks.
+- Record bounded automatic source-stage fallback separately from successful
+  initial construction, including its failed work and elapsed time.
+- Prepare three-platform PyPI publishing with matching source and qualification
+  receipts, clean installed consumers and a fresh package-index installation check.
 - Add an optional Python interface for native STEP import, audited Tet4 meshing,
   assembly interference reports and tagged VTK/archive export.
 - Build and test a Windows x64 CPython 3.12 wheel with the pinned CAD runtime.
