@@ -15,8 +15,13 @@ The preview JSON contains display triangles and original CAD face tags.
 The mesher uses the STEP geometry and topology directly. STEP coordinates,
 sizes and geometric error limits are in millimetres.
 
-The CLI chooses a mesh route based on the solid. It can use a recognized
-primitive, a supported planar or swept strategy, or native Tet4 recovery.
+Single-solid Tet4 requests use native wall and gap point placement by default
+when the request supports that route. Hex requests, assemblies and explicit
+strategy or body controls retain their existing routing. A single body meshed
+with `--independent-parts` uses the new placement inside its audited part wrapper;
+multiple parts retain their existing construction and interference reports.
+`--no-advancing-interior-front` selects the previous placement and recognized
+primitive, planar or swept routes.
 Check `archive_published`, `audit_valid` and each body's `route` in the JSON
 receipt. A refusal leaves an existing output archive intact.
 
@@ -40,7 +45,8 @@ paacs-cad-mesh tests/fixtures/cad/cylinder.step .7 cylinder.paacsmesh \
   from a selected face or box. Inspect achieved lengths and adjacent Tet4 size
   ratios when the transition matters.
 - Recognized cylinder and tube cap profiles remain available through
-  `--face-size` on the analytic route. Native size-field controls currently
+  `--face-size` with `--no-advancing-interior-front` on the analytic route.
+  Native size-field controls currently
   apply to one Tet4 solid.
 
 Use [native_step_sizing.py](../scripts/native_step_sizing.py) to save a face
@@ -56,13 +62,19 @@ The `plot` command uses exact intersections of the stored Tet4 cells.
 | `--local-partition-recovery`, `--adaptive-tet-recovery` | Enable optional bounded recovery routes. |
 | `--curvature-points-per-turn N` | Enable curvature-based surface sizing on eligible native routes. |
 | `--improve-tet-quality` | Try bounded quality improvement on native pieces and after spatial sizing, keeping the prescribed surface fixed. |
-| `--advancing-interior-front` | Select experimental size- and shape-guided interior construction for one native Tet4 solid. |
+| `--advancing-interior-front` | Force wall and gap initial point construction for one supported native Tet4 solid. Unsupported combinations return a diagnostic. |
+| `--no-advancing-interior-front` | Disable the new default and use the previous construction and route selection. |
 | `--independent-parts` | Mesh supported bodies separately and report material interference. The result certifies each part individually. |
 | `--max-work`, `--max-working-bytes` | Set work and temporary storage limits. |
 | `--warning-quality`, `--min-quality` | Report a weak mesh or require a strict quality floor. |
 | `--trace-native-stages` | Record active stages and diagnostics on standard error. |
 
-For spatial Tet4 sizing without the advancing interior front,
+The default logical work allowance is 50 million units for both construction
+and validation. `--max-work` sets both ceilings; an explicit limit is retained
+across automatic fallback attempts. Work units measure bounded operations,
+not elapsed seconds.
+
+With `--no-advancing-interior-front`, for spatial Tet4 sizing,
 `--improve-tet-quality` also supplies interior sites to the first constrained
 Delaunay construction. Enclosed boxes contribute points
 before the fill, and oriented surface triangles propose inward points using the
@@ -84,8 +96,20 @@ attempts count toward work and time. Trace stages include `interior_sites`,
 `interior_seed_fallback` when needed, and `volume_quality`. Inspect the achieved
 size and quality distributions, since bounded runs can leave weak cells unresolved.
 
-`--advancing-interior-front` selects the native size-field route for a single
-Tet4 solid. It constructs initial interior points **before** constrained volume
+Automatic initial placement selects the native size-field route for an eligible
+single Tet4 solid. `--advancing-interior-front` forces this selection;
+`--no-advancing-interior-front` disables it. The last explicit flag wins.
+In C++, `NativeCadMeshOptions::useAdvancingInteriorFront` is `std::nullopt` for
+automatic selection, `true` to force it and `false` for the previous route.
+Automatic selection respects disabled native fallback, requested geometry
+strategies, body controls and other unsupported construction contracts.
+If the automatic route refuses a surface before initial point construction has
+started, it can try the previous route within the remaining work allowance.
+The receipt records this in `initial_front_fallback`, including the first
+failure and its work and time. Both attempts contribute to total cost.
+Cancellation, exhausted budgets and strict quality refusals are terminal.
+An explicit `--advancing-interior-front` request does not use this fallback.
+It constructs initial interior points **before** constrained volume
 meshing, including for a uniform global-size request with no face or box controls.
 A first sweep constructs wall sites from the fixed surface triangles. Step
 lengths follow actual neighbouring edges and grow toward the requested size.

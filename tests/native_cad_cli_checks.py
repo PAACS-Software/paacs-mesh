@@ -74,11 +74,72 @@ def main():
                          "archive_preserved": not success, "result": receipt})
             return receipt
 
-        cylinder = run("native_cylinder", "cylinder.step", success=True)
+        cylinder = run("legacy_native_cylinder", "cylinder.step",
+                       ("--no-advancing-interior-front",), success=True)
         if cylinder.get("curved_faces") != 1 or cylinder["bodies"][0].get("route") != "cylinder":
             raise RuntimeError(f"cylinder did not consume native curved CAD: {cylinder}")
+        plain = run("plain_default_cylinder_phases", "cylinder.step", success=True)
+        plain_body = plain["bodies"][0]
+        plain_front = plain_body.get("initial_front", {})
+        if (plain.get("advancing_interior_front_policy") != "auto"
+                or plain.get("advancing_interior_front") is not True
+                or plain.get("audit_valid") is not True
+                or plain_front.get("wall_nodes", 0) == 0 or plain_front.get("void_nodes", 0) == 0
+                or plain_front.get("source_sweep_complete") is not True
+                or plain_front.get("delaunay_commits") != plain_front.get("nodes")
+                or plain_front.get("full_certifications", 0) < plain_front.get("delaunay_commits", 0)
+                or plain_body.get("boundary_embedding_certified") is not True
+                or plain_body.get("native_centroid_source_guard") is not True
+                or plain_body.get("native_centroids_checked", 0) == 0
+                or plain_body.get("centroid_outside_distance_limit") != 0
+                or plain_body.get("centroids_within_chord_tolerance") != 0
+                or plain_body.get("interior_front", {}).get("diagnostic") != "not_attempted"):
+            raise RuntimeError(f"plain defaults did not complete the source sweep and populate the interior voids: {plain}")
+        default_sphere = run("default_native_surface_sphere", "sphere.step", success=True)
+        default_sphere_body = default_sphere["bodies"][0]
+        if (default_sphere.get("audit_valid") is not True or default_sphere.get("solids") != 1
+                or default_sphere.get("advancing_interior_front_policy") != "auto"
+                or default_sphere.get("advancing_interior_front_selected") is not True
+                or default_sphere.get("advancing_interior_front") is not False
+                or default_sphere_body.get("solid_tag") != 1
+                or default_sphere_body.get("boundary_embedding_certified") is not True
+                or default_sphere_body.get("native_volume_reason") != "none"
+                or default_sphere_body.get("centroid_outside_distance_limit") != 0
+                or default_sphere_body.get("centroids_within_chord_tolerance") != 0
+                or default_sphere_body.get("maximum_outside_centroid_distance") != 0
+                or default_sphere_body.get("relative_volume_error", 1) > .01):
+            raise RuntimeError(f"automatic defaults regressed the established sphere's strict native publication: {default_sphere}")
+        fallback = default_sphere.get("initial_front_fallback", {})
+        body_fallback = default_sphere_body.get("initial_front_fallback", {})
+        if (fallback.get("attempted") is not True or fallback.get("reason") != "geometry_error"
+                or fallback.get("work", 0) <= 0 or fallback.get("seconds", -1) < 0
+                or fallback.get("surface_diagnostic") in {None, "not_attempted"}
+                or default_sphere.get("validation_work", 0) <= fallback.get("work", 0)
+                or default_sphere.get("total_seconds", 0) < fallback.get("seconds", 0)
+                or body_fallback != fallback
+                or default_sphere_body.get("initial_front", {}).get("diagnostic") != "not_attempted"):
+            raise RuntimeError(f"automatic sphere fallback hid its failed pre-point surface work: {default_sphere}")
+        default_sphere_bytes = output.read_bytes()
+        forced_sphere = run("forced_initial_sphere_surface_refusal", "sphere.step",
+                            ("--advancing-interior-front",), reason="geometry-error")
+        if forced_sphere.get("initial_front_fallback", {}).get("attempted") is not False:
+            raise RuntimeError("explicit initial-front ON silently fell back after source refusal")
+        sphere_reference = run("automatic_sphere_matches_legacy_off", "sphere.step",
+                               ("--no-advancing-interior-front",), success=True)
+        if output.read_bytes() != default_sphere_bytes:
+            raise RuntimeError("automatic pre-point fallback changed the established sphere archive")
+        reference_body = sphere_reference["bodies"][0]
+        for key in ("route", "solid_tag", "boundary_embedding_certified", "native_surface_reason", "native_volume_reason",
+                    "native_centroid_threads", "native_centroids_checked", "native_centroid_exact_reuses",
+                    "native_centroid_reference_queries", "native_centroid_geometry_pairs", "native_centroid_source_guard",
+                    "centroid_outside_distance_limit", "centroids_within_chord_tolerance", "native_centroid_distance_queries",
+                    "maximum_outside_centroid_distance", "native_chord_samples_checked", "chord_samples_within_tolerance",
+                    "maximum_outside_chord_sample_distance", "cad_volume", "mesh_volume", "relative_volume_error",
+                    "boundary_node_error", "boundary_sample_error", "surface_chord_error_limit"):
+            if key not in default_sphere_body or default_sphere_body[key] != reference_body.get(key):
+                raise RuntimeError(f"automatic sphere fallback changed the established certificate field {key}")
         sized = run("curved_face_and_box", "cylinder.step",
-                    ("--face-size", "1", ".38", "--size-box", "-.3", "-.3", ".7", ".3", ".3", "1.3", ".31",
+                    ("--no-advancing-interior-front", "--face-size", "1", ".38", "--size-box", "-.3", "-.3", ".7", ".3", ".3", "1.3", ".31",
                      "--min-size", ".34", "--growth", "1.55", "--max-work", "100000000"),
                     success=True, size=".7")
         sized_body = sized["bodies"][0]
@@ -101,14 +162,16 @@ def main():
                 or front.get("front_advances", 0) + front.get("void_activations", 0) == 0
                 or front.get("diagnostic") not in {"targets_satisfied", "targets_unmet", "budget_limited"}):
             raise RuntimeError(f"advancing interior front did not report audited construction: {advancing}")
-        initial = run("uniform_initial_interior_front", "cylinder.step",
-                      ("--advancing-interior-front", "--max-work", "100000000",
-                       "--max-chord-error", ".008660254037844387", "--min-quality", "0",
-                       "--warning-quality", ".25"),
-                      success=True)
+        uniform_options = ("--max-work", "100000000", "--max-chord-error", ".008660254037844387",
+                           "--min-quality", "0", "--warning-quality", ".25")
+        initial = run("default_uniform_initial_interior_front", "cylinder.step",
+                      uniform_options, success=True)
         initial_body = initial["bodies"][0]
         seed = initial_body.get("initial_front", {})
-        if (initial.get("face_size_controls") != 0 or initial.get("size_box_controls") != 0
+        if (initial.get("advancing_interior_front") is not True
+                or initial.get("advancing_interior_front_policy") != "auto"
+                or initial.get("advancing_interior_front_selected") is not True
+                or initial.get("face_size_controls") != 0 or initial.get("size_box_controls") != 0
                 or initial.get("improve_tet_quality") is not False
                 or initial.get("audit_valid") is not True
                 or seed.get("nodes", 0) == 0 or seed.get("propagated_activations", 0) == 0
@@ -127,15 +190,89 @@ def main():
                 or initial.get("quality_percentile_1", 0) < .25
                 or initial_body.get("interior_front", {}).get("diagnostic") != "not_attempted"):
             raise RuntimeError(f"uniform initial construction did not run independently: {initial}")
+        if (initial_body.get("boundary_embedding_certified") is not True
+                or initial_body.get("native_centroid_source_guard") is not True
+                or initial_body.get("native_centroids_checked", 0) <= 0
+                or initial_body.get("centroid_outside_distance_limit") != 0
+                or initial_body.get("centroids_within_chord_tolerance") != 0
+                or initial_body.get("maximum_outside_centroid_distance") != 0
+                or initial_body.get("recovery_steiner_nodes") != 0
+                or initial_body.get("local_delaunay_refinement_nodes") != 0
+                or initial_body.get("local_delaunay_quality_edits") != 0):
+            raise RuntimeError(f"default initial construction lost its strict native publication guards: {initial}")
+        automatic_bytes = output.read_bytes()
+        forced = run("initial_front_last_flag_on", "cylinder.step",
+                     (*uniform_options, "--no-advancing-interior-front", "--advancing-interior-front"), success=True)
+        if (forced.get("advancing_interior_front") is not True
+                or forced.get("advancing_interior_front_policy") != "enabled"
+                or output.read_bytes() != automatic_bytes):
+            raise RuntimeError("automatic and last-explicit-on initial construction differ")
+        minimum = run("automatic_uniform_minimum_size", "cylinder.step",
+                      (*uniform_options, "--min-size", ".1"), success=True)
+        if minimum.get("advancing_interior_front") is not True or output.read_bytes() != automatic_bytes:
+            raise RuntimeError("a uniform minimum-size bound changed or disabled automatic initial construction")
+        single_part = run("automatic_single_independent_part", "cylinder.step",
+                          (*uniform_options, "--independent-parts"), success=True)
+        single_body = single_part["bodies"][0]
+        if (single_part.get("solids") != 1 or single_part.get("mesh_scope") != "independent_parts"
+                or single_part.get("advancing_interior_front") is not True
+                or single_part.get("advancing_interior_front_policy") != "auto"
+                or single_part.get("advancing_interior_front_selected") is not True
+                or single_body.get("solid_tag") != 1
+                or single_body.get("initial_front", {}).get("nodes", 0) == 0
+                or single_body.get("initial_front", {}).get("source_sweep_complete") is not True
+                or single_body.get("boundary_embedding_certified") is not True
+                or single_body.get("native_centroid_source_guard") is not True
+                or single_body.get("native_centroids_checked", 0) == 0
+                or single_body.get("centroid_outside_distance_limit") != 0
+                or single_body.get("centroids_within_chord_tolerance") != 0):
+            raise RuntimeError("single-part automatic construction lost the independent wrapper's native tags/audits")
+        run("forced_single_independent_front_refused", "cylinder.step",
+            ("--advancing-interior-front", "--independent-parts"), reason="unsupported-control")
+        legacy = run("initial_front_last_flag_off", "cylinder.step",
+                     (*uniform_options, "--advancing-interior-front", "--no-advancing-interior-front"), success=True)
+        if (legacy.get("advancing_interior_front") is not False
+                or legacy.get("advancing_interior_front_policy") != "disabled"
+                or legacy.get("advancing_interior_front_selected") is not False
+                or legacy["bodies"][0].get("route") != "cylinder"
+                or legacy["bodies"][0].get("initial_front", {}).get("diagnostic") != "not_attempted"):
+            raise RuntimeError("last-explicit-off did not restore the legacy cylinder route")
+        no_fallback = run("automatic_without_native_fallback", "cylinder.step",
+                          ("--no-native-fallback",), success=True)
+        if (no_fallback.get("advancing_interior_front") is not False
+                or no_fallback["bodies"][0].get("route") != "cylinder"):
+            raise RuntimeError("automatic policy displaced a recognized route without native fallback")
+        run("forced_front_without_native_fallback_refused", "cylinder.step",
+            ("--no-native-fallback", "--advancing-interior-front"), reason="unsupported-control")
+        native = run("automatic_native_linear_elements", "box.step", ("--elements", "native"), success=True)
+        native_bytes = output.read_bytes()
+        native_off = run("legacy_native_linear_elements", "box.step",
+                         ("--elements", "native", "--no-advancing-interior-front"), success=True)
+        if (native.get("advancing_interior_front") is not False
+                or native.get("advancing_interior_front_selected") is not False
+                or native.get("advancing_interior_front_policy") != "auto"
+                or native_off.get("advancing_interior_front") is not False
+                or native_off.get("advancing_interior_front_policy") != "disabled"
+                or any(body.get("initial_front", {}).get("diagnostic") != "not_attempted" for body in native["bodies"])
+                or output.read_bytes() != native_bytes):
+            raise RuntimeError("automatic policy changed the existing non-Tet4 route")
+        default_box = run("default_uniform_box", "box.step", success=True)
+        if (default_box.get("advancing_interior_front") is not True
+                or default_box.get("advancing_interior_front_policy") != "auto"
+                or default_box.get("audit_valid") is not True
+                or default_box["bodies"][0].get("initial_front", {}).get("nodes", 0) == 0
+                or default_box["bodies"][0].get("solid_tag") != 1
+                or default_box["bodies"][0].get("native_centroid_source_guard") is not True):
+            raise RuntimeError("automatic defaults failed to mesh the established uniform box")
         run("advancing_front_independent_parts_refused", "assembly.step",
             ("--advancing-interior-front", "--independent-parts"), reason="unsupported-control")
-        standard = run("planar_box", "box.step", success=True, size="3e-1")
+        standard = run("legacy_planar_box", "box.step", ("--no-advancing-interior-front",), success=True, size="3e-1")
         standard_bytes = output.read_bytes()
-        advanced = run("advanced_recognized_box", "box.step", ("--recovery-mode", "advanced"), success=True)
+        advanced = run("advanced_recognized_box", "box.step", ("--no-advancing-interior-front", "--recovery-mode", "advanced"), success=True)
         quality_disabled = run("advanced_box_with_regular_quality_disabled", "box.step",
-                               ("--recovery-mode", "advanced", "--no-improve-regular-quality"), success=True)
+                               ("--no-advancing-interior-front", "--recovery-mode", "advanced", "--no-improve-regular-quality"), success=True)
         quality_enabled = run("standard_box_with_regular_quality_enabled", "box.step",
-                              ("--improve-regular-quality",), success=True)
+                              ("--no-advancing-interior-front", "--improve-regular-quality"), success=True)
         if standard.get("improve_regular_quality") is not False or \
                 advanced.get("improve_regular_quality") is not True or \
                 quality_disabled.get("improve_regular_quality") is not False or \
@@ -143,13 +280,13 @@ def main():
                 output.read_bytes() != standard_bytes:
             raise RuntimeError("regular quality policies did not preserve the recognized box route")
         reset = run("explicit_standard_box", "box.step",
-                    ("--recovery-mode", "advanced", "--recovery-mode", "standard"), success=True)
+                    ("--no-advancing-interior-front", "--recovery-mode", "advanced", "--recovery-mode", "standard"), success=True)
         if standard["recovery_mode"] != "standard" or advanced["recovery_mode"] != "advanced" or \
                 reset["recovery_mode"] != "standard" or output.read_bytes() != standard_bytes or \
                 advanced["bodies"][0]["constraint_recovery"]["diagnostic"] != "not_attempted":
             raise RuntimeError("recovery mode did not preserve the standard or recognized route")
         local_delaunay = run("advanced_box_with_local_delaunay", "box.step",
-                             ("--recovery-mode", "advanced", "--live-material-recovery",
+                             ("--no-advancing-interior-front", "--recovery-mode", "advanced", "--live-material-recovery",
                               "--local-delaunay-refinement"), success=True)
         body = local_delaunay["bodies"][0]
         if (standard.get("local_delaunay_refinement") is not False
@@ -164,7 +301,21 @@ def main():
         assembly = run("separated_assembly", "assembly.step", success=True)
         if assembly.get("solids") != 2 or len(assembly.get("bodies", [])) != 2:
             raise RuntimeError(f"assembly bodies were lost: {assembly}")
-        sphere = run("native_surface_sphere", "sphere.step", ("--warning-quality", ".25"), success=True)
+        if (assembly.get("advancing_interior_front") is not False
+                or assembly.get("advancing_interior_front_selected") is not False
+                or assembly.get("advancing_interior_front_policy") != "auto"
+                or any(body.get("initial_front", {}).get("diagnostic") != "not_attempted" for body in assembly["bodies"])):
+            raise RuntimeError("automatic policy leaked into assembly children")
+        assembly_bytes = output.read_bytes()
+        run("legacy_separated_assembly", "assembly.step", ("--no-advancing-interior-front",), success=True)
+        if output.read_bytes() != assembly_bytes:
+            raise RuntimeError("automatic policy changed an existing conforming assembly archive")
+        independent = run("automatic_independent_parts", "assembly.step", ("--independent-parts",), success=True)
+        if (independent.get("advancing_interior_front") is not False or independent.get("solids") != 2
+                or any(body.get("initial_front", {}).get("diagnostic") != "not_attempted" for body in independent["bodies"])):
+            raise RuntimeError("automatic policy leaked into independent assembly children")
+        sphere = run("legacy_native_surface_sphere", "sphere.step",
+                     ("--no-advancing-interior-front", "--warning-quality", ".25"), success=True)
         if sphere["bodies"][0].get("route") != "native_surface_star" or sphere["bodies"][0].get("native_volume_reason") != "none":
             raise RuntimeError(f"sphere fallback certificate missing: {sphere}")
         refusals = [
@@ -187,10 +338,10 @@ def main():
             ("node_budget", "cylinder.step", ("--max-nodes", "1"), "budget-exceeded"),
             ("cell_budget", "cylinder.step", ("--max-cells", "1"), "budget-exceeded"),
             ("output_budget", "cylinder.step", ("--max-bytes", "1"), "budget-exceeded"),
-            ("fallback_cell_budget", "sphere.step", ("--max-cells", "1"), "budget-exceeded"),
-            ("fallback_node_budget", "sphere.step", ("--max-nodes", "1"), "budget-exceeded"),
-            ("fallback_working_storage", "sphere.step", ("--max-working-bytes", "1"), "budget-exceeded"),
-            ("fallback_strict_quality", "sphere.step", ("--min-quality", "1"), "quality-requirement-not-met"),
+            ("fallback_cell_budget", "sphere.step", ("--no-advancing-interior-front", "--max-cells", "1"), "budget-exceeded"),
+            ("fallback_node_budget", "sphere.step", ("--no-advancing-interior-front", "--max-nodes", "1"), "budget-exceeded"),
+            ("fallback_working_storage", "sphere.step", ("--no-advancing-interior-front", "--max-working-bytes", "1"), "budget-exceeded"),
+            ("fallback_strict_quality", "sphere.step", ("--no-advancing-interior-front", "--min-quality", "1"), "quality-requirement-not-met"),
             ("file_budget", "box.step", ("--max-file-bytes", "1"), "file-budget"),
             ("invalid_budget_number", "box.step", ("--max-nodes", "-1"), "invalid-request"),
             ("invalid_element_flag", "box.step", ("--elements", "tet10"), "invalid-request"),
@@ -200,7 +351,8 @@ def main():
             ("nan_growth", "cylinder.step", ("--growth", "nan"), "invalid-request"),
             ("underflow_box_coordinate", "box.step",
              ("--size-box", "1e-999", ".2", ".2", ".8", ".8", ".8", ".1"), "invalid-request"),
-            ("minimum_without_control", "cylinder.step", ("--min-size", ".1"), "unsupported-control"),
+            ("legacy_minimum_without_control", "cylinder.step", ("--no-advancing-interior-front", "--min-size", ".1"), "unsupported-control"),
+            ("independent_minimum_without_control", "cylinder.step", ("--independent-parts", "--min-size", ".1"), "unsupported-control"),
         ]
         for name, fixture, options, reason in refusals:
             run(name, fixture, options, reason=reason)

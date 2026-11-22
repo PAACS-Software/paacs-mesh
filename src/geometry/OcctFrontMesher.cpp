@@ -50,6 +50,8 @@ void need(bool ok,NativeCadMeshReason reason,const char* why){if(!ok)throw Stop{
 OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
     const NativeCadMeshOptions& options,std::uint64_t maximumWork,mesh::Mesh& destination,
     std::uint64_t earlyConstraintWork,OcctFrontSurface surfaceMode,bool liveTrial) noexcept {
+    // Public dispatch resolves AUTO once; direct private callers opt in explicitly.
+    const bool advancingInteriorFront=options.useAdvancingInteriorFront.value_or(false);
     const bool spaceSurface=surfaceMode!=OcctFrontSurface::Standard;
     const bool spatialSizing=surfaceMode==OcctFrontSurface::SpatialSizing;
     const bool improveQuality=surfaceMode==OcctFrontSurface::RegularQuality||
@@ -163,7 +165,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 constraintWork,options.maximumPrimitiveWorkingBytes/2,
                 std::min(frontCells,maximumSeedTets),o.cancellation,seed,
                 std::min<std::uint64_t>(64,o.maximumNodes-std::uint64_t(sites.nodeCount())),
-                false,true,options.useAdvancingInteriorFront);
+                false,true,advancingInteriorFront);
             out.constraintRecovery={constraints.diagnostic,constraints.candidateCells,
                 constraints.missingEdgesBefore,constraints.missingFacesBefore,
                 constraints.missingEdgesAfter,constraints.missingFacesAfter,constraints.patches,
@@ -178,14 +180,14 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
         };
         OcctSolidClassifier classifier(OcctModelAccess::solid(model,tag));
         const auto tol=model.tolerance(3,tag);
-        if(spatialSizing&&(options.improveNativeTetQuality||options.useAdvancingInteriorFront)){
+        if(spatialSizing&&(options.improveNativeTetQuality||advancingInteriorFront)){
             // Construct the first interior point set before constraint recovery.
             // The prescribed surface remains the same input constraint complex.
             OcctStageTrace placement("interior_sites",tag);
             const auto placementStarted=Clock::now();
             struct SiteLimit {};
             mesh::Mesh sites;
-            const auto siteBudget=options.useAdvancingInteriorFront?
+            const auto siteBudget=advancingInteriorFront?
                 std::min<std::uint64_t>(42'000'000,remaining()/2):
                 std::min<std::uint64_t>(1'000'000,remaining()/8);
             constexpr auto nodeBytes=sizeof(Vec3)+sizeof(mesh::Classification);
@@ -203,9 +205,9 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 if(amount>siteBudget-siteWork)throw SiteLimit{};
                 tick(amount);siteWork+=amount;
             };
-            if(options.useAdvancingInteriorFront)out.initialFront.diagnostic="budget_limited";
+            if(advancingInteriorFront)out.initialFront.diagnostic="budget_limited";
             try {if(siteCap&&siteBudget&&preparationBytes<=options.maximumPrimitiveWorkingBytes-retained){
-                if(options.useAdvancingInteriorFront){
+                if(advancingInteriorFront){
                     OcctInitialPointFrontLimits limits;
                     limits.work=siteBudget;limits.queries=12'000;limits.sites=std::size_t(siteCap);
                     limits.cancellation=o.cancellation;
@@ -270,7 +272,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             }catch(const std::bad_alloc&){
                 // Preparation is transactional; retain the ordinary seed route.
             }
-            if(options.useAdvancingInteriorFront){
+            if(advancingInteriorFront){
                 out.initialFront.work=siteWork;out.initialFront.queries=siteQueries;
                 out.initialFront.seconds=std::chrono::duration<double>(Clock::now()-placementStarted).count();
             }
@@ -293,7 +295,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
         }else if(spaceSurface||options.recoveryMode==NativeCadRecoveryMode::Advanced)
             buildConstraintSeed(boundary,pendingRecovery);
         const bool usesConstraintSeed=pendingRecovery.cellCount()!=0;
-        if(options.useAdvancingInteriorFront&&!usesConstraintSeed){
+        if(advancingInteriorFront&&!usesConstraintSeed){
             const std::string_view diagnostic=out.constraintRecovery.diagnostic;
             need(diagnostic!="construction_budget"&&diagnostic!="work_budget"&&
                  diagnostic!="storage_budget"&&diagnostic!="admission_budget",
@@ -776,7 +778,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
         }
         // Uniform requests use only the initial point construction above.
         // Explicit local controls can additionally require adaptive sizing.
-        if(options.useAdvancingInteriorFront&&(!options.faceSizes.empty()||!options.sizeBoxes.empty())){
+        if(advancingInteriorFront&&(!options.faceSizes.empty()||!options.sizeBoxes.empty())){
             OcctStageTrace construction("interior_front",tag);
             const auto started=Clock::now();
             const auto used=strictAdmissions.retainedPayloadBytes();
@@ -830,7 +832,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                     native,tick);
             }
         }
-        if(!options.useAdvancingInteriorFront&&(spatialSizing||(useLocalDelaunay&&!refinedBeforeMaterial))){
+        if(!advancingInteriorFront&&(spatialSizing||(useLocalDelaunay&&!refinedBeforeMaterial))){
             OcctStageTrace refinement("local_delaunay_refinement",tag);
             out.localDelaunayRefinementNodes=localInsert(completed,{}, {},
                 !spatialSizing||improveQuality?&out.localDelaunayQualityEdits:nullptr);

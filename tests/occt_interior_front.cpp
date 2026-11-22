@@ -6,15 +6,18 @@
 #include "../src/geometry/OcctInteriorFront.hpp"
 #include "../src/geometry/OcctModelInternal.hpp"
 #include "../src/geometry/OcctSpatialSizing.hpp"
+#include "../src/geometry/OcctSolidClassifier.hpp"
 #include "paacs/mesh/LinearVolumeAudit.hpp"
 #include "paacs/mesh/Quality.hpp"
 #include <BRepPrimAPI_MakeCylinder.hxx>
 #include <BRepTools.hxx>
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <bit>
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
 #include <iostream>
 #include <iomanip>
 #include <limits>
@@ -598,6 +601,7 @@ void exercisePublicNativeFront() {
     options.faceSizes.push_back({wall,.16,1.55});
     options.sizeBoxes.push_back({{-.3,-.3,.7},{.3,.3,1.3},.15,1.55});
     options.useSpatialSizing=true;options.improveNativeTetQuality=true;
+    options.useAdvancingInteriorFront=false;
     options.allowCentroidsWithinChordTolerance=false;options.recoveryMode=geo::NativeCadRecoveryMode::Standard;
     mesh::Mesh baseline;
     const auto ordinary=geo::meshNativeCad(model,options,baseline);
@@ -605,11 +609,11 @@ void exercisePublicNativeFront() {
         "front-disabled production baseline failed");
     check(std::string(ordinary.bodies.front().interiorFrontDiagnostic)=="not_attempted",
         "disabled front changed the established route");
-    options.useAdvancingInteriorFront=true;
+    options.useAdvancingInteriorFront.reset();
     mesh::Mesh advanced;const auto built=geo::meshNativeCad(model,options,advanced);
     if (!built.published) std::cerr<<"native front publication: "<<geo::nativeCadMeshReasonName(built.reason)<<'\n';
     check(built.published&&built.audit.complete&&built.audit.valid&&built.quality.complete&&built.quality.valid&&built.bodies.size()==1,
-        "public advancing-front route must publish an audited native mesh");
+        "public automatic advancing-front route must publish an audited native mesh");
     const auto& body=built.bodies.front();
     const auto tets=std::uint64_t(advanced.countCells(mesh::CellType::Tet4));
     check(body.solidTag==1&&body.boundaryEmbeddingCertified&&body.nativeCentroidsChecked==tets&&
@@ -634,7 +638,7 @@ void exercisePublicNativeFront() {
         (diagnostic!="targets_satisfied"||body.interiorFrontRemainingOversized==0),
         "production front result hides refusal or unresolved size targets");
     check(boundarySignature(baseline)==boundarySignature(advanced),
-        "advancing-front opt-in changed exact prescribed boundary coordinates, winding or tags");
+        "automatic advancing front changed exact prescribed boundary coordinates, winding or tags");
     for (Index i=0;i<advanced.cellCount();++i) {
         const auto cell=advanced.cell(i);
         if (cell.type==mesh::CellType::Tet4) check(cell.onEntity==mesh::Classification{3,1},"front lost original body tags");
@@ -644,6 +648,195 @@ void exercisePublicNativeFront() {
     check(snapshot(model)==originalCad,"advancing-front production route modified original CAD");
     std::cout<<"native front cylinder: sites="<<body.interiorFrontNodes<<" advances="<<body.interiorFrontAdvances
         <<" voids="<<body.interiorVoidActivations<<" diagnostic="<<diagnostic<<'\n';
+}
+
+void exercisePublicDefaultInitialFront() {
+    auto imported=OcctModelAccess::fromShape(BRepPrimAPI_MakeCylinder(1.,2.).Shape());
+    check(imported.imported(),"default initial-front cylinder import failed");
+    const auto& model=*imported.model;const auto originalCad=snapshot(model);
+    geo::NativeCadMeshOptions options;
+    check(!options.useAdvancingInteriorFront.has_value(),"initial-front default must retain automatic policy");
+    // Exercise the public defaults, including both work ceilings and chord
+    // policy. The separate controlled-field regression supplies its own limits.
+    options.geometry.targetSize=.3;
+    check(options.maximumValidationWork==options.geometry.maximumMeshingWork,
+        "default public construction has mismatched validation and meshing budgets");
+    check(!options.useSpatialSizing&&options.faceSizes.empty()&&options.sizeBoxes.empty()&&
+        !options.improveNativeTetQuality,"default fixture must use uniform size without quality opt-in");
+    mesh::Mesh automatic;
+    const auto built=geo::meshNativeCad(model,options,automatic);
+    check(built.published&&built.audit.complete&&built.audit.valid&&built.quality.complete&&built.quality.valid&&
+        built.bodies.size()==1,"automatic initial front must publish an audited native Tet4 mesh");
+    const auto& body=built.bodies.front();
+    const auto tets=std::uint64_t(automatic.countCells(mesh::CellType::Tet4));
+    check(std::string(body.route)=="native_spatial_sizing"&&body.boundaryEmbeddingCertified&&
+        body.nativeCentroidsChecked==tets&&body.nativeCentroidSourceGuard&&
+        body.centroidOutsideDistanceLimit==0.&&body.centroidsWithinChordTolerance==0&&
+        body.maximumOutsideCentroidDistance==0.&&body.nativeCentroidDistanceQueries==0,
+        "automatic initial front lost strict original-CAD centroid and boundary certification");
+    check(body.initialFront.nodes>0&&body.initialFront.wallNodes>0&&body.initialFront.voidNodes>0&&
+        body.initialFront.sourceSweepComplete&&body.initialFront.delaunayCommits==body.initialFront.nodes&&
+        body.initialFront.fullCertifications>=body.initialFront.delaunayCommits&&
+        body.initialFront.candidates>0&&body.initialFront.work>0&&body.initialFront.queries>0,
+        "automatic initial front did not execute the wall-source and interior-void construction");
+    check(std::string(body.interiorFrontDiagnostic)=="not_attempted"&&body.interiorFrontNodes==0&&
+        body.localDelaunayRefinementNodes==0&&body.localDelaunayQualityEdits==0&&
+        body.recoverySteinerNodes==0,"uniform automatic construction added a later adaptive or quality stage");
+    std::size_t volumeNodes=0;
+    for (Index i=0;i<automatic.nodeCount();++i) if (automatic.nodeClass(i).dim==3) ++volumeNodes;
+    check(volumeNodes==body.initialFront.nodes,"published volume nodes must all belong to initial construction");
+    for (Index i=0;i<automatic.cellCount();++i) {
+        const auto cell=automatic.cell(i);
+        if (cell.type==mesh::CellType::Tet4) check(cell.onEntity==mesh::Classification{3,1},"default front lost body tags");
+        else check(cell.type==mesh::CellType::Tri3&&cell.onEntity.dim==2&&model.face(cell.onEntity.tag),
+            "default front lost CAD face tags");
+    }
+    for(const auto policy:{geo::NativeCadAssemblyPolicy::ConformingDomain,geo::NativeCadAssemblyPolicy::IndependentParts}) {
+        auto bounded=options;bounded.assemblyPolicy=policy;bounded.geometry.maximumMeshingWork=1;
+        check(bounded.maximumValidationWork>bounded.geometry.maximumMeshingWork,
+            "first-attempt budget regression requires genuinely asymmetric caller ceilings");
+        auto held=automatic;const auto refused=geo::meshNativeCad(model,bounded,held);
+        if(refused.published||!refused.destinationUnchanged||refused.reason!=geo::NativeCadMeshReason::BudgetExceeded||
+           refused.validationWork>bounded.geometry.maximumMeshingWork)
+            std::cerr<<"first AUTO budget: independent="<<(policy==geo::NativeCadAssemblyPolicy::IndependentParts)
+                <<" geometry="<<bounded.geometry.maximumMeshingWork<<" validation="<<bounded.maximumValidationWork
+                <<" published="<<refused.published<<" reason="<<geo::nativeCadMeshReasonName(refused.reason)
+                <<" work="<<refused.validationWork<<'\n';
+        check(!refused.published&&refused.destinationUnchanged&&refused.reason==geo::NativeCadMeshReason::BudgetExceeded&&
+            refused.validationWork<=bounded.geometry.maximumMeshingWork&&!refused.initialFrontFallback.attempted,
+            "first automatic attempt or its independent wrapper exceeded the smaller caller work ceiling");
+        sameMesh(held,automatic);
+        check(!bounded.useAdvancingInteriorFront.has_value()&&bounded.geometry.maximumMeshingWork==1&&
+            bounded.maximumValidationWork==options.maximumValidationWork,
+            "automatic budget normalization mutated caller options");
+    }
+    check(!options.useAdvancingInteriorFront.has_value(),"policy resolution mutated caller options");
+    options.useAdvancingInteriorFront=true;
+    mesh::Mesh forced;const auto explicitOn=geo::meshNativeCad(model,options,forced);
+    check(explicitOn.published&&explicitOn.audit.valid,"forced-on initial front failed");
+    sameMesh(automatic,forced);
+    options.useAdvancingInteriorFront=false;
+    mesh::Mesh legacy;const auto explicitOff=geo::meshNativeCad(model,options,legacy);
+    check(explicitOff.published&&explicitOff.audit.valid&&explicitOff.quality.valid&&explicitOff.bodies.size()==1,
+        "explicit legacy initial-front opt-out must retain a valid recognized route");
+    check(std::string(explicitOff.bodies.front().route)=="cylinder"&&
+        std::string(explicitOff.bodies.front().initialFront.diagnostic)=="not_attempted"&&
+        explicitOff.bodies.front().initialFront.nodes==0,
+        "explicit initial-front opt-out did not restore the recognized cylinder route");
+    check(snapshot(model)==originalCad,"default/explicit initial-front policies modified source CAD");
+}
+
+std::atomic_bool* fallbackCancellation=nullptr;
+unsigned fallbackMeshEndEvents=0;
+void cancelBeforeLegacyRetry(const geo::NativeCadStageEvent& event) noexcept {
+    if(fallbackCancellation&&!event.beginning&&std::string_view(event.stage)=="native_mesh") {
+        ++fallbackMeshEndEvents;
+        fallbackCancellation->store(true,std::memory_order_relaxed);
+    }
+}
+
+void exercisePrePointAutomaticFallback() {
+    const auto path=std::filesystem::path(__FILE__).parent_path()/"fixtures"/"cad"/"sphere.step";
+    auto imported=geo::importOcctCad(path);
+    check(imported.imported(),"automatic fallback needs the owned legacy sphere STEP fixture");
+    const auto& model=*imported.model;const auto source=snapshot(model);
+    geo::NativeCadMeshOptions options;options.geometry.targetSize=.3;options.geometry.threads=1;
+    auto off=options;off.useAdvancingInteriorFront=false;
+    mesh::Mesh legacy;const auto old=geo::meshNativeCad(model,off,legacy);
+    check(old.published&&old.audit.valid&&old.quality.valid&&old.bodies.size()==1,
+        "legacy sphere reference must remain a valid native mesh");
+    auto forced=options;forced.useAdvancingInteriorFront=true;
+    auto held=legacy;const auto originalHeld=held;
+    const auto trial=geo::meshNativeCad(model,forced,held);
+    check(!trial.published&&trial.destinationUnchanged&&trial.reason==geo::NativeCadMeshReason::GeometryError&&
+        !trial.bodies.empty()&&!trial.initialFrontFallback.attempted&&trial.validationWork>0,
+        "explicit initial-front surface refusal must remain terminal and accounted");
+    for(const auto& body:trial.bodies)
+        check(std::string(body.initialFront.diagnostic)=="not_attempted"&&!body.initialFrontFallback.attempted,
+            "source fallback fixture must refuse before every initial point-construction attempt");
+    sameMesh(held,originalHeld);
+    mesh::Mesh automatic;const auto built=geo::meshNativeCad(model,options,automatic);
+    check(built.published&&built.audit.complete&&built.audit.valid&&built.quality.complete&&built.quality.valid&&
+        built.bodies.size()==1,"automatic pre-point fallback must retain the established valid sphere");
+    sameMesh(automatic,legacy);
+    const auto& fallback=built.initialFrontFallback;
+    check(fallback.attempted&&fallback.reason==geo::NativeCadMeshReason::GeometryError&&
+        fallback.work==trial.validationWork&&fallback.seconds>=0.&&
+        std::string(fallback.surfaceDiagnostic)!="not_attempted",
+        "automatic fallback hid the failed surface reason, work or time");
+    const auto& body=built.bodies.front();
+    const auto& reference=old.bodies.front();
+    check(body.initialFrontFallback.attempted&&body.initialFrontFallback.reason==fallback.reason&&
+        body.initialFrontFallback.work==fallback.work&&std::string(body.initialFront.diagnostic)=="not_attempted"&&
+        body.initialFront.nodes==0&&body.solidTag==1&&body.boundaryEmbeddingCertified&&
+        std::string(body.nativeVolumeReason)=="none"&&
+        body.centroidOutsideDistanceLimit==0.&&body.centroidsWithinChordTolerance==0.&&
+        body.maximumOutsideCentroidDistance==0.,"automatic fallback lost the final certified native/body guards");
+    // The established star route has its own boundary/kernel certificate. Its
+    // recovery-only centroid counters must retain the reference's meaning.
+    check(std::string(body.route)==std::string(reference.route)&&
+        std::string(body.nativeSurfaceReason)==std::string(reference.nativeSurfaceReason)&&
+        std::string(body.nativeVolumeReason)==std::string(reference.nativeVolumeReason)&&
+        body.boundaryEmbeddingCertified==reference.boundaryEmbeddingCertified&&
+        body.nativeCentroidThreads==reference.nativeCentroidThreads&&
+        body.nativeCentroidsChecked==reference.nativeCentroidsChecked&&
+        body.nativeCentroidExactReuses==reference.nativeCentroidExactReuses&&
+        body.nativeCentroidReferenceQueries==reference.nativeCentroidReferenceQueries&&
+        body.nativeCentroidGeometryPairs==reference.nativeCentroidGeometryPairs&&
+        body.nativeCentroidSourceGuard==reference.nativeCentroidSourceGuard&&
+        body.nativeCentroidDistanceQueries==reference.nativeCentroidDistanceQueries&&
+        body.nativeChordSamplesChecked==reference.nativeChordSamplesChecked&&
+        body.chordSamplesWithinTolerance==reference.chordSamplesWithinTolerance&&
+        body.maximumOutsideChordSampleDistance==reference.maximumOutsideChordSampleDistance&&
+        body.maximumBoundaryNodeError==reference.maximumBoundaryNodeError&&
+        body.maximumBoundarySampleError==reference.maximumBoundarySampleError&&
+        body.surfaceChordErrorLimit==reference.surfaceChordErrorLimit&&
+        body.cadVolume==reference.cadVolume&&body.meshVolume==reference.meshVolume&&
+        body.relativeVolumeError==reference.relativeVolumeError,
+        "automatic fallback changed the legacy route's published certificate or counter meaning");
+    OcctSolidClassifier classifier(OcctModelAccess::solid(model,body.solidTag));
+    std::uint64_t classified=0;
+    for(Index i=0;i<automatic.cellCount();++i) if(automatic.cell(i).type==mesh::CellType::Tet4){
+        check(automatic.cell(i).onEntity==mesh::Classification{3,body.solidTag},"fallback sphere lost its original body tag");
+        const auto* vertices=automatic.cellNodes(i);Vec3 center{};
+        for(unsigned j=0;j<4;++j)center=center+automatic.node(vertices[j])*.25;
+        classifier.Perform(gp_Pnt(center.x,center.y,center.z),model.tolerance(3,body.solidTag));
+        check(classifier.State()==TopAbs_IN,"a published fallback Sphere Tet4 centroid is not strictly inside original CAD");
+        ++classified;
+    }
+    check(classified>0&&classified==std::uint64_t(automatic.countCells(mesh::CellType::Tet4))&&
+        classifier.metrics().queries==classified,"fallback sphere did not independently classify every actual Tet4 centroid");
+    check(built.validationWork>=trial.validationWork+old.validationWork&&
+        built.validationWork<=std::min(options.maximumValidationWork,options.geometry.maximumMeshingWork)&&
+        built.totalSeconds>=fallback.seconds&&body.initialFrontFallback.seconds==fallback.seconds&&
+        body.nativeCandidateQueries>=trial.bodies.front().nativeCandidateQueries+old.bodies.front().nativeCandidateQueries,
+        "automatic fallback did not retain cumulative trial and legacy costs");
+    check(built.validationWork>trial.validationWork,"fallback test needs nonzero legacy work after its surface trial");
+    const auto tight=built.validationWork-1;
+    for(bool validationBudget:{true,false}) {
+        auto bounded=options;
+        if(validationBudget)bounded.maximumValidationWork=tight;
+        else bounded.geometry.maximumMeshingWork=tight;
+        held=legacy;const auto refused=geo::meshNativeCad(model,bounded,held);
+        if(refused.published||!refused.destinationUnchanged||refused.reason!=geo::NativeCadMeshReason::BudgetExceeded||
+           refused.validationWork>tight)
+            std::cerr<<"fallback budget: kind="<<(validationBudget?"validation":"geometry")
+                <<" tight="<<tight<<" published="<<refused.published
+                <<" reason="<<geo::nativeCadMeshReasonName(refused.reason)
+                <<" work="<<refused.validationWork<<" trial="<<refused.initialFrontFallback.work<<'\n';
+        check(!refused.published&&refused.destinationUnchanged&&refused.reason==geo::NativeCadMeshReason::BudgetExceeded&&
+            refused.validationWork<=tight,"automatic fallback reset or exceeded a caller work budget");
+        sameMesh(held,originalHeld);
+    }
+    std::atomic_bool cancellation{false};auto cancelled=options;
+    cancelled.geometry.cancellation=&cancellation;cancelled.stageObserver=cancelBeforeLegacyRetry;
+    fallbackCancellation=&cancellation;fallbackMeshEndEvents=0;
+    held=legacy;const auto stopped=geo::meshNativeCad(model,cancelled,held);
+    fallbackCancellation=nullptr;
+    check(!stopped.published&&stopped.destinationUnchanged&&stopped.reason==geo::NativeCadMeshReason::Cancelled&&
+        fallbackMeshEndEvents==1,"cancellation after the source trial was retried or ignored");
+    sameMesh(held,originalHeld);
+    check(snapshot(model)==source,"automatic route retry modified the original sphere CAD");
 }
 }
 
@@ -659,7 +852,7 @@ int main(int argc,char** argv) {
         exerciseAllLiveVertexSpacing();
         exerciseNativeAndLimits();
         exerciseNativeFieldBounds();
-        if (!pure) exercisePublicNativeFront();
+        if (!pure) {exercisePrePointAutomaticFallback();exercisePublicDefaultInitialFront();exercisePublicNativeFront();}
         std::cout<<"native interior front geometry, enclosed fields, live spacing and transactional admissions passed\n";
         return 0;
     } catch (const std::exception& error) {

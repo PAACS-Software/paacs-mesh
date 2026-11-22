@@ -5,6 +5,7 @@
 
 #include "OcctInitialPointFront.hpp"
 #include "PlcVoidGeometry.hpp"
+#include "paacs/geometry/OcctMesher.hpp"
 #include <array>
 #include <atomic>
 #include <bit>
@@ -26,6 +27,43 @@ struct UniformField {
     double eval(Vec3)const{return h;}
     std::uint64_t queryWork()const{return 1;}
 };
+void exerciseDefaultPolicy(){
+    geo::NativeCadMeshOptions automatic;
+    check(automatic.maximumValidationWork==automatic.geometry.maximumMeshingWork,
+        "native default validation and construction work ceilings must agree");
+    check(!automatic.useAdvancingInteriorFront.has_value()&&automatic.advancingInteriorFrontEnabled(1),
+        "compatible native Tet4 requests must default to automatic initial construction");
+    check(!automatic.advancingInteriorFrontEnabled(0)&&!automatic.advancingInteriorFrontEnabled(2),
+        "automatic initial construction must not take over empty models or assemblies");
+    const auto legacy=[](geo::NativeCadMeshOptions options){
+        check(!options.advancingInteriorFrontEnabled(1),"automatic initial construction replaced an established route policy");
+        options.useAdvancingInteriorFront=true;
+        check(options.advancingInteriorFrontEnabled(1),"explicit initial-front request was silently treated as automatic");
+        options.useAdvancingInteriorFront=false;
+        check(!options.advancingInteriorFrontEnabled(1),"explicit legacy opt-out was ignored");
+    };
+    auto options=automatic;options.elements=algo::PrimitiveElements::HexDominant;legacy(options);
+    options=automatic;options.assemblyPolicy=geo::NativeCadAssemblyPolicy::IndependentParts;
+    check(options.advancingInteriorFrontEnabled(1)&&!options.advancingInteriorFrontEnabled(2),
+        "automatic single-part planning must defer to its eligible child without changing assemblies");
+    options=automatic;options.useNativeSurfaceFallback=false;legacy(options);
+    options=automatic;options.separateMatchedNativeFaceContacts=true;legacy(options);
+    options=automatic;options.geometry.strategy=algo::GeometryStrategy::MappedHex8;legacy(options);
+    options=automatic;options.geometry.bodyControls.push_back({});legacy(options);
+    options=automatic;options.geometry.maximumElementSizeRatio=2.;legacy(options);
+    options=automatic;options.geometry.warningElementSizeRatio=2.;legacy(options);
+    options=automatic;options.faceSizes.push_back({1,2.*options.geometry.targetSize,1.3});legacy(options);
+    struct Field final:sizing::BoundedSizeField {
+        double eval(const Vec3&)const override{return .3;}
+        bool valid()const noexcept override{return true;}
+        double minimumOnBox(const Vec3&,const Vec3&)const noexcept override{return .3;}
+    } field;
+    options=automatic;options.geometry.spatialField=&field;legacy(options);
+    options=automatic;options.minimumSize=.1;
+    check(options.advancingInteriorFrontEnabled(1),"a uniform minimum size incorrectly disabled automatic construction");
+    options.useAdvancingInteriorFront=false;
+    check(!options.advancingInteriorFrontEnabled(1),"explicit legacy policy did not override the automatic default");
+}
 mesh::Mesh cubeSurface(){
     mesh::Mesh mesh;std::map<std::array<int,3>,Index> ids;
     const auto vertex=[&](std::array<int,3> p){
@@ -707,6 +745,7 @@ void exerciseCertificateTransactions(){
 }
 }
 int main(){try{
+    exerciseDefaultPolicy();
     exerciseUniformFront();exerciseFineBoundaryInteriorExclusion();exerciseRefusals();exerciseCompleteConflictCavity();exerciseCompaction();
     exercisePlcVoidGeometry();
     exerciseCanonicalOwnerScope();exerciseMaterialInheritance();exerciseInheritedSourceBarrier();exerciseConicSurvivorAdmission();

@@ -7,6 +7,7 @@
 #include "paacs/geometry/OcctModel.hpp"
 #include "paacs/algo/GeometryMesher.hpp"
 #include "paacs/algo/PrimitiveMesher.hpp"
+#include <cstddef>
 #include <optional>
 #include <string>
 
@@ -50,7 +51,8 @@ struct NativeCadMeshOptions {
     // Parts may overlap; this certifies each part, not a global material domain.
     // Interference reports accompany the result. Default conformity is unchanged.
     NativeCadAssemblyPolicy assemblyPolicy=NativeCadAssemblyPolicy::ConformingDomain;
-    // Analytic routes use the established uniform Tet4 engines by default.
+    // Automatic interior placement applies to compatible single-solid Tet4
+    // requests. Other element families retain their established routes.
     algo::PrimitiveElements elements = algo::PrimitiveElements::Tet4;
     double maximumChordError = 0, maximumRelativeVolumeError = .01;
     // Explicit approximation policy for the exact source-conforming Tet4 PLC
@@ -66,7 +68,9 @@ struct NativeCadMeshOptions {
     // selects this route. Existing analytic cap controls remain available.
     bool useSpatialSizing = false;
     std::vector<CadBoxSizeControl> sizeBoxes;
-    std::uint64_t maximumValidationWork = 5'000'000;
+    // Native construction and validation share this logical work admission.
+    // Match the geometry meshing default so an unset request admits both phases.
+    std::uint64_t maximumValidationWork = 50'000'000;
     std::uint64_t maximumPrimitiveWorkingBytes = 512ULL * 1024 * 1024;
     bool optimizeProfileInterior = false;
     std::uint64_t maximumQualityNodeTrials = 100'000;
@@ -146,11 +150,22 @@ struct NativeCadMeshOptions {
     // Try local interior-point insertion on a recovered Tet4 mesh in the
     // strict live material recovery trial.
     bool useLocalDelaunayRefinement = false;
-    // Experimental single-solid Tet4 construction: grow initial interior
-    // sites from the fixed CAD surface using neighbour spacing and actual
-    // prospective Delaunay cavities. Works with a uniform global size;
-    // optional sizing controls can trigger a separate adaptive stage.
-    bool useAdvancingInteriorFront = false;
+    // Unset selects initial wall/void construction automatically for compatible
+    // single-solid Tet4 requests. True forces the existing native size-field
+    // route and its control restrictions; false retains the legacy dispatch.
+    // Optional sizing controls can trigger a separate adaptive stage.
+    std::optional<bool> useAdvancingInteriorFront;
+    [[nodiscard]] bool advancingInteriorFrontEnabled(std::size_t solidCount) const noexcept {
+        if(useAdvancingInteriorFront.has_value())return *useAdvancingInteriorFront;
+        // Legacy analytic cap controls can be coarser than the global ceiling;
+        // the native size-field route deliberately accepts only finer controls.
+        for(const auto& control:faceSizes)if(control.size>geometry.targetSize)return false;
+        return solidCount==1&&elements==algo::PrimitiveElements::Tet4&&useNativeSurfaceFallback&&
+            (assemblyPolicy==NativeCadAssemblyPolicy::ConformingDomain||
+             assemblyPolicy==NativeCadAssemblyPolicy::IndependentParts)&&!separateMatchedNativeFaceContacts&&
+            geometry.strategy==algo::GeometryStrategy::Auto&&geometry.bodyControls.empty()&&
+            !geometry.spatialField&&geometry.maximumElementSizeRatio==0&&geometry.warningElementSizeRatio==0;
+    }
     [[nodiscard]] bool regularMeshQualityEnabled() const noexcept {
         return improveRegularMeshQuality.value_or(recoveryMode==NativeCadRecoveryMode::Advanced);
     }
@@ -190,6 +205,16 @@ struct NativeCadInitialFrontReport {
     // Modeled auxiliary payload during compaction, not peak process RSS.
     std::uint64_t compactionPeakModeledBytes=0,auxiliaryWorkingBytes=0;
     double seconds=0;
+};
+// AUTO may retry the legacy route only after a bounded source-stage refusal,
+// before any initial point construction. This records the discarded trial;
+// it is separate from the initial-front report for the published route.
+struct NativeCadInitialFrontFallbackReport {
+    bool attempted=false;
+    NativeCadMeshReason reason=NativeCadMeshReason::None;
+    std::uint64_t work=0;
+    double seconds=0;
+    const char* surfaceDiagnostic="not_attempted";
 };
 struct NativeCadBodyMeshReport {
     int solidTag = -1;
@@ -246,6 +271,7 @@ struct NativeCadBodyMeshReport {
     std::uint64_t localDelaunaySupportNodes=0,localDelaunayRefinementNodes=0;
     unsigned localDelaunayQualityEdits=0;
     NativeCadInitialFrontReport initialFront;
+    NativeCadInitialFrontFallbackReport initialFrontFallback;
     const char* interiorFrontDiagnostic="not_attempted";
     std::uint64_t interiorFrontNodes=0,interiorFrontCandidates=0;
     std::uint64_t interiorFrontWork=0,interiorFrontQueries=0;
@@ -266,6 +292,7 @@ struct NativeCadMeshOutcome {
     double preparationSeconds = 0, generationSeconds = 0, validationSeconds = 0;
     double auditSeconds = 0, qualitySeconds = 0, totalSeconds = 0;
     std::vector<NativeCadBodyMeshReport> bodies;
+    NativeCadInitialFrontFallbackReport initialFrontFallback;
     mesh::LinearVolumeAudit audit;
     algo::MixedMeshQualityReport quality;
     bool qualityWarning = false;

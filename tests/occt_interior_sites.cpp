@@ -313,6 +313,8 @@ void exerciseProductionPipeline() {
     options.faceSizes.push_back({wall,.16,1.55});
     options.sizeBoxes.push_back({{-.3,-.3,.7},{.3,.3,1.3},.15,1.55});
     options.useSpatialSizing=true;
+    // This regression isolates the earlier quality-controlled initial sites.
+    options.useAdvancingInteriorFront=false;
     options.allowCentroidsWithinChordTolerance=false;
     options.recoveryMode=geo::NativeCadRecoveryMode::Standard;
     mesh::Mesh ordinary;

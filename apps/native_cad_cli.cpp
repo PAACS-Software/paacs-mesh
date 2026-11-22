@@ -6,6 +6,7 @@
 #include "paacs/geometry/OcctMesher.hpp"
 #include "paacs/sdk/MeshArchive.hpp"
 #include "NumberArgument.hpp"
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -27,6 +28,12 @@ void traceNativeStage(const paacs::geo::NativeCadStageEvent& event) noexcept {
         event.beginning ? "begin" : "end", event.entityTag, event.stage, event.diagnostic);
     std::fflush(stderr);
 }
+void writeInitialFrontFallback(const paacs::geo::NativeCadInitialFrontFallbackReport& report){
+    std::cout<<"{\"attempted\":"<<(report.attempted?"true":"false")
+        <<",\"reason\":\""<<paacs::geo::nativeCadMeshReasonName(report.reason)<<"\""
+        <<",\"work\":"<<report.work<<",\"seconds\":"<<report.seconds
+        <<",\"surface_diagnostic\":\""<<report.surfaceDiagnostic<<"\"}";
+}
 }
 int runNativeCadCli(int argc,char** argv) {
     using namespace paacs;
@@ -36,6 +43,9 @@ int runNativeCadCli(int argc,char** argv) {
     const auto started=std::chrono::steady_clock::now();
     const auto receipt=[&](const char* status,const char* reason) {
         if(!report)return;
+        const bool interiorFrontAttempted=std::any_of(result.bodies.begin(),result.bodies.end(),[](const auto& body){
+            return body.initialFront.diagnostic&&std::string_view(body.initialFront.diagnostic)!="not_attempted";
+        });
         double volumeReference=cad.cadVolume;
         bool auditedReference=result.published&&result.bodies.size()==cad.solids;
         double bodyVolumeSum=0;
@@ -89,14 +99,16 @@ int runNativeCadCli(int argc,char** argv) {
             <<",\"local_partition_recovery\":"<<(options.useLocalPartitionRecovery?"true":"false")
             <<",\"adaptive_tet_recovery\":"<<(options.useAdaptiveTetRecovery?"true":"false")
             <<",\"curvature_points_per_turn\":"<<options.curvaturePointsPerTurn
-            <<",\"native_spatial_sizing\":"<<((options.useSpatialSizing||!options.sizeBoxes.empty()||options.useAdvancingInteriorFront)?"true":"false")
+            <<",\"native_spatial_sizing\":"<<((options.useSpatialSizing||!options.sizeBoxes.empty()||options.advancingInteriorFrontEnabled(std::size_t(cad.solids)))?"true":"false")
             <<",\"face_size_controls\":"<<options.faceSizes.size()<<",\"size_box_controls\":"<<options.sizeBoxes.size()
             <<",\"live_material_recovery\":"<<(options.useLiveMaterialRecovery?"true":"false")
             <<",\"trimmed_ray_witnesses\":"<<(options.useTrimmedRayWitnesses?"true":"false")
             <<",\"local_delaunay_refinement\":"<<(options.useLocalDelaunayRefinement?"true":"false")
             <<",\"improve_surface_spacing\":"<<(options.improveNativeSurfaceSpacing?"true":"false")
             <<",\"improve_tet_quality\":"<<(options.improveNativeTetQuality?"true":"false")
-            <<",\"advancing_interior_front\":"<<(options.useAdvancingInteriorFront?"true":"false")
+            <<",\"advancing_interior_front\":"<<(interiorFrontAttempted?"true":"false")
+            <<",\"advancing_interior_front_selected\":"<<(options.advancingInteriorFrontEnabled(std::size_t(cad.solids))?"true":"false")
+            <<",\"advancing_interior_front_policy\":\""<<(!options.useAdvancingInteriorFront.has_value()?"auto":*options.useAdvancingInteriorFront?"enabled":"disabled")<<"\""
             <<",\"regular_surface_front\":"<<(options.useRegularSurfaceFront?"true":"false")
             <<",\"improve_regular_quality\":"<<(options.regularMeshQualityEnabled()?"true":"false")
             <<",\"maximum_edge_recovery_steiner_candidates\":"<<options.maximumEdgeRecoverySteinerCandidates
@@ -115,7 +127,9 @@ int runNativeCadCli(int argc,char** argv) {
             <<",\"validation_work\":"<<result.validationWork<<",\"millimetres_per_model_unit\":"<<cad.millimetresPerModelUnit
             <<",\"total_seconds\":"<<std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count()<<",\"interferences\":[";
         for(std::size_t i=0;i<result.interferences.size();++i){if(i)std::cout<<',';const auto& p=result.interferences[i];std::cout<<"{\"first_solid_tag\":"<<p.firstSolidTag<<",\"second_solid_tag\":"<<p.secondSolidTag<<",\"state\":\""<<(p.state==geo::NativeCadInterferenceState::MaterialOverlap?"material_overlap":p.state==geo::NativeCadInterferenceState::NoMaterialOverlap?"no_material_overlap":"unresolved")<<"\",\"native_overlap_volume\":"<<p.nativeOverlapVolume<<'}';}
-        std::cout<<"],\"bodies\":[";
+        std::cout<<"],\"initial_front_fallback\":";
+        writeInitialFrontFallback(result.initialFrontFallback);
+        std::cout<<",\"bodies\":[";
         for(std::size_t i=0;i<result.bodies.size();++i) {if(i)std::cout<<',';const auto& b=result.bodies[i];
             std::cout<<"{\"solid_tag\":"<<b.solidTag<<",\"route\":\""<<b.route<<"\",\"reason\":\""<<geo::nativeCadMeshReasonName(b.reason)
                 <<"\",\"start_face_tag\":"<<b.startFaceTag<<",\"end_face_tag\":"<<b.endFaceTag
@@ -123,6 +137,8 @@ int runNativeCadCli(int argc,char** argv) {
                 <<",\"relative_volume_error\":"<<b.relativeVolumeError<<",\"boundary_node_error\":"<<b.maximumBoundaryNodeError
                 <<",\"boundary_sample_error\":"<<b.maximumBoundarySampleError<<",\"primitive_reason\":\""<<algo::primitiveReasonName(b.primitive.reason)
                 <<"\",\"planar_reason\":\""<<algo::geometryReasonName(b.planar.reason)<<"\"";
+            std::cout<<",\"initial_front_fallback\":";
+            writeInitialFrontFallback(b.initialFrontFallback);
             std::cout<<",\"native_surface_reason\":\""<<b.nativeSurfaceReason<<"\""
                 <<",\"native_volume_reason\":\""<<b.nativeVolumeReason<<"\""
                 <<",\"surface_deflection\":"<<b.surfaceDeflection
@@ -276,7 +292,7 @@ int runNativeCadCli(int argc,char** argv) {
     };
     for(int i=1;i<argc;++i)report|=std::string_view(argv[i])=="--report-json"||std::string_view(argv[i])=="--independent-parts";
     try {
-        if(argc<4)throw std::invalid_argument("usage: paacs-cad-mesh input.step size output.paacsmesh --native-cad [--face-size tag size] [--native-sizing] [--size-box x0 y0 z0 x1 y1 z1 size] [--min-size h] [--growth g] [--report-json] [--trace-native-stages] [--independent-parts] [--local-partition-recovery] [--adaptive-tet-recovery] [--live-material-recovery] [--curvature-points-per-turn 0..64] [--trimmed-ray-witnesses] [--local-delaunay-refinement] [--advancing-interior-front] [--improve-tet-quality] [--improve-surface-spacing] [--regular-surface-front] [--no-improve-regular-quality] [--recovery-mode standard|advanced] [--recovery-seed N] [--recovery-retries 0..4] [--recovery-steiner-candidates 0..64]");
+        if(argc<4)throw std::invalid_argument("usage: paacs-cad-mesh input.step size output.paacsmesh --native-cad [--face-size tag size] [--native-sizing] [--size-box x0 y0 z0 x1 y1 z1 size] [--min-size h] [--growth g] [--report-json] [--trace-native-stages] [--independent-parts] [--local-partition-recovery] [--adaptive-tet-recovery] [--live-material-recovery] [--curvature-points-per-turn 0..64] [--trimmed-ray-witnesses] [--local-delaunay-refinement] [--advancing-interior-front|--no-advancing-interior-front] [--improve-tet-quality] [--improve-surface-spacing] [--regular-surface-front] [--no-improve-regular-quality] [--recovery-mode standard|advanced] [--recovery-seed N] [--recovery-retries 0..4] [--recovery-steiner-candidates 0..64]");
         options.geometry.targetSize=number<double>(argv[2]);
         for(int i=4;i<argc;++i) {
             const std::string_view a(argv[i]);
@@ -307,6 +323,7 @@ int runNativeCadCli(int argc,char** argv) {
                 options.curvaturePointsPerTurn=number<unsigned>(argv[++i]);
             else if(a=="--improve-tet-quality")options.improveNativeTetQuality=true;
             else if(a=="--advancing-interior-front")options.useAdvancingInteriorFront=true;
+            else if(a=="--no-advancing-interior-front")options.useAdvancingInteriorFront=false;
             else if(a=="--improve-surface-spacing")options.improveNativeSurfaceSpacing=true;
             else if(a=="--regular-surface-front")options.useRegularSurfaceFront=true;
             else if(a=="--improve-regular-quality")options.improveRegularMeshQuality=true;
