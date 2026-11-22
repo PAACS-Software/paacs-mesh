@@ -45,6 +45,7 @@
 #include <string_view>
 #include <limits>
 #include <set>
+#include <type_traits>
 
 namespace paacs::geo {
 namespace {
@@ -870,8 +871,153 @@ bool nativeLongitudinalFallback(const OcctModel& model,const View& view,const Na
     }
     return false;
 }
+// Cost counters concern both attempted routes. Geometry, quality and source
+// certificates remain those of the route that is actually published.
+bool accumulateInitialFrontTrial(NativeCadBodyMeshReport& result,const NativeCadBodyMeshReport& trial) noexcept {
+    const std::array workCounters{
+        &NativeCadBodyMeshReport::nativeSurfaceWork,&NativeCadBodyMeshReport::nativeVolumeWork,
+        &NativeCadBodyMeshReport::partitionWork,&NativeCadBodyMeshReport::boxContactWork,
+        &NativeCadBodyMeshReport::contactCylinderWork,&NativeCadBodyMeshReport::surfaceAttempts,
+        &NativeCadBodyMeshReport::rebuiltSurfaceCharts,&NativeCadBodyMeshReport::exactSurfacePairs,
+        &NativeCadBodyMeshReport::kernelTrials,&NativeCadBodyMeshReport::partitionAttempts,
+        &NativeCadBodyMeshReport::partitionTrimSamples,&NativeCadBodyMeshReport::surfaceDiagonalRepairs,
+        &NativeCadBodyMeshReport::nativeCentroidsChecked,&NativeCadBodyMeshReport::nativeCentroidReferenceQueries,
+        &NativeCadBodyMeshReport::nativeCentroidExactReuses,&NativeCadBodyMeshReport::nativeCentroidGeometryPairs,
+        &NativeCadBodyMeshReport::centroidsWithinChordTolerance,&NativeCadBodyMeshReport::nativeCentroidDistanceQueries,
+        &NativeCadBodyMeshReport::nativeChordSamplesChecked,&NativeCadBodyMeshReport::chordSamplesWithinTolerance,
+        &NativeCadBodyMeshReport::nativeCandidateQueries,&NativeCadBodyMeshReport::nativeCandidateRayAdmissions,
+        &NativeCadBodyMeshReport::nativeFinalRayAdmissions};
+    for(const auto member:workCounters){
+        if(trial.*member>UINT64_MAX-result.*member)return false;
+        result.*member+=trial.*member;
+    }
+    result.nativeSurfaceSeconds+=trial.nativeSurfaceSeconds;
+    result.nativeVolumeSeconds+=trial.nativeVolumeSeconds;
+    result.nativePartitionSeconds+=trial.nativePartitionSeconds;
+    result.nativeAssemblySeconds+=trial.nativeAssemblySeconds;
+    return true;
+}
+bool accumulateInitialFrontTrial(NativeCadMeshOutcome& result,const NativeCadMeshOutcome& trial) noexcept {
+    const std::array queryCounters{
+        &NativeCadMeshOutcome::nativeProjectionQueries,&NativeCadMeshOutcome::nativeProjectionInitializations,
+        &NativeCadMeshOutcome::nativeProjectionReuses,&NativeCadMeshOutcome::nativeTrimmedProjectionQueries,
+        &NativeCadMeshOutcome::nativeTrimmedProjectionMemoHits};
+    for(const auto member:queryCounters){
+        if(trial.*member>UINT64_MAX-result.*member)return false;
+        result.*member+=trial.*member;
+    }
+    result.preparationSeconds+=trial.preparationSeconds;
+    result.generationSeconds+=trial.generationSeconds;
+    result.validationSeconds+=trial.validationSeconds;
+    result.auditSeconds+=trial.auditSeconds;
+    result.qualitySeconds+=trial.qualitySeconds;
+    for(auto& body:result.bodies){
+        const auto found=std::find_if(trial.bodies.begin(),trial.bodies.end(),[&](const auto& previous){
+            return previous.solidTag==body.solidTag;
+        });
+        if(found!=trial.bodies.end()&&!accumulateInitialFrontTrial(body,*found))return false;
+    }
+    return true;
+}
 }
 NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOptions& o,mesh::Mesh& destination) noexcept {
+    if(!o.useAdvancingInteriorFront.has_value()){
+        const auto automaticStarted=Clock::now();
+        NativeCadMeshOutcome trial;
+        NativeCadInitialFrontFallbackReport fallbackReport;
+        // No allocation may occur while returning a result after publication.
+        static_assert(std::is_nothrow_move_constructible_v<NativeCadMeshOutcome>);
+        const auto failedAutomatic=[&](NativeCadMeshReason reason){
+            trial.published=false;trial.destinationUnchanged=true;trial.reason=reason;
+            trial.initialFrontFallback=fallbackReport;
+            for(auto& body:trial.bodies){body.reason=reason;body.initialFrontFallback=fallbackReport;}
+            trial.totalSeconds=elapsed(automaticStarted);
+            return std::move(trial);
+        };
+        try {
+            const auto solidCount=model.solids().size();
+            const bool enabled=o.advancingInteriorFrontEnabled(solidCount);
+            if(enabled&&o.maximumValidationWork!=o.geometry.maximumMeshingWork){
+                // AUTO construction, source checks and final validation share
+                // both original ceilings, including an independent wrapper's
+                // own work. Preserve AUTO for the bounded child dispatch; equal
+                // caps make this normalization re-entry happen at most once.
+                auto bounded=o;
+                const auto sharedWork=std::min(o.maximumValidationWork,o.geometry.maximumMeshingWork);
+                bounded.maximumValidationWork=sharedWork;
+                bounded.geometry.maximumMeshingWork=sharedWork;
+                auto result=meshNativeCad(model,bounded,destination);
+                result.totalSeconds=elapsed(automaticStarted);
+                return result;
+            }
+            // A single independent part retains its wrapper/source audits. Its
+            // conforming child resolves AUTO once; multi-part requests resolve
+            // false here so their children retain the established dispatch.
+            // The wrapper changes the child policy to ConformingDomain, so
+            // deferral cannot recurse back into the independent-part wrapper.
+            const bool deferToSinglePart=enabled&&solidCount==1&&
+                o.assemblyPolicy==NativeCadAssemblyPolicy::IndependentParts;
+            if(!deferToSinglePart){
+                auto resolved=o;resolved.useAdvancingInteriorFront=enabled;
+                const auto trialStarted=Clock::now();
+                trial=meshNativeCad(model,resolved,destination);
+                const auto trialSeconds=elapsed(trialStarted);
+                const bool sourceRefusal=trial.reason==NativeCadMeshReason::GeometryError||
+                    trial.reason==NativeCadMeshReason::UnsupportedBody||
+                    trial.reason==NativeCadMeshReason::RecognitionFailed||
+                    trial.reason==NativeCadMeshReason::MeshingFailed;
+                const bool beforeInitialStage=!trial.bodies.empty()&&
+                    std::all_of(trial.bodies.begin(),trial.bodies.end(),[](const auto& body){
+                        return body.initialFront.diagnostic&&
+                            std::string_view(body.initialFront.diagnostic)=="not_attempted";
+                    });
+                if(enabled&&!trial.published&&trial.destinationUnchanged&&sourceRefusal&&beforeInitialStage&&
+                   trial.validationWork<o.maximumValidationWork&&trial.validationWork<o.geometry.maximumMeshingWork){
+                    if(o.geometry.cancellation&&o.geometry.cancellation->load(std::memory_order_relaxed))
+                        return failedAutomatic(NativeCadMeshReason::Cancelled);
+                    fallbackReport={true,trial.reason,trial.validationWork,trialSeconds,
+                        trial.bodies.front().nativeSurfaceReason?trial.bodies.front().nativeSurfaceReason:"not_attempted"};
+                    auto legacy=o;legacy.useAdvancingInteriorFront=false;
+                    // Work::tick enforces the validation admission while some
+                    // legacy constructors separately enforce the meshing cap.
+                    // Give execution their shared remaining allowance, rather
+                    // than discover a meshing-cap overrun after the retry.
+                    const auto retryWork=std::min(o.maximumValidationWork-trial.validationWork,
+                        o.geometry.maximumMeshingWork-trial.validationWork);
+                    legacy.maximumValidationWork=retryWork;
+                    legacy.geometry.maximumMeshingWork=retryWork;
+                    // The retry publishes into a private destination. Cumulative
+                    // budgets, counters and cancellation are checked before the
+                    // caller's destination can be changed.
+                    mesh::Mesh candidate;
+                    auto retry=meshNativeCad(model,legacy,candidate);
+                    retry.destinationUnchanged=true;
+                    retry.initialFrontFallback=fallbackReport;
+                    for(auto& body:retry.bodies)body.initialFrontFallback=fallbackReport;
+                    const bool withinBudget=retry.validationWork<=legacy.maximumValidationWork&&
+                        retry.validationWork<=legacy.geometry.maximumMeshingWork;
+                    if(!withinBudget){retry.published=false;retry.reason=NativeCadMeshReason::BudgetExceeded;}
+                    if(trial.validationWork>UINT64_MAX-retry.validationWork){
+                        retry.published=false;retry.reason=NativeCadMeshReason::InternalError;
+                    }else retry.validationWork+=trial.validationWork;
+                    if(!accumulateInitialFrontTrial(retry,trial)){
+                        retry.published=false;retry.reason=NativeCadMeshReason::InternalError;
+                    }
+                    if(o.geometry.cancellation&&o.geometry.cancellation->load(std::memory_order_relaxed)){
+                        retry.published=false;retry.reason=NativeCadMeshReason::Cancelled;
+                    }
+                    if(retry.published){destination.swap(candidate);retry.destinationUnchanged=false;}
+                    else for(auto& body:retry.bodies)body.reason=retry.reason;
+                    retry.totalSeconds=elapsed(automaticStarted);
+                    return retry;
+                }
+                trial.totalSeconds=elapsed(automaticStarted);
+                return trial;
+            }
+        }catch(const Standard_OutOfMemory&){return failedAutomatic(NativeCadMeshReason::AllocationFailed);}
+         catch(const std::bad_alloc&){return failedAutomatic(NativeCadMeshReason::AllocationFailed);}
+         catch(...){return failedAutomatic(NativeCadMeshReason::InternalError);}
+    }
     if(o.useAdaptiveTetRecovery&&o.reuseNativeQueries){
         const auto retained=detail::OcctQueryContext::maximumRetainedPayloadBytes(true);
         if(retained<=o.maximumPrimitiveWorkingBytes/8){
@@ -894,7 +1040,7 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
     }
     detail::OcctStageObserverScope observe(o.stageObserver);
     detail::OcctStageTrace meshTrace("native_mesh");
-    const bool spatialSizing=o.useSpatialSizing||!o.sizeBoxes.empty();
+    const bool spatialSizing=o.useSpatialSizing||!o.sizeBoxes.empty()||o.useAdvancingInteriorFront.value_or(false);
     if(o.maximumRecoveryRandomRetries>4||o.maximumEdgeRecoverySteinerCandidates>64||o.maximumRecoveryPatchStates>65536||o.curvaturePointsPerTurn>64||
        (o.recoveryMode!=NativeCadRecoveryMode::Standard&&o.recoveryMode!=NativeCadRecoveryMode::Advanced)||
        (o.assemblyPolicy!=NativeCadAssemblyPolicy::ConformingDomain&&o.assemblyPolicy!=NativeCadAssemblyPolicy::IndependentParts)){NativeCadMeshOutcome invalid;invalid.reason=NativeCadMeshReason::InvalidRequest;return invalid;}
@@ -1178,6 +1324,17 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
                         report.recoveryMergedComponents+=recovered.mergedComponents;report.recoverySourceBlockedCandidates+=recovered.sourceBlockedCandidates;report.recoveryOtherComponentBlockedCandidates+=recovered.otherComponentBlockedCandidates;report.recoverySourceFacetNodes+=recovered.sourceFacetNodes;
                         report.recoveryRegions=recovered.regionRecovery;
                         report.constraintRecovery=recovered.constraintRecovery;
+                        report.initialFront=recovered.initialFront;
+                        report.interiorFrontDiagnostic=recovered.interiorFrontDiagnostic;
+                        report.interiorFrontNodes=recovered.interiorFrontNodes;
+                        report.interiorFrontCandidates=recovered.interiorFrontCandidates;
+                        report.interiorFrontWork=recovered.interiorFrontWork;
+                        report.interiorFrontQueries=recovered.interiorFrontQueries;
+                        report.interiorFrontRemainingOversized=recovered.interiorFrontRemainingOversized;
+                        report.interiorFrontActivations=recovered.interiorFrontActivations;
+                        report.interiorVoidActivations=recovered.interiorVoidActivations;
+                        report.interiorFrontAdvances=recovered.interiorFrontAdvances;
+                        report.interiorFrontSeconds=recovered.interiorFrontSeconds;
                         if(recovered.published){report.route=spatialSizing?"native_spatial_sizing":!spaceSurface?
                                 (recovered.liveMaterialPatches?"native_plc_live_material":"native_plc_cavity"):
                                 surfaceMode==OcctFrontSurface::Curvature?"native_curvature_surface":

@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <optional>
+#include <unordered_set>
 
 namespace paacs::geo::detail {
 
@@ -33,7 +34,28 @@ inline std::optional<bnd::detail::BistellarComplex::Proposal> buildOcctDelaunayC
 
     Complex::Proposal patch;
     auto& cavity = patch.removed;
+    // Retain the established small-cavity work and traversal. Only complete
+    // conflict fans growing beyond 64 cells acquire a membership hash; the
+    // vector still owns the original deterministic breadth-first order.
+    std::unordered_set<std::size_t> membership;
+    bool hashed=false;
+    const auto rememberOne=[&](std::size_t cell){
+        live.charge(); // The membership node allocation and insertion.
+        const auto buckets=membership.bucket_count();
+        membership.insert(cell);
+        if(membership.bucket_count()!=buckets)
+            live.charge(membership.bucket_count()+membership.size());
+    };
+    const auto remember=[&](std::size_t cell){
+        if(!hashed){
+            if(cavity.size()<=64)return;
+            const auto slots=std::min<std::size_t>({128,maximumCells,live.alive.size()});
+            live.charge(slots);membership.reserve(slots);hashed=true;
+            for(const auto queued:cavity)rememberOne(queued);
+        }else rememberOne(cell);
+    };
     cavity.push_back(start);
+    remember(start);
     const auto region = live.cells[start].classification;
     const auto position = [&](bnd::TetFacetVertexId id) -> const Vec3& {
         return live.vertices[id].position;
@@ -44,7 +66,9 @@ inline std::optional<bnd::detail::BistellarComplex::Proposal> buildOcctDelaunayC
                                             position(face[2]),point);
     };
     const auto contains = [&](std::size_t cell) {
-        return std::ranges::find(cavity,cell)!=cavity.end();
+        if(!hashed)return std::ranges::find(cavity,cell)!=cavity.end();
+        live.charge();
+        return membership.contains(cell);
     };
     const auto canCross = [&](std::size_t next, const Complex::Face& face) {
         return next!=Complex::noCell && live.cells[next].classification==region &&
@@ -66,6 +90,7 @@ inline std::optional<bnd::detail::BistellarComplex::Proposal> buildOcctDelaunayC
                                               position(v[3]),point)!=Sign::Positive) continue;
             if (cavity.size()>=maximumCells) return {};
             cavity.push_back(next);
+            remember(next);
         }
         if (pointInCell) owner = cell;
     }
@@ -87,6 +112,7 @@ inline std::optional<bnd::detail::BistellarComplex::Proposal> buildOcctDelaunayC
             }
             if (cavity.size()>=maximumCells || !canCross(next,face)) return {};
             cavity.push_back(next);
+            remember(next);
         }
     }
 

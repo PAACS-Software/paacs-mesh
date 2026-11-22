@@ -273,6 +273,16 @@ py::dict importReport(const geo::NativeCadImportOutcome& cad, const fs::path& so
     return r;
 }
 
+py::dict initialFallbackReport(const geo::NativeCadInitialFrontFallbackReport& fallback) {
+    py::dict r;
+    r["attempted"] = fallback.attempted;
+    r["reason"] = geo::nativeCadMeshReasonName(fallback.reason);
+    r["work"] = fallback.work;
+    r["seconds"] = finiteValue(fallback.seconds);
+    r["surface_diagnostic"] = fallback.surfaceDiagnostic;
+    return r;
+}
+
 struct MeshResult {
     mesh::Mesh value;
     geo::NativeCadMeshOutcome outcome;
@@ -284,6 +294,7 @@ struct MeshResult {
     std::string requestedAssembly;
     SizingRequest sizing;
     std::optional<double> requestedWarningQuality, requestedMinimumQuality;
+    std::optional<bool> requestedAdvancingInteriorFront;
     double warningQuality = 0, minimumQuality = 0;
     unsigned workers = 1, validationWorkers = 1;
 
@@ -308,6 +319,8 @@ struct MeshResult {
         r["requested_size"] = requestedSize;
         r["recovery"] = recovery;
         r["requested_assembly"] = requestedAssembly;
+        r["requested_advancing_interior_front"] = py::cast(requestedAdvancingInteriorFront);
+        r["initial_front_fallback"] = initialFallbackReport(outcome.initialFrontFallback);
         r["sizing"] = sizing.report(requestedSize);
         r["workers"] = workers;
         r["validation_workers"] = validationWorkers;
@@ -380,6 +393,24 @@ struct MeshResult {
             b["native_centroids_checked"] = body.nativeCentroidsChecked;
             b["local_delaunay_refinement_nodes"] = body.localDelaunayRefinementNodes;
             b["surface_chord_error_limit"] = finiteValue(body.surfaceChordErrorLimit);
+            const auto& initial = body.initialFront;
+            py::dict placement;
+            placement["diagnostic"] = initial.diagnostic;
+            placement["nodes"] = initial.nodes;
+            placement["wall_nodes"] = initial.wallNodes;
+            placement["void_nodes"] = initial.voidNodes;
+            placement["void_candidates"] = initial.voidCandidates;
+            placement["source_sweep_complete"] = initial.sourceSweepComplete;
+            placement["void_queue_exhausted"] = initial.voidQueueExhausted;
+            placement["maximum_unresolved_void_ratio"] = finiteValue(initial.maximumUnresolvedVoidRatio);
+            placement["candidates"] = initial.candidates;
+            placement["work"] = initial.work;
+            placement["queries"] = initial.queries;
+            placement["delaunay_commits"] = initial.delaunayCommits;
+            placement["full_certifications"] = initial.fullCertifications;
+            placement["seconds"] = finiteValue(initial.seconds);
+            b["initial_front"] = std::move(placement);
+            b["initial_front_fallback"] = initialFallbackReport(body.initialFrontFallback);
             bodies.append(std::move(b));
         }
         for (const auto& pair : outcome.interferences) {
@@ -474,9 +505,15 @@ struct CadModel {
         const py::object& faceSizes, const py::object& volumeControls,
         const py::object& minimumSize, const py::object& growth,
         const py::object& nativeSizing, const py::object& warningQuality,
-        const py::object& minimumQuality) {
+        const py::object& minimumQuality, const py::object& advancingInteriorFront) {
         geo::NativeCadMeshOptions options;
         options.geometry.targetSize = positiveNumber(size, "size");
+        if (!advancingInteriorFront.is_none()) {
+            if (!py::isinstance<py::bool_>(advancingInteriorFront))
+                throw py::type_error("advancing_interior_front must be bool or None");
+            options.useAdvancingInteriorFront = advancingInteriorFront.cast<bool>();
+        }
+        const auto requestedPlacement = options.useAdvancingInteriorFront;
         std::optional<double> requestedWarningQuality, requestedMinimumQuality;
         if (!warningQuality.is_none()) {
             requestedWarningQuality = qualityThreshold(warningQuality, "warning_quality");
@@ -504,6 +541,11 @@ struct CadModel {
         }
         if (sizing.requestedNative == false && !sizing.boxes.empty())
             throw py::value_error("volume_controls require native_sizing=True or None");
+        if (sizing.requestedNative == false) {
+            if (requestedPlacement == true)
+                throw py::value_error("advancing_interior_front=True conflicts with native_sizing=False");
+            options.useAdvancingInteriorFront = false;
+        }
         sizing.native = sizing.requestedNative.value_or(!sizing.faces.empty() || !sizing.boxes.empty());
         options.useSpatialSizing = sizing.native;
         options.minimumSize = sizing.minimum;
@@ -551,6 +593,7 @@ struct CadModel {
         result->sizing = std::move(sizing);
         result->requestedWarningQuality = requestedWarningQuality;
         result->requestedMinimumQuality = requestedMinimumQuality;
+        result->requestedAdvancingInteriorFront = requestedPlacement;
         result->warningQuality = options.geometry.warningElementQuality;
         result->minimumQuality = options.geometry.minimumElementQuality;
         result->workers = static_cast<unsigned>(nw);
@@ -734,6 +777,7 @@ PYBIND11_MODULE(_native, m) {
              py::arg("face_sizes") = py::none(), py::arg("volume_controls") = py::none(),
              py::arg("min_size") = py::none(), py::arg("growth") = py::float_(1.3),
              py::arg("native_sizing") = py::none(),
-             py::arg("warning_quality") = py::none(), py::arg("minimum_quality") = py::none());
+             py::arg("warning_quality") = py::none(), py::arg("minimum_quality") = py::none(),
+             py::arg("advancing_interior_front") = py::none());
     m.def("read_step", &readStep, py::arg("path"), py::kw_only(), py::arg("max_file_bytes") = py::none(), py::arg("names") = true, py::arg("retain_source") = false);
 }

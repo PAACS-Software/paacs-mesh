@@ -226,6 +226,24 @@ class WorkflowTests(unittest.TestCase):
                         self.assertEqual(recipe["options"][key], value)
             self.assertEqual(calls.call_count, 0)
 
+    def test_initial_placement_choice_is_saved_and_legacy_recipes_keep_auto(self):
+        for value in (None, True, False):
+            recipe = pm.create_recipe(self.model, .7, advancing_interior_front=value)
+            path = self.directory / ("placement-" + str(value) + ".json")
+            pm.save_recipe(self.model, recipe, path)
+            loaded = pm.load_recipe(self.model, path)
+            self.assertIs(loaded["options"]["advancing_interior_front"], value)
+            with patch.object(pm.CadModel, "mesh", return_value=self.baseline) as calls:
+                result = pm.run_recipe(self.model, loaded)
+            self.assertIs(calls.call_args.kwargs["advancing_interior_front"], value)
+            self.assertIs(result.report["attempts"][0]["options"]["advancing_interior_front"], value)
+        del recipe["options"]["advancing_interior_front"]
+        path.write_text(json.dumps(recipe), encoding="utf-8")
+        self.assertIsNone(pm.load_recipe(self.model, path)["options"]["advancing_interior_front"])
+        for value in (0, 1, "auto", [], {}):
+            with self.subTest(value=value), self.assertRaises(wf.WorkflowError):
+                pm.create_recipe(self.model, .7, advancing_interior_front=value)
+
     def test_total_wall_budget_counts_preparation_failures_and_overruns(self):
         model = pm.read_step(self.fixture)
         recipe = pm.create_recipe(model, .7, max_seconds=.1, allow_advanced=True, max_attempts=3)

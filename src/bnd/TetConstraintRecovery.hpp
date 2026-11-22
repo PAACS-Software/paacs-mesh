@@ -503,7 +503,8 @@ inline void recoverResidualCavities(
 inline TetConstraintRecoveryReport recoverTetConstraints(const mesh::Mesh& boundary,
     mesh::Classification region, std::uint64_t maximumWork, std::uint64_t maximumBytes,
     std::uint64_t maximumCells, const std::atomic_bool* cancellation, mesh::Mesh& destination,
-    std::uint64_t maximumSteinerNodes=64, bool profile=false, bool expandResidualEdges=true) {
+    std::uint64_t maximumSteinerNodes=64, bool profile=false, bool expandResidualEdges=true,
+    bool boundedConstruction=false) {
     using namespace constraint_detail;
     TetConstraintRecoveryReport report;
     const auto start=Clock::now();
@@ -521,7 +522,9 @@ inline TetConstraintRecoveryReport recoverTetConstraints(const mesh::Mesh& bound
             return "admission_budget";
         Complex complex;
         complex.chargeWork=charge;
-        complex.maximumStoredCells=static_cast<std::size_t>((maximumBytes-32ULL*1024*1024)/1536);
+        const auto availablePayload=maximumBytes-32ULL*1024*1024;
+        complex.maximumStoredCells=static_cast<std::size_t>(
+            availablePayload/(boundedConstruction?4096:1536));
         complex.useLookahead=false;
         complex.walkConstraints=true;
         complex.profile=profile;
@@ -548,20 +551,39 @@ inline TetConstraintRecoveryReport recoverTetConstraints(const mesh::Mesh& bound
         if (!(std::isfinite(span)&&span>0)) return "invalid_source";
         for (unsigned i=0;i<8;++i) points.push_back({(i&1)?hi.x+span:lo.x-span,
             (i&2)?hi.y+span:lo.y-span,(i&4)?hi.z+span:lo.z-span});
-        auto built=algo::buildTetCandidate(points);
+        // Roll out online construction limits with the experimental initial
+        // front. Keep the established constructor and accounting unchanged
+        // for callers that have not selected that mode.
+        algo::TetCandidateBuildOutcome built;
+        if (boundedConstruction) {
+            algo::TetCandidateBuildLimits limits;
+            limits.maxWork=maximumWork-report.work;
+            limits.maxCells=complex.maximumStoredCells;
+            // Source constraints, the input point copy, and recovery maps
+            // retain their existing 32 MiB allowance during construction.
+            limits.maxTemporaryBytes=maximumBytes-32ULL*1024*1024;
+            limits.cancellation=cancellation;
+            built=algo::buildTetCandidate(points,limits);
+        } else built=algo::buildTetCandidate(points);
         const auto& m=built.metrics;
-        const auto candidateWork=m.construction.conflictInsphereTests+m.construction.conflictOrientationTests+
+        const auto candidateWork=boundedConstruction?m.boundedWork:
+            m.construction.conflictInsphereTests+m.construction.conflictOrientationTests+
             m.validationFaceUses+m.validationHullTests+m.candidateCells+m.discardedCandidateWork;
-        // The shared Delaunay builder returns its counters on completion.
-        // Charge the reserved allowance even when its construction exhausts it.
+        // Include every constructor attempt once, including failed retries.
         const auto charged=std::min(candidateWork,maximumWork-report.work);
         charge(charged);
+        if (built.reason==algo::TetCandidateReason::Cancelled) throw Cancelled{};
+        if (built.reason==algo::TetCandidateReason::BudgetExceeded) return "construction_budget";
         if (built.reason==algo::TetCandidateReason::AllocationFailed) throw std::bad_alloc{};
         if (charged!=candidateWork) throw WorkLimit{};
         if (!built.built()||built.candidate->points.size()!=points.size()) return "delaunay_refused";
         report.candidateCells=m.candidateCells;
         if (report.candidateCells>complex.maximumStoredCells||
             m.constructionCandidateConservativeBytes>maximumBytes) return "admission_budget";
+        if (boundedConstruction &&
+            (report.candidateCells>availablePayload/4096 ||
+             m.candidateAccountedBytes>availablePayload-4096*report.candidateCells))
+            return "construction_budget";
         for (auto p:points) complex.vertices.push_back({p,complex.vertices.size()+1});
         for (const auto& src:built.candidate->cells) {
             TetFacetCell tet{{},0,region};

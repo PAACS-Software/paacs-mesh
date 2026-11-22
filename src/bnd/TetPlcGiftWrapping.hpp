@@ -40,6 +40,9 @@ public:
     bool requireManifoldFront=false;
     bool useLocalCandidates=false;
     bool useExactContactShortcut=false;
+    // Only an owner that validated the table once and preserves finite,
+    // strictly increasing appended vertices may enable this contact shortcut.
+    bool initialOwnerCanonical=false;
     bool useIncrementalFrontQueue=true;
     bool manifoldIndexValid=false;
     bool lastTopologyRefusal=false;
@@ -88,7 +91,7 @@ public:
             charge();
             ++metrics.boundaryTests;view.target.vertices=boundary[i];
             if(useExactContactShortcut&&tet_facet_detail::separatedByTetFace(view,cell,boundary[i],[]{}))continue;
-            const auto contact=canonicalVertices?
+            const auto contact=(canonicalVertices||initialOwnerCanonical)?
                 tet_facet_detail::classifyTetFacetContactWithCanonicalVertices(view,cell):
                 classifyTetFacetContact(view,cell);
             if(contact!=TetFacetContact::Disjoint&&contact!=TetFacetContact::CoplanarExactFace&&contact!=TetFacetContact::DeclaredBoundaryTouch)return false;}

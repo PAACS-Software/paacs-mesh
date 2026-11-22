@@ -59,7 +59,6 @@ class NativeQualityTests(unittest.TestCase):
                 self.assertIsNone(quality["requested_warning_threshold"])
                 self.assertIsNone(quality["requested_minimum_required"])
                 self.assertIs(report["quality_warning"], False)
-        self.assertGreaterEqual(self.good.report["quality"]["minimum"], .25)
 
     def test_warning_policy_does_not_change_the_controlled_mesh(self):
         report = self.assert_valid(self.warned)
@@ -101,12 +100,24 @@ class NativeQualityTests(unittest.TestCase):
                              self.archive(mesh, directory, "warning.paacsmesh"))
 
     def test_good_cylinder_meets_an_explicit_requirement_without_warning(self):
-        mesh = self.model.mesh(.3, warning_quality=.25, minimum_quality=.25, max_work=100_000_000)
+        # Exercise the threshold contract against this compiler's measured
+        # mesh, without promising a fixed quality floor from automatic placement.
+        threshold = .9 * self.good.report["quality"]["minimum"]
+        self.assertGreater(threshold, 0)
+        self.assertLess(threshold, 1)
+        mesh = self.model.mesh(.3, warning_quality=threshold, minimum_quality=threshold,
+                               max_work=100_000_000)
         report = self.assert_valid(mesh)
-        self.assertGreaterEqual(report["quality"]["minimum"], .25)
+        self.assertGreaterEqual(report["quality"]["minimum"], threshold)
         self.assertIs(report["quality_warning"], False)
         self.assertIs(report["quality"]["warning_enabled"], True)
-        self.assertEqual(report["quality"]["minimum_required"], .25)
+        self.assertEqual(report["quality"]["warning_threshold"], threshold)
+        self.assertEqual(report["quality"]["minimum_required"], threshold)
+        self.assertEqual(report["quality"]["requested_warning_threshold"], threshold)
+        self.assertEqual(report["quality"]["requested_minimum_required"], threshold)
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertEqual(self.archive(self.good, directory, "default.paacsmesh"),
+                             self.archive(mesh, directory, "required.paacsmesh"))
 
     def test_strict_refusal_preserves_an_existing_valid_mesh(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -6,6 +6,7 @@
 #include "paacs/geometry/OcctMesher.hpp"
 #include "paacs/sdk/MeshArchive.hpp"
 #include "NumberArgument.hpp"
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -27,6 +28,12 @@ void traceNativeStage(const paacs::geo::NativeCadStageEvent& event) noexcept {
         event.beginning ? "begin" : "end", event.entityTag, event.stage, event.diagnostic);
     std::fflush(stderr);
 }
+void writeInitialFrontFallback(const paacs::geo::NativeCadInitialFrontFallbackReport& report){
+    std::cout<<"{\"attempted\":"<<(report.attempted?"true":"false")
+        <<",\"reason\":\""<<paacs::geo::nativeCadMeshReasonName(report.reason)<<"\""
+        <<",\"work\":"<<report.work<<",\"seconds\":"<<report.seconds
+        <<",\"surface_diagnostic\":\""<<report.surfaceDiagnostic<<"\"}";
+}
 }
 int runNativeCadCli(int argc,char** argv) {
     using namespace paacs;
@@ -36,6 +43,9 @@ int runNativeCadCli(int argc,char** argv) {
     const auto started=std::chrono::steady_clock::now();
     const auto receipt=[&](const char* status,const char* reason) {
         if(!report)return;
+        const bool interiorFrontAttempted=std::any_of(result.bodies.begin(),result.bodies.end(),[](const auto& body){
+            return body.initialFront.diagnostic&&std::string_view(body.initialFront.diagnostic)!="not_attempted";
+        });
         double volumeReference=cad.cadVolume;
         bool auditedReference=result.published&&result.bodies.size()==cad.solids;
         double bodyVolumeSum=0;
@@ -89,13 +99,16 @@ int runNativeCadCli(int argc,char** argv) {
             <<",\"local_partition_recovery\":"<<(options.useLocalPartitionRecovery?"true":"false")
             <<",\"adaptive_tet_recovery\":"<<(options.useAdaptiveTetRecovery?"true":"false")
             <<",\"curvature_points_per_turn\":"<<options.curvaturePointsPerTurn
-            <<",\"native_spatial_sizing\":"<<((options.useSpatialSizing||!options.sizeBoxes.empty())?"true":"false")
+            <<",\"native_spatial_sizing\":"<<((options.useSpatialSizing||!options.sizeBoxes.empty()||options.advancingInteriorFrontEnabled(std::size_t(cad.solids)))?"true":"false")
             <<",\"face_size_controls\":"<<options.faceSizes.size()<<",\"size_box_controls\":"<<options.sizeBoxes.size()
             <<",\"live_material_recovery\":"<<(options.useLiveMaterialRecovery?"true":"false")
             <<",\"trimmed_ray_witnesses\":"<<(options.useTrimmedRayWitnesses?"true":"false")
             <<",\"local_delaunay_refinement\":"<<(options.useLocalDelaunayRefinement?"true":"false")
             <<",\"improve_surface_spacing\":"<<(options.improveNativeSurfaceSpacing?"true":"false")
             <<",\"improve_tet_quality\":"<<(options.improveNativeTetQuality?"true":"false")
+            <<",\"advancing_interior_front\":"<<(interiorFrontAttempted?"true":"false")
+            <<",\"advancing_interior_front_selected\":"<<(options.advancingInteriorFrontEnabled(std::size_t(cad.solids))?"true":"false")
+            <<",\"advancing_interior_front_policy\":\""<<(!options.useAdvancingInteriorFront.has_value()?"auto":*options.useAdvancingInteriorFront?"enabled":"disabled")<<"\""
             <<",\"regular_surface_front\":"<<(options.useRegularSurfaceFront?"true":"false")
             <<",\"improve_regular_quality\":"<<(options.regularMeshQualityEnabled()?"true":"false")
             <<",\"maximum_edge_recovery_steiner_candidates\":"<<options.maximumEdgeRecoverySteinerCandidates
@@ -114,7 +127,9 @@ int runNativeCadCli(int argc,char** argv) {
             <<",\"validation_work\":"<<result.validationWork<<",\"millimetres_per_model_unit\":"<<cad.millimetresPerModelUnit
             <<",\"total_seconds\":"<<std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count()<<",\"interferences\":[";
         for(std::size_t i=0;i<result.interferences.size();++i){if(i)std::cout<<',';const auto& p=result.interferences[i];std::cout<<"{\"first_solid_tag\":"<<p.firstSolidTag<<",\"second_solid_tag\":"<<p.secondSolidTag<<",\"state\":\""<<(p.state==geo::NativeCadInterferenceState::MaterialOverlap?"material_overlap":p.state==geo::NativeCadInterferenceState::NoMaterialOverlap?"no_material_overlap":"unresolved")<<"\",\"native_overlap_volume\":"<<p.nativeOverlapVolume<<'}';}
-        std::cout<<"],\"bodies\":[";
+        std::cout<<"],\"initial_front_fallback\":";
+        writeInitialFrontFallback(result.initialFrontFallback);
+        std::cout<<",\"bodies\":[";
         for(std::size_t i=0;i<result.bodies.size();++i) {if(i)std::cout<<',';const auto& b=result.bodies[i];
             std::cout<<"{\"solid_tag\":"<<b.solidTag<<",\"route\":\""<<b.route<<"\",\"reason\":\""<<geo::nativeCadMeshReasonName(b.reason)
                 <<"\",\"start_face_tag\":"<<b.startFaceTag<<",\"end_face_tag\":"<<b.endFaceTag
@@ -122,6 +137,8 @@ int runNativeCadCli(int argc,char** argv) {
                 <<",\"relative_volume_error\":"<<b.relativeVolumeError<<",\"boundary_node_error\":"<<b.maximumBoundaryNodeError
                 <<",\"boundary_sample_error\":"<<b.maximumBoundarySampleError<<",\"primitive_reason\":\""<<algo::primitiveReasonName(b.primitive.reason)
                 <<"\",\"planar_reason\":\""<<algo::geometryReasonName(b.planar.reason)<<"\"";
+            std::cout<<",\"initial_front_fallback\":";
+            writeInitialFrontFallback(b.initialFrontFallback);
             std::cout<<",\"native_surface_reason\":\""<<b.nativeSurfaceReason<<"\""
                 <<",\"native_volume_reason\":\""<<b.nativeVolumeReason<<"\""
                 <<",\"surface_deflection\":"<<b.surfaceDeflection
@@ -181,6 +198,46 @@ int runNativeCadCli(int argc,char** argv) {
                 <<",\"local_delaunay_support_nodes\":"<<b.localDelaunaySupportNodes
                 <<",\"local_delaunay_refinement_nodes\":"<<b.localDelaunayRefinementNodes
                 <<",\"local_delaunay_quality_edits\":"<<b.localDelaunayQualityEdits
+                <<",\"initial_front\":{\"diagnostic\":\""<<b.initialFront.diagnostic
+                <<"\",\"nodes\":"<<b.initialFront.nodes<<",\"candidates\":"<<b.initialFront.candidates
+                <<",\"wall_nodes\":"<<b.initialFront.wallNodes<<",\"void_nodes\":"<<b.initialFront.voidNodes
+                <<",\"void_candidates\":"<<b.initialFront.voidCandidates
+                <<",\"source_sweep_complete\":"<<(b.initialFront.sourceSweepComplete?"true":"false")
+                <<",\"void_queue_exhausted\":"<<(b.initialFront.voidQueueExhausted?"true":"false")
+                <<",\"maximum_unresolved_void_ratio\":"<<b.initialFront.maximumUnresolvedVoidRatio
+                <<",\"work\":"<<b.initialFront.work<<",\"queries\":"<<b.initialFront.queries
+                <<",\"cones\":"<<b.initialFront.cones<<",\"reused_apices\":"<<b.initialFront.reusedApices
+                <<",\"source_activations\":"<<b.initialFront.sourceActivations
+                <<",\"propagated_activations\":"<<b.initialFront.propagatedActivations
+                <<",\"propagated_sites\":"<<b.initialFront.propagatedSites
+                <<",\"maximum_depth\":"<<b.initialFront.maximumDepth
+                <<",\"remaining_faces\":"<<b.initialFront.remainingFaces
+                <<",\"delaunay_evaluations\":"<<b.initialFront.delaunayEvaluations
+                <<",\"delaunay_commits\":"<<b.initialFront.delaunayCommits
+                <<",\"full_certifications\":"<<b.initialFront.fullCertifications
+                <<",\"cavity_unavailable\":"<<b.initialFront.cavityUnavailable
+                <<",\"cavity_limit\":"<<b.initialFront.cavityLimit
+                <<",\"maximum_planned_cavity\":"<<b.initialFront.maximumPlannedCavity
+                <<",\"maximum_accepted_cavity\":"<<b.initialFront.maximumAcceptedCavity
+                <<",\"storage_rejections\":"<<b.initialFront.storageRejections
+                <<",\"compactions\":"<<b.initialFront.compactions
+                <<",\"retired_cells_reclaimed\":"<<b.initialFront.retiredCellsReclaimed
+                <<",\"compaction_work\":"<<b.initialFront.compactionWork
+                <<",\"auxiliary_stored_cells\":"<<b.initialFront.auxiliaryStoredCells
+                <<",\"auxiliary_live_cells\":"<<b.initialFront.auxiliaryLiveCells
+                <<",\"auxiliary_stored_peak\":"<<b.initialFront.auxiliaryStoredPeak
+                <<",\"auxiliary_storage_capacity\":"<<b.initialFront.auxiliaryStorageCapacity
+                <<",\"compaction_peak_modeled_bytes\":"<<b.initialFront.compactionPeakModeledBytes
+                <<",\"auxiliary_working_bytes\":"<<b.initialFront.auxiliaryWorkingBytes
+                <<",\"seconds\":"<<b.initialFront.seconds<<"}"
+                <<",\"interior_front\":{\"diagnostic\":\""<<b.interiorFrontDiagnostic
+                <<"\",\"nodes\":"<<b.interiorFrontNodes<<",\"candidates\":"<<b.interiorFrontCandidates
+                <<",\"work\":"<<b.interiorFrontWork<<",\"queries\":"<<b.interiorFrontQueries
+                <<",\"remaining_oversized\":"<<b.interiorFrontRemainingOversized
+                <<",\"front_activations\":"<<b.interiorFrontActivations
+                <<",\"front_advances\":"<<b.interiorFrontAdvances
+                <<",\"void_activations\":"<<b.interiorVoidActivations
+                <<",\"seconds\":"<<b.interiorFrontSeconds<<"}"
                 <<",\"local_delaunay_used_global_fallback\":"<<(b.localDelaunayUsedGlobalFallback?"true":"false")
                 <<",\"contact_cylinder_reason\":\""<<b.contactCylinderReason<<"\""
                 <<",\"contact_source_edge_tag\":"<<b.contactSourceEdgeTag
@@ -235,7 +292,7 @@ int runNativeCadCli(int argc,char** argv) {
     };
     for(int i=1;i<argc;++i)report|=std::string_view(argv[i])=="--report-json"||std::string_view(argv[i])=="--independent-parts";
     try {
-        if(argc<4)throw std::invalid_argument("usage: paacs-cad-mesh input.step size output.paacsmesh --native-cad [--face-size tag size] [--native-sizing] [--size-box x0 y0 z0 x1 y1 z1 size] [--min-size h] [--growth g] [--report-json] [--trace-native-stages] [--independent-parts] [--local-partition-recovery] [--adaptive-tet-recovery] [--live-material-recovery] [--curvature-points-per-turn 0..64] [--trimmed-ray-witnesses] [--local-delaunay-refinement] [--improve-surface-spacing] [--regular-surface-front] [--no-improve-regular-quality] [--recovery-mode standard|advanced] [--recovery-seed N] [--recovery-retries 0..4] [--recovery-steiner-candidates 0..64]");
+        if(argc<4)throw std::invalid_argument("usage: paacs-cad-mesh input.step size output.paacsmesh --native-cad [--face-size tag size] [--native-sizing] [--size-box x0 y0 z0 x1 y1 z1 size] [--min-size h] [--growth g] [--report-json] [--trace-native-stages] [--independent-parts] [--local-partition-recovery] [--adaptive-tet-recovery] [--live-material-recovery] [--curvature-points-per-turn 0..64] [--trimmed-ray-witnesses] [--local-delaunay-refinement] [--advancing-interior-front|--no-advancing-interior-front] [--improve-tet-quality] [--improve-surface-spacing] [--regular-surface-front] [--no-improve-regular-quality] [--recovery-mode standard|advanced] [--recovery-seed N] [--recovery-retries 0..4] [--recovery-steiner-candidates 0..64]");
         options.geometry.targetSize=number<double>(argv[2]);
         for(int i=4;i<argc;++i) {
             const std::string_view a(argv[i]);
@@ -265,6 +322,8 @@ int runNativeCadCli(int argc,char** argv) {
             else if(a=="--curvature-points-per-turn"&&i+1<argc)
                 options.curvaturePointsPerTurn=number<unsigned>(argv[++i]);
             else if(a=="--improve-tet-quality")options.improveNativeTetQuality=true;
+            else if(a=="--advancing-interior-front")options.useAdvancingInteriorFront=true;
+            else if(a=="--no-advancing-interior-front")options.useAdvancingInteriorFront=false;
             else if(a=="--improve-surface-spacing")options.improveNativeSurfaceSpacing=true;
             else if(a=="--regular-surface-front")options.useRegularSurfaceFront=true;
             else if(a=="--improve-regular-quality")options.improveRegularMeshQuality=true;

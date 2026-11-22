@@ -88,7 +88,7 @@ class NativeWheelTests(unittest.TestCase):
         self.assertEqual(report["validation_workers"], 1)
         self.assertEqual(report["mesh_scope"], "independent_parts")
         self.assertFalse(report["interbody_nonoverlap_certified"])
-        self.assertEqual(report["bodies"][0]["route"], "cylinder")
+        self.assertGreater(report["bodies"][0]["initial_front"]["nodes"], 0)
         self.assertEqual(self.mesh.face_tags, [1, 2, 3])
         self.assertEqual(self.mesh.body_tags, [1])
         json.dumps(report, allow_nan=False)
@@ -170,11 +170,72 @@ class NativeWheelTests(unittest.TestCase):
         for options in ({"recovery": "typo"}, {"assembly": "fuse"},
                         {"workers": 0}, {"workers": True}, {"validation_workers": 9},
                         {"max_nodes": -1}, {"max_cells": 2 ** 65}, {"max_work": True},
-                        {"max_seconds": math.nan}, {"max_seconds": 1e300}):
+                        {"max_seconds": math.nan}, {"max_seconds": 1e300},
+                        {"advancing_interior_front": 1}, {"advancing_interior_front": "auto"},
+                        {"advancing_interior_front": True, "native_sizing": False}):
             with self.subTest(options=options), self.assertRaises((ValueError, TypeError, OverflowError)):
                 self.model.mesh(0.3, **options)
         with self.assertRaises((ValueError, TypeError)):
             pm.read_step("bad\0path.step")
+
+    def test_initial_placement_has_automatic_and_explicit_modes(self):
+        self.assertEqual(self.mesh.report["requested_assembly"], "preserve_parts")
+        self.assertIsNone(self.mesh.report["requested_advancing_interior_front"])
+        # setUpClass uses mesh(.3) without a work-budget override.
+        default_initial = self.mesh.report["bodies"][0]["initial_front"]
+        self.assertIs(default_initial["source_sweep_complete"], True)
+        self.assertGreater(default_initial["wall_nodes"], 0)
+        self.assertGreater(default_initial["void_nodes"], 0)
+        self.assertEqual(default_initial["nodes"], default_initial["delaunay_commits"])
+        self.assertIs(self.mesh.report["initial_front_fallback"]["attempted"], False)
+        automatic = self.model.mesh(.3, assembly="conforming", max_work=100_000_000)
+        enabled = self.model.mesh(.3, assembly="conforming", advancing_interior_front=True,
+                                  max_work=100_000_000)
+        legacy = self.model.mesh(.3, assembly="conforming", advancing_interior_front=False,
+                                 max_work=100_000_000)
+        self.assertIsNone(automatic.report["requested_advancing_interior_front"])
+        self.assertIs(enabled.report["requested_advancing_interior_front"], True)
+        self.assertIs(legacy.report["requested_advancing_interior_front"], False)
+        for result in (automatic, enabled):
+            initial = result.report["bodies"][0]["initial_front"]
+            self.assertGreater(initial["wall_nodes"], 0)
+            self.assertGreater(initial["void_nodes"], 0)
+            self.assertEqual(initial["nodes"], initial["delaunay_commits"])
+            self.assertGreaterEqual(initial["full_certifications"], initial["nodes"])
+        self.assertEqual(legacy.report["bodies"][0]["initial_front"]["diagnostic"], "not_attempted")
+        self.assertEqual(automatic.face_tags, legacy.face_tags)
+        self.assertEqual(automatic.body_tags, legacy.body_tags)
+        with tempfile.TemporaryDirectory() as directory:
+            paths = [Path(directory) / name for name in ("auto.paacsmesh", "on.paacsmesh")]
+            automatic.write_archive(paths[0])
+            enabled.write_archive(paths[1])
+            self.assertEqual(paths[0].read_bytes(), paths[1].read_bytes())
+        for result in (automatic, enabled, legacy):
+            self.assertTrue(result.report["audit"]["complete"])
+            self.assertTrue(result.report["audit"]["valid"])
+            self.assertTrue(result.report["quality"]["valid"])
+
+    def test_automatic_source_refusal_has_a_reported_bounded_fallback(self):
+        source = Path(__file__).resolve().parents[2] / "tests/fixtures/cad/sphere.step"
+        model = pm.read_step(source)
+        mesh = model.mesh(.35, max_work=100_000_000)
+        report = mesh.report
+        self.assertTrue(report["audit"]["complete"] and report["audit"]["valid"])
+        self.assertTrue(report["quality"]["valid"])
+        self.assertIsNone(report["requested_advancing_interior_front"])
+        self.assertEqual(mesh.body_tags, [1])
+        for fallback in (report["initial_front_fallback"], report["bodies"][0]["initial_front_fallback"]):
+            self.assertIs(fallback["attempted"], True)
+            self.assertEqual(fallback["reason"], "geometry_error")
+            self.assertGreater(fallback["work"], 0)
+            self.assertGreater(fallback["seconds"], 0)
+            self.assertNotEqual(fallback["surface_diagnostic"], "not_attempted")
+            self.assertGreaterEqual(report["seconds"]["meshing_total"], fallback["seconds"])
+        self.assertEqual(report["bodies"][0]["initial_front"]["diagnostic"], "not_attempted")
+        with self.assertRaises(pm.MeshingError) as caught:
+            model.mesh(.35, assembly="conforming", advancing_interior_front=True, max_work=100_000_000)
+        self.assertEqual(caught.exception.reason, "geometry_error")
+        self.assertIs(caught.exception.report["initial_front_fallback"]["attempted"], False)
 
     def test_export_failure_and_source_protection(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -233,6 +294,7 @@ class NativeWheelTests(unittest.TestCase):
             start = child.stdout.find("{\n")
             report = json.loads(child.stdout[start:])
             self.assertTrue(report["mesh_published"])
+            self.assertIsNone(report["requested_advancing_interior_front"])
             self.assertEqual(len(archive_data(output)[0]), self.mesh.node_count)
 
 

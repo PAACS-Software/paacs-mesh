@@ -25,6 +25,8 @@
 #include "OcctShellProximity.hpp"
 #include "OcctSpatialSizing.hpp"
 #include "OcctInteriorSites.hpp"
+#include "OcctInteriorFront.hpp"
+#include "OcctInitialPointFront.hpp"
 #include "paacs/algo/BoundaryConformingMesher.hpp"
 #include "paacs/bnd/TetPlcCavityRecovery.hpp"
 #include "../bnd/TetPlcRetainedRecovery.hpp"
@@ -48,6 +50,8 @@ void need(bool ok,NativeCadMeshReason reason,const char* why){if(!ok)throw Stop{
 OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
     const NativeCadMeshOptions& options,std::uint64_t maximumWork,mesh::Mesh& destination,
     std::uint64_t earlyConstraintWork,OcctFrontSurface surfaceMode,bool liveTrial) noexcept {
+    // Public dispatch resolves AUTO once; direct private callers opt in explicitly.
+    const bool advancingInteriorFront=options.useAdvancingInteriorFront.value_or(false);
     const bool spaceSurface=surfaceMode!=OcctFrontSurface::Standard;
     const bool spatialSizing=surfaceMode==OcctFrontSurface::SpatialSizing;
     const bool improveQuality=surfaceMode==OcctFrontSurface::RegularQuality||
@@ -160,7 +164,8 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             const auto constraints=bnd::detail::recoverTetConstraints(sites,{3,tag},
                 constraintWork,options.maximumPrimitiveWorkingBytes/2,
                 std::min(frontCells,maximumSeedTets),o.cancellation,seed,
-                std::min<std::uint64_t>(64,o.maximumNodes-std::uint64_t(sites.nodeCount())));
+                std::min<std::uint64_t>(64,o.maximumNodes-std::uint64_t(sites.nodeCount())),
+                false,true,advancingInteriorFront);
             out.constraintRecovery={constraints.diagnostic,constraints.candidateCells,
                 constraints.missingEdgesBefore,constraints.missingFacesBefore,
                 constraints.missingEdgesAfter,constraints.missingFacesAfter,constraints.patches,
@@ -175,13 +180,16 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
         };
         OcctSolidClassifier classifier(OcctModelAccess::solid(model,tag));
         const auto tol=model.tolerance(3,tag);
-        if(spatialSizing&&options.improveNativeTetQuality){
-            // Put size-aware interior sites into the first Delaunay point set.
+        if(spatialSizing&&(options.improveNativeTetQuality||advancingInteriorFront)){
+            // Construct the first interior point set before constraint recovery.
             // The prescribed surface remains the same input constraint complex.
             OcctStageTrace placement("interior_sites",tag);
+            const auto placementStarted=Clock::now();
             struct SiteLimit {};
             mesh::Mesh sites;
-            const auto siteBudget=std::min<std::uint64_t>(1'000'000,remaining()/8);
+            const auto siteBudget=advancingInteriorFront?
+                std::min<std::uint64_t>(42'000'000,remaining()/2):
+                std::min<std::uint64_t>(1'000'000,remaining()/8);
             constexpr auto nodeBytes=sizeof(Vec3)+sizeof(mesh::Classification);
             constexpr auto tetBytes=sizeof(mesh::Cell)+4*sizeof(Index);
             const auto boundaryBytes=std::uint64_t(ns)*nodeBytes+
@@ -197,21 +205,76 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 if(amount>siteBudget-siteWork)throw SiteLimit{};
                 tick(amount);siteWork+=amount;
             };
+            if(advancingInteriorFront)out.initialFront.diagnostic="budget_limited";
             try {if(siteCap&&siteBudget&&preparationBytes<=options.maximumPrimitiveWorkingBytes-retained){
-                sites=appendOcctInteriorSites(boundary,*sizeField,mesh::Classification{3,tag},
-                    std::size_t(siteCap),
-                    [&](Vec3 p){
-                        siteCharge();
-                        if(siteQueries>=2048)throw SiteLimit{};
-                        ++siteQueries;++out.nativeQueries;
-                        classifier.Perform(gp_Pnt(p.x,p.y,p.z),tol);
-                        return classifier.State()==TopAbs_IN;
-                    },siteCharge);
+                if(advancingInteriorFront){
+                    OcctInitialPointFrontLimits limits;
+                    limits.work=siteBudget;limits.queries=12'000;limits.sites=std::size_t(siteCap);
+                    limits.cancellation=o.cancellation;
+                    limits.workingBytes=std::min<std::uint64_t>(128ULL*1024*1024,
+                        options.maximumPrimitiveWorkingBytes-retained);
+                    OcctInitialPointFrontReport built;
+                    sites=appendOcctInitialPointFrontSites(boundary,*sizeField,o.targetSize,
+                        mesh::Classification{3,tag},limits,[&](Vec3 p){
+                            // The builder charges and bounds both point and
+                            // cached material-witness queries before this call.
+                            ++siteQueries;++out.nativeQueries;
+                            classifier.Perform(gp_Pnt(p.x,p.y,p.z),tol);
+                            return classifier.State()==TopAbs_IN;
+                        },siteCharge,&built);
+                    need(!built.cancelled,NativeCadMeshReason::Cancelled,"cancelled");
+                    auto& report=out.initialFront;
+                    report.diagnostic=built.budgetLimited?"budget_limited":!built.initialized?
+                        "unavailable":built.frontClosed?"front_closed":"stalled";
+                    report.nodes=built.sites;report.candidates=built.candidates;
+                    report.wallNodes=built.sourcePhaseSites;report.voidNodes=built.bulkSites;
+                    report.voidCandidates=built.bulkCandidates;
+                    report.sourceSweepComplete=built.sourcePhaseCompleted;
+                    report.voidQueueExhausted=built.bulkQueueExhausted;
+                    report.maximumUnresolvedVoidRatio=built.bulkMaximumUnresolvedRatio;
+                    report.cones=built.seedCones;report.reusedApices=built.reusedApices;
+                    report.sourceActivations=built.originalFaceActivations;
+                    report.propagatedActivations=built.propagatedFaceActivations;
+                    report.propagatedSites=built.deepSites;report.maximumDepth=built.maximumDepth;
+                    report.remainingFaces=built.remainingFrontFaces;
+                    report.delaunayEvaluations=built.auxiliaryScorerEvaluations;
+                    report.delaunayCommits=built.auxiliaryCommits;
+                    report.fullCertifications=built.auxiliaryFullCertifications;
+                    report.cavityUnavailable=built.auxiliaryScoreCavityUnavailable;
+                    report.cavityLimit=built.auxiliaryCavityLimit;
+                    report.maximumPlannedCavity=built.auxiliaryMaximumPlannedCavity;
+                    report.maximumAcceptedCavity=built.auxiliaryMaximumAcceptedCavity;
+                    report.storageRejections=built.auxiliaryScoreStorageRejects+built.auxiliaryCommitStorageRejects;
+                    report.compactions=built.auxiliaryCompactions;
+                    report.retiredCellsReclaimed=built.auxiliaryDeadCellsReclaimed;
+                    report.compactionWork=built.auxiliaryCompactionWork;
+                    report.auxiliaryStoredCells=built.auxiliaryStoredCells;
+                    report.auxiliaryLiveCells=built.auxiliaryLiveCells;
+                    report.auxiliaryStoredPeak=built.auxiliaryStoredPeak;
+                    report.auxiliaryStorageCapacity=built.auxiliaryStorageCapacity;
+                    report.compactionPeakModeledBytes=built.auxiliaryMaximumCompactionModeledBytes;
+                    report.auxiliaryWorkingBytes=built.auxiliaryWorkingBytes;
+                }else{
+                    sites=appendOcctInteriorSites(boundary,*sizeField,mesh::Classification{3,tag},
+                        std::size_t(siteCap),[&](Vec3 p){
+                            siteCharge();
+                            if(siteQueries>=2048)throw SiteLimit{};
+                            ++siteQueries;++out.nativeQueries;
+                            classifier.Perform(gp_Pnt(p.x,p.y,p.z),tol);
+                            return classifier.State()==TopAbs_IN;
+                        },siteCharge);
+                }
             }
+            }catch(const OcctInitialConstructionCancelled&){
+                throw Stop{NativeCadMeshReason::Cancelled,"cancelled"};
             }catch(const SiteLimit&){
                 // This optional preparation leaves the original shell intact.
             }catch(const std::bad_alloc&){
                 // Preparation is transactional; retain the ordinary seed route.
+            }
+            if(advancingInteriorFront){
+                out.initialFront.work=siteWork;out.initialFront.queries=siteQueries;
+                out.initialFront.seconds=std::chrono::duration<double>(Clock::now()-placementStarted).count();
             }
             placement.finish(sites.nodeCount()>ns?"seeded":"unchanged");
             if(sites.nodeCount()>ns){
@@ -232,6 +295,12 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
         }else if(spaceSurface||options.recoveryMode==NativeCadRecoveryMode::Advanced)
             buildConstraintSeed(boundary,pendingRecovery);
         const bool usesConstraintSeed=pendingRecovery.cellCount()!=0;
+        if(advancingInteriorFront&&!usesConstraintSeed){
+            const std::string_view diagnostic=out.constraintRecovery.diagnostic;
+            need(diagnostic!="construction_budget"&&diagnostic!="work_budget"&&
+                 diagnostic!="storage_budget"&&diagnostic!="admission_budget",
+                 NativeCadMeshReason::BudgetExceeded,"native-plc-constraint-construction-budget");
+        }
         need(!spaceSurface||usesConstraintSeed,NativeCadMeshReason::MeshingFailed,"spaced-surface-constraint-seed-refused");
         const bool reuseStrictAdmissions=(options.useAdaptiveTetRecovery||spaceSurface)&&usesConstraintSeed&&
             options.maximumNativeValidationThreads==1&&!options.allowCentroidsWithinChordTolerance;
@@ -707,6 +776,50 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             need(result.reason!=bnd::TetPlcCavityReason::AllocationFailed,NativeCadMeshReason::AllocationFailed,"allocation-failed");need(result.reason!=bnd::TetPlcCavityReason::Cancelled,NativeCadMeshReason::Cancelled,"cancelled");need(result.reason!=bnd::TetPlcCavityReason::BudgetExceeded,NativeCadMeshReason::BudgetExceeded,result.diagnostic);
             need(result.published,localRefinementBound?NativeCadMeshReason::BudgetExceeded:NativeCadMeshReason::GeometryError,localRefinementBound?"native-plc-refinement-budget":"native-plc-cavity-material-refusal");out.cavitiesClosed+=result.cavitiesClosed;completed.swap(repaired);out.surfaceTriangles=boundary.cellCount();
         }
+        // Uniform requests use only the initial point construction above.
+        // Explicit local controls can additionally require adaptive sizing.
+        if(advancingInteriorFront&&(!options.faceSizes.empty()||!options.sizeBoxes.empty())){
+            OcctStageTrace construction("interior_front",tag);
+            const auto started=Clock::now();
+            const auto used=strictAdmissions.retainedPayloadBytes();
+            const auto bytes=std::uint64_t(completed.nodeCount())*(sizeof(Vec3)+sizeof(mesh::Classification))+
+                std::uint64_t(completed.cellCount())*sizeof(mesh::Cell)+
+                std::uint64_t(completed.connectivityCount())*sizeof(Index);
+            const auto reserve=1024*(std::uint64_t(completed.nodeCount())+
+                std::uint64_t(completed.countCells(mesh::CellType::Tet4)));
+            const auto room=remaining();
+            const auto budget=room>reserve?std::min<std::uint64_t>(42'000'000,(room-reserve)/2):0;
+            const auto queries=out.nativeQueries<maximumSpacedCandidateQueries?
+                std::min<std::uint64_t>(12'000,(maximumSpacedCandidateQueries-out.nativeQueries)/2):0;
+            out.interiorFrontDiagnostic="budget_limited";
+            if(budget&&queries&&used<availableBytes&&bytes<o.maximumOutputBytes){
+                const auto growth=(o.maximumOutputBytes-bytes)/(
+                    sizeof(Vec3)+sizeof(mesh::Classification)+sizeof(mesh::Cell)+4*sizeof(Index));
+                OcctInteriorFrontLimits limits;
+                limits.work=budget;limits.queries=queries;
+                limits.nodes=std::min(o.maximumNodes,std::uint64_t(completed.nodeCount())+growth);
+                limits.tets=std::min(frontCells,std::uint64_t(completed.countCells(mesh::CellType::Tet4))+growth);
+                limits.workingBytes=availableBytes-used;
+                const auto built=advanceOcctInteriorFront(completed,*sizeField,limits,
+                    [&](Vec3 p){
+                        tick();admitQueries(1);++out.nativeQueries;
+                        classifier.Perform(gp_Pnt(p.x,p.y,p.z),tol);
+                        return classifier.State()==TopAbs_IN;
+                    },nativeCentroid,tick);
+                out.interiorFrontDiagnostic=built.budgetLimited?"budget_limited":
+                    !built.initialized?"scaffold_refused":built.targetsSatisfied?"targets_satisfied":"targets_unmet";
+                out.interiorFrontNodes=built.sites;
+                out.interiorFrontCandidates=built.candidates;
+                out.interiorFrontWork=built.workUsed;
+                out.interiorFrontQueries=built.nativeQueries;
+                out.interiorFrontRemainingOversized=built.remainingOversized;
+                out.interiorFrontActivations=built.frontActivations;
+                out.interiorVoidActivations=built.voidActivations;
+                out.interiorFrontAdvances=built.frontAdvances;
+            }
+            out.interiorFrontSeconds=std::chrono::duration<double>(Clock::now()-started).count();
+            construction.finish(out.interiorFrontDiagnostic);
+        }
         if(improveQuality&&out.nativeQueries<maximumSpacedCandidateQueries){
             // Reserve work and queries for the strict validation of the
             // candidate. Swaps retain the existing boundary and its nodes.
@@ -719,7 +832,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                     native,tick);
             }
         }
-        if(spatialSizing||(useLocalDelaunay&&!refinedBeforeMaterial)){
+        if(!advancingInteriorFront&&(spatialSizing||(useLocalDelaunay&&!refinedBeforeMaterial))){
             OcctStageTrace refinement("local_delaunay_refinement",tag);
             out.localDelaunayRefinementNodes=localInsert(completed,{}, {},
                 !spatialSizing||improveQuality?&out.localDelaunayQualityEdits:nullptr);

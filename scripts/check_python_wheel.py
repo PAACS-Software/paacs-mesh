@@ -10,7 +10,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from build_python_wheel import host_platform, installed_smoke, occt_pin, sha256, validate_contents
+from build_python_wheel import host_platform, installed_smoke, occt_pin, sha256, source_revision, validate_contents
 
 
 def artifact_file(directory: Path, name: str) -> Path:
@@ -32,6 +32,9 @@ def main() -> None:
     build_dir = (args.build_dir or source / "build/python-wheel-consumer").resolve()
     current_platform = host_platform()
     receipt = json.loads((directory / "wheel-validation.json").read_text(encoding="utf-8"))
+    source_record = source_revision(source)
+    if (source_record["clean"] is not True or receipt.get("source_revision") != source_record):
+        raise RuntimeError("Independent qualification requires the same clean source revision as its builder")
     if receipt["platform"] != current_platform:
         raise RuntimeError("The downloaded wheel was qualified for a different platform")
     wheel = artifact_file(directory, receipt["wheel"])
@@ -59,6 +62,7 @@ def main() -> None:
     # configured or built; on Linux its mount also differs from the builder.
     numpy_results = installed_smoke(source, wheel, build_dir)
     result = {
+        "source_revision": source_record,
         "platform": current_platform,
         "wheel": wheel.name,
         "sha256": sha256(wheel),

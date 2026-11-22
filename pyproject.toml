@@ -11,8 +11,8 @@ build-backend = "scikit_build_core.build"
 name = "paacs-mesh"
 dynamic = ["version"]
 description = "Native STEP import and Tet4 meshing with PAACS Mesh"
-readme = "README.md"
-requires-python = ">=3.12"
+readme = "python/README.md"
+requires-python = ">=3.12,<3.13"
 license = "MPL-2.0"
 license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "Paul LeDewhurst" }]
@@ -28,6 +28,9 @@ classifiers = [
 
 [project.optional-dependencies]
 numpy = ["numpy>=1.26.4,<3"]
+
+[project.scripts]
+paacs-mesh = "paacs_mesh.__main__:main"
 
 [project.urls]
 Homepage = "https://github.com/PAACS-Software/paacs-mesh"
