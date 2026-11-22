@@ -285,6 +285,7 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
             out.budgetLimited=true;return done();
         }
         auxiliary.compactionEnabled=limits.enableAuxiliaryCompaction;
+        auxiliary.useCertifiedConeCavities=true;
         out.auxiliaryInitialized=true;
         const auto syncAuxiliary=[&](){
             out.budgetLimited=out.budgetLimited||auxiliary.budgetLimited;

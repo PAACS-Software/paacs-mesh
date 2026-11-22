@@ -22,6 +22,7 @@
 #include <map>
 #include <new>
 #include <optional>
+#include <set>
 #include <type_traits>
 #include <utility>
 #include <unordered_set>
@@ -41,6 +42,10 @@ public:
     bool budgetLimited=false;
     mutable bool cancelled=false;
     bool compactionEnabled=true;
+    // Only an owner preserving validated bootstrap/commit/compaction embedding
+    // may enable the local certificate. Generic direct users retain full proof.
+    bool useCertifiedConeCavities=false;
+    std::uint64_t coneCertificateAttempts=0,coneCertificates=0,coneCertificateFallbacks=0;
     std::uint64_t bootstrapWork=0,bootstrapPeakTemporaryBytes=0;
     std::uint64_t bootstrapWorkLimit=0,bootstrapTemporaryLimitBytes=0;
     std::uint64_t evaluations=0,fullCertifications=0,certificationRefusals=0;
@@ -264,7 +269,7 @@ public:
     // Call after sourceFront.valid/native admission and before sourceFront's
     // insert. Any bounded-work refusal precedes auxiliary topology mutation.
     bool commit(const Plan& plan,Vertex frontPointId) {
-        if(!initialized_||!plan.valid||plan.generation!=planEpoch_||
+        if(!initialized_||!plan.valid||!finite(plan.point)||plan.generation!=planEpoch_||
             plan.stagedAux!=live_.vertices.size()||frontPointId!=live_.vertices.size()-8||
             plan.addedRelevance.size()!=plan.patch.added.size()){
             ++commitStateRejects;return false;
@@ -286,7 +291,9 @@ public:
             // bipyramid certificate that bypasses pair/survivor admission.
             patch.convexBipyramid=false;
             ++fullCertifications;
-            for(const auto& cell:patch.added)if(!positive(cell)){
+            for(const auto& cell:patch.added)if(std::ranges::any_of(cell.vertices,[&](Vertex v){
+                return v>=live_.vertices.size()||!finite(live_.vertices[v].position);
+            })||!positive(cell)){
                 ++certificationRefusals;++commitPositiveRejects;
                 live_.vertices.pop_back();return false;
             }
@@ -294,7 +301,13 @@ public:
                 ++certificationRefusals;++commitValidityRejects;
                 live_.vertices.pop_back();return false;
             }
-            if(!live_.preservesSurvivors(patch)){
+            bool coneCertified=false;
+            if(useCertifiedConeCavities){
+                ++coneCertificateAttempts;
+                coneCertified=certifiesConeCavity(patch,plan.stagedAux);
+                if(coneCertified)++coneCertificates;else ++coneCertificateFallbacks;
+            }
+            if(!coneCertified&&!live_.preservesSurvivors(patch)){
                 ++certificationRefusals;++commitSurvivorRejects;
                 live_.vertices.pop_back();return false;
             }
@@ -434,6 +447,158 @@ private:
             for(const auto cell:owner->second){tick();oldOwners+=removed.contains(cell);}
             if(oldOwners>1)return false;
         }
+        return true;
+    }
+    bool certifiesConeCavity(const Complex::Proposal& patch,Vertex staged)const{
+        if(!live_.walkConstraints||patch.removed.empty()||patch.added.empty()||
+            staged+std::size_t(1)!=live_.vertices.size()||!finite(live_.vertices[staged].position)||
+            !live_.protectedFaces.empty()||!live_.protectedEdges.empty()||
+            !live_.requiredFaces.empty()||!live_.requiredEdges.empty())return false;
+        struct Use {std::size_t cell;unsigned side;Face directed;};
+        struct Uses {std::array<Use,2> owners{};unsigned count=0;bool cone=false;};
+        using Edge=Complex::Edge;
+        struct EdgeUse {std::size_t face;unsigned side;bool forward;};
+        struct EdgeUses {std::array<EdgeUse,2> owners{};unsigned count=0;};
+        // Modeled payload, not RSS. Let L be stored cells and R unused capacity.
+        // Storage admission already guarantees C removed<=L and S added<=R.
+        // Bound faces by4C, old vertices by4C, shell edges/vertices by3S (even
+        // before pairing), and include 64 allocator bytes per node/vector,
+        // 3x incident-vector payload for growth overlap, selected patch copy,
+        // and three retained fresh plans at2x vector capacity. The weighted
+        // bound is modeledRemoved*L + modeledAdded*R, with L+R=capacity.
+        constexpr auto modeledRemoved=
+            4*(sizeof(std::pair<const Face,Uses>)+4*sizeof(void*)+64)+
+            4*(sizeof(Vertex)+5*sizeof(void*)+64)+
+            (sizeof(std::size_t)+6*sizeof(void*)+64)+4*sizeof(Face)+7*sizeof(std::size_t);
+        constexpr auto modeledAdded=
+            3*(sizeof(std::pair<const Edge,EdgeUses>)+4*sizeof(void*)+64)+
+            3*(sizeof(std::pair<const Vertex,std::vector<std::size_t>>)+4*sizeof(void*)+128)+
+            11*sizeof(std::size_t)+sizeof(std::array<std::size_t,3>)+sizeof(Cell)+
+            6*(sizeof(Cell)+sizeof(unsigned char));
+        static_assert(modeledRemoved<=4096&&modeledAdded<=4096,"local cone certificate payload envelope");
+        // Full valid() scratch has returned; no compaction overlaps a plan.
+        // The existing 8192/capacity admission reserves 4096 for the live
+        // complex and 4096 for this scratch; fixed container heads use the
+        // existing fixed reserve. No new storage limit or uncharged reserve.
+        std::unordered_set<std::size_t> removed;
+        std::map<Face,Uses> faces;
+        std::set<Vertex> oldVertices;
+        tick(patch.removed.size());removed.reserve(patch.removed.size());
+        for(const auto id:patch.removed){
+            tick();
+            if(id>=live_.alive.size()||!live_.alive[id]||id>=live_.neighbours.size()||
+                !removed.insert(id).second)return false;
+            const auto& cell=live_.cells[id];
+            for(const auto v:cell.vertices){tick();
+                if(v>=staged||!finite(live_.vertices[v].position))return false;
+                oldVertices.insert(v);
+            }
+            if(!positive(cell))return false;
+        }
+        bool pointInRemoved=false;
+        const auto point=live_.vertices[staged].position;
+        for(const auto id:patch.removed){
+            bool pointInCell=!pointInRemoved;
+            for(unsigned side=0;side<4;++side){
+                tick();const auto directed=bnd::tet_facet_detail::outwardFace(live_.cells[id],side);
+                auto& uses=faces[Complex::key(directed)];
+                if(uses.count==2)return false;
+                uses.owners[uses.count++]={id,side,directed};
+                if(pointInCell){tick();
+                    if(predicates::orient3dFiltered(live_.vertices[directed[0]].position,
+                        live_.vertices[directed[1]].position,live_.vertices[directed[2]].position,point)
+                        ==predicates::Sign::Positive)pointInCell=false;
+                }
+            }
+            pointInRemoved=pointInRemoved||pointInCell;
+        }
+        if(!pointInRemoved)return false;
+        std::vector<Face> shell;
+        const auto shellSlots=4*patch.removed.size();
+        tick(shellSlots);shell.reserve(shellSlots);
+        for(const auto& [key,uses]:faces){
+            tick();const auto found=live_.faces.find(key);
+            if(found==live_.faces.end()||found->second.empty()||found->second.size()>2)return false;
+            unsigned oldOwners=0;std::array<Face,2> directed{};unsigned at=0;
+            for(const auto id:found->second){
+                tick();
+                if(id>=live_.alive.size()||!live_.alive[id]||id>=live_.neighbours.size())return false;
+                const auto keys=Complex::faceKeys(live_.cells[id]);
+                const auto face=std::ranges::find(keys,key);
+                if(face==keys.end())return false;
+                const auto side=unsigned(face-keys.begin());
+                directed[at++]=bnd::tet_facet_detail::outwardFace(live_.cells[id],side);
+                const auto other=found->second.size()==1?Complex::noCell:
+                    (*found->second.begin()==id?*found->second.rbegin():*found->second.begin());
+                if(live_.neighbours[id][side]!=other)return false;
+                oldOwners+=removed.contains(id);
+            }
+            if(oldOwners!=uses.count)return false;
+            if(at==2&&!sameCycle(directed[0],Face{directed[1][0],directed[1][2],directed[1][1]}))return false;
+            for(unsigned i=0;i<uses.count;++i)
+                if(!found->second.contains(uses.owners[i].cell))return false;
+            if(uses.count==1)shell.push_back(uses.owners[0].directed);
+        }
+        if(shell.size()<4||shell.size()!=patch.added.size())return false;
+        for(const auto& cell:patch.added){
+            tick();if(cell.vertices[0]!=staged)return false;
+            const Face base{cell.vertices[1],cell.vertices[2],cell.vertices[3]};
+            const auto found=faces.find(Complex::key(base));
+            if(found==faces.end()||found->second.count!=1||found->second.cone||
+                base!=found->second.owners[0].directed||!positive(cell))return false;
+            found->second.cone=true;
+        }
+        for(const auto& [key,uses]:faces){(void)key;tick();if(uses.count==1&&!uses.cone)return false;}
+        std::map<Edge,EdgeUses> edges;
+        std::map<Vertex,std::vector<std::size_t>> vertexFaces;
+        for(std::size_t i=0;i<shell.size();++i)for(unsigned side=0;side<3;++side){
+            tick(2);const auto a=shell[i][side],b=shell[i][(side+1)%3];
+            auto& uses=edges[Complex::key(Edge{a,b})];
+            if(uses.count==2)return false;
+            uses.owners[uses.count++]={i,side,a<b};
+            auto& incident=vertexFaces[a];
+            if(incident.size()==incident.capacity()){
+                const auto slots=std::min(shell.size(),std::max<std::size_t>(1,2*incident.size()));
+                tick(incident.size()+slots);incident.reserve(slots);
+            }
+            incident.push_back(i);
+        }
+        if(oldVertices.size()!=vertexFaces.size())return false;
+        for(const auto v:oldVertices){tick();if(!vertexFaces.contains(v))return false;}
+        if(std::int64_t(vertexFaces.size())-std::int64_t(edges.size())+std::int64_t(shell.size())!=2)return false;
+        tick(shell.size());std::vector<std::array<std::size_t,3>> adjacent(shell.size());
+        for(const auto& [edge,uses]:edges){(void)edge;tick();
+            if(uses.count!=2||uses.owners[0].forward==uses.owners[1].forward)return false;
+            const auto a=uses.owners[0],b=uses.owners[1];
+            adjacent[a.face][a.side]=b.face;adjacent[b.face][b.side]=a.face;
+        }
+        tick(2*shell.size());std::vector<std::size_t> queue;queue.reserve(shell.size());
+        std::vector<std::size_t> seen(shell.size(),0);queue.push_back(0);seen[0]=1;
+        for(std::size_t i=0;i<queue.size();++i)for(const auto next:adjacent[queue[i]]){
+            tick();if(!seen[next]){seen[next]=1;queue.push_back(next);}
+        }
+        if(queue.size()!=shell.size())return false;
+        // Edge incidence alone permits pinched vertices. Each vertex's incident
+        // faces must form one cycle, so radial coning preserves exact simplex
+        // contacts as well as positive-volume occupancy.
+        tick(seen.size());std::fill(seen.begin(),seen.end(),0);std::size_t stamp=0;
+        for(const auto& [vertex,incident]:vertexFaces){
+            tick();++stamp;queue.clear();queue.push_back(incident.front());seen[incident.front()]=stamp;
+            for(std::size_t i=0;i<queue.size();++i){
+                const auto face=queue[i];const auto found=std::ranges::find(shell[face],vertex);
+                if(found==shell[face].end())return false;
+                const auto side=unsigned(found-shell[face].begin());
+                for(const auto edgeSide:std::array{(side+2)%3,side}){
+                    tick();const auto next=adjacent[face][edgeSide];
+                    if(seen[next]!=stamp){seen[next]=stamp;queue.push_back(next);}
+                }
+            }
+            if(queue.size()!=incident.size())return false;
+        }
+        // The trusted old complex is embedded. Its closed manifold shell is
+        // strictly visible from the contained site (the exact positive cones).
+        // Every ray therefore exits once: these cones form the same embedded,
+        // face-to-face cavity and can touch survivors only on that old shell.
         return true;
     }
     bool guard(const Cell& cell)const{

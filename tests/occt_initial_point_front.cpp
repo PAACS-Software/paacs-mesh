@@ -536,10 +536,122 @@ void exerciseBoundedBootstrapAndCancellation(){
     std::cout<<"bounded initial bootstrap refusals and sticky cancellation passed\n";
 }
 
+template<class Run>void withCertifiedSource(const mesh::Mesh& source,Run run){
+    auto front=sourceFront(source);std::atomic_bool cancellation{false};
+    std::function<void(std::uint64_t)> hook;
+    Scorer scorer;
+    check(scorer.initialize(source,{3,7},2048,64ULL*1024*1024,[&](std::uint64_t n){if(hook)hook(n);},
+        {},0,4'000'000,&cancellation),"certificate fixture bootstrap refused");
+    check(!scorer.useCertifiedConeCavities,"generic scorer enabled a trusted-owner certificate");
+    scorer.useCertifiedConeCavities=true;front.initialOwnerCanonical=true;
+    run(front,scorer,hook,cancellation);
+}
+Scorer::Plan stageCertificatePoint(Front& front,Scorer& scorer,Vec3 point){
+    front.vertices.push_back({point,front.vertices.size()+1});
+    auto plan=scorer.score(point,front);check(plan&&plan->valid,"certificate point proposal unavailable");
+    return std::move(*plan);
+}
+void acceptCertificatePoint(Front& front,Scorer& scorer,Vec3 point){
+    auto plan=stageCertificatePoint(front,scorer,point);
+    const auto certificates=scorer.coneCertificates,fallbacks=scorer.coneCertificateFallbacks;
+    check(scorer.commit(plan,Scorer::Vertex(front.vertices.size()-1)),"certified geometric insertion refused");
+    check(scorer.coneCertificates==certificates+1&&scorer.coneCertificateFallbacks==fallbacks,
+        "complete cone fan did not receive its exact local certificate");
+    coherent(scorer);
+}
+void exerciseCertificateDegeneracies(){
+    withCertifiedSource(tetraSurface(),[](Front& front,Scorer& scorer,auto&,auto&){
+        // These sites lie exactly on an old face and edge. Visibility growth
+        // must consume every zero shell cone before the local proof succeeds.
+        acceptCertificatePoint(front,scorer,{.25,.25,0});
+        acceptCertificatePoint(front,scorer,{.5,0,0});
+        acceptCertificatePoint(front,scorer,{.125,.125,std::ldexp(1.,-40)});
+        const auto before=snapshot(scorer);const auto validityRejects=scorer.commitValidityRejects;
+        auto duplicate=stageCertificatePoint(front,scorer,{0,0,0});
+        const auto cached=snapshot(scorer);
+        check(!scorer.commit(duplicate,Scorer::Vertex(front.vertices.size()-1))&&snapshot(scorer)==cached&&
+            scorer.commitValidityRejects==validityRejects+1,
+            "duplicate site replaced an original vertex identity");
+        check(before.accepted==scorer.acceptedSites(),"duplicate site advanced the accepted generation");
+    });
+    withCertifiedSource(compactionCube(),[](Front& front,Scorer& scorer,auto&,auto&){
+        // The original cube and these exact dyadic sites repeatedly expose
+        // co-spherical and coplanar configurations without symbolic perturbation.
+        for(const auto p:std::array{Vec3{0,0,0},Vec3{.5,0,0},Vec3{0,.5,0},Vec3{0,0,.5},
+            Vec3{-.5,0,0},Vec3{0,-.5,0},Vec3{0,0,-.5}})acceptCertificatePoint(front,scorer,p);
+    });
+}
+void exerciseActualPatchCertification(){
+    for(unsigned mutation=0;mutation<5;++mutation)withCertifiedSource(tetraSurface(),[&](Front& front,Scorer& scorer,auto&,auto&){
+        auto plan=stageCertificatePoint(front,scorer,{.125,.125,.125});
+        switch(mutation){
+        case 0:std::swap(plan.patch.added.front().vertices[1],plan.patch.added.front().vertices[2]);break;
+        case 1:plan.patch.added.pop_back();plan.addedRelevance.pop_back();break;
+        case 2:plan.patch.added.push_back(plan.patch.added.front());plan.addedRelevance.push_back(1);break;
+        case 3:{const auto& live=scorer.complexForDiagnostics();
+            for(std::size_t id=0;id<live.alive.size();++id)if(live.alive[id]&&id!=plan.patch.removed.front()){
+                plan.patch.removed.push_back(id);break;}break;}
+        default:plan.point={100,100,100};break;
+        }
+        const auto before=snapshot(scorer);
+        check(!scorer.commit(plan,Scorer::Vertex(front.vertices.size()-1))&&snapshot(scorer)==before,
+            "mutated actual point/base/cone/removed set escaped complete selected admission");
+    });
+    withCertifiedSource(tetraSurface(),[](Front& front,Scorer& scorer,auto&,auto&){
+        auto plan=stageCertificatePoint(front,scorer,{.125,.125,.125});
+        // A cyclically reordered base has the same geometry, but differs from
+        // the exact builder quartet. It must use the full fallback certificate.
+        auto& v=plan.patch.added.front().vertices;std::rotate(v.begin()+1,v.begin()+2,v.end());
+        const auto certificates=scorer.coneCertificates,fallbacks=scorer.coneCertificateFallbacks;
+        check(scorer.commit(plan,Scorer::Vertex(front.vertices.size()-1))&&
+            scorer.coneCertificates==certificates&&scorer.coneCertificateFallbacks==fallbacks+1,
+            "unsupported quartet ordering bypassed the complete fallback proof");
+        coherent(scorer);
+    });
+}
+void exerciseTouchedIncidenceFallback(){
+    for(bool corruptOwner:std::array{false,true})withCertifiedSource(tetraSurface(),[&](Front& front,Scorer& scorer,auto& hook,auto&){
+        auto plan=stageCertificatePoint(front,scorer,{.125,.125,.125});
+        auto& live=const_cast<Complex&>(scorer.complexForDiagnostics());
+        const auto id=plan.patch.removed.front();const auto key=Complex::faceKeys(live.cells[id])[0];
+        const auto oldNeighbour=live.neighbours[id][0];const auto oldOwners=live.faces.at(key);
+        check(oldNeighbour!=Complex::noCell&&oldOwners.size()==2,"local reciprocity fixture has no survivor neighbor");
+        if(corruptOwner)live.faces.at(key).erase(id);else live.neighbours[id][0]=Complex::noCell;
+        const auto before=snapshot(scorer);const auto fallbacks=scorer.coneCertificateFallbacks;
+        hook=[&](std::uint64_t){if(scorer.coneCertificateFallbacks>fallbacks)throw std::runtime_error("fallback-stop");};
+        bool threw=false;try{(void)scorer.commit(plan,Scorer::Vertex(front.vertices.size()-1));}
+        catch(const std::runtime_error&){threw=true;}hook={};
+        check(threw&&scorer.coneCertificateFallbacks==fallbacks+1&&snapshot(scorer)==before,
+            "local incidence/reciprocity fault neither fell back nor preserved state on refusal");
+        live.neighbours[id][0]=oldNeighbour;live.faces.at(key)=oldOwners;
+        check(scorer.commit(plan,Scorer::Vertex(front.vertices.size()-1)),"restored local ownership remained invalid");
+        coherent(scorer);
+    });
+}
+void exerciseCertificateTransactions(){
+    for(unsigned failure=0;failure<3;++failure)withCertifiedSource(tetraSurface(),[&](Front& front,Scorer& scorer,auto& hook,auto& cancellation){
+        auto plan=stageCertificatePoint(front,scorer,{.125,.125,.125});
+        const auto before=snapshot(scorer);const auto attempts=scorer.coneCertificateAttempts;
+        hook=[&](std::uint64_t){if(scorer.coneCertificateAttempts==attempts)return;
+            if(failure==0)throw std::runtime_error("certificate-work-stop");
+            if(failure==1)throw std::bad_alloc{};
+            cancellation.store(true);
+        };
+        bool threw=false;try{(void)scorer.commit(plan,Scorer::Vertex(front.vertices.size()-1));}
+        catch(const OcctInitialConstructionCancelled&){check(failure==2,"unexpected certificate cancellation");threw=true;}
+        catch(const std::bad_alloc&){check(failure==1,"unexpected certificate allocation refusal");threw=true;}
+        catch(const std::runtime_error&){check(failure==0,"unexpected certificate work refusal");threw=true;}
+        hook={};check(threw&&snapshot(scorer)==before&&scorer.coneCertificateAttempts==attempts+1,
+            "certificate work/allocation/cancellation refusal changed auxiliary topology or cache");
+        if(failure==2)check(scorer.cancelled,"certificate cancellation observation was not sticky");
+    });
+}
 }
 int main(){try{
     exerciseUniformFront();exerciseFineBoundaryInteriorExclusion();exerciseRefusals();exerciseCompleteConflictCavity();exerciseCompaction();
     exerciseCanonicalOwnerScope();exerciseMaterialInheritance();exerciseInheritedSourceBarrier();exerciseConicSurvivorAdmission();
     exerciseBoundedBootstrapAndCancellation();
+    exerciseCertificateDegeneracies();exerciseActualPatchCertification();
+    exerciseTouchedIncidenceFallback();exerciseCertificateTransactions();
     std::cout<<"initial volume points, complete conflict cavities and transactional guards passed\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
