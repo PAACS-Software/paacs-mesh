@@ -107,6 +107,8 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" = Linux ]; then
+            # The runner must own the cache parent before Docker creates probe files.
+            mkdir -p build
             docker run --rm -v "$PWD:/io" -w /io \
               -e PAACS_MANYLINUX_IMAGE "$PAACS_MANYLINUX_IMAGE" bash -euc '
                 export PATH="/opt/python/cp312-cp312/bin:$PATH"
