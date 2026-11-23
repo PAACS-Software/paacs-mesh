@@ -18,6 +18,7 @@ matched after normalizing the OCCT checked-state flag and line endings.
 
 | Figures | Origin |
 | --- | --- |
+| `docs/images/refinement-rc3-*` (5) | Actual published-RC3 meshes of the project-owned cylinder fixture, rendered from exact saved archive coordinates. The [study](REFINEMENT_FINDINGS.md) and [numerical/figure receipt](data/refinement-cylinder-rc3.json) record settings, IDs, hashes and limitations. These are scientific renderings, not generated interpretations of geometry. |
 | Cantilever, plate with a hole, straight duct and hybrid duct (7) | PAACS meshes and solver results from the generated example fixtures above. Their READMEs link the source generators and give plotting commands. The README uses the plate example's `achieved-sizing.png`. |
 | `examples/python_step_sizing/sizing-sections.png` (1) | Actual native STEP meshes generated through the Python interface from the project-owned cylinder fixture. The [example](../examples/python_step_sizing/README.md) gives commands, control settings, achieved-size measurements and archive hashes. |
 | `docs/mesh_gallery*.png` and the RC4–RC8 figures in `docs/` (13) | PAACS-generated primitive meshes, size and layer controls, and benchmark measurements. The [primitive gallery](../benchmarks/render_primitive_gallery.py), [element gallery](../benchmarks/render_element_gallery.py), [circular comparison](../benchmarks/render_circular_comparison.py) and [control plots](../benchmarks/render_local_controls.py) record the underlying geometry and render paths. |

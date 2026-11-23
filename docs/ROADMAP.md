@@ -19,6 +19,30 @@ See [element choices](ELEMENT_CHOICES.md), [native CAD](NATIVE_CAD.md),
 [prism layer controls](PRISM_LAYER_CONTROLS.md), [spatial fields](SPATIAL_CONTROL_FIELDS.md)
 and [archive format](ARCHIVE_FORMAT.md).
 
+## Diagnostic development milestone
+
+The unreleased [inspection interface](MESH_INSPECTION.md) adds opt-in Tet4 mean
+ratio, interior dihedral and signed scaled-Jacobian measurements; pagination of
+every native cell; spatial distributions; exact trimmed-CAD centroid distances;
+quality-field VTK; and deterministic whole-element cutaways and x-ray views.
+Comparisons use a common world grid and preserve validation provenance, units,
+source hashes and mesh-local cell IDs. These measurements distinguish shape,
+geometry, achieved sizing and solver adequacy.
+
+The [cylinder refinement study](REFINEMENT_FINDINGS.md) establishes the next
+construction work: report unfinished surface-spacing work, allocate bounded
+insertion allowances from the surface metric, and avoid starving bulk initial
+construction when a fine wall consumes proposal budgets. Investigate the
+near-boundary slivers separately. Preserve all native validity gates and compare
+quality distributions, achieved spacing, CAD error, work and time on fixed and
+held-out geometries before changing defaults.
+
+Next diagnostics work includes complete local size/growth certificates,
+source-and-final-attempt-paired workflow retry totals, additional element-family
+metrics, and solver-provided error indicators. A poor shape metric alone is not
+a reason to automatically refine. Extend bounded local editing only with
+validated rollback and preserved material/CAD ownership.
+
 ## 1. Broaden CAD coverage and apply sizing consistently
 
 Qualify the complete path from shared edge sampling through trimmed face
@@ -133,15 +157,16 @@ the solver's quantity of interest.
 
 The first [Python interface](PYTHON.md) wraps native STEP import, audited Tet4
 meshing and tagged export, with combined face and box sizing, minimum size and
-growth on the supported single-solid route. Its development wheel targets
-Windows x64, macOS 15 ARM64 and Linux x64 with CPython 3.12. Optional NumPy
+growth on the supported single-solid route. Published RC3 wheels support
+CPython 3.12–3.15 on Windows and Linux x64/ARM64 and macOS ARM64, with macOS 15
+as the deployment floor. See the [compatibility matrix](PYTHON_COMPATIBILITY.md)
+for independent build and installation qualification. Optional NumPy
 snapshots expose node coordinates,
 typed connectivity and CAD classifications without modifying the native mesh.
 Expose additional native controls
 and cancellation without introducing a separate meshing implementation.
 
-Extend the prebuilt wheel matrix to additional supported Python versions and
-architectures.
+Qualify future interpreter and platform additions independently.
 Keep CAD dependencies optional in the C++ build and bundle the required runtime
 in STEP wheels. Publish wheels to PyPI after installation qualification.
 CAD inspection and source-bound semantic selections expose named groups and
