@@ -217,11 +217,15 @@ class MeshInspection:
         kind, nodes, classification = self._archive.cell(cell_id)
         points_and_classes = [self._archive.node(n) for n in nodes]
         points = [pair[0] for pair in points_and_classes]
+        source, kernel = self.source_sha256, (self._archive.report or {}).get("kernel_version")
+        guarded_cad = (isinstance(source, str) and len(source) == 64
+                       and all(char in "0123456789abcdef" for char in source)
+                       and isinstance(kernel, str) and bool(kernel))
         result = {"cell_id": cell_id, "cell_type": CELL_NAMES[kind], "node_ids": list(nodes),
                   "points": points, "node_classifications": [pair[1] for pair in points_and_classes],
                   "classification": classification,
                   "body_tag": classification["tag"] if classification["dimension"] == 3 else None,
-                  "cad_body_identity_known": classification["dimension"] == 3 and classification["tag"] > 0,
+                  "cad_body_identity_known": guarded_cad and classification["dimension"] == 3 and classification["tag"] > 0,
                   "centroid": _centroid(points), "bounds": _box(points),
                   "metrics": {name: self._metric(cell_id, name) for name in MEASUREMENTS},
                   "orientation": next(name for name, value in ORIENTATIONS.items() if value == self._orientation[cell_id]),

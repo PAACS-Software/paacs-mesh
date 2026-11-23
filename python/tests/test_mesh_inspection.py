@@ -61,6 +61,7 @@ class MeshInspectionTests(unittest.TestCase):
             self.assertEqual(record["node_ids"], [0, 1, 2, 3])
             self.assertEqual(record["centroid"], [.25, .25, .25])
             self.assertEqual(record["body_tag"], 7)
+            self.assertFalse(record["cad_body_identity_known"])
             self.assertEqual(record["cad_boundary_associations"][0]["boundary_cell_id"], 0)
             self.assertEqual(record["cad_boundary_associations"][0]["tag"], 11)
             self.assertFalse(record["nearby_cad_surfaces"]["available"])
