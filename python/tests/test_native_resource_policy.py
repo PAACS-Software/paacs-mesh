@@ -133,6 +133,22 @@ class NativeResourcePolicyTests(unittest.TestCase):
                 self.assertEqual(fixture.read_bytes(), source_bytes)
         self.assert_valid(retained)
 
+    def test_normal_resource_admission_preserves_strict_quality_rejection(self):
+        before = fixture_path().read_bytes()
+        with self.assertRaises(pm.MeshingError) as caught:
+            self.model.mesh(.7, resource_policy="normal", minimum_quality=1,
+                            warning_quality=.25, max_work=100_000_000,
+                            workers=1, validation_workers=1, max_seconds=90)
+        error = caught.exception
+        self.assertEqual(error.reason, "quality_requirement_not_met")
+        self.assertFalse(error.report["mesh_published"])
+        self.assertEqual(error.report["resources"]["policy"], "normal")
+        quality = error.report["quality"]
+        self.assertEqual(quality["minimum_required"], 1)
+        self.assertEqual(quality["warning_threshold"], .25)
+        self.assertEqual(fixture_path().read_bytes(), before)
+        json.dumps(error.report, allow_nan=False)
+
     def test_normal_cooperative_cancellation_refuses_without_partial_publication(self):
         fixture = fixture_path()
         source_bytes = fixture.read_bytes()
