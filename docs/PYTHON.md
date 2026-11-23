@@ -1,42 +1,47 @@
 # Python STEP interface
 
 The Python distribution calls the C++ STEP importer and Tet4 mesher in process.
-The published **1.2.0rc2** wheels support **64-bit CPython 3.12** on these platforms:
+The **1.2.0rc3 release candidate** supports regular, **64-bit CPython 3.12–3.15**
+on these platforms:
 
 | System | Architecture | Compatibility target |
 |---|---|---|
 | Windows | x64 | Qualified on Windows Server 2022 |
-| macOS | ARM64 | macOS 15 or newer |
+| Windows | ARM64 | Windows 11 ARM64 |
+| macOS | ARM64 | Minimum macOS 15; the same wheel tested on 15, 26 and 27 |
 | Linux | x64 | glibc 2.28 or newer, manylinux 2.28 |
+| Linux | ARM64 | glibc 2.28 or newer, manylinux 2.28 |
 
 Each repaired wheel contains the shared CAD libraries and runtime dependencies.
 Installation needs Python and pip, with no compiler, OCCT SDK or `PATH` setup.
 
-The development qualification plan covers CPython 3.12–3.15, adds Linux ARM64 and
-Windows 11 ARM64, and tests the same macOS 15 ARM64 wheels on macOS 15, 26 and 27.
-These additional configurations are **not yet qualified or published**. Development
-metadata accepts the planned interpreters; it does not change the existing PyPI
-release. See the [compatibility matrix](PYTHON_COMPATIBILITY.md) for exact targets
-and the checks required before another release.
+The expanded implementation passed 20 wheel builders, 28 clean installations and
+the native regression jobs in [PR #11](https://github.com/PAACS-Software/paacs-mesh/pull/11).
+RC3 is rebuilt and qualified from its own tagged source before publication. See
+the [compatibility evidence and matrix](PYTHON_COMPATIBILITY.md) for exact targets,
+NumPy checks and source identities. Intel macOS, Python 2, PyPy, 32-bit, debug and
+free-threaded Python ABIs are excluded.
 
-Install the release candidate in a Python 3.12 environment:
+Install the exact release candidate:
 
 ```sh
-python -m pip install --pre paacs-mesh
+python -m pip install paacs-mesh==1.2.0rc3
 ```
 
-For a fixed version, use `python -m pip install paacs-mesh==1.2.0rc2`.
-See [package releases](PYPI_RELEASE.md) for the qualification and publication
+The previous published `1.2.0rc2` release supports CPython 3.12
+on Windows x64, macOS ARM64 and Linux x64 only. Use
+`python -m pip install --pre paacs-mesh` to install the newest available candidate;
+see [package releases](PYPI_RELEASE.md) for the qualification and publication
 process.
 
 Development wheels are also available from the
 [Python STEP wheel workflow](../.github/workflows/python-wheel.yml). Choose the
 artifact matching the interpreter, system and architecture, check its qualification
 receipts, extract it and install its
-`.whl` file. For example, on Windows:
+`.whl` file. For example, an RC3 Windows x64 artifact for CPython 3.12 installs with:
 
 ```powershell
-python -m pip install --force-reinstall --only-binary=:all: .\paacs_mesh-1.2.0rc2-cp312-cp312-win_amd64.whl
+python -m pip install --force-reinstall --only-binary=:all: .\paacs_mesh-1.2.0rc3-cp312-cp312-win_amd64.whl
 ```
 
 Development artifacts can share the candidate version; `--force-reinstall`
@@ -106,14 +111,13 @@ provides `--advancing-interior-front` and `--no-advancing-interior-front`.
 ## Package distribution
 
 The [publishing workflow](../.github/workflows/publish-python.yml) prepares the
-complete wheel set from the [compatibility plan](PYTHON_COMPATIBILITY.md) and
+complete wheel set from the [compatibility matrix](PYTHON_COMPATIBILITY.md) and
 requires independent installed-wheel consumers from the same source commit.
-The published CPython 3.12 release candidate remains available on PyPI through
-Trusted Publishing. Development artifacts test the expanded matrix before the
-next qualified release; no additional compatibility is implied by the current
-package-index files.
-The [release guide](PYPI_RELEASE.md) records that setup
-and the publication checks.
+The expanded implementation is qualified; RC3's versioned artifacts must repeat
+those checks before upload through Trusted Publishing. The previous RC2 files
+remain immutable and retain their original CPython 3.12 compatibility. Only the
+version actually installed determines the available platforms and features.
+The [release guide](PYPI_RELEASE.md) records the publication checks.
 
 ## Face sizing, volume regions and growth
 
@@ -192,13 +196,14 @@ four requests on the same cylinder, with measured sizes and mesh sections.
 
 ## NumPy mesh arrays
 
-NumPy is optional. Install it alongside the development wheel, or use the
-`numpy` extra when installing a wheel from a local directory:
+NumPy is optional. Install the `numpy` extra with the release candidate:
 
 ```powershell
-python -m pip install "numpy>=1.26.4,<3"
-python -m pip install --force-reinstall --find-links . "paacs-mesh[numpy]==1.2.0rc2"
+python -m pip install "paacs-mesh[numpy]==1.2.0rc3"
 ```
+
+For a wheel in a local directory, add `--find-links .` and use
+`--force-reinstall` when replacing an earlier development artifact.
 
 Import, meshing and export continue to work without NumPy. Array extraction
 loads it on demand and gives an installation hint when it is absent.
@@ -537,7 +542,13 @@ produce different meshes. Every replay reruns the native validity checks.
 
 ## Build and qualify a wheel
 
-Windows builds require Visual Studio 2022 C++ build tools and CPython 3.12 x64.
+Build wheels with the regular, 64-bit CPython interpreter for the target minor
+version and native architecture. The commands below are examples; the
+[workflow](../.github/workflows/python-wheel.yml) defines all qualified targets,
+pinned build tools and repair steps.
+
+For Windows x64, install compatible Visual Studio C++ build tools and an x64
+CPython 3.12–3.15 interpreter. The qualified x64 runner uses Visual Studio 2022.
 Run from the repository root:
 
 ```powershell
@@ -546,7 +557,14 @@ build/python-dev/Scripts/python.exe -m pip install build==1.6.1 delvewheel==1.13
 build/python-dev/Scripts/python.exe scripts/build_python_wheel.py --jobs 4
 ```
 
-On macOS 15 ARM64, install Xcode command-line tools and ARM64 CPython 3.12, then:
+For Windows 11 ARM64, use native ARM64 CPython and the installed MSVC 14.44 toolset
+for both OCCT and the bindings. Set `$env:PAACS_MSVC_TOOLSET = '14.44'` before the
+same build command. The qualified ARM64 runner uses Visual Studio 2026 with its
+v143/14.44 toolset; it does not use the runner's default compiler. See the
+[compiler qualification](PYTHON_COMPATIBILITY.md#windows-arm64-compiler).
+
+On macOS 15 ARM64, install Xcode command-line tools and an ARM64 interpreter.
+For example, with CPython 3.12:
 
 ```sh
 python3.12 -m venv build/python-dev
@@ -554,11 +572,12 @@ build/python-dev/bin/python -m pip install build==1.6.1 delocate==0.13.0 cmake==
 build/python-dev/bin/python scripts/build_python_wheel.py --jobs 3
 ```
 
-Linux wheels build inside the digest-pinned manylinux 2.28 x64 container in the
-[workflow](../.github/workflows/python-wheel.yml). Its compiler and glibc target
-establish the compatibility floor before auditwheel repairs the dependency
-closure. The builder refuses a different glibc build host. See the workflow for
-the complete container command and image digest.
+Linux x64 and ARM64 wheels build on their matching native runners inside the
+architecture-specific, digest-pinned manylinux 2.28 images in the workflow. Each
+build uses its matching `/opt/python/cp3xx-cp3xx/bin/python` interpreter. The
+compiler and glibc target establish the compatibility floor before auditwheel
+repairs the dependency closure. The builder refuses a different glibc build host.
+See the workflow for the complete container commands and pinned image digests.
 
 The script builds the SHA-512-pinned OCCT 8.0.1 source, builds the extension and
 a matching native CLI, then repairs the wheel with delvewheel, delocate or
@@ -568,7 +587,9 @@ through both OCCT bootstrap layers.
 
 The wheel is installed in a fresh virtual environment with SDK, loader and CAD
 variables removed. Qualification exercises STEP import, Tet4 publication,
-failures, sizing, tagged export and both supported NumPy series. A separate
+failures, sizing, tagged export and the target-specific NumPy versions from the
+compatibility matrix. NumPy 2.5.5 is required on every target; CPython 3.12 also
+tests 1.26.4 where a native wheel exists. A separate
 check compares complete Python/native CLI archives for a cylinder, an assembly
 and combined face/volume sizing at matching settings.
 
@@ -578,7 +599,8 @@ consumer uses glibc 2.28 and a different mount path from the builder. This check
 that repaired libraries resolve without absolute paths into the build SDK.
 
 `dist/` receives the repaired wheel, matching OCCT source archive, dependency
-audit, native parity receipt, sizing measurements and validation receipt. Keep
+audit, native parity receipt, hash-bound native compiler/configuration record,
+sizing measurements and validation receipt. Keep
 the source archive and notices available when redistributing the wheel. Use
 this script for distributable wheels; backend output requires platform repair.
 
@@ -597,7 +619,7 @@ the C++ SDK headers and static libraries.
 
 ## Next milestones
 
-Extend the qualified platform and Python-version matrix.
-Extend the qualified workflow and selection tools for remote automation.
+Maintain the qualified platform matrix as interpreters and runner images evolve.
+Extend workflow and selection tools for remote automation.
 A thin tool adapter can build on the bounded Python functions without replacing
 the native engine or its validity checks.

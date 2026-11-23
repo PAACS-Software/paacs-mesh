@@ -1,26 +1,35 @@
 # Python package releases
 
-The published `1.2.0rc2` package-index distribution targets CPython 3.12 on Windows
-x64, macOS 15 ARM64 and Linux x64 with glibc 2.28 or newer. Its metadata restricts
-Python to `>=3.12,<3.13`.
+The `1.2.0-rc.3` release candidate uses PyPI version `1.2.0rc3`. It supports regular,
+64-bit CPython 3.12–3.15 on Windows x64/ARM64, Linux x64/ARM64 with glibc 2.28 or
+newer, and macOS ARM64 with a minimum of macOS 15. Its metadata restricts Python
+to `>=3.12,<3.16`.
 Runtime CAD libraries are bundled. Only PAACS wheels enter PyPI; the matching
 OCCT source archive and build recipes remain available with the GitHub release.
 
+The previous published `1.2.0rc2` release supports CPython 3.12 on Windows x64,
+macOS ARM64 and Linux x64 only, with metadata `>=3.12,<3.13`. Its tag and files
+remain immutable. RC3 uses a new version and a fresh tagged-source qualification;
+development artifacts are never relabelled as a different release.
+
 ## Expanded qualification matrix
 
-The development release pipeline uses [python/compatibility.json](../python/compatibility.json)
+The release pipeline uses [python/compatibility.json](../python/compatibility.json)
 for **20 repaired wheels and 28 independent installation results**: CPython
 3.12–3.15 on Windows x64/ARM64, Linux x64/ARM64 and macOS ARM64. macOS wheels retain
 deployment target 15.0 and are each installed on macOS 15, 26 and 27. The macOS 27
 runner is a public preview, with its actual OS version checked and its result
 required. Intel macOS and free-threaded Python are excluded.
 
-Development metadata uses `>=3.12,<3.16` to enable these builds. This is a
-qualification plan, **not yet qualified or published compatibility**. The existing
-PyPI release is unchanged. No new release is authorized by this expansion; all
-required combinations and native regression checks must pass before publication.
-See [Python compatibility](PYTHON_COMPATIBILITY.md) for exact tags, NumPy versions,
-CAD SDK reuse and upstream runner references.
+The implementation passed all 55 compatibility jobs and seven native jobs in
+[PR #11](https://github.com/PAACS-Software/paacs-mesh/pull/11), followed by a local
+assembly of all 48 builder/consumer artifacts and strict Twine checks on all 20
+wheels. The [compatibility evidence](PYTHON_COMPATIBILITY.md#qualification-evidence)
+records the source identities and workflow runs. RC3 repeats qualification from
+its own versioned source before publication. All required combinations and
+native regression checks remain mandatory; a passing development PR does not
+replace release qualification. See [Python compatibility](PYTHON_COMPATIBILITY.md)
+for exact tags, NumPy versions, CAD SDK reuse and upstream runner references.
 
 ## One-time account setup
 
@@ -46,8 +55,14 @@ reserve its name beforehand. See [PyPI's setup instructions](https://docs.pypi.o
 
 1. Merge and qualify the release source. Update the version consistently using
    `scripts/verify_version.py` as the check. Keep existing release tags immutable.
+   Before tagging, record successful runs for all seven native qualification jobs
+   and all 55 Python qualification jobs. Check that the tested checkout tree
+   matches the tag target and merged main tree; a pull-request run can check out
+   a virtual merge rather than its reported head commit. The publication workflow
+   repeats the wheel matrix; it does not replace this native regression gate.
 2. Create the new version tag and publish its GitHub release. For example,
-   `VERSION.txt` containing `1.2.0-rc.2` requires tag `v1.2.0-rc.2`.
+   `VERSION.txt` containing `1.2.0-rc.3` requires tag `v1.2.0-rc.3` and publishes
+   the normalized PyPI version `1.2.0rc3`.
 3. Run **Publish Python package** from `main`, providing that release tag. The
    annotated tag must identify a commit on the history of the selected main
    revision. The tagged `VERSION.txt` determines the package version. Keep
@@ -61,7 +76,8 @@ clean runners, without a configured OCCT SDK. Installation tests exercise import
 meshing, controls, tags, exports, optional NumPy versions and the installed command.
 
 Assembly checks each wheel's metadata and hashes, successful builder/consumer
-receipts, matching native-CLI parity and the pinned OCCT source. Wheels are staged
+receipts, actual compiler/configuration evidence, matching native-CLI parity and
+the pinned OCCT source. Wheels are staged
 separately from source assets. Matching source and qualification receipts are
 attached to the public GitHub release before PyPI publication. Existing assets
 are reused only when their hashes match; they are never silently replaced.
@@ -98,16 +114,16 @@ this resume option does not retry or overwrite published package files.
 
 ## Installation
 
-For the release candidate:
+For the pinned release candidate:
+
+```sh
+python -m pip install paacs-mesh==1.2.0rc3
+```
+
+For the newest available release candidate:
 
 ```sh
 python -m pip install --pre paacs-mesh
-```
-
-For an exact qualified version:
-
-```sh
-python -m pip install paacs-mesh==1.2.0rc2
 ```
 
 Stable releases use `python -m pip install paacs-mesh`. Wheel users do not need a
