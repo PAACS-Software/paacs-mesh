@@ -133,6 +133,30 @@ class DiagnosticTests(unittest.TestCase):
         self.assertIn("diagnose", result["cli_commands"])
         json.dumps(result, allow_nan=False)
 
+    def test_nested_cli_workflow_failure_keeps_final_native_identity_and_failure(self):
+        wrapped = {"status": "failed", "stage": "publication", "reason": "io_error", "report": {
+            "schema": "paacs-mesh-workflow-v1", "status": "succeeded",
+            "source_sha256": self.model.source_sha256, "attempts": [{"native_report": self.mesh.report}]}}
+        result = pm.diagnose(wrapped)
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["source_sha256"], self.model.source_sha256)
+        self.assertEqual(result["summary"]["nodes"], self.mesh.node_count)
+        self.assertEqual(result["timings"]["attempts"], 1)
+
+    def test_contradictory_native_claims_cannot_strengthen_validity(self):
+        for change in ("assembly", "status", "strict_quality"):
+            native = self.mesh.report
+            if change == "assembly":
+                native["interbody_nonoverlap_certified"] = True
+            elif change == "status":
+                native["status"] = "refused"
+            else:
+                native["quality"]["minimum_required"] = 1
+            result = pm.diagnose(native)
+            self.assertEqual(result["status"], "failed")
+            self.assertTrue(result["issues"])
+            self.assertFalse(result["validation"]["interbody_nonoverlap_certified"])
+
 
 if __name__ == "__main__":
     unittest.main()

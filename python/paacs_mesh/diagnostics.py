@@ -86,6 +86,12 @@ def _positive(value):
 def _native_report(report):
     """Select the final attempt, never a successful earlier attempt from a failed run."""
     workflow = None
+    envelopes = []
+    while report.get("status") == "failed" and "report" in report and "mesh_published" not in report:
+        if len(envelopes) == 4:
+            raise ValueError("Too many nested failure envelopes")
+        envelopes.append(report)
+        report = _mapping(report["report"], "report")
     if report.get("schema") == "paacs-mesh-workflow-v1":
         workflow = report
         attempts = _records(report.get("attempts", []), "attempts")
@@ -93,9 +99,9 @@ def _native_report(report):
         if attempts:
             native = attempts[-1].get("native_report")
         report = {} if native is None else _mapping(native, "native_report")
-    elif report.get("status") == "failed" and "report" in report:
-        workflow = report
-        report = _mapping(report["report"], "report")
+    if envelopes:
+        workflow = dict(workflow or {})
+        workflow.update(status="failed", outer_failure={key: envelopes[0].get(key) for key in ("stage", "reason")})
     if "mesh_published" not in report and workflow is None:
         raise ValueError("Expected a native mesh report or paacs-mesh-workflow-v1 report")
     if "mesh_published" in report and not isinstance(report["mesh_published"], bool):
@@ -167,6 +173,8 @@ def diagnose(report_or_mesh, *, max_issues=32):
              not any(_positive(audit.get(key)) for key in _AUDIT_ERRORS) and
              not _positive(quality.get("inverted_cells")))
     reason = native.get("reason")
+    if published and native.get("status") not in (None, "succeeded"):
+        issue("native_report_inconsistent", "error", {"status": native.get("status"), "mesh_published": True})
     if not published or reason not in (None, "none"):
         issue("mesh_refused", "error", {"reason": reason or (workflow or {}).get("reason", "unavailable"),
                                        "mesh_published": published},
@@ -189,6 +197,10 @@ def diagnose(report_or_mesh, *, max_issues=32):
         issue("preferred_quality_not_met", "warning",
               {key: quality.get(key) for key in ("metric", "minimum", "percentile_1", "percentile_5", "median", "warning_threshold")},
               actions=("review_quality_distribution", "review_sizing_without_assuming_quality_improves"))
+    required = quality.get("minimum_required")
+    if minimum is not None and _positive(required) and minimum < required:
+        issue("strict_quality_not_met", "error", {"minimum": minimum, "minimum_required": required},
+              actions=("review_explicit_quality_requirement",))
     for body in bodies:
         tag = body.get("solid_tag")
         if tag is not None:
@@ -208,12 +220,20 @@ def diagnose(report_or_mesh, *, max_issues=32):
             issue("assembly_interference" if state == "material_overlap" else "assembly_interference_unresolved",
                   "warning", {"state": state, "overlap_volume_mm3": pair.get("overlap_volume")},
                   scope="assembly", tags=sorted(tags), actions=("review_preserved_part_interference",))
+    nonoverlap = native.get("interbody_nonoverlap_certified") is True
+    if nonoverlap and (native.get("mesh_scope") != "conforming_domain" or
+                      any(pair.get("state") != "no_material_overlap" for pair in interferences)):
+        issue("native_report_inconsistent", "error",
+              {"mesh_scope": native.get("mesh_scope"), "interbody_nonoverlap_certified": True,
+               "interference_states": sorted({pair.get("state") for pair in interferences})}, scope="assembly")
+        nonoverlap = False
     workflow_failed = workflow is not None and workflow.get("status") != "succeeded"
     workflow_incomplete = workflow is not None and workflow.get("diagnostics_complete") is False
     if workflow_failed or workflow_incomplete:
         issue("workflow_incomplete" if workflow_incomplete else "workflow_failed", "error",
               {"status": workflow.get("status"), "reason": workflow.get("reason"),
-               "diagnostics_complete": workflow.get("diagnostics_complete")}, scope="workflow",
+               "diagnostics_complete": workflow.get("diagnostics_complete"),
+               "outer_failure": workflow.get("outer_failure")}, scope="workflow",
               actions=("review_recorded_attempts_and_budgets",))
     if (workflow_failed or not published or not valid or reason not in (None, "none") or
             native.get("status") not in (None, "succeeded") or "error" in severities and complete):
@@ -229,7 +249,7 @@ def diagnose(report_or_mesh, *, max_issues=32):
                        "native_quality_complete": quality.get("complete") is True,
                        "native_quality_valid": quality.get("valid") is True,
                        "mesh_scope": native.get("mesh_scope"),
-                       "interbody_nonoverlap_certified": native.get("interbody_nonoverlap_certified") is True},
+                       "interbody_nonoverlap_certified": nonoverlap},
         "summary": {"nodes": native.get("nodes"), "cells": native.get("cells"),
                     "tetrahedra": native.get("tetrahedra"),
                     "quality": {key: quality.get(key) for key in _QUALITY}},
