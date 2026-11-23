@@ -57,7 +57,9 @@ def _native_output_to_stderr():
 
 
 def _json(value, *, stream=None):
-    print(json.dumps(value, indent=2, ensure_ascii=False, allow_nan=False), file=stream)
+    # Redirected Windows streams can use a legacy code page. JSON escapes keep
+    # the machine stream ASCII-compatible while preserving Unicode on decode.
+    print(json.dumps(value, indent=2, ensure_ascii=True, allow_nan=False), file=stream)
 
 
 def _legacy(argv):
