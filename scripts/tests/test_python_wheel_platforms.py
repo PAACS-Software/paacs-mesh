@@ -296,6 +296,8 @@ class ToolchainAndConsumerTests(unittest.TestCase):
                          "--occt-dir", str(config)]
             with (patch.object(build.sys, "argv", arguments), patch.object(build.sys, "platform", "win32"),
                   patch.object(build, "host_platform", return_value="windows-arm64"),
+                  patch.object(build, "python_configuration", return_value={
+                      "python_version": "3.12", "python_tag": "cp312"}),
                   patch.object(build, "cmake_generator", return_value=generator),
                   patch.object(build, "run", side_effect=RuntimeError("stop before compilation")) as call):
                 with self.assertRaisesRegex(RuntimeError, "stop before compilation"):
