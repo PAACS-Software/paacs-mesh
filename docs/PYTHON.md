@@ -79,6 +79,12 @@ python -m paacs_mesh part.step part.vtk --size 0.7
 
 Installed wheels also provide the `paacs-mesh` command with the same arguments.
 
+For development-only per-element and spatial quality inspection, see
+[mesh inspection](MESH_INSPECTION.md). For Python request discovery and guarded
+selection controls, see [API usability](API_USABILITY.md). These additions require
+a wheel built from the corresponding development commit; published RC3 wheels
+do not contain them.
+
 For paginated CAD inspection, capability discovery, saved recipe execution and
 human/JSON diagnostic summaries, see [inspection and diagnostics](AGENT_WORKFLOW.md).
 

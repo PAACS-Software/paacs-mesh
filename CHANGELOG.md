@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Add opt-in, bounded Tet4 quality inspection, native-ID pagination, spatial
+  distributions, trimmed CAD centroid distances and quality-field VTK export.
+- Add deterministic SVG mesh views with whole-element cuts and visible interior
+  highlights, plus common-region comparisons of reported-valid mesh snapshots.
+- Expose Python meshing signatures, guarded selection sizing and native hints;
+  preserve the distinction between requested policy and native body routes.
+- Retain native meshing algorithms, validity gates and archive v1. These
+  development interfaces are not part of the published RC3 wheels.
+
 ## 1.2.0-rc.3
 
 - Add capability discovery, paginated CAD inspection, saved-recipe execution and

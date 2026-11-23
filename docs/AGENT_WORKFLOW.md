@@ -95,6 +95,12 @@ reported; overlapping part meshes do not become one non-overlapping domain.
 
 ## What a diagnostic means
 
+The development interface adds [per-element mesh inspection](MESH_INSPECTION.md)
+and [explicit Python request signatures](API_USABILITY.md). Those operations
+are opt-in and separate from the report-only `diagnose()` operation below.
+See the [schema and issue-code reference](DIAGNOSTIC_SCHEMAS.md) for machine
+contracts. Published RC3 wheels retain their original interface.
+
 `pm.diagnose(mesh_or_report, max_issues=32)` accepts a native mesh or its report,
 or a bounded workflow report. It returns copied JSON data using
 `paacs-mesh-diagnostics-v1`. `pm.format_diagnostics(diagnostic)` presents that

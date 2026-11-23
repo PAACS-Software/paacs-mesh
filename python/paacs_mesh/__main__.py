@@ -1,4 +1,4 @@
-"""Inspect STEP geometry, run saved recipes or mesh directly with PAACS Mesh."""
+"""Inspect CAD and mesh quality, compare attempts, or mesh STEP with PAACS Mesh."""
 
 # PAACS Mesh
 # Project author: Paul LeDewhurst
@@ -15,13 +15,15 @@ import sys
 
 from . import (
     BoxSize, CadImportError, ExportError, FaceSize, MeshingError, SelectionError,
-    WorkflowError, publish_result, read_step, run_saved_recipe,
+    WorkflowError, InspectionError, compare_meshes, open_mesh, publish_result, read_step, run_saved_recipe,
 )
-from ._cad_common import load_json
+from ._cad_common import MAX_JSON_BYTES, json_text, load_json
 from .diagnostics import capabilities, diagnose, format_diagnostics
+from .mesh_archive import CELL_NAMES, atomic_bytes
+from .mesh_inspection import METRICS
 
 
-_COMMANDS = ("capabilities", "inspect", "diagnose", "run")
+_COMMANDS = ("capabilities", "inspect", "diagnose", "run", "inspect-mesh", "visualize", "compare")
 
 
 def _flush_output():
@@ -59,13 +61,18 @@ def _native_output_to_stderr():
 def _json(value, *, stream=None):
     # Redirected Windows streams can use a legacy code page. JSON escapes keep
     # the machine stream ASCII-compatible while preserving Unicode on decode.
-    print(json.dumps(value, indent=2, ensure_ascii=True, allow_nan=False), file=stream)
+    payload = json.dumps(value, indent=2, ensure_ascii=True, allow_nan=False)
+    if len(payload) > MAX_JSON_BYTES:
+        payload = json.dumps(value, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
+    if len(payload) > MAX_JSON_BYTES:
+        raise InspectionError("output_budget", "Machine output exceeds the 8 MiB JSON budget")
+    print(payload, file=stream)
 
 
 def _legacy(argv):
     parser = argparse.ArgumentParser(
         description=__doc__,
-        epilog="Discovery commands: capabilities, inspect, diagnose, run. "
+        epilog="Discovery commands: " + ", ".join(_COMMANDS) + ". "
                "Use 'paacs-mesh COMMAND --help' for their options.",
     )
     parser.add_argument("input", type=Path, help="STEP file; transferred to mm")
@@ -126,6 +133,8 @@ class _CommandParser(argparse.ArgumentParser):
 def _command_parser(command):
     parser = _CommandParser(prog=f"paacs-mesh {command}")
     parser.add_argument("--json", action="store_true", help="write one JSON document to stdout")
+    if command in ("inspect-mesh", "visualize", "compare"):
+        return _mesh_parser(parser, command)
     if command == "capabilities":
         parser.description = "Discover supported operations and their limitations."
     elif command == "inspect":
@@ -144,6 +153,131 @@ def _command_parser(command):
         parser.add_argument("--source", type=Path, required=True, help="explicit local STEP input")
         parser.add_argument("--output", type=Path, required=True, help="new result directory; never overwritten")
     return parser
+
+
+def _mesh_parser(parser, command):
+    parser.add_argument("input", type=Path, help="native archive or hash-paired inspection bundle")
+    parser.add_argument("--max-bytes", type=int, default=256 * 1024 * 1024,
+                        help="owned storage/scratch allowance per snapshot or operation; compare retains two snapshots")
+    parser.add_argument("--max-cells", type=int, default=1_000_000)
+    parser.add_argument("--max-nodes", type=int, default=1_000_000)
+    parser.add_argument("--max-work", type=int, default=20_000_000)
+    parser.add_argument("--max-seconds", type=float, default=60., help="cooperative deadline per inspection operation")
+    if command == "inspect-mesh":
+        parser.description = "Measure and query stable native cell IDs without recertifying an archive."
+        parser.add_argument("--cell", type=int)
+        parser.add_argument("--offset", type=int, default=0)
+        parser.add_argument("--limit", type=int, default=100)
+        parser.add_argument("--metric", choices=METRICS, default="mean_ratio")
+        parser.add_argument("--quality-below", type=float)
+        parser.add_argument("--region", nargs=6, type=float, metavar=("X0", "Y0", "Z0", "X1", "Y1", "Z1"))
+        parser.add_argument("--spatial-mode", choices=("centroid", "aabb_overlap"), default="centroid")
+        parser.add_argument("--body", type=int, action="append")
+        parser.add_argument("--cell-type", choices=("all",) + CELL_NAMES, default="tet4")
+        parser.add_argument("--orientation", choices=("positive", "inverted", "degenerate", "unsupported"))
+        parser.add_argument("--sort-by", choices=("cell_id",) + METRICS, default="cell_id")
+        parser.add_argument("--descending", action="store_true")
+        parser.add_argument("--no-associations", action="store_true")
+        parser.add_argument("--source", type=Path, help="matching STEP for optional trimmed-face centroid distances")
+        parser.add_argument("--cad-distance", type=float, help="inclusive maximum centroid-to-selected-face distance")
+        parser.add_argument("--cad-face", type=int, action="append")
+        parser.add_argument("--max-cad-work", type=int, default=100000)
+        parser.add_argument("--max-cad-seconds", type=float, default=10.)
+        parser.add_argument("--cad-all-faces", action="store_true", help="include every selected face measurement in each returned record")
+        parser.add_argument("--summary", action="store_true")
+        parser.add_argument("--spatial-bins", type=int, default=4)
+        parser.add_argument("--vtk", type=Path, help="atomically export the full snapshot with quality fields and native IDs, independent of page filters")
+    elif command == "visualize":
+        parser.description = "Render actual element IDs as deterministic SVG with explicit interior x-ray highlights."
+        parser.add_argument("--output", type=Path, required=True)
+        parser.add_argument("--source", type=Path, help="optional matching STEP source for display-tessellation context")
+        parser.add_argument("--color-by", choices=METRICS, default="mean_ratio")
+        parser.add_argument("--highlight-below", type=float, default=.2)
+        parser.add_argument("--cell", action="append", type=int, help="explicit native cell IDs to isolate")
+        parser.add_argument("--cut-axis", choices=("x", "y", "z"))
+        parser.add_argument("--cut-value", type=float)
+        parser.add_argument("--view-bounds", nargs=6, type=float)
+        parser.add_argument("--azimuth", type=float, default=35.)
+        parser.add_argument("--elevation", type=float, default=25.)
+        parser.add_argument("--width", type=int, default=1200)
+        parser.add_argument("--height", type=int, default=900)
+        parser.add_argument("--max-triangles", type=int, default=100000)
+        parser.add_argument("--max-highlights", type=int, default=10000)
+        parser.add_argument("--max-output-bytes", type=int, default=32 * 1024 * 1024)
+    else:
+        parser.description = "Compare two separately reported native-valid attempts on the same CAD source."
+        parser.add_argument("second", type=Path, help="second hash-paired inspection bundle")
+        parser.add_argument("--spatial-bins", type=int, default=4)
+        parser.add_argument("--output", type=Path, help="optional atomic JSON comparison export")
+    return parser
+
+
+def _human_mesh(report):
+    print(f"PAACS {report['schema']}")
+    if "mesh_sha256" in report:
+        print(f"Mesh SHA-256: {report['mesh_sha256']}")
+        print(f"Units: {report.get('units') or 'not stored in bare archive'}")
+    if "cells" in report:
+        print(f"Showing {len(report['cells'])} of {report['total']} matching elements.")
+        for cell in report["cells"]:
+            print(f"Cell {cell['cell_id']} ({cell['cell_type']}), body {cell['body_tag']}, {cell['orientation']}")
+            print("  Metrics: " + json.dumps(cell["metrics"], allow_nan=False))
+            print(f"  Nodes: {cell['node_ids']}; centroid: {cell['centroid']}")
+        if report["next_offset"] is not None:
+            print(f"Next page: --offset {report['next_offset']}")
+    else:
+        for key, value in report.items():
+            if key not in ("schema", "mesh_sha256", "units", "metric_conventions"):
+                print(f"{key.replace('_', ' ')}: {json.dumps(value, indent=2, allow_nan=False)}")
+
+
+def _mesh_command(command, args):
+    limits = {name: getattr(args, name) for name in ("max_bytes", "max_cells", "max_nodes", "max_work", "max_seconds")}
+    with open_mesh(args.input, **limits) as inspection:
+        if command == "inspect-mesh":
+            if args.summary:
+                if (args.cell is not None or args.quality_below is not None or args.region is not None
+                        or args.body is not None or args.orientation is not None or args.cell_type != "tet4"
+                        or args.offset != 0 or args.limit != 100 or args.sort_by != "cell_id" or args.descending
+                        or args.metric != "mean_ratio" or args.spatial_mode != "centroid" or args.no_associations
+                        or args.source is not None or args.cad_distance is not None or args.cad_face is not None or args.cad_all_faces):
+                    raise ValueError("--summary describes the entire snapshot; use filtered pages or its spatial distributions for localization")
+                report = inspection.summary(spatial_bins=args.spatial_bins)
+            else:
+                with _native_output_to_stderr():
+                    cad = read_step(args.source, max_file_bytes=min(args.max_bytes // 2, 128 * 1024 * 1024)) if args.source else None
+                report = inspection.query(cell_id=args.cell, offset=args.offset, limit=args.limit,
+                    metric=args.metric, quality_below=args.quality_below,
+                    region=[args.region[:3], args.region[3:]] if args.region is not None else None,
+                    spatial_mode=args.spatial_mode, body_tags=args.body,
+                    cell_type=None if args.cell_type == "all" else args.cell_type,
+                    orientation=args.orientation, sort_by=args.sort_by, descending=args.descending,
+                    associations=not args.no_associations, cad=cad, cad_distance=args.cad_distance,
+                    cad_face_tags=args.cad_face, max_cad_work=args.max_cad_work, max_cad_seconds=args.max_cad_seconds,
+                    cad_include_faces=args.cad_all_faces)
+            if args.vtk is not None:
+                report["exports"] = {"vtk": str(inspection.write_vtk(args.vtk))}
+        elif command == "visualize":
+            with _native_output_to_stderr():
+                cad = read_step(args.source, max_file_bytes=min(args.max_bytes // 2, 128 * 1024 * 1024)) if args.source else None
+                report = inspection.visualize(args.output, metric=args.color_by, highlight_below=args.highlight_below,
+                    highlight_cell_ids=args.cell, cad=cad, cut_axis=args.cut_axis, cut_value=args.cut_value,
+                    view_bounds=[args.view_bounds[:3], args.view_bounds[3:]] if args.view_bounds else None,
+                    azimuth=args.azimuth, elevation=args.elevation, width=args.width, height=args.height,
+                    max_triangles=args.max_triangles, max_highlights=args.max_highlights,
+                    max_output_bytes=args.max_output_bytes)
+        else:
+            with open_mesh(args.second, **limits) as second:
+                report = compare_meshes(inspection, second, spatial_bins=args.spatial_bins,
+                                       max_work=args.max_work, max_seconds=args.max_seconds)
+                if args.output is not None:
+                    protected = inspection._archive.protected_paths + second._archive.protected_paths
+                    atomic_bytes(args.output, json_text(report).encode("utf-8"), protected=protected)
+        if args.json:
+            _json(report)
+        else:
+            _human_mesh(report)
+    return 0
 
 
 def _human_capabilities(report):
@@ -175,14 +309,21 @@ def _human_inspection(report):
 
 
 def _command_error(error, *, machine, native):
+    message = str(error)
     report = {
         "schema": "paacs-mesh-cli-error-v1", "status": "failed",
         "stage": getattr(error, "stage", "input"),
         "reason": getattr(error, "reason", "invalid_argument"),
-        "message": str(error), "report": getattr(error, "report", {}),
+        "message": message[:4096], "message_truncated": len(message) > 4096,
+        "report": getattr(error, "report", {}),
     }
     if machine:
-        _json(report)
+        try:
+            _json(report)
+        except InspectionError:
+            report["report"] = {}
+            report["report_omitted_due_to_output_budget"] = True
+            _json(report)
     else:
         print(f"{report['stage']}: {report['reason']}: {report['message']}", file=sys.stderr)
     return 1 if native else 2
@@ -192,6 +333,8 @@ def _advanced(command, argv):
     machine = "--json" in argv
     try:
         args = _command_parser(command).parse_args(argv)
+        if command in ("inspect-mesh", "visualize", "compare"):
+            return _mesh_command(command, args)
         if command == "capabilities":
             report = capabilities()
             if args.json:
@@ -236,7 +379,7 @@ def _advanced(command, argv):
             print(format_diagnostics(diagnostics))
             print(f"Saved result bundle: {publication['path']}")
         return 0
-    except (CadImportError, MeshingError, ExportError, SelectionError, WorkflowError) as error:
+    except (CadImportError, MeshingError, ExportError, SelectionError, WorkflowError, InspectionError) as error:
         return _command_error(error, machine=machine,
                               native=not isinstance(error, SelectionError) or error.reason != "invalid_argument")
     except (ValueError, TypeError, OverflowError, OSError) as error:
