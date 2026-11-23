@@ -33,6 +33,10 @@ struct OcctCurveSamplingReport {
     double metricLength=0,estimatedMetricError=0;
     bool completed=false,budgetLimited=false;
     const char* diagnostic="not_attempted";
+    std::optional<std::array<double,2>> numericalInterval,lastRejectedInterval;
+    std::optional<std::array<double,5>> lastRejectedSpeeds,lastRejectedSizes,lastRejectedRawSizes;
+    // Metric, length and physical-mapping error estimates and their tolerances.
+    std::optional<std::array<double,6>> lastRejectedErrors;
 };
 struct OcctCurveSpacing {
     unsigned pointsPerTurn = 32;
@@ -115,14 +119,30 @@ std::vector<double> progressive(BRepAdaptor_Curve& curve,double first,double las
             return cache.emplace(at,value).first->second;
         };
         const auto density=[](const Sample& p){return static_cast<long double>(p.speed)/p.size;};
+        const double slope=std::sqrt(1.8)-1;
         long double estimatedError=0;
         while(!pending.empty()){
             tick(1);const auto interval=pending.back();pending.pop_back();
             const auto a=interval.first,b=interval.last,m=std::midpoint(a,b);
             const auto q1=std::midpoint(a,m),q3=std::midpoint(m,b);
-            if(!(a<q1&&q1<m&&m<q3&&q3<b))fail("curve_parameter_resolution",false);
-            const auto& s0=sample(a);const auto& s1=sample(q1);const auto& s2=sample(m);
-            const auto& s3=sample(q3);const auto& s4=sample(b);
+            if(!(a<q1&&q1<m&&m<q3&&q3<b)){
+                report.numericalInterval=std::array{a,b};fail("curve_parameter_resolution",false);
+            }
+            std::array<Sample,5> stencil{sample(a),sample(q1),sample(m),sample(q3),sample(b)};
+            const std::array rawSizes{stencil[0].size,stencil[1].size,stencil[2].size,stencil[3].size,stencil[4].size};
+            // Prepare the growth-limited metric before estimating its error.
+            // Pointwise curvature/feature changes must not force endless
+            // relative-error subdivision. These local passes only lower sizes
+            // using chord distances (a conservative arclength bound); raw
+            // cached requests and the later global growth pass stay separate.
+            // The estimate describes this prepared metric, not a certificate
+            // of integration error in a discontinuous raw curvature field.
+            for(std::size_t i=1;i<stencil.size();++i){tick(1);stencil[i].size=std::min(stencil[i].size,
+                stencil[i-1].size+slope*(stencil[i].point-stencil[i-1].point).norm());}
+            for(std::size_t i=stencil.size()-1;i>0;--i){tick(1);stencil[i-1].size=std::min(stencil[i-1].size,
+                stencil[i].size+slope*(stencil[i].point-stencil[i-1].point).norm());}
+            const auto& s0=stencil[0];const auto& s1=stencil[1];const auto& s2=stencil[2];
+            const auto& s3=stencil[3];const auto& s4=stencil[4];
             const auto width=static_cast<long double>(b-a);
             const auto coarse=width*(density(s0)+density(s4))*.5L;
             const auto fine=width*(density(s0)+2*density(s1)+2*density(s2)+2*density(s3)+density(s4))*.125L;
@@ -139,6 +159,12 @@ std::vector<double> progressive(BRepAdaptor_Curve& curve,double first,double las
                 lengthError<=1e-5L*std::abs(fineLength)+1e-12L*h*((b-a)/span)&&
                 std::isfinite(mappingError)&&mappingError<=physicalTolerance;
             if(accurate){++report.integrationIntervals;estimatedError+=error;continue;}
+            report.lastRejectedInterval=std::array{a,b};
+            report.lastRejectedSpeeds=std::array{s0.speed,s1.speed,s2.speed,s3.speed,s4.speed};
+            report.lastRejectedSizes=std::array{s0.size,s1.size,s2.size,s3.size,s4.size};
+            report.lastRejectedRawSizes=rawSizes;
+            report.lastRejectedErrors=std::array{double(error),double(1e-4L*std::abs(fine)+1e-10L*((b-a)/span)),
+                double(lengthError),double(1e-5L*std::abs(fineLength)+1e-12L*h*((b-a)/span)),mappingError,physicalTolerance};
             if(report.integrationIntervals+pending.size()+2>intervals)fail("curve_integration_limit",true);
             admit(cache.size(),std::max<std::uint64_t>(2*pending.capacity(),2*(pending.size()+2)),breaks.capacity(),0,0);
             pending.push_back({m,b});pending.push_back({a,m});
@@ -151,7 +177,6 @@ std::vector<double> progressive(BRepAdaptor_Curve& curve,double first,double las
             tick(1);length[i]=(samples[i+1].at-samples[i].at)*(samples[i].speed+samples[i+1].speed)*.5;
             if(!std::isfinite(length[i])||length[i]<0)fail("curve_nonfinite_length",false);
         }
-        const double slope=std::sqrt(1.8)-1;
         for(std::size_t i=0;i<length.size();++i){tick(1);samples[i+1].size=std::min(samples[i+1].size,samples[i].size+slope*length[i]);}
         for(std::size_t i=length.size();i>0;--i){tick(1);samples[i-1].size=std::min(samples[i-1].size,samples[i].size+slope*length[i-1]);}
         const auto logarithm=[](double a,double b){
@@ -232,19 +257,46 @@ std::vector<double> sampleOcctCurveMetric(const OcctModel& model, int tag, doubl
     edge->parameterBounds(first, last);
     BRepAdaptor_Curve curve(OcctModelAccess::edge(model, tag));
     if(spacing.resourcePolicy==CadResourcePolicy::Normal){
-        const auto evaluate=[&](double at){
-            gp_Pnt point;gp_Vec derivative;curve.D1(at,point,derivative);
-            auto curvature=localCurvature(tag,at);
-            if(at==first)curvature=std::max(curvature,vertexCurvature(edge->startVertexTag()));
-            if(at==last)curvature=std::max(curvature,vertexCurvature(edge->endVertexTag()));
+        const auto refuse=[&](const char* diagnostic,bool budget){
+            if(spacing.report){*spacing.report={};spacing.report->diagnostic=diagnostic;
+                spacing.report->budgetLimited=budget;}
+            return std::vector<double>{};
+        };
+        if(!spacing.maximumSegments||!spacing.maximumIntegrationIntervals||spacing.maximumWorkingBytes<4096)
+            return refuse("curve_resource_limit",true);
+        if(!std::isfinite(first)||!std::isfinite(last)||!(last>first)||!std::isfinite(last-first))
+            return refuse("curve_parameter_range",false);
+        const auto requestedSize=[&](double curvature,Vec3 position){
             auto h=curvature>0?std::min(sizeCap,2*std::numbers::pi/(spacing.pointsPerTurn*curvature)):sizeCap;
             if(curvature>0&&spacing.maximumChordError>0)
                 h=std::min(h,std::sqrt(8*spacing.maximumChordError/curvature));
-            const Vec3 position{point.X(),point.Y(),point.Z()};
             if(sizeField){tick(sizeField->queryWork());h=std::min(h,sizeField->eval(position));}
+            return h;
+        };
+        tick(1);const auto start=curve.Value(first);tick(1);const auto end=curve.Value(last);
+        const Vec3 startPoint{start.X(),start.Y(),start.Z()},endPoint{end.X(),end.Y(),end.Z()};
+        auto startSize=requestedSize(vertexCurvature(edge->startVertexTag()),startPoint);
+        auto endSize=requestedSize(vertexCurvature(edge->endVertexTag()),endPoint);
+        const bool closed=edge->startVertexTag()==edge->endVertexTag();
+        if(closed)startSize=endSize=std::min(startSize,endSize);
+        const auto finitePoint=[](Vec3 p){return std::isfinite(p.x)&&std::isfinite(p.y)&&std::isfinite(p.z);};
+        if(!finitePoint(startPoint)||!finitePoint(endPoint)||!(std::isfinite(startSize)&&startSize>0&&
+            std::isfinite(endSize)&&endSize>0))return refuse("curve_nonfinite_sample",false);
+        // Endpoint feature sizes must influence a continuous neighbourhood
+        // before quadrature. An isolated endpoint override makes relative
+        // quadrature error persist through every subdivision. Euclidean
+        // distance is a lower bound on physical arclength, so this existing
+        // growth-slope envelope is conservative; final arclength smoothing
+        // and all native geometric audits still apply.
+        const double slope=std::sqrt(1.8)-1;
+        const auto evaluate=[&](double at){
+            gp_Pnt point;gp_Vec derivative;curve.D1(at,point,derivative);
+            const Vec3 position{point.X(),point.Y(),point.Z()};
+            const auto h=std::min({requestedSize(localCurvature(tag,at),position),
+                startSize+slope*(position-startPoint).norm(),endSize+slope*(position-endPoint).norm()});
             return curve_metric_detail::Sample{at,derivative.Magnitude(),h,position};
         };
-        return curve_metric_detail::progressive(curve,first,last,edge->startVertexTag()==edge->endVertexTag(),
+        return curve_metric_detail::progressive(curve,first,last,closed,
             spacing,evaluate,tick);
     }
     std::array<double, intervals+1> t{}, speed{}, size{}, metric{};

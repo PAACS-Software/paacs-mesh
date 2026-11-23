@@ -9,13 +9,19 @@
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakePolygon.hxx>
+#include <BRepBuilderAPI_MakeVertex.hxx>
 #include <BRepPrimAPI_MakeBox.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
 #include <BRepTools.hxx>
 #include <BRep_Builder.hxx>
 #include <Geom_BezierCurve.hxx>
+#include <Geom_BSplineCurve.hxx>
+#include <Geom_Circle.hxx>
+#include <Geom_Line.hxx>
 #include <TopoDS_Compound.hxx>
+#include <TopoDS_Vertex.hxx>
+#include <gp_Circ.hxx>
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -152,6 +158,135 @@ void exerciseVaryingCurve(){
     std::cout<<"adaptive Bezier: segments="<<report.segments<<" intervals="<<report.integrationIntervals
         <<" reference_length="<<independent<<" work="<<work.used<<'\n';
 }
+void exerciseUnequalEndpointFeatures(){
+    // A wide-parameter straight edge joins circular features with unequal
+    // scales. Applying those feature sizes only at the two endpoints caused
+    // adaptive relative-error subdivision to run out of parameter precision.
+    constexpr double first=-3.5,last=4.5,length=last-first,target=1.25;
+    const auto start=BRepBuilderAPI_MakeVertex(gp_Pnt(first,0,0)).Vertex();
+    const auto end=BRepBuilderAPI_MakeVertex(gp_Pnt(last,0,0)).Vertex();
+    occ::handle<Geom_Line> line=new Geom_Line(gp_Pnt(0,0,0),gp_Dir(1,0,0));
+    const auto straight=BRepBuilderAPI_MakeEdge(line,start,end,first,last).Edge();
+    const auto arc=[&](double x,double radius,const TopoDS_Vertex& vertex){
+        occ::handle<Geom_Circle> curve=new Geom_Circle(gp_Circ(gp_Ax2(gp_Pnt(x,-radius,0),gp_Dir(0,0,1)),radius));
+        const auto other=BRepBuilderAPI_MakeVertex(gp_Pnt(x-radius,-radius,0)).Vertex();
+        return BRepBuilderAPI_MakeEdge(curve,vertex,other,std::numbers::pi/2,std::numbers::pi).Edge();
+    };
+    BRep_Builder builder;TopoDS_Compound shape;builder.MakeCompound(shape);
+    builder.Add(shape,BRepPrimAPI_MakeBox(gp_Pnt(0,5,0),1,1,1).Shape());
+    builder.Add(shape,straight);builder.Add(shape,arc(first,.5,start));builder.Add(shape,arc(last,1.,end));
+    geo::NativeCadImportOptions options;options.retainAuxiliaryGeometry=true;
+    auto imported=OcctModelAccess::fromShape(shape,options);
+    require(imported.imported(),"unequal endpoint fixture import failed");
+    const auto& model=*imported.model;const auto before=snapshot(model);const auto relation=relations(model);
+    int selected=-1;
+    for(const auto* candidate:model.edges()){
+        double a,b;candidate->parameterBounds(a,b);
+        if(BRepAdaptor_Curve(OcctModelAccess::edge(model,candidate->tag())).GetType()==GeomAbs_Line&&
+            a==first&&b==last)selected=candidate->tag();
+    }
+    require(selected>0,"wide native-parameter line was not retained");
+    const auto* source=model.edge(selected);
+    require(relation.incident.at(source->startVertexTag()).size()==2&&
+        relation.incident.at(source->endVertexTag()).size()==2,"endpoint features lost shared topology");
+    OcctCurveSamplingReport report;auto spacing=normal(report);
+    spacing.pointsPerTurn=16;spacing.maximumChordError=.02;
+    Work work;work.maximum=1'000'000;
+    const auto schedule=sample(model,selected,target,relation,work,spacing);
+    ordered(schedule,first,last);
+    require(report.completed&&!report.budgetLimited&&report.integrationIntervals<512,
+        "endpoint size jumps still force unbounded adaptive subdivision");
+    const auto slope=std::sqrt(1.8)-1;
+    const double near=2*std::numbers::pi*.5/16,far=2*std::numbers::pi/16;
+    const auto left=(target-near)/slope,right=length-(target-far)/slope;
+    require(left>0&&right>left&&right<length,"independent endpoint envelope fixture changed");
+    const auto integral=[&](double x){
+        if(x<=left)return std::log1p(slope*x/near)/slope;
+        const auto initial=std::log(target/near)/slope;
+        if(x<=right)return initial+(x-left)/target;
+        return initial+(right-left)/target+std::log(target/(far+slope*(length-x)))/slope;
+    };
+    const auto reference=integral(length);
+    require(std::abs(report.metricLength-reference)<=reference*3e-4,
+        "continuous endpoint metric differs from independent analytic line integral");
+    const auto metricStep=reference/double(schedule.size()-1);
+    double previous=0;
+    for(std::size_t i=1;i<schedule.size();++i){
+        const auto a=schedule[i-1]-first,b=schedule[i]-first,segment=b-a;
+        require(segment<=target*(1+1e-8)&&integral(b)-integral(a)<=metricStep*1.003,
+            "endpoint feature size/growth envelope was lost in physical placement");
+        if(previous>0)require(std::max(segment/previous,previous/segment)<=std::exp(slope)*1.003,
+            "achieved adjacent line segments exceed the independent growth bound");
+        previous=segment;
+    }
+    require(before==snapshot(model)&&report.maximumModeledWorkingBytes<=spacing.maximumWorkingBytes,
+        "continuous endpoint sampling changed CAD or escaped modeled memory");
+    std::cout<<"continuous endpoint features: segments="<<report.segments
+        <<" intervals="<<report.integrationIntervals<<" work="<<work.used<<'\n';
+}
+void exerciseInteriorCurvatureJump(){
+    // C1 quadratic spline: x=t; y=0 before t=.5 and 2*(t-.5)^2
+    // afterwards. Speed is continuous while curvature jumps from zero to4.
+    NCollection_Array1<gp_Pnt> points(1,4);
+    points(1)=gp_Pnt(0,0,0);points(2)=gp_Pnt(.25,0,0);
+    points(3)=gp_Pnt(.75,0,0);points(4)=gp_Pnt(1,.5,0);
+    NCollection_Array1<double> knots(1,3);knots(1)=0;knots(2)=.5;knots(3)=1;
+    NCollection_Array1<int> multiplicity(1,3);multiplicity(1)=3;multiplicity(2)=1;multiplicity(3)=3;
+    occ::handle<Geom_BSplineCurve> curve=new Geom_BSplineCurve(points,knots,multiplicity,2,false);
+    BRep_Builder builder;TopoDS_Compound shape;builder.MakeCompound(shape);
+    builder.Add(shape,BRepPrimAPI_MakeBox(gp_Pnt(0,5,0),1,1,1).Shape());
+    builder.Add(shape,BRepBuilderAPI_MakeEdge(curve).Edge());
+    geo::NativeCadImportOptions options;options.retainAuxiliaryGeometry=true;
+    auto imported=OcctModelAccess::fromShape(shape,options);
+    require(imported.imported(),"interior curvature-jump fixture import failed");
+    const auto& model=*imported.model;const auto before=snapshot(model);const auto relation=relations(model);
+    const auto edge=edgeOfType(model,GeomAbs_BSplineCurve);
+    require(model.edge(edge)->curvatureAt(.5-1e-6)<1e-6&&model.edge(edge)->curvatureAt(.5+1e-6)>3.99,
+        "owned spline did not reproduce a one-sided curvature jump");
+    OcctCurveSamplingReport report;auto spacing=normal(report);
+    spacing.pointsPerTurn=16;spacing.maximumChordError=.02;
+    Work work;work.maximum=2'000'000;
+    const auto schedule=sample(model,edge,.4,relation,work,spacing);ordered(schedule,0,1);
+    require(report.completed&&!report.budgetLimited&&report.integrationIntervals<2048,
+        "interior curvature jump still exhausts parameter precision or integration resources");
+    constexpr std::size_t intervals=20000;
+    std::vector<double> arclength(intervals+1),sizes(intervals+1),metric(intervals+1);
+    const auto speed=[](double t){const auto q=std::max(0.,t-.5);return std::sqrt(1+16*q*q);};
+    for(std::size_t i=0;i<=intervals;++i){
+        const auto t=double(i)/intervals,q=std::max(0.,t-.5);
+        const auto curvature=t<.5?0.:4/std::pow(1+16*q*q,1.5);
+        sizes[i]=curvature>0?std::min({.4,2*std::numbers::pi/(16*curvature),std::sqrt(8*.02/curvature)}):.4;
+        if(i){const auto a=double(i-1)/intervals,b=t;
+            arclength[i]=arclength[i-1]+(b-a)*(speed(a)+4*speed((a+b)*.5)+speed(b))/6;}
+    }
+    const auto slope=std::sqrt(1.8)-1;
+    // Dense analytic geometry gives an independent discrete Lipschitz minorant
+    // of the requested field in physical arclength, including its one-sided
+    // knot limit. Simpson quadrature avoids the production logarithmic rule.
+    for(std::size_t i=1;i<=intervals;++i)sizes[i]=std::min(sizes[i],sizes[i-1]+slope*(arclength[i]-arclength[i-1]));
+    for(std::size_t i=intervals;i>0;--i)sizes[i-1]=std::min(sizes[i-1],sizes[i]+slope*(arclength[i]-arclength[i-1]));
+    for(std::size_t i=1;i<=intervals;++i)
+        metric[i]=metric[i-1]+(arclength[i]-arclength[i-1])*(1/sizes[i-1]+8/(sizes[i-1]+sizes[i])+1/sizes[i])/6;
+    require(std::abs(report.metricLength-metric.back())<=metric.back()*1e-3,
+        "prepared spline metric differs from independent dense arclength reference");
+    const auto integral=[&](double t){
+        if(t>=1)return metric.back();
+        const auto scaled=t*intervals;
+        const auto index=std::size_t(scaled);
+        return std::lerp(metric[index],metric[index+1],scaled-double(index));
+    };
+    const auto step=metric.back()/double(schedule.size()-1);
+    for(std::size_t i=1;i<schedule.size();++i)
+        require(integral(schedule[i])-integral(schedule[i-1])<=step*1.01,
+            "spline placement misses independent prepared-metric spacing");
+    if(report.lastRejectedSizes&&report.lastRejectedRawSizes)
+        for(std::size_t i=0;i<5;++i)require((*report.lastRejectedSizes)[i]<=(*report.lastRejectedRawSizes)[i],
+            "local growth preparation increased a raw requested size");
+    require(before==snapshot(model)&&report.maximumModeledWorkingBytes<=spacing.maximumWorkingBytes,
+        "interior curvature sampling changed geometry or escaped modeled memory");
+    std::cout<<"interior curvature jump: segments="<<report.segments<<" intervals="<<report.integrationIntervals
+        <<" metric="<<report.metricLength<<" reference="<<metric.back()<<" work="<<work.used<<'\n';
+}
 void exerciseResourceRefusal(){
     auto imported=OcctModelAccess::fromShape(BRepPrimAPI_MakeCylinder(1.,2.).Shape());
     require(imported.imported(),"resource cylinder import failed");const auto& model=*imported.model;
@@ -203,7 +338,8 @@ void exerciseManyFaces(){
 }
 }
 int main(){try{
-    exerciseCircleAndBoundedIdentity();exerciseVaryingCurve();exerciseResourceRefusal();exerciseManyFaces();
+    exerciseCircleAndBoundedIdentity();exerciseVaryingCurve();exerciseUnequalEndpointFeatures();
+    exerciseInteriorCurvatureJump();exerciseResourceRefusal();exerciseManyFaces();
     std::cout<<"Normal CAD curve and face resource guards passed\n";return 0;
 }catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}
 catch(...){std::cerr<<"unexpected CAD curve resource exception\n";return 1;}}
