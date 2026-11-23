@@ -6,7 +6,7 @@
 cmake_minimum_required(VERSION 3.30...4.4)
 project(PAACSMesh VERSION 1.2.0 LANGUAGES C CXX)
 
-set(PAACS_RELEASE_VERSION "1.2.0-rc.2")
+set(PAACS_RELEASE_VERSION "1.2.0-rc.3")
 set(PAACS_CXX_STANDARD 26 CACHE STRING "C++ language level: 26 or compatibility mode 23")
 set_property(CACHE PAACS_CXX_STANDARD PROPERTY STRINGS 26 23)
 if(NOT PAACS_CXX_STANDARD MATCHES "^(23|26)$")
