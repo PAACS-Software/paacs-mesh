@@ -87,6 +87,7 @@ jobs:
     env:
       MACOSX_DEPLOYMENT_TARGET: '15.0'
       PAACS_MANYLINUX_IMAGE: ${{ matrix.image }}
+      PAACS_MSVC_TOOLSET: ${{ matrix.msvc_toolset || '' }}
       SDK_JOBS: ${{ matrix.jobs }}
     steps:
       - uses: actions/checkout@v7
@@ -154,6 +155,7 @@ jobs:
     env:
       MACOSX_DEPLOYMENT_TARGET: '15.0'
       PAACS_MANYLINUX_IMAGE: ${{ matrix.image }}
+      PAACS_MSVC_TOOLSET: ${{ matrix.msvc_toolset || '' }}
       WHEEL_JOBS: ${{ matrix.jobs }}
       PYTHON_TAG: ${{ matrix.python_tag }}
     steps:

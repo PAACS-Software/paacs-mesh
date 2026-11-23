@@ -95,6 +95,22 @@ builds, dependency checks and independent installations still run for every
 required combination. Matching OCCT source and redistribution notices remain
 part of the release process.
 
+### Windows ARM64 compiler
+
+The Windows ARM64 qualification plan pins MSVC **14.44** for both the shared OCCT
+SDK and the Python bindings. The runner's default MSVC 14.52 compiler crashed
+while compiling OCCT, with a `UtcBldCompileSerializedFile` stack followed by D8040.
+An [upstream runner issue](https://github.com/actions/runner-images/issues/15328)
+reports the same compiler version and stack; selecting 14.44 compiled the same
+source on the same image, and the runner maintainer recommends that workaround
+while investigating.
+
+MSVC 14.52 is a stable release; this pin addresses an observed ARM64 compiler
+regression. Both build stages select the same installed toolset and record the
+resolved compiler in their SDK context and qualification receipts. The changed
+ARM64 compiler produces a distinct SDK cache fingerprint. Other platforms retain
+their existing toolchain selection.
+
 ## Publication gate
 
 No new package-index release is published as part of this expansion. Before a

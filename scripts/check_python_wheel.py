@@ -89,6 +89,10 @@ def main() -> None:
     parity = artifact_file(directory, parity_record["file"])
     if sha256(parity) != parity_record["sha256"]:
         raise RuntimeError("The native CLI parity result does not match the builder's receipt")
+    build_record = receipt["build_info"]
+    build_info = artifact_file(directory, build_record["file"])
+    if build_info.name != "native-build-info.txt" or sha256(build_info) != build_record["sha256"]:
+        raise RuntimeError("The compiler and configuration record does not match the builder's receipt")
 
     # This job has checked out source and downloaded artifacts only. No SDK is
     # configured or built; on Linux its mount also differs from the builder.
@@ -100,6 +104,8 @@ def main() -> None:
         "sha256": sha256(wheel),
         "installed_tests": json.loads((build_dir / "installed-validation.json").read_text(encoding="utf-8")),
         "numpy_validation": numpy_results,
+        "build_info": build_record,
+        **({"toolchain": receipt["toolchain"]} if "toolchain" in receipt else {}),
         "qualification": "passed with isolated Python and cleared SDK, loader and CAD paths",
     }
     (build_dir / "consumer-validation.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")

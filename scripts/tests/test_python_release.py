@@ -44,6 +44,11 @@ class PythonReleaseTests(unittest.TestCase):
                     "Metadata-Version: 2.4\nName: paacs-mesh\nVersion: 1.2.0rc2\nRequires-Python: " + release.REQUIRES_PYTHON + "\n")
             (directory / "occt-8.0.1.tar.gz").write_bytes(source)
             (directory / "dependency-audit.txt").write_text("test audited dependencies\n")
+            compiler = "MSVC 19.44.35207.1" if platform.startswith("windows-") else (
+                "AppleClang 17.0.0" if platform == "macos-arm64" else "GNU 14.2.1")
+            (directory / "native-build-info.txt").write_text(
+                "release=1.2.0-rc.2\ncompiler=" + compiler + "\ncmake=4.4.3\nstandard=23\n"
+                "configuration=Release\nflags=\nstrict_fp=ON\nipo=OFF\nnative=OFF\nsanitizer=none\n")
             release.write(directory / "native-parity.json", {"status": "passed", "cases": [{}, {}, {}]})
             record = {"source_revision": {"commit": self.sha, "clean": True}, "platform": platform,
                 "target_id": identifier, "python_version": row["python"], "python_tag": row["python_tag"],
@@ -55,7 +60,10 @@ class PythonReleaseTests(unittest.TestCase):
                                      for v in row["numpy_versions"]],
                 "occt_source": {"file": "occt-8.0.1.tar.gz", "sha256": release.sha256(directory / "occt-8.0.1.tar.gz")},
                 "repair": {"audit": "dependency-audit.txt", "audit_sha256": release.sha256(directory / "dependency-audit.txt")},
+                "build_info": {"file": "native-build-info.txt", "sha256": release.sha256(directory / "native-build-info.txt")},
                 "native_parity": {"file": "native-parity.json", "sha256": release.sha256(directory / "native-parity.json")}}
+            if platform.startswith("windows-"):
+                record["toolchain"] = {"tools_version": "14.44.35207", "requested_toolset": row.get("msvc_toolset")}
             release.write(directory / "wheel-validation.json", record)
             for consumer_row in release.CONSUMERS.values():
                 if consumer_row["target_id"] != identifier:
@@ -180,6 +188,8 @@ class PythonReleaseTests(unittest.TestCase):
         self.assertEqual(len(manifest["qualified_consumers"]), 28)
         self.assertTrue(all(p.suffix == ".whl" for p in (self.output / "dist").iterdir()))
         self.assertTrue((self.output / "release-assets/occt-8.0.1.tar.gz").is_file())
+        for identifier in release.TARGETS:
+            self.assertTrue((self.output / f"release-assets/{identifier}-native-build-info.txt").is_file())
         release.verify(manifest, self.output / "dist", self.sha)
         with self.assertRaises(RuntimeError):
             self.assemble()
@@ -227,6 +237,55 @@ class PythonReleaseTests(unittest.TestCase):
 
     def test_cross_python_abi_receipt_blocks_release(self):
         self.change_builder(lambda r: r.update(python_version="3.13", python_tag="cp313"))
+        self.assert_gate_refuses()
+
+    def test_missing_or_altered_compiler_proof_blocks_release(self):
+        path = self.builder_directory("windows-arm64") / "native-build-info.txt"
+        original = path.read_bytes()
+        path.unlink()
+        self.assert_gate_refuses()
+        path.write_bytes(original + b"compiler=MSVC 19.50.1\n")
+        self.assert_gate_refuses()
+
+    def test_compiler_proof_must_match_configuration_even_with_updated_hash(self):
+        directory = self.builder_directory("linux-arm64")
+        path = directory / "native-build-info.txt"
+        original = path.read_text()
+        receipt_path = directory / "wheel-validation.json"
+        receipt = release.load(receipt_path)
+        for before, after in (("strict_fp=ON", "strict_fp=OFF"), ("configuration=Release", "configuration=Debug"),
+                              ("standard=23", "standard=26"), ("native=OFF", "native=ON"),
+                              ("sanitizer=none", "sanitizer=thread"), ("flags=", "flags=-ffast-math")):
+            path.write_text(original.replace(before, after))
+            receipt["build_info"]["sha256"] = release.sha256(path)
+            release.write(receipt_path, receipt)
+            with self.subTest(after=after):
+                self.assert_gate_refuses()
+
+    def test_windows_arm64_actual_compiler_must_match_pinned_toolset(self):
+        directory = self.builder_directory("windows-arm64")
+        path = directory / "native-build-info.txt"
+        path.write_text(path.read_text().replace("MSVC 19.44.35207.1", "MSVC 19.50.1"))
+        receipt_path = directory / "wheel-validation.json"
+        receipt = release.load(receipt_path)
+        receipt["build_info"]["sha256"] = release.sha256(path)
+        receipt["toolchain"]["tools_version"] = "14.50.1"
+        release.write(receipt_path, receipt)
+        self.assert_gate_refuses()
+
+    def test_selected_and_actual_compiler_proofs_cannot_be_mixed(self):
+        directory = self.builder_directory("windows-arm64")
+        receipt_path = directory / "wheel-validation.json"
+        receipt = release.load(receipt_path)
+        receipt["toolchain"]["tools_version"] = "14.50.1"
+        release.write(receipt_path, receipt)
+        self.assert_gate_refuses()
+
+    def test_consumer_must_verify_the_exact_native_compiler_proof(self):
+        path = self.consumer_receipt("windows-arm64")
+        record = release.load(path)
+        record["build_info"]["sha256"] = "b" * 64
+        release.write(path, record)
         self.assert_gate_refuses()
 
     def test_consumer_receipt_cannot_substitute_another_python_or_target(self):

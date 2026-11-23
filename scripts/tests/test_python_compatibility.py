@@ -70,6 +70,35 @@ class PythonCompatibilityTests(unittest.TestCase):
         self.assertTrue(all("@sha256:" in row["image"] for row in linux))
         self.assertNotEqual(linux[0]["image"], linux[1]["image"])
 
+    def test_windows_arm64_toolset_pin_reaches_sdk_wheels_and_consumers_only(self):
+        for rows in (compatibility.platforms(), compatibility.targets(), compatibility.consumers()):
+            for row in rows:
+                if row["platform"] == "windows-arm64":
+                    self.assertEqual(row["msvc_toolset"], "14.44")
+                else:
+                    self.assertNotIn("msvc_toolset", row,
+                                     "The ARM64 compiler workaround must not change other toolchains")
+
+    def test_windows_arm64_toolset_pin_cannot_be_missing_or_changed(self):
+        for selected in (None, "14.52", "v143", "14.44-arm64ec", 14.44, True):
+            with self.subTest(selected=selected):
+                value = deepcopy(self.manifest)
+                row = next(row for row in value["platforms"] if row["id"] == "windows-arm64")
+                if selected is None:
+                    row.pop("msvc_toolset")
+                else:
+                    row["msvc_toolset"] = selected
+                with self.assertRaises(RuntimeError):
+                    compatibility.validate_manifest(value)
+
+    def test_toolset_pin_is_rejected_on_other_platforms(self):
+        for platform in ("windows-x86_64", "macos-arm64", "linux-x86_64", "linux-arm64"):
+            with self.subTest(platform=platform):
+                value = deepcopy(self.manifest)
+                next(row for row in value["platforms"] if row["id"] == platform)["msvc_toolset"] = "14.44"
+                with self.assertRaises(RuntimeError):
+                    compatibility.validate_manifest(value)
+
     def test_manifest_rejects_missing_extra_and_duplicate_versions(self):
         for versions in (["3.12", "3.13", "3.14"], ["3.12", "3.13", "3.14", "3.15", "3.16"],
                          ["3.12", "3.13", "3.14", "3.14"]):

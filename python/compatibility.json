@@ -61,6 +61,7 @@
       "id": "windows-arm64",
       "platform_tag": "win_arm64",
       "runner": "windows-11-arm",
+      "msvc_toolset": "14.44",
       "architecture": "arm64",
       "jobs": 4,
       "timeout_minutes": 120,

@@ -68,7 +68,8 @@ def validate_manifest(value: dict) -> dict:
         found.add(name)
         tag, runner, architecture = _PLATFORMS[name]
         extra = ({"image", "image_architecture", "minimum_glibc"} if name.startswith("linux-")
-                 else {"minimum_macos"} if name == "macos-arm64" else set())
+                 else {"minimum_macos"} if name == "macos-arm64"
+                 else {"msvc_toolset"} if name == "windows-arm64" else set())
         allowed = common | extra | ({"image_config_sha256"} if name.startswith("linux-") else set())
         if (not common | extra <= row.keys() or not row.keys() <= allowed
                 or (row["platform_tag"], row["runner"], row["architecture"]) != (tag, runner, architecture)
@@ -89,6 +90,8 @@ def validate_manifest(value: dict) -> dict:
                 raise RuntimeError("Linux builds require a pinned, matching native manylinux 2.28 image")
         if name == "macos-arm64" and row["minimum_macos"] != "15.0":
             raise RuntimeError("macOS ARM64 wheels must retain deployment target 15.0")
+        if name == "windows-arm64" and row["msvc_toolset"] != "14.44":
+            raise RuntimeError("Windows ARM64 qualification requires the reviewed MSVC 14.44 toolset")
         environments = row["consumers"]
         expected = _CONSUMERS[name]
         if not isinstance(environments, list) or len(environments) != len(expected):

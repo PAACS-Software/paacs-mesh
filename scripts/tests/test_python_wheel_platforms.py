@@ -233,6 +233,79 @@ class ToolchainAndConsumerTests(unittest.TestCase):
                 (root / "new/VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt").write_text("14.99", encoding="utf-8")
                 self.assertIn(str((root / "old").resolve()), build.cmake_generator()[4])
 
+    def test_explicit_toolset_selects_installed_older_native_compiler_and_matching_crt(self):
+        capabilities = {"generators": [{"name": "Visual Studio 17 2022"}, {"name": "Visual Studio 18 2026"}]}
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            installed = [installation(root / "vs17", "17.14", "14.44.35207"),
+                         installation(root / "vs18", "18.12", "14.52.37025")]
+            selected_root = root / "vs18"
+            older = selected_root / "VC/Tools/MSVC/14.44.35207/bin/Hostarm64/arm64/cl.exe"
+            older.parent.mkdir(parents=True)
+            older.write_bytes(b"older native compiler")
+            (selected_root / "VC/Auxiliary/Build/Microsoft.VCToolsVersion.v143.default.txt").write_text("14.44.35207", encoding="utf-8")
+            for version in ("14.44.35112", "14.52.37025"):
+                runtime = selected_root / f"VC/Redist/MSVC/{version}/arm64/Microsoft.VC143.CRT"
+                runtime.mkdir(parents=True)
+                (runtime / "msvcp140.dll").write_bytes(image("pe", "arm64"))
+            with (patch.object(build, "host_platform", return_value="windows-arm64"),
+                  patch.object(build.platform, "machine", return_value="ARM64"),
+                  patch.object(build, "_visual_studio_installations", return_value=installed),
+                  patch.object(build.subprocess, "check_output", return_value=json.dumps(capabilities)),
+                  patch.dict(os.environ, {}, clear=True)):
+                self.assertEqual(build.visual_studio_toolchain()["tools_version"], "14.52.37025")
+                with patch.dict(os.environ, {"PAACS_MSVC_TOOLSET": "14.44"}):
+                    actual = build.visual_studio_toolchain()
+                    self.assertEqual(actual["installation"], str(selected_root.resolve()))
+                    self.assertEqual(actual["compiler"], str(older.resolve()))
+                    self.assertEqual(actual["requested_toolset"], "14.44")
+                    self.assertEqual(actual["host_architecture"], "arm64")
+                    self.assertEqual(actual["redist_version"], "14.44.35112")
+                    arguments = build.cmake_generator()
+                    self.assertEqual(arguments[-2:], ["-T", "v143,version=14.44,host=ARM64"])
+                    self.assertEqual(build.runtime_directory(None),
+                        (selected_root / "VC/Redist/MSVC/14.44.35112/arm64/Microsoft.VC143.CRT").resolve())
+                with patch.dict(os.environ, {"PAACS_MSVC_TOOLSET": "14.43"}), self.assertRaises(RuntimeError):
+                    build.visual_studio_toolchain()
+                with patch.dict(os.environ, {"PAACS_MSVC_TOOLSET": "invalid"}), self.assertRaisesRegex(RuntimeError, "numeric"):
+                    build.visual_studio_toolchain()
+
+    def test_requested_arm_toolset_can_use_matching_x64_host_cross_compiler(self):
+        capabilities = {"generators": [{"name": "Visual Studio 18 2026"}]}
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            installed = installation(root, "18.12", "14.44.35207")
+            (root / "VC/Tools/MSVC/14.44.35207/bin/Hostarm64/arm64/cl.exe").unlink()
+            (root / "VC/Auxiliary/Build/Microsoft.VCToolsVersion.v143.default.txt").write_text("14.44.35207", encoding="utf-8")
+            with (patch.object(build.platform, "machine", return_value="ARM64"),
+                  patch.object(build, "_visual_studio_installations", return_value=[installed]),
+                  patch.object(build.subprocess, "check_output", return_value=json.dumps(capabilities)),
+                  patch.dict(os.environ, {"PAACS_MSVC_TOOLSET": "14.44"}, clear=True)):
+                self.assertEqual(build.cmake_generator("windows-arm64")[-1], "v143,version=14.44,host=x64")
+
+    def test_wheel_backend_receives_the_same_cmake_toolset_as_the_sdk(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config = root / "sdk-config"
+            config.mkdir()
+            (config / "OpenCASCADEConfig.cmake").write_text("", encoding="utf-8")
+            toolset = "v143,version=14.44,host=ARM64"
+            generator = ["-G", "Visual Studio 18 2026", "-A", "ARM64",
+                         "-DCMAKE_GENERATOR_INSTANCE:INTERNAL=" + str(root), "-T", toolset]
+            arguments = ["builder", "--build-dir", str(root / "build"), "--out-dir", str(root / "dist"),
+                         "--occt-dir", str(config)]
+            with (patch.object(build.sys, "argv", arguments), patch.object(build.sys, "platform", "win32"),
+                  patch.object(build, "host_platform", return_value="windows-arm64"),
+                  patch.object(build, "cmake_generator", return_value=generator),
+                  patch.object(build, "run", side_effect=RuntimeError("stop before compilation")) as call):
+                with self.assertRaisesRegex(RuntimeError, "stop before compilation"):
+                    build.main()
+                command = call.call_args.args[0]
+                environment = call.call_args.kwargs["env"]
+                self.assertEqual(environment["CMAKE_GENERATOR_TOOLSET"], toolset)
+                self.assertIn("-Ccmake.define.CMAKE_GENERATOR_TOOLSET=" + toolset, command)
+                self.assertIn("-Ccmake.define.CMAKE_GENERATOR_INSTANCE=" + str(root), command)
+
     def test_native_cli_copies_only_its_native_crt_dependency_closure(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -174,6 +174,9 @@ def visual_studio_toolchain(selected: str | None = None) -> dict:
             generators[int(match.group(1))] = item["name"]
     requested = os.environ.get("CMAKE_GENERATOR")
     requested_instance = os.environ.get("CMAKE_GENERATOR_INSTANCE")
+    requested_toolset = os.environ.get("PAACS_MSVC_TOOLSET", "")
+    if requested_toolset and not re.fullmatch(r"\d+\.\d+(?:\.\d+)?", requested_toolset):
+        raise RuntimeError("PAACS_MSVC_TOOLSET must name an installed numeric toolset version, for example 14.44")
     candidates = []
     for installation in _visual_studio_installations():
         version = _numeric_version(installation.get("installationVersion", ""))
@@ -189,9 +192,12 @@ def visual_studio_toolchain(selected: str | None = None) -> dict:
         defaults = root / "VC/Auxiliary/Build"
         default_file = defaults / "Microsoft.VCToolsVersion.default.txt"
         default_version = default_file.read_text(encoding="utf-8-sig").strip() if default_file.is_file() else None
-        toolsets = [tools / default_version] if default_version else sorted(
+        toolsets = [tools / default_version] if default_version and not requested_toolset else sorted(
             (entry for entry in tools.glob("*") if _numeric_version(entry.name)),
             key=lambda entry: _numeric_version(entry.name), reverse=True)
+        if requested_toolset:
+            prefix = _numeric_version(requested_toolset)
+            toolsets = [entry for entry in toolsets if _numeric_version(entry.name)[:len(prefix)] == prefix]
         compiler = None
         for toolset in toolsets:
             # Native ARM64 hosts and x64-hosted cross compilers are both valid.
@@ -203,11 +209,38 @@ def visual_studio_toolchain(selected: str | None = None) -> dict:
                 break
         if compiler is None:
             continue
+        actual_tools_version = compiler.parents[3].name
+        cmake_toolset = None
+        if requested_toolset:
+            families = []
+            for entry in defaults.glob("Microsoft.VCToolsVersion.v*.default.*"):
+                match = re.fullmatch(r"Microsoft\.VCToolsVersion\.(v\d+)\.default\.(?:txt|props)", entry.name)
+                if not match:
+                    continue
+                contents = entry.read_text(encoding="utf-8-sig")
+                versions = re.findall(r"\b\d+\.\d+(?:\.\d+)+\b", contents)
+                if any(_numeric_version(value)[:2] == _numeric_version(actual_tools_version)[:2] for value in versions):
+                    families.append(match.group(1))
+            if not families:
+                continue
+            cmake_toolset = f"{max(set(families))},version={requested_toolset}"
+        host_architecture = compiler.parent.parent.name[4:].lower()
+        if requested_toolset or host_architecture != ("arm64" if native_host == "hostarm64" else "x64"):
+            host_option = "host=" + ("ARM64" if host_architecture == "arm64" else host_architecture)
+            cmake_toolset = ",".join(value for value in (cmake_toolset, host_option) if value)
         redist_file = defaults / "Microsoft.VCRedistVersion.default.txt"
         redist_version = redist_file.read_text(encoding="utf-8-sig").strip() if redist_file.is_file() else None
+        if requested_toolset:
+            compatible = sorted((entry.name for entry in (root / "VC/Redist/MSVC").glob("*")
+                                 if _numeric_version(entry.name)[:2] == _numeric_version(actual_tools_version)[:2]),
+                                key=_numeric_version, reverse=True)
+            redist_version = compatible[0] if compatible else redist_version
+            if redist_version and _numeric_version(redist_version)[:2] < _numeric_version(actual_tools_version)[:2]:
+                redist_version = None
         record = {"installation": str(root.resolve()), "generator": name, "architecture": architecture,
-                  "compiler": str(compiler.resolve()), "tools_version": compiler.parents[3].name,
-                  "redist_version": redist_version}
+                  "compiler": str(compiler.resolve()), "tools_version": actual_tools_version,
+                  "host_architecture": host_architecture, "requested_toolset": requested_toolset or None,
+                  "toolset": cmake_toolset, "redist_version": redist_version}
         candidates.append((version, str(root).lower(), record))
     if not candidates:
         raise RuntimeError("No installed Visual Studio instance has a supported generator and target C++ compiler")
@@ -220,9 +253,12 @@ def cmake_generator(platform: str | None = None) -> list[str]:
     if not selected.startswith("windows-"):
         return ["-G", "Ninja"]
     selected_toolchain = visual_studio_toolchain(selected)
-    return ["-G", selected_toolchain["generator"], "-A",
-            "ARM64" if selected == "windows-arm64" else "x64",
-            "-DCMAKE_GENERATOR_INSTANCE:INTERNAL=" + selected_toolchain["installation"]]
+    result = ["-G", selected_toolchain["generator"], "-A",
+              "ARM64" if selected == "windows-arm64" else "x64",
+              "-DCMAKE_GENERATOR_INSTANCE:INTERNAL=" + selected_toolchain["installation"]]
+    if selected_toolchain["toolset"]:
+        result.extend(["-T", selected_toolchain["toolset"]])
+    return result
 
 
 def binary_architecture(payload: bytes) -> tuple[str, str]:
@@ -587,9 +623,15 @@ def main() -> None:
         generator = cmake_generator(current_platform)
         env.update(CMAKE_GENERATOR=generator[1], CMAKE_GENERATOR_PLATFORM=generator[3])
         env.pop("CMAKE_GENERATOR_TOOLSET", None)
-        for setting in generator[4:]:
-            key, value = setting.removeprefix("-D").split("=", 1)
-            command.append(f"-Ccmake.define.{key.split(':')[0]}={value}")
+        settings = iter(generator[4:])
+        for setting in settings:
+            if setting == "-T":
+                value = next(settings)
+                env["CMAKE_GENERATOR_TOOLSET"] = value
+                command.append(f"-Ccmake.define.CMAKE_GENERATOR_TOOLSET={value}")
+            else:
+                key, value = setting.removeprefix("-D").split("=", 1)
+                command.append(f"-Ccmake.define.{key.split(':')[0]}={value}")
         command.append("-Ccmake.define.CMAKE_VS_GLOBALS=VcpkgEnabled=false;VcpkgApplocalDeps=false")
     else:
         env["CMAKE_GENERATOR"] = "Ninja"
@@ -615,6 +657,14 @@ def main() -> None:
     prepare_native_runtime(native_cli, sdk, runtime)
     wheel, receipt = repair_wheel(wheels[0], sdk, output, source, runtime)
     receipt["source_revision"] = source_revision(source)
+    if sys.platform == "win32":
+        receipt["toolchain"] = visual_studio_toolchain(current_platform)
+    build_info = build_dir / "cmake/build-info-Release.txt"
+    if not build_info.is_file():
+        raise RuntimeError("The native build omitted its compiler and configuration record")
+    build_info_output = output / "native-build-info.txt"
+    shutil.copyfile(build_info, build_info_output)
+    receipt["build_info"] = {"file": build_info_output.name, "sha256": sha256(build_info_output)}
     if current_platform.startswith("linux-"):
         receipt["minimum_glibc"] = "2.28"
         receipt["build_image"] = os.environ.get("PAACS_MANYLINUX_IMAGE")

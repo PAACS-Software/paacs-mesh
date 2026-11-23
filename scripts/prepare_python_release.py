@@ -170,11 +170,55 @@ def artifact_directories(directory: Path, expected: set[str]):
         raise RuntimeError("Release artifact directories do not match the complete compatibility matrix")
 
 
+def check_build_info(directory: Path, receipt: dict, row: dict, version: str):
+    """Bind release-only compiler/configuration evidence to the qualified wheel."""
+    record = receipt.get("build_info")
+    if (not isinstance(record, dict) or record.get("file") != "native-build-info.txt"
+            or not re.fullmatch(r"[0-9a-f]{64}", str(record.get("sha256")))):
+        raise RuntimeError("The wheel lacks hash-bound native compiler and configuration evidence")
+    path = checked_file(directory, record)
+    if path.stat().st_size > 65_536:
+        raise RuntimeError("Native build information exceeds its metadata budget")
+    fields = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        if key in fields:
+            raise RuntimeError("Native build information contains duplicate evidence fields")
+        fields[key] = value
+    expected = {"release": version, "cmake": "4.4.3", "standard": "23", "configuration": "Release",
+                "strict_fp": "ON", "ipo": "OFF", "native": "OFF", "sanitizer": "none"}
+    if any(fields.get(key) != value for key, value in expected.items()) or "flags" not in fields:
+        raise RuntimeError("The native wheel build does not match its qualified release configuration")
+    if any(flag in fields["flags"] for flag in ("/fp:fast", "-ffast-math", "-Ofast", "-march=native",
+                                               "-funsafe-math-optimizations")):
+        raise RuntimeError("The native wheel build enables unqualified floating-point or CPU flags")
+    compiler = re.fullmatch(r"(MSVC|GNU|Clang|AppleClang) ([0-9]+(?:\.[0-9]+)+)", fields.get("compiler", ""))
+    platform = row["platform"]
+    permitted = {"MSVC"} if platform.startswith("windows-") else {"AppleClang"} if platform == "macos-arm64" else {"GNU", "Clang"}
+    if compiler is None or compiler[1] not in permitted:
+        raise RuntimeError("The actual native compiler does not match its wheel platform")
+    if platform.startswith("windows-"):
+        toolchain = receipt.get("toolchain", {})
+        if not isinstance(toolchain, dict):
+            raise RuntimeError("The Windows wheel omits its selected toolchain evidence")
+        tools = re.fullmatch(r"14\.([0-9]+)(?:\.[0-9]+)+", str(toolchain.get("tools_version", "")))
+        native = compiler[2].split(".")
+        if tools is None or native[:2] != ["19", tools[1]]:
+            raise RuntimeError("Selected Windows tools and actual native compiler versions differ")
+        requested = row.get("msvc_toolset")
+        if requested and (toolchain.get("requested_toolset") != requested or "14." + tools[1] != requested):
+            raise RuntimeError("The actual Windows ARM64 compiler does not match its pinned toolset")
+    return path
+
+
 def assemble(source: Path, builders: Path, consumers: Path, expected: str, output: Path):
     expected_revision(expected)
     if output.exists():
         raise RuntimeError("Refusing to overwrite an existing release staging directory")
-    version = Version((source / "VERSION.txt").read_text(encoding="utf-8").strip())
+    source_version = (source / "VERSION.txt").read_text(encoding="utf-8").strip()
+    version = Version(source_version)
     pin = occt_pin(source)
     artifact_directories(builders, set(ARTIFACTS.values()))
     artifact_directories(consumers, {row["consumer_artifact"] for row in CONSUMERS.values()})
@@ -194,6 +238,7 @@ def assemble(source: Path, builders: Path, consumers: Path, expected: str, outpu
         if list(directory.glob("*.whl")) != [wheel]:
             raise RuntimeError("Builder artifact must contain exactly its qualified wheel")
         wheel_metadata(wheel, version, platform, row["python"])
+        build_info = check_build_info(directory, receipt, row, source_version)
         target_consumers = [item for item in CONSUMERS.values() if item["target_id"] == identifier]
         consumer_evidence = {}
         for consumer_row in target_consumers:
@@ -202,6 +247,8 @@ def assemble(source: Path, builders: Path, consumers: Path, expected: str, outpu
             check_source(consumer, expected)
             receipt_target(consumer, consumer_row, consumer=True)
             if (consumer.get("wheel") != wheel.name or consumer.get("sha256") != receipt["sha256"]
+                    or consumer.get("build_info") != receipt["build_info"]
+                    or consumer.get("toolchain") != receipt.get("toolchain")
                     or not str(consumer.get("qualification", "")).startswith("passed ")):
                 raise RuntimeError("The independent consumer did not qualify this exact wheel")
             tests_passed(consumer.get("installed_tests", {}))
@@ -219,7 +266,8 @@ def assemble(source: Path, builders: Path, consumers: Path, expected: str, outpu
         parity_result = load(parity)
         if parity_result.get("status") != "passed" or len(parity_result.get("cases", [])) != 3:
             raise RuntimeError("Native/Python parity qualification is missing")
-        evidence[identifier] = {"builder": receipt_path, "parity": parity, "dependencies": audit}
+        evidence[identifier] = {"builder": receipt_path, "parity": parity, "dependencies": audit,
+                                "native-build-info": build_info}
         for consumer_id, consumer_path in consumer_evidence.items():
             evidence[consumer_id] = {"consumer": consumer_path}
         qualified[identifier] = {"wheel": wheel.name, "platform": platform, "python": row["python"],
