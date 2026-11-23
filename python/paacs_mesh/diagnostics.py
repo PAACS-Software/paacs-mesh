@@ -20,7 +20,8 @@ _QUALITY = ("metric", "complete", "valid", "minimum", "percentile_1", "percentil
 _BODY = ("solid_tag", "route", "reason", "surface_reason", "volume_reason", "cad_volume",
          "mesh_volume", "relative_volume_error", "maximum_boundary_node_error",
          "maximum_boundary_sample_error", "surface_chord_error_limit",
-         "boundary_embedding_certified", "centroid_outside_distance_limit", "native_centroids_checked")
+         "boundary_embedding_certified", "centroid_outside_distance_limit", "native_centroids_checked",
+         "initial_front", "surface_spacing")
 
 
 def capabilities():
@@ -41,6 +42,11 @@ def capabilities():
                       "inspection_page_limit": 1000},
         "controls": {"global_size": True, "face_size": True, "box_size": True,
                      "minimum_size": True, "growth": True,
+                     "construction_efforts": ["legacy", "auto", "thorough"],
+                     "construction_default": "legacy",
+                     "construction_stage_caps": ["max_surface_points", "max_surface_chord_points",
+                                                 "max_interior_candidates", "max_interior_sites"],
+                     "construction_caps_override_overall_resources": False,
                      "spatial_sizing_requires": {"solids": 1, "assembly": "conforming", "cell_family": "Tet4"}},
         "recovery": {"default": "standard", "experimental": "advanced",
                      "recipe_retries": "explicit_bounded_diagnostic_selection"},
@@ -195,7 +201,7 @@ def diagnose(report_or_mesh, *, max_issues=32):
     interferences = _records(native.get("interferences", []), "interferences")
     issues, total, severities = [], 0, set()
 
-    def issue(code, severity, evidence, *, scope="mesh", tags=(), actions=()):
+    def issue(code, severity, evidence, *, scope="mesh", tags=(), face_tags=(), actions=()):
         nonlocal total
         total += 1
         severities.add(severity)
@@ -205,7 +211,7 @@ def diagnose(report_or_mesh, *, max_issues=32):
         identity = json.dumps([source, code, scope, body_tags], separators=(",", ":"))
         issues.append({"id": hashlib.sha256(identity.encode("utf-8")).hexdigest()[:24],
                        "code": code, "severity": severity, "scope": scope,
-                       "body_tags": body_tags, "cad_face_tags": [], "cell_ids": [],
+                       "body_tags": body_tags, "cad_face_tags": list(face_tags), "cell_ids": [],
                        "evidence": evidence, "candidate_actions": list(actions)})
 
     published = native.get("mesh_published") is True
@@ -261,6 +267,44 @@ def diagnose(report_or_mesh, *, max_issues=32):
                   {key: body.get(key) for key in ("reason", "surface_reason", "volume_reason", "route")},
                   scope="body", tags=() if tag is None else (tag,),
                   actions=("inspect_body_and_native_stage", "review_explicit_recipe_retry_policy"))
+        surface = _records(body.get("surface_spacing", []), "surface_spacing")
+        for row in surface:
+            for name in ("budget_limited", "queue_exhausted"):
+                if name in row and not isinstance(row[name], bool):
+                    raise ValueError(f"surface_spacing.{name} must be bool")
+        limited, limited_count, limited_faces, faces_truncated = [], 0, set(), False
+        for row in surface:
+            if row.get("budget_limited") is not True:
+                continue
+            limited_count += 1
+            if len(limited) < maximum:
+                limited.append(row)
+            face = row.get("face_tag")
+            if isinstance(face, int) and not isinstance(face, bool) and face > 0:
+                if face in limited_faces or len(limited_faces) < maximum:
+                    limited_faces.add(face)
+                else:
+                    faces_truncated = True
+        initial = _mapping(body.get("initial_front", {}), "initial_front")
+        if initial.get("budget_reason") is not None and not isinstance(initial["budget_reason"], str):
+            raise ValueError("initial_front.budget_reason must be a string or null")
+        initial_limited = (initial.get("diagnostic") == "budget_limited"
+                           and initial.get("budget_reason") not in (None, "none"))
+        if limited_count or initial_limited:
+            face_tags = sorted(limited_faces)
+            issue("construction_budget_limited", "warning", {
+                "surface_stages": limited,
+                "surface_stages_total": limited_count,
+                "surface_stages_truncated": limited_count > len(limited),
+                "cad_face_tags_truncated": faces_truncated,
+                "initial_stage": {key: initial.get(key) for key in ("budget_reason", "candidate_limit", "site_limit",
+                    "query_limit", "work_limit", "candidates", "nodes", "work", "queries",
+                    "reserved_bulk_candidates", "reserved_bulk_sites", "source_phase_deferred")}
+                    if initial_limited else None,
+                "sizing_completion_certified": False,
+                "native_validity_gates_changed": False}, scope="body", tags=() if tag is None else (tag,),
+                face_tags=face_tags, actions=("review_construction_limits_and_requested_size",
+                                            "measure_achieved_sizing_before_raising_limits"))
     for pair in interferences:
         state = pair.get("state")
         if state not in ("material_overlap", "no_material_overlap", "unresolved"):
@@ -292,6 +336,14 @@ def diagnose(report_or_mesh, *, max_issues=32):
         status = "incomplete"
     else:
         status = "valid_with_warnings" if "warning" in severities else "valid"
+    def body_summary(body):
+        summary = {key: body.get(key) for key in _BODY}
+        if "surface_spacing" in body:
+            rows = body["surface_spacing"]
+            summary.update(surface_spacing=rows[:maximum], surface_spacing_total=len(rows),
+                           surface_spacing_truncated=len(rows) > maximum)
+        return summary
+
     result = {
         "schema": DIAGNOSTIC_SCHEMA, "status": status, "source_sha256": source, "units": "mm",
         "validation": {"basis": "reported_native_checks", "native_audit_complete": audit.get("complete") is True,
@@ -303,8 +355,9 @@ def diagnose(report_or_mesh, *, max_issues=32):
         "summary": {"nodes": native.get("nodes"), "cells": native.get("cells"),
                     "tetrahedra": native.get("tetrahedra"),
                     "native_hint": native.get("hint"),
+                    "construction": native.get("construction"),
                     "quality": {key: quality.get(key) for key in _QUALITY}},
-        "bodies": [{key: body.get(key) for key in _BODY} for body in bodies[:maximum]],
+        "bodies": [body_summary(body) for body in bodies[:maximum]],
         "bodies_truncated": len(bodies) > maximum,
         "timings": {"native_seconds": native.get("seconds"),
                     "workflow_seconds": None if workflow is None else workflow.get("seconds"),

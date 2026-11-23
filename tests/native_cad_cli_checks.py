@@ -180,7 +180,10 @@ def main():
                 or seed.get("wall_nodes", 0) + seed.get("void_nodes", 0) > seed.get("nodes", 0)
                 or seed.get("void_candidates", 0) < seed.get("void_nodes", 0)
                 or not isinstance(seed.get("void_queue_exhausted"), bool)
-                or seed.get("maximum_unresolved_void_ratio", -1) < 0
+                or (seed.get("maximum_unresolved_void_ratio", -1) is None
+                    and seed.get("void_queue_exhausted") is not False)
+                or (seed.get("maximum_unresolved_void_ratio", -1) is not None
+                    and seed.get("maximum_unresolved_void_ratio", -1) < 0)
                 or seed.get("delaunay_commits") != seed.get("nodes")
                 or seed.get("full_certifications", 0) < seed.get("delaunay_commits", 0)
                 or seed.get("maximum_planned_cavity", 0) <= 64

@@ -23,6 +23,22 @@ _KINDS = {"faces": 2, "bodies": 3, "edges": 1, "vertices": 0}
 _QUERY_FIELDS = {"tags", "name", "group", "surface", "body", "area", "radius",
                  "centroid_box", "normal", "adjacent_to", "expect", "tolerance"}
 _MAX_FACE_CONTROLS = 10000
+_DEFAULT_CONSTRUCTION_EFFORT = "legacy"
+_CONSTRUCTION_LIMITS = ("max_surface_points", "max_surface_chord_points",
+                        "max_interior_candidates", "max_interior_sites")
+_CONSTRUCTION_FIELDS = ("construction_effort", *_CONSTRUCTION_LIMITS)
+
+
+def _construction_options(construction_effort=_DEFAULT_CONSTRUCTION_EFFORT, *, max_surface_points=None,
+                          max_surface_chord_points=None, max_interior_candidates=None,
+                          max_interior_sites=None):
+    if not isinstance(construction_effort, str) or construction_effort not in ("legacy", "auto", "thorough"):
+        raise ValueError("construction_effort must be legacy, auto or thorough")
+    result = {"construction_effort": construction_effort}
+    for name, value in zip(_CONSTRUCTION_LIMITS, (max_surface_points, max_surface_chord_points,
+                                                max_interior_candidates, max_interior_sites)):
+        result[name] = None if value is None else integer(value, name)
+    return result
 
 
 def _tags(value, name):
@@ -270,7 +286,9 @@ class CadModel:
              max_audit_bytes=None, max_seconds=None, face_sizes=None,
              selected_face_sizes=(), volume_controls=None, min_size=None, growth=1.3,
              native_sizing=None, warning_quality=None, minimum_quality=None,
-             advancing_interior_front=None):
+             advancing_interior_front=None, construction_effort=_DEFAULT_CONSTRUCTION_EFFORT,
+             max_surface_points=None, max_surface_chord_points=None,
+             max_interior_candidates=None, max_interior_sites=None):
         """Generate an owned, audited Tet4 mesh; lengths and sizes are in mm.
 
         ``face_sizes`` contains native ``FaceSize`` controls. Alternatively,
@@ -285,8 +303,16 @@ class CadModel:
         cooperative and starts after the native operation gate is acquired.
         Quality warnings do not replace validity checks. Native refusal reasons
         and hints remain available on ``MeshingError.report``.
+
+        Construction effort controls bounded construction allowances. ``legacy``
+        retains the established defaults. Optional positive integer caps override
+        individual allowances within the existing global budgets; they do not
+        select a recovery mode or weaken geometry and validity checks.
         """
         self._assert_identity()
+        construction = _construction_options(construction_effort,
+            max_surface_points=max_surface_points, max_surface_chord_points=max_surface_chord_points,
+            max_interior_candidates=max_interior_candidates, max_interior_sites=max_interior_sites)
         selected = _selected_face_controls(self, selected_face_sizes)
         if selected:
             existing = sequence(() if face_sizes is None else face_sizes, "face_sizes")
@@ -302,7 +328,7 @@ class CadModel:
             max_seconds=max_seconds, face_sizes=face_sizes, volume_controls=volume_controls,
             min_size=min_size, growth=growth, native_sizing=native_sizing,
             warning_quality=warning_quality, minimum_quality=minimum_quality,
-            advancing_interior_front=advancing_interior_front)
+            advancing_interior_front=advancing_interior_front, **construction)
 
     def preview(self, selection=None, *, linear_deflection=.02, max_points=50000, max_triangles=100000):
         """Return owned, tagged display geometry for visual selection checks."""

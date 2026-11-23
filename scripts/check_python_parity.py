@@ -54,6 +54,14 @@ def main():
         }, ["--native-sizing", "--growth", "1.55", "--face-size", "1", ".16",
             "--size-box", "-.3", "-.3", ".7", ".3", ".3", "1.3", ".15",
             "--min-size", ".12", "--max-work", "100000000"]),
+        ("construction-caps", "cylinder.step", .5, {
+            "assembly": "conforming", "construction_effort": "thorough",
+            "max_surface_points": 400, "max_surface_chord_points": 128,
+            "max_interior_candidates": 20000, "max_interior_sites": 256,
+            "max_work": 100_000_000,
+        }, ["--construction-effort", "thorough", "--max-surface-points", "400",
+            "--max-surface-chord-points", "128", "--max-interior-candidates", "20000",
+            "--max-interior-sites", "256", "--max-work", "100000000"]),
     ]
     results = []
     with tempfile.TemporaryDirectory(prefix="paacs-native-parity-") as directory:
@@ -79,6 +87,18 @@ def main():
             python_hash, native_hash = digest(python_archive), digest(native_archive)
             if python_hash != native_hash:
                 raise RuntimeError(f"Python and native CLI archives differ for {name}")
+            if name == "construction-caps":
+                native_reports = []
+                for line in child.stdout.splitlines():
+                    try:
+                        value = json.loads(line)
+                    except ValueError:
+                        continue
+                    if isinstance(value, dict) and value.get("schema") == "paacs-native-cad-report-v1":
+                        native_reports.append(value)
+                requested = {key: value for key, value in report["construction"].items() if key != "scope"}
+                if len(native_reports) != 1 or native_reports[0].get("construction") != requested:
+                    raise RuntimeError("Python and native CLI construction receipts differ")
             results.append({
                 "case": name, "source": filename, "source_sha256": digest(step),
                 "archives_identical": True, "archive_sha256": python_hash,

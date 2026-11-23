@@ -298,6 +298,7 @@ struct MeshResult {
     std::optional<bool> requestedAdvancingInteriorFront;
     double warningQuality = 0, minimumQuality = 0;
     unsigned workers = 1, validationWorkers = 1;
+    geo::CadConstructionBudget construction;
 
     std::vector<int> tags(int dimension) const {
         std::set<int> found;
@@ -324,6 +325,18 @@ struct MeshResult {
         r["requested_advancing_interior_front"] = py::cast(requestedAdvancingInteriorFront);
         r["initial_front_fallback"] = initialFallbackReport(outcome.initialFrontFallback);
         r["sizing"] = sizing.report(requestedSize);
+        py::dict constructionReport;
+        constructionReport["effort"] = construction.effort==geo::CadConstructionEffort::Legacy?"legacy":
+            construction.effort==geo::CadConstructionEffort::Automatic?"auto":"thorough";
+        const auto requestedCap=[](std::uint64_t value)->py::object {
+            return value?py::object(py::int_(value)):py::object(py::none());
+        };
+        constructionReport["max_surface_points"] = requestedCap(construction.surfacePointsPerFace);
+        constructionReport["max_surface_chord_points"] = requestedCap(construction.surfaceChordPointsPerFace);
+        constructionReport["max_interior_candidates"] = requestedCap(construction.interiorCandidates);
+        constructionReport["max_interior_sites"] = requestedCap(construction.interiorSites);
+        constructionReport["scope"] = "stage ceilings subordinate to overall resource limits; not a sizing certificate";
+        r["construction"] = std::move(constructionReport);
         r["workers"] = workers;
         r["validation_workers"] = validationWorkers;
         // Early refusals may retain the native outcome's default policy. With
@@ -385,6 +398,10 @@ struct MeshResult {
             b["reason"] = geo::nativeCadMeshReasonName(body.reason);
             b["surface_reason"] = body.nativeSurfaceReason;
             b["volume_reason"] = body.nativeVolumeReason;
+            b["native_surface_work"] = body.nativeSurfaceWork;
+            b["native_volume_work"] = body.nativeVolumeWork;
+            b["native_surface_seconds"] = finiteValue(body.nativeSurfaceSeconds);
+            b["native_volume_seconds"] = finiteValue(body.nativeVolumeSeconds);
             b["cad_volume"] = finiteValue(body.cadVolume);
             b["mesh_volume"] = finiteValue(body.meshVolume);
             b["relative_volume_error"] = finiteValue(body.relativeVolumeError);
@@ -411,7 +428,34 @@ struct MeshResult {
             placement["delaunay_commits"] = initial.delaunayCommits;
             placement["full_certifications"] = initial.fullCertifications;
             placement["seconds"] = finiteValue(initial.seconds);
+            placement["budget_reason"] = initial.budgetReason;
+            placement["candidate_limit"] = initial.candidateLimit;
+            placement["site_limit"] = initial.siteLimit;
+            placement["query_limit"] = initial.queryLimit;
+            placement["work_limit"] = initial.workLimit;
+            placement["reserved_bulk_candidates"] = initial.reservedBulkCandidates;
+            placement["reserved_bulk_sites"] = initial.reservedBulkSites;
+            placement["source_candidates"] = initial.sourceCandidates;
+            placement["source_deferred_faces"] = initial.sourceDeferredFaces;
+            placement["source_phase_deferred"] = initial.sourcePhaseDeferred;
             b["initial_front"] = std::move(placement);
+            py::list surfaceSpacing;
+            for(const auto& face:body.surfaceSpacing){
+                py::dict row;
+                row["face_tag"]=face.faceTag;
+                row["point_limit"]=face.pointLimit;
+                row["chord_point_limit"]=face.chordPointLimit;
+                row["chart_node_limit"]=face.chartNodeLimit;
+                row["added_points"]=face.addedPoints;
+                row["chord_added_points"]=face.chordAddedPoints;
+                row["pending_entries"]=face.pendingEntries;
+                row["blocked_candidates"]=face.blockedCandidates;
+                row["termination"]=face.termination;
+                row["queue_exhausted"]=face.queueExhausted;
+                row["budget_limited"]=face.budgetLimited;
+                surfaceSpacing.append(std::move(row));
+            }
+            b["surface_spacing"]=std::move(surfaceSpacing);
             b["initial_front_fallback"] = initialFallbackReport(body.initialFrontFallback);
             // This is the native adaptive stage after the initial point set.
             // Its diagnostic distinguishes completion from a bounded stop;
@@ -538,9 +582,20 @@ struct CadModel {
         const py::object& faceSizes, const py::object& volumeControls,
         const py::object& minimumSize, const py::object& growth,
         const py::object& nativeSizing, const py::object& warningQuality,
-        const py::object& minimumQuality, const py::object& advancingInteriorFront) {
+        const py::object& minimumQuality, const py::object& advancingInteriorFront,
+        const std::string& constructionEffort, const py::object& maxSurfacePoints,
+        const py::object& maxSurfaceChordPoints, const py::object& maxInteriorCandidates,
+        const py::object& maxInteriorSites) {
         geo::NativeCadMeshOptions options;
         options.geometry.targetSize = positiveNumber(size, "size");
+        if(constructionEffort=="legacy")options.construction.effort=geo::CadConstructionEffort::Legacy;
+        else if(constructionEffort=="auto")options.construction.effort=geo::CadConstructionEffort::Automatic;
+        else if(constructionEffort=="thorough")options.construction.effort=geo::CadConstructionEffort::Thorough;
+        else throw py::value_error("construction_effort must be 'legacy', 'auto' or 'thorough'");
+        if(!maxSurfacePoints.is_none())options.construction.surfacePointsPerFace=positiveInteger(maxSurfacePoints,"max_surface_points");
+        if(!maxSurfaceChordPoints.is_none())options.construction.surfaceChordPointsPerFace=positiveInteger(maxSurfaceChordPoints,"max_surface_chord_points");
+        if(!maxInteriorCandidates.is_none())options.construction.interiorCandidates=positiveInteger(maxInteriorCandidates,"max_interior_candidates");
+        if(!maxInteriorSites.is_none())options.construction.interiorSites=positiveInteger(maxInteriorSites,"max_interior_sites");
         if (!advancingInteriorFront.is_none()) {
             if (!py::isinstance<py::bool_>(advancingInteriorFront))
                 throw py::type_error("advancing_interior_front must be bool or None");
@@ -624,6 +679,7 @@ struct CadModel {
         result->recovery = recovery;
         result->requestedAssembly = assembly;
         result->sizing = std::move(sizing);
+        result->construction = options.construction;
         result->requestedWarningQuality = requestedWarningQuality;
         result->requestedMinimumQuality = requestedMinimumQuality;
         result->requestedAdvancingInteriorFront = requestedPlacement;
@@ -924,6 +980,9 @@ PYBIND11_MODULE(_native, m) {
              py::arg("min_size") = py::none(), py::arg("growth") = py::float_(1.3),
              py::arg("native_sizing") = py::none(),
              py::arg("warning_quality") = py::none(), py::arg("minimum_quality") = py::none(),
-             py::arg("advancing_interior_front") = py::none());
+             py::arg("advancing_interior_front") = py::none(),
+             py::arg("construction_effort") = "legacy",
+             py::arg("max_surface_points") = py::none(), py::arg("max_surface_chord_points") = py::none(),
+             py::arg("max_interior_candidates") = py::none(), py::arg("max_interior_sites") = py::none());
     m.def("read_step", &readStep, py::arg("path"), py::kw_only(), py::arg("max_file_bytes") = py::none(), py::arg("names") = true, py::arg("retain_source") = false);
 }

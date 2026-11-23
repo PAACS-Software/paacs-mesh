@@ -21,6 +21,7 @@ from ._cad_common import MAX_JSON_BYTES, json_text, load_json
 from .diagnostics import capabilities, diagnose, format_diagnostics
 from .mesh_archive import CELL_NAMES, atomic_bytes
 from .mesh_inspection import METRICS
+from .cad import _CONSTRUCTION_LIMITS, _DEFAULT_CONSTRUCTION_EFFORT
 
 
 _COMMANDS = ("capabilities", "inspect", "diagnose", "run", "inspect-mesh", "visualize", "compare")
@@ -69,6 +70,24 @@ def _json(value, *, stream=None):
     print(payload, file=stream)
 
 
+def _construction_cap(value):
+    try:
+        result = int(value)
+    except (TypeError, ValueError) as error:
+        raise argparse.ArgumentTypeError("construction caps must be positive integers") from error
+    if not 1 <= result <= 2 ** 63 - 1:
+        raise argparse.ArgumentTypeError("construction caps must be positive integers below 2^63")
+    return result
+
+
+def _construction_arguments(parser):
+    parser.add_argument("--construction-effort", choices=("legacy", "auto", "thorough"), default=_DEFAULT_CONSTRUCTION_EFFORT,
+                        help="bounded construction allowance policy (default: %(default)s); validity checks stay enabled")
+    for name in _CONSTRUCTION_LIMITS:
+        parser.add_argument("--" + name.replace("_", "-"), type=_construction_cap,
+                            help="optional positive construction cap; existing global budgets still apply")
+
+
 def _legacy(argv):
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -98,6 +117,7 @@ def _legacy(argv):
                         help="preferred mean-ratio quality in [0,1]; 0 disables warnings")
     parser.add_argument("--minimum-quality", type=float,
                         help="strict minimum mean-ratio quality in [0,1]")
+    _construction_arguments(parser)
     args = parser.parse_args(argv)
     try:
         with _native_output_to_stderr():
@@ -111,7 +131,9 @@ def _legacy(argv):
                               native_sizing=args.native_sizing, max_work=args.max_work,
                               advancing_interior_front=args.advancing_interior_front,
                               max_seconds=args.max_seconds, warning_quality=args.warning_quality,
-                              minimum_quality=args.minimum_quality)
+                              minimum_quality=args.minimum_quality,
+                              construction_effort=args.construction_effort,
+                              **{name: getattr(args, name) for name in _CONSTRUCTION_LIMITS})
             mesh.write(args.output)
         _json(mesh.report)
         return 0

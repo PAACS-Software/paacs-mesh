@@ -16,6 +16,12 @@
 #include <stdexcept>
 
 namespace {
+struct JsonFinite { double value; };
+std::ostream& operator<<(std::ostream& stream,JsonFinite number) {
+    if(std::isfinite(number.value))stream<<number.value;
+    else stream<<"null";
+    return stream;
+}
 template<class T>T number(const char* text) {
     T value{};
     if (!paacs::cli::parseNumber(text, value)) throw std::invalid_argument("invalid number");
@@ -43,6 +49,8 @@ int runNativeCadCli(int argc,char** argv) {
     const auto started=std::chrono::steady_clock::now();
     const auto receipt=[&](const char* status,const char* reason) {
         if(!report)return;
+        const auto& construction=options.construction;
+        const auto cap=[](std::uint64_t value){return value?std::to_string(value):std::string("null");};
         const bool interiorFrontAttempted=std::any_of(result.bodies.begin(),result.bodies.end(),[](const auto& body){
             return body.initialFront.diagnostic&&std::string_view(body.initialFront.diagnostic)!="not_attempted";
         });
@@ -61,6 +69,12 @@ int runNativeCadCli(int argc,char** argv) {
             <<",\"mesh_scope\":\""<<(options.assemblyPolicy==geo::NativeCadAssemblyPolicy::IndependentParts?"independent_parts":"conforming_domain")<<"\""
             <<",\"interbody_nonoverlap_certified\":"<<(result.published&&options.assemblyPolicy==geo::NativeCadAssemblyPolicy::ConformingDomain?"true":"false")
             <<",\"validated_parts\":"<<result.validatedParts
+            <<",\"construction\":{\"effort\":\""<<(construction.effort==geo::CadConstructionEffort::Legacy?"legacy":
+                construction.effort==geo::CadConstructionEffort::Automatic?"auto":"thorough")
+            <<"\",\"max_surface_points\":"<<cap(construction.surfacePointsPerFace)
+            <<",\"max_surface_chord_points\":"<<cap(construction.surfaceChordPointsPerFace)
+            <<",\"max_interior_candidates\":"<<cap(construction.interiorCandidates)
+            <<",\"max_interior_sites\":"<<cap(construction.interiorSites)<<"}"
             <<",\"faces\":"<<cad.faces<<",\"curved_faces\":"<<cad.curvedFaces<<",\"edges\":"<<cad.edges
             <<",\"vertices\":"<<cad.vertices<<",\"nodes\":"<<mesh.nodeCount()<<",\"cells\":"<<mesh.cellCount()
             <<",\"auxiliary_faces\":"<<cad.auxiliaryFaces<<",\"auxiliary_edges\":"<<cad.auxiliaryEdges
@@ -202,9 +216,17 @@ int runNativeCadCli(int argc,char** argv) {
                 <<"\",\"nodes\":"<<b.initialFront.nodes<<",\"candidates\":"<<b.initialFront.candidates
                 <<",\"wall_nodes\":"<<b.initialFront.wallNodes<<",\"void_nodes\":"<<b.initialFront.voidNodes
                 <<",\"void_candidates\":"<<b.initialFront.voidCandidates
+                <<",\"budget_reason\":\""<<b.initialFront.budgetReason<<"\""
+                <<",\"candidate_limit\":"<<b.initialFront.candidateLimit<<",\"site_limit\":"<<b.initialFront.siteLimit
+                <<",\"query_limit\":"<<b.initialFront.queryLimit<<",\"work_limit\":"<<b.initialFront.workLimit
+                <<",\"reserved_bulk_candidates\":"<<b.initialFront.reservedBulkCandidates
+                <<",\"reserved_bulk_sites\":"<<b.initialFront.reservedBulkSites
+                <<",\"source_candidates\":"<<b.initialFront.sourceCandidates
+                <<",\"source_deferred_faces\":"<<b.initialFront.sourceDeferredFaces
+                <<",\"source_phase_deferred\":"<<(b.initialFront.sourcePhaseDeferred?"true":"false")
                 <<",\"source_sweep_complete\":"<<(b.initialFront.sourceSweepComplete?"true":"false")
                 <<",\"void_queue_exhausted\":"<<(b.initialFront.voidQueueExhausted?"true":"false")
-                <<",\"maximum_unresolved_void_ratio\":"<<b.initialFront.maximumUnresolvedVoidRatio
+                <<",\"maximum_unresolved_void_ratio\":"<<JsonFinite{b.initialFront.maximumUnresolvedVoidRatio}
                 <<",\"work\":"<<b.initialFront.work<<",\"queries\":"<<b.initialFront.queries
                 <<",\"cones\":"<<b.initialFront.cones<<",\"reused_apices\":"<<b.initialFront.reusedApices
                 <<",\"source_activations\":"<<b.initialFront.sourceActivations
@@ -244,6 +266,18 @@ int runNativeCadCli(int argc,char** argv) {
                 <<",\"contact_target_edge_tag\":"<<b.contactTargetEdgeTag
                 <<",\"contact_ring_nodes\":"<<b.contactRingNodes
                 <<",\"contact_cylinder_work\":"<<b.contactCylinderWork;
+            std::cout<<",\"surface_spacing\":[";
+            for(std::size_t faceIndex=0;faceIndex<b.surfaceSpacing.size();++faceIndex){
+                if(faceIndex)std::cout<<',';
+                const auto& face=b.surfaceSpacing[faceIndex];
+                std::cout<<"{\"face_tag\":"<<face.faceTag<<",\"point_limit\":"<<face.pointLimit
+                    <<",\"chord_point_limit\":"<<face.chordPointLimit<<",\"chart_node_limit\":"<<face.chartNodeLimit
+                    <<",\"added_points\":"<<face.addedPoints<<",\"chord_added_points\":"<<face.chordAddedPoints
+                    <<",\"pending_entries\":"<<face.pendingEntries<<",\"blocked_candidates\":"<<face.blockedCandidates
+                    <<",\"termination\":\""<<face.termination<<"\",\"queue_exhausted\":"<<(face.queueExhausted?"true":"false")
+                    <<",\"budget_limited\":"<<(face.budgetLimited?"true":"false")<<'}';
+            }
+            std::cout<<']';
             const auto& constraints=b.constraintRecovery;
             std::cout<<",\"constraint_recovery\":{\"diagnostic\":\""<<constraints.diagnostic
                 <<"\",\"candidate_cells\":"<<constraints.candidateCells
@@ -292,7 +326,7 @@ int runNativeCadCli(int argc,char** argv) {
     };
     for(int i=1;i<argc;++i)report|=std::string_view(argv[i])=="--report-json"||std::string_view(argv[i])=="--independent-parts";
     try {
-        if(argc<4)throw std::invalid_argument("usage: paacs-cad-mesh input.step size output.paacsmesh --native-cad [--face-size tag size] [--native-sizing] [--size-box x0 y0 z0 x1 y1 z1 size] [--min-size h] [--growth g] [--report-json] [--trace-native-stages] [--independent-parts] [--local-partition-recovery] [--adaptive-tet-recovery] [--live-material-recovery] [--curvature-points-per-turn 0..64] [--trimmed-ray-witnesses] [--local-delaunay-refinement] [--advancing-interior-front|--no-advancing-interior-front] [--improve-tet-quality] [--improve-surface-spacing] [--regular-surface-front] [--no-improve-regular-quality] [--recovery-mode standard|advanced] [--recovery-seed N] [--recovery-retries 0..4] [--recovery-steiner-candidates 0..64]");
+        if(argc<4)throw std::invalid_argument("usage: paacs-cad-mesh input.step size output.paacsmesh --native-cad [--face-size tag size] [--native-sizing] [--size-box x0 y0 z0 x1 y1 z1 size] [--min-size h] [--growth g] [--report-json] [--trace-native-stages] [--independent-parts] [--local-partition-recovery] [--adaptive-tet-recovery] [--live-material-recovery] [--curvature-points-per-turn 0..64] [--trimmed-ray-witnesses] [--local-delaunay-refinement] [--advancing-interior-front|--no-advancing-interior-front] [--improve-tet-quality] [--improve-surface-spacing] [--regular-surface-front] [--no-improve-regular-quality] [--recovery-mode standard|advanced] [--recovery-seed N] [--recovery-retries 0..4] [--recovery-steiner-candidates 0..64] [--construction-effort legacy|auto|thorough] [--max-surface-points N] [--max-surface-chord-points N] [--max-interior-candidates N] [--max-interior-sites N]");
         options.geometry.targetSize=number<double>(argv[2]);
         for(int i=4;i<argc;++i) {
             const std::string_view a(argv[i]);
@@ -324,6 +358,22 @@ int runNativeCadCli(int argc,char** argv) {
             else if(a=="--improve-tet-quality")options.improveNativeTetQuality=true;
             else if(a=="--advancing-interior-front")options.useAdvancingInteriorFront=true;
             else if(a=="--no-advancing-interior-front")options.useAdvancingInteriorFront=false;
+            else if(a=="--construction-effort"&&i+1<argc){
+                const std::string_view effort(argv[++i]);
+                if(effort=="legacy")options.construction.effort=geo::CadConstructionEffort::Legacy;
+                else if(effort=="auto")options.construction.effort=geo::CadConstructionEffort::Automatic;
+                else if(effort=="thorough")options.construction.effort=geo::CadConstructionEffort::Thorough;
+                else throw std::invalid_argument("construction effort must be legacy, auto or thorough");
+            }
+            else if((a=="--max-surface-points"||a=="--max-surface-chord-points"||
+                     a=="--max-interior-candidates"||a=="--max-interior-sites")&&i+1<argc){
+                const auto value=number<std::uint64_t>(argv[++i]);
+                if(!value)throw std::invalid_argument("construction stage ceilings must be positive");
+                if(a=="--max-surface-points")options.construction.surfacePointsPerFace=value;
+                else if(a=="--max-surface-chord-points")options.construction.surfaceChordPointsPerFace=value;
+                else if(a=="--max-interior-candidates")options.construction.interiorCandidates=value;
+                else options.construction.interiorSites=value;
+            }
             else if(a=="--improve-surface-spacing")options.improveNativeSurfaceSpacing=true;
             else if(a=="--regular-surface-front")options.useRegularSurfaceFront=true;
             else if(a=="--improve-regular-quality")options.improveRegularMeshQuality=true;
