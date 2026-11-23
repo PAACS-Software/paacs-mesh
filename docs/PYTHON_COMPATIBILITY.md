@@ -1,13 +1,37 @@
 # Python compatibility
 
-The published `1.2.0rc2` release supports regular, 64-bit CPython 3.12 on Windows
-x64, macOS ARM64 with a minimum of macOS 15, and Linux x64 with glibc 2.28 or newer.
-It bundles the CAD runtime and installs without a compiler or a separate OCCT SDK.
+The **1.2.0-rc.3 release candidate** supports the expanded matrix below: regular,
+64-bit CPython 3.12–3.15 on five native platforms. Wheels bundle the CAD runtime and
+install without a compiler or a separate OCCT SDK. Package metadata restricts
+Python to `>=3.12,<3.16`; each interpreter still needs its matching binary wheel.
 
-The following expanded matrix is a **development qualification plan**. Its new
-interpreter and architecture combinations are not yet qualified or available on
-PyPI. Development metadata accepts `>=3.12,<3.16` so the candidate wheels can be
-built and tested; metadata alone does not establish binary compatibility.
+The expanded implementation has passed the qualification recorded below.
+Official releases pass the release gates from their own immutable tagged source
+before publication. The previous published `1.2.0rc2` release remains limited to
+CPython 3.12 on Windows x64, macOS ARM64 and Linux x64; its files are unchanged.
+
+## Qualification evidence
+
+[PR #11](https://github.com/PAACS-Software/paacs-mesh/pull/11) qualified the expanded
+implementation at commit `44a22fe00333191e2900d8053958259198d8ca4f`:
+
+- [Python qualification](https://github.com/PAACS-Software/paacs-mesh/actions/runs/45095800374)
+  passed all **55 jobs**: 20 wheel builders, 28 independent consumers, five CAD SDK
+  jobs, matrix generation and release-assembly regression checks.
+- [Native qualification](https://github.com/PAACS-Software/paacs-mesh/actions/runs/45095800447)
+  passed all **seven jobs**, including GCC thread and address/undefined
+  sanitizers and native STEP checks on Windows, Linux and macOS.
+- A local release-assembly dry run verified all 48 downloaded builder/consumer
+  artifacts against their GitHub ZIP digests, assembled the 20 wheels and passed
+  strict Twine metadata checks for every wheel.
+
+The qualified workflow checkout was clean virtual merge
+`3d79164059bfe274d20c810e8c8255296c5fbc7c`, with source tree
+`eca306ca6e2d9b623f9f58af48832749c3a7187f`. That tree matched the reviewed candidate.
+These implementation artifacts used the earlier development version; they are
+evidence for the expanded matrix, not published RC3 files. RC3 is rebuilt and
+qualified again from its own immutable tagged source. The native meshing
+algorithms are unchanged by this distribution expansion.
 
 ## Required artifacts
 
@@ -34,7 +58,7 @@ checks the actual operating system major version, not just the workflow label.
 Its checks remain required. See the [runner announcement](https://github.blog/changelog/2026-09-10-xcode-27-runner-image-now-runs-on-macos-27/)
 and [installed image details](https://github.com/actions/runner-images/blob/main/images/macos/xcode-27-arm64-Readme.md).
 
-This plan excludes Intel macOS, Python 2, 32-bit interpreters, PyPy, debug builds
+This matrix excludes Intel macOS, Python 2, 32-bit interpreters, PyPy, debug builds
 and free-threaded CPython ABIs. Native C++ builds remain independent of the Python
 wheel matrix and continue through their existing regression checks.
 
@@ -43,7 +67,7 @@ wheel matrix and continue through their existing regression checks.
 [python/compatibility.json](../python/compatibility.json) defines the interpreter
 versions, native platforms, pinned Linux images, NumPy checks and consumer
 environments. [scripts/python_compatibility.py](../scripts/python_compatibility.py)
-validates that plan and supplies the build, installation and release gates. An
+validates that matrix and supplies the build, installation and release gates. An
 omitted, duplicated or extra target is an error.
 
 The generated matrices can be inspected locally:
@@ -97,15 +121,15 @@ part of the release process.
 
 ### Windows ARM64 compiler
 
-The Windows ARM64 qualification plan pins MSVC **14.44** for both the shared OCCT
-SDK and the Python bindings. The runner's default MSVC 14.52 compiler crashed
+Windows ARM64 builds pin the MSVC **14.44 toolset** (compiler 19.44) for both the
+shared OCCT SDK and the Python bindings. The runner's default MSVC 14.52 toolset failed
 while compiling OCCT, with a `UtcBldCompileSerializedFile` stack followed by D8040.
 An [upstream runner issue](https://github.com/actions/runner-images/issues/15328)
 reports the same compiler version and stack; selecting 14.44 compiled the same
 source on the same image, and the runner maintainer recommends that workaround
 while investigating.
 
-MSVC 14.52 is a stable release; this pin addresses an observed ARM64 compiler
+MSVC 14.52 is a stable toolset release; this pin addresses an observed ARM64 compiler
 regression. Both build stages select the same installed toolset and record the
 resolved compiler in their SDK context and qualification receipts. The changed
 ARM64 compiler produces a distinct SDK cache fingerprint. Other platforms retain
@@ -113,8 +137,7 @@ their existing toolchain selection.
 
 ## Publication gate
 
-No new package-index release is published as part of this expansion. Before a
-future release, all 20 wheels and 28 independent consumers must pass from one
+RC3 publication requires all 20 wheels and 28 independent consumers to pass from one
 clean immutable source revision, along with the native regression checks and
 release assembly checks. Assembly verifies the exact target set, interpreter and
 platform tags, metadata, source identity, dependency receipts and artifact hashes.
@@ -122,5 +145,8 @@ A missing or failed combination blocks publication, including a failed macOS 27
 preview check. Existing release tags and PyPI files remain immutable.
 
 The [release guide](PYPI_RELEASE.md) describes staging, Trusted Publishing and
-verification of the published files. Support documentation should be updated to
-qualified status only after the corresponding evidence exists.
+verification of the published files. A passing implementation PR does not replace
+qualification of the versioned release source or establish package-index
+availability. Published versions and their checksums identify the files offered
+through the package index; development artifacts retain their own source and
+qualification receipts.

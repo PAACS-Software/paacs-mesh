@@ -9,7 +9,7 @@ Applications can link the core library directly through `PAACS::mesh`. It uses
 the C++ standard library and platform threads. The STEP adapter, CLI tools and
 debug UI bridge are optional.
 
-**Current candidate** · [1.2.0-rc.2](RELEASE_NOTES.md) ·
+**Current candidate** · [1.2.0-rc.3](RELEASE_NOTES.md) ·
 [Validation](docs/RELEASE_READINESS.md) · [Roadmap](docs/ROADMAP.md)
 
 ## Build a first mesh
@@ -69,12 +69,21 @@ box.
 
 ## Python
 
-An experimental [Python STEP interface](docs/PYTHON.md) imports STEP, generates
-audited Tet4 meshes and exports tagged VTK or native archives. Its wheel matrix
-targets Python 3.12 on Windows x64, macOS 15 ARM64 and Linux x64 with glibc 2.28,
-with the CAD runtime bundled. Install the release candidate with
-`python -m pip install --pre paacs-mesh`. Wheels are built and tested on all
-three platforms before [publication](docs/PYPI_RELEASE.md).
+The [Python STEP interface](docs/PYTHON.md) imports STEP, generates audited Tet4
+meshes and exports tagged VTK or native archives. The **1.2.0-rc.3 release candidate**
+supports regular, 64-bit CPython 3.12–3.15 on Windows x64/ARM64, Linux x64/ARM64
+with glibc 2.28 or newer, and macOS ARM64 with a minimum of macOS 15. The same
+macOS wheels are tested on macOS 15, 26 and 27. CAD libraries are bundled; wheel
+users need no compiler or separate OCCT installation.
+
+The expanded implementation passed its
+[20-wheel and 28-consumer qualification](docs/PYTHON_COMPATIBILITY.md#qualification-evidence).
+Official releases pass the [publication gates](docs/PYPI_RELEASE.md) from their
+own immutable tagged source. Install RC3 with
+`python -m pip install paacs-mesh==1.2.0rc3`. The previous `1.2.0rc2` release
+supports CPython 3.12 on Windows x64, Linux x64 and macOS ARM64 only; its files
+remain unchanged.
+
 The [sizing guide](docs/PYTHON.md#face-sizing-volume-regions-and-growth) covers
 selected-face refinement, volume boxes, minimum size and growth controls.
 Optional [NumPy snapshots](docs/PYTHON.md#numpy-mesh-arrays) expose coordinates,

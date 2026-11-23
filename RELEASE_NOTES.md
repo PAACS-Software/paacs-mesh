@@ -1,43 +1,77 @@
-# PAACS Mesh 1.2.0-rc.2
+# PAACS Mesh 1.2.0-rc.3
 
-This candidate adds a Python STEP package and improves initial Tet4 point
-placement. The C++ core continues to build independently of OCCT.
+This candidate expands the Python distribution and adds inspection and diagnostic
+commands for engineers, scripts and agents. It preserves the native meshing
+algorithms and validity checks from the previous candidate.
 
-- Compatible single-solid Tet4 requests construct wall sites before filling
-  interior gaps. C++, Python and the STEP CLI provide explicit on/off controls.
-  Multi-part assemblies and specialized routes retain their documented policies.
-- Local cavity certification and cached source-contact checks reduce repeated
-  geometry work. Native validity, prescribed surfaces and CAD tags remain checked.
-  Automatic source-stage fallback records its failed work and elapsed time.
-- CPython 3.12 wheels bundle the CAD runtime on Windows x64, macOS 15 ARM64
-  and manylinux 2.28 x64. Python supports face and volume sizing, NumPy snapshots,
-  geometric selections, bounded recipes, tagged exports and a terminal command.
-  The PyPI workflow requires qualified builders and separate clean consumers
-  from one source revision before publication.
+## Python installation
 
-The native STEP features introduced in the previous candidate remain available:
+```sh
+python -m pip install --pre --upgrade paacs-mesh
+```
 
-- Native Tet4 combines a global size, a selected CAD face and one or more
-  refinement boxes. Shared CAD edges, trimmed surfaces and volume refinement
-  use the same size field. The native checks run before publication.
-- A saved recipe binds face tags to the input STEP hash. The C3D4 example
-  checks the exported volume and boundary groups against the native archive.
-- The optional STEP build downloads pinned OCCT 8.0.1 and builds it as shared
-  libraries. CI uses the same build on Windows, Linux and macOS, with STEP CLI
-  checks on Windows and macOS and a Windows solver-export check.
-- The plate-with-hole and hybrid straight-duct examples document local
-  refinement, stress convergence and conforming Prism6/Tet4 wall layers.
+For a reproducible installation, use `paacs-mesh==1.2.0rc3`. The source version is
+`1.2.0-rc.3`; Python package tools normalize it to `1.2.0rc3`.
 
-Native STEP remains a preview. Single-solid Tet4 sizing is covered by the
-fixture tests. Trimmed surfaces, assemblies and volume recovery have bounded
-failure routes. The [candidate validation](docs/RELEASE_READINESS.md) records
-which cases completed and the settings used.
+The release requires a wheel for every regular 64-bit CPython version listed:
 
-The CMake package version is `1.2.0`. The SDK and CLI report `1.2.0-rc.2`.
-Rebuild downstream C++ applications with the candidate's headers and libraries.
-See [release policy](docs/RELEASE_POLICY.md) and [licensing status](LICENSING_STATUS.md).
-The mesh archive remains format v1. The [Python guide](docs/PYTHON.md) records
-platform limits and installation; [package publication](docs/PYPI_RELEASE.md)
-describes the qualified release workflow.
+| Platform | Python | System requirement |
+|---|---|---|
+| Windows x64 | 3.12, 3.13, 3.14, 3.15 | Windows x64; independently tested on Windows Server 2022 |
+| Windows ARM64 | 3.12, 3.13, 3.14, 3.15 | Windows 11 ARM64 |
+| Linux x64 | 3.12, 3.13, 3.14, 3.15 | glibc 2.28 or newer |
+| Linux ARM64 | 3.12, 3.13, 3.14, 3.15 | glibc 2.28 or newer |
+| macOS ARM64 | 3.12, 3.13, 3.14, 3.15 | macOS 15 or newer; same wheels tested on 15, 26 and 27 |
 
-Earlier changes are in the [1.1.0 notes](docs/RELEASE_NOTES_1.1.0.md) and [changelog](CHANGELOG.md).
+The CAD runtime is bundled: wheel installations need no compiler or separate
+OCCT installation. NumPy remains optional. Intel macOS, Python 2, PyPy, 32-bit,
+debug and free-threaded Python builds are outside this wheel matrix. The macOS 27
+CI runner is a public preview; its actual OS version and result are checked.
+
+## Inspection and diagnostics
+
+The terminal now exposes `capabilities`, paginated `inspect`, saved-recipe `run`
+and `diagnose`. Each supports readable output and `--json`; machine output stays
+on stdout while native messages go to stderr. Unicode CAD names round-trip even
+when the terminal cannot represent their characters directly.
+
+Python adds `capabilities()`, `diagnose()` and `format_diagnostics()`. Diagnostics
+report the native checks already completed, bounded body evidence, stable issue
+codes and suggested actions. Missing measurements are explicit. They do not
+invent per-cell or per-face quality localization or independently recertify a
+supplied report. Assembly body identities and interference reporting are retained.
+
+See the [inspection workflow](docs/AGENT_WORKFLOW.md) and its owned cylinder example.
+Face sizing, refinement boxes, growth controls, NumPy snapshots, guarded selections,
+source-bound recipes and tagged exports remain available.
+
+## Build and release validation
+
+The complete release gate requires **20 repaired wheels and 28 independent clean
+installation results** from one immutable source revision. Each target exercises
+STEP import, meshing, auditing, controls, tags, exports, deterministic repeats and
+the CLI, followed by the NumPy versions assigned to that target. Native C++/Python
+parity, binary architecture, compiler configuration and dependency hashes are checked.
+
+OCCT SDK reuse checks the source pin, build recipe, toolchain and installed files.
+Windows ARM64 selects the validated MSVC 14.44 toolset. A Linux host-directory fix
+allows verified SDK caches to be restored before container builds.
+
+Before publication, the native regression jobs and sanitizers must also pass.
+The GitHub release carries the matching OCCT source, build and qualification
+receipts, source archive and checksums. A final index check verifies the published
+wheel hashes and performs a fresh pip installation, import, mesh and export.
+See [compatibility](docs/PYTHON_COMPATIBILITY.md) and [publication](docs/PYPI_RELEASE.md).
+
+Native STEP remains a preview with bounded failure routes for unsupported geometry
+and recovery limits. This release changes the interface and packaging rather than
+the meshing algorithms; the [recorded CAD corpus results](docs/RELEASE_READINESS.md)
+are the existing engine baseline, not a new corpus run.
+
+The CMake package version remains `1.2.0`; SDK and CLI report `1.2.0-rc.3`.
+Rebuild C++ consumers with matching headers and libraries. Mesh archive format v1
+and C bridge ABI version 1 are unchanged. The C++ core builds independently of OCCT.
+The project remains MPL 2.0, copyright PAACS Software Ltd.
+
+Earlier changes are in the [rc.2 notes](docs/RELEASE_NOTES_1.2.0-rc.2.md) and
+[changelog](CHANGELOG.md).

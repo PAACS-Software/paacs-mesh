@@ -4,28 +4,30 @@ PAACS Mesh imports STEP geometry, builds audited Tet4 volume meshes and exports
 tagged VTK or native mesh archives. The Python package calls the C++ engine in
 process and bundles its CAD runtime.
 
-The published **1.2.0rc2** wheels support **64-bit CPython 3.12** on Windows x64,
-macOS 15 or newer on ARM64, and Linux x64 with glibc 2.28 or newer. These wheels need no C++
-compiler, separate OCCT installation or loader-path configuration. NumPy is
-optional.
+The **1.2.0rc3 release candidate** supports regular, **64-bit CPython 3.12–3.15**
+on Windows x64 and Windows 11 ARM64, Linux x64/ARM64 with glibc 2.28 or newer, and macOS ARM64
+with a minimum of macOS 15. The macOS wheels are tested on macOS 15, 26 and 27.
+Wheel installations need no C++ compiler, separate OCCT installation or
+loader-path configuration. NumPy is optional. Intel macOS, Python 2, PyPy, debug
+interpreters and free-threaded Python ABIs are excluded.
 
-The development branch is qualifying CPython 3.12–3.15, Linux ARM64 and Windows 11
-ARM64, with the macOS 15 ARM64 wheels also tested on macOS 26 and 27. Those
-additional configurations are **not yet qualified or published**. Package
-metadata in development describes the intended interpreter range; the
-[compatibility plan](https://github.com/PAACS-Software/paacs-mesh/blob/main/docs/PYTHON_COMPATIBILITY.md)
-records the required artifacts and validation gates. Intel macOS and free-threaded
-Python builds are outside this plan.
+The expanded implementation passed 20 wheel builds, 28 independent installations
+and the native regression jobs in
+[PR #11](https://github.com/PAACS-Software/paacs-mesh/pull/11).
+The [compatibility guide](https://github.com/PAACS-Software/paacs-mesh/blob/main/docs/PYTHON_COMPATIBILITY.md)
+records that evidence and the required release checks. Official releases are
+built and qualified from their own immutable tagged source before publication.
 
-```sh
-python -m pip install paacs-mesh
-```
-
-For release candidates, explicitly include prereleases:
+Install the pinned release candidate:
 
 ```sh
-python -m pip install --pre paacs-mesh
+python -m pip install paacs-mesh==1.2.0rc3
 ```
+
+The previous published `1.2.0rc2` release supports CPython 3.12 on Windows x64,
+macOS ARM64 and Linux x64 only; its files remain unchanged. Use
+`python -m pip install --pre paacs-mesh` to select the newest available candidate.
+Stable releases use `python -m pip install paacs-mesh`.
 
 ```python
 import paacs_mesh as pm
@@ -47,7 +49,8 @@ The same operation is available from a terminal:
 paacs-mesh part.step part.vtk --size 0.7
 ```
 
-Development wheels also provide discovery and CAD inspection before selecting controls:
+RC3 and the qualified development wheels provide discovery and CAD inspection
+before selecting controls:
 
 ```sh
 paacs-mesh capabilities --json

@@ -1,12 +1,18 @@
 # Changelog
 
-## Unreleased
+## 1.2.0-rc.3
 
 - Add capability discovery, paginated CAD inspection, saved-recipe execution and
   shared human/JSON diagnostic summaries without changing native meshing checks.
-- Prepare CPython 3.12–3.15 wheels on Windows and Linux x64/ARM64 and macOS ARM64,
+- Add CPython 3.12–3.15 wheels on Windows and Linux x64/ARM64 and macOS ARM64,
   with macOS 15/26/27 installation checks and reusable verified CAD SDKs.
-  Expanded compatibility remains subject to the complete qualification matrix.
+  Require the complete builder and installation matrix before publication.
+- Preserve Unicode CAD names in JSON output on terminals with restricted encodings.
+- Select the validated MSVC 14.44 toolset for Windows ARM64 and package the actual
+  runtime dependency closure. Record native compiler and configuration evidence.
+- Verify restored CAD SDK contents and create Linux cache directories on the host
+  before container builds, so a cache hit can reuse the validated files.
+- Keep native meshing algorithms, validity checks and mesh archive format unchanged.
 
 ## 1.2.0-rc.2
 
