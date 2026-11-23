@@ -22,6 +22,7 @@ from ._cad_common import (
 _KINDS = {"faces": 2, "bodies": 3, "edges": 1, "vertices": 0}
 _QUERY_FIELDS = {"tags", "name", "group", "surface", "body", "area", "radius",
                  "centroid_box", "normal", "adjacent_to", "expect", "tolerance"}
+_MAX_FACE_CONTROLS = 10000
 
 
 def _tags(value, name):
@@ -168,6 +169,40 @@ class FaceSelection:
         return iter(self._tags)
 
 
+def _selected_face_controls(model, values):
+    """Validate model-owned selections before expanding bounded native controls."""
+    result = []
+    try:
+        entries = sequence(() if values is None else values, "selected_face_sizes")
+        for index, entry in enumerate(entries):
+            try:
+                entry = sequence(entry, f"selected_face_sizes[{index}]", maximum=3)
+                if len(entry) not in (2, 3) or not isinstance(entry[0], FaceSelection):
+                    raise ValueError("expected (FaceSelection, size) or (FaceSelection, size, growth)")
+                selection = model._require_selection(entry[0])
+                if len(result) + len(selection) > _MAX_FACE_CONTROLS:
+                    raise SelectionError("control_budget", "Selected face sizing exceeds the control budget",
+                                         {"control_limit": _MAX_FACE_CONTROLS,
+                                          "requested_controls": len(result) + len(selection)}, stage="sizing")
+                size = number(entry[1], "selected face size", minimum=0)
+                if size == 0:
+                    raise ValueError("selected face size must be positive")
+                growth = entry[2] if len(entry) == 3 else None
+                growth = None if growth is None else number(growth, "selected face growth", minimum=1)
+                selection.validate()
+                result.extend(_native.FaceSize(tag, size, growth=growth) for tag in selection.tags)
+            except SelectionError:
+                raise
+            except (TypeError, ValueError, OverflowError) as error:
+                raise SelectionError("invalid_argument", f"selected_face_sizes[{index}]: {error}",
+                                     {"control_index": index}, stage="sizing") from error
+        return result
+    except SelectionError:
+        raise
+    except (TypeError, ValueError, OverflowError) as error:
+        raise SelectionError("invalid_argument", str(error), stage="sizing") from error
+
+
 class CadModel:
     """An imported native model with model-local selection and intent helpers."""
 
@@ -229,9 +264,45 @@ class CadModel:
                 self._native.kernel_version != self._kernel):
             raise SelectionError("model_changed", "The native model identity changed")
 
-    def mesh(self, size, **kwargs):
+    def mesh(self, size, *, recovery="standard", assembly="preserve_parts",
+             workers=1, validation_workers=1, max_nodes=None, max_cells=None,
+             max_work=None, max_output_bytes=None, max_working_bytes=None,
+             max_audit_bytes=None, max_seconds=None, face_sizes=None,
+             selected_face_sizes=(), volume_controls=None, min_size=None, growth=1.3,
+             native_sizing=None, warning_quality=None, minimum_quality=None,
+             advancing_interior_front=None):
+        """Generate an owned, audited Tet4 mesh; lengths and sizes are in mm.
+
+        ``face_sizes`` contains native ``FaceSize`` controls. Alternatively,
+        ``selected_face_sizes`` accepts ``(FaceSelection, size)`` or
+        ``(FaceSelection, size, growth)`` entries, with the same ownership and
+        property guards as saved recipes. ``volume_controls`` contains BoxSize
+        regions. Spatial controls require one solid and an explicit
+        ``assembly="conforming"`` request; this method preserves the default
+        ``preserve_parts`` assembly policy rather than changing it for controls.
+
+        Optional budgets retain native defaults when None. ``max_seconds`` is
+        cooperative and starts after the native operation gate is acquired.
+        Quality warnings do not replace validity checks. Native refusal reasons
+        and hints remain available on ``MeshingError.report``.
+        """
         self._assert_identity()
-        return self._native.mesh(size, **kwargs)
+        selected = _selected_face_controls(self, selected_face_sizes)
+        if selected:
+            existing = sequence(() if face_sizes is None else face_sizes, "face_sizes")
+            if len(existing) + len(selected) > _MAX_FACE_CONTROLS:
+                raise SelectionError("control_budget", "Combined face sizing exceeds the control budget",
+                                     {"control_limit": _MAX_FACE_CONTROLS,
+                                      "requested_controls": len(existing) + len(selected)}, stage="sizing")
+            face_sizes = existing + selected
+        return self._native.mesh(size, recovery=recovery, assembly=assembly,
+            workers=workers, validation_workers=validation_workers, max_nodes=max_nodes,
+            max_cells=max_cells, max_work=max_work, max_output_bytes=max_output_bytes,
+            max_working_bytes=max_working_bytes, max_audit_bytes=max_audit_bytes,
+            max_seconds=max_seconds, face_sizes=face_sizes, volume_controls=volume_controls,
+            min_size=min_size, growth=growth, native_sizing=native_sizing,
+            warning_quality=warning_quality, minimum_quality=minimum_quality,
+            advancing_interior_front=advancing_interior_front)
 
     def preview(self, selection=None, *, linear_deflection=.02, max_points=50000, max_triangles=100000):
         """Return owned, tagged display geometry for visual selection checks."""

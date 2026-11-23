@@ -28,7 +28,7 @@ from ._cad_common import (
     bounds, integer, json_copy, json_text, load_json, number, sequence, text,
 )
 from ._cad_intent import _group
-from .cad import CadModel, FaceSelection, read_step
+from .cad import CadModel, FaceSelection, _selected_face_controls, read_step
 
 
 RECIPE_SCHEMA = "paacs-mesh-recipe-v1"
@@ -69,7 +69,7 @@ def _small(value):
 def _native_summary(report):
     if not isinstance(report, dict):
         return {"available": False}
-    result = {key: _small(report.get(key)) for key in ("status", "reason", "mesh_published")}
+    result = {key: _small(report.get(key)) for key in ("status", "reason", "mesh_published", "hint")}
     for stage in ("audit", "quality"):
         data = report.get(stage)
         if isinstance(data, dict):
@@ -255,23 +255,23 @@ def _options(values):
         result[key] = None if values[key] is None else integer(values[key], key)
     result["face_sizes"], result["volume_controls"] = [], []
     seen = set()
-    for control in sequence(values["face_sizes"], "face sizes"):
+    for index, control in enumerate(sequence(values["face_sizes"], "face sizes")):
         if not isinstance(control, dict) or set(control) != {"tag", "size", "growth"}:
-            raise ValueError("Invalid recipe face control")
-        tag = integer(control["tag"], "face tag")
+            raise ValueError(f"face_sizes[{index}] must contain tag, size and growth")
+        tag = integer(control["tag"], f"face_sizes[{index}].tag")
         if tag in seen:
-            raise ValueError("Recipe contains duplicate face sizing controls")
+            raise ValueError(f"Recipe contains duplicate sizing controls for face tag {tag}")
         seen.add(tag)
-        result["face_sizes"].append({"tag": tag, "size": _positive(control["size"], "face size"),
-                                     "growth": None if control["growth"] is None else number(control["growth"], "face growth", minimum=1)})
-    for control in sequence(values["volume_controls"], "volume controls"):
+        result["face_sizes"].append({"tag": tag, "size": _positive(control["size"], f"face tag {tag} size"),
+                                     "growth": None if control["growth"] is None else number(control["growth"], f"face tag {tag} growth", minimum=1)})
+    for index, control in enumerate(sequence(values["volume_controls"], "volume controls")):
         if not isinstance(control, dict) or set(control) != {"lower", "upper", "size", "growth"}:
-            raise ValueError("Invalid recipe box control")
-        lo, hi = bounds([control["lower"], control["upper"]], "box")
+            raise ValueError(f"volume_controls[{index}] must contain lower, upper, size and growth")
+        lo, hi = bounds([control["lower"], control["upper"]], f"volume_controls[{index}]")
         if any(a >= b for a, b in zip(lo, hi)):
-            raise ValueError("Box lower coordinates must be strictly below upper coordinates")
-        result["volume_controls"].append({"lower": lo, "upper": hi, "size": _positive(control["size"], "box size"),
-                                          "growth": None if control["growth"] is None else number(control["growth"], "box growth", minimum=1)})
+            raise ValueError(f"volume_controls[{index}] lower coordinates must be strictly below upper coordinates")
+        result["volume_controls"].append({"lower": lo, "upper": hi, "size": _positive(control["size"], f"volume_controls[{index}] size"),
+                                          "growth": None if control["growth"] is None else number(control["growth"], f"volume_controls[{index}] growth", minimum=1)})
     if result["volume_controls"] and result["native_sizing"] is False:
         raise ValueError("Box controls require native spatial sizing")
     return result
@@ -310,7 +310,8 @@ def create_recipe(model, size, *, face_sizes=(), selected_face_sizes=(), volume_
     """Capture controls, source identity and intent without changing model policy.
 
     selected_face_sizes contains (FaceSelection, size) or (FaceSelection, size,
-    growth) entries. Retry sizes are explicit fractions of the original global
+    growth) entries, matching CadModel.mesh(). None means no optional controls.
+    Retry sizes are explicit fractions of the original global
     size; existing face/box/minimum controls and resource budgets are unchanged.
     Optional warning and strict quality thresholds remain fixed across retries.
     """
@@ -319,19 +320,13 @@ def create_recipe(model, size, *, face_sizes=(), selected_face_sizes=(), volume_
             raise ValueError("model must be a CadModel")
         model._assert_identity()
         faces, boxes = [], []
-        for control in sequence(face_sizes, "face_sizes"):
+        for control in sequence(() if face_sizes is None else face_sizes, "face_sizes"):
             if not isinstance(control, _native.FaceSize):
                 raise ValueError("face_sizes must contain FaceSize controls")
             faces.append({"tag": control.tag, "size": control.size, "growth": control.growth})
-        for entry in sequence(selected_face_sizes, "selected_face_sizes"):
-            entry = sequence(entry, "selected face size", maximum=3)
-            if len(entry) not in (2, 3) or not isinstance(entry[0], FaceSelection):
-                raise ValueError("selected_face_sizes entries must contain a FaceSelection and size")
-            selection = model._require_selection(entry[0])
-            selection.validate()
-            for tag in selection.tags:
-                faces.append({"tag": tag, "size": entry[1], "growth": entry[2] if len(entry) == 3 else None})
-        for control in sequence(volume_controls, "volume_controls"):
+        for control in _selected_face_controls(model, selected_face_sizes):
+            faces.append({"tag": control.tag, "size": control.size, "growth": control.growth})
+        for control in sequence(() if volume_controls is None else volume_controls, "volume_controls"):
             if not isinstance(control, _native.BoxSize):
                 raise ValueError("volume_controls must contain BoxSize controls")
             boxes.append({"lower": list(control.lower), "upper": list(control.upper),
