@@ -67,11 +67,16 @@ class QualifiedRunTests(unittest.TestCase):
         self.assertEqual(result["builder-artifact-ids"], "")
         self.assertFalse(any(self.previous in path for path in self.calls))
 
-    def test_resume_binds_original_source_and_all_six_immutable_artifact_ids(self):
+    def test_resume_binds_original_source_and_every_immutable_artifact_id(self):
         result = self.prepare()
+        builders = ",".join(str(index + 1) for index in range(len(release.BUILDERS)))
+        consumers = ",".join(str(index + 1) for index in range(len(release.BUILDERS), len(self.artifacts)))
         self.assertEqual(result, {"source-sha": self.sha, "artifact-run-id": self.previous,
-            "reuse-qualified": "true", "builder-artifact-ids": "1,2,3",
-            "consumer-artifact-ids": "4,5,6"})
+            "reuse-qualified": "true", "builder-artifact-ids": builders,
+            "consumer-artifact-ids": consumers})
+        self.assertEqual(len(release.BUILDERS), 20)
+        self.assertEqual(len(release.CONSUMERS), 28)
+        self.assertEqual(len(release.QUALIFY), 55)
         self.assertNotEqual(result["source-sha"], self.workflow_sha)
 
     def test_run_identifiers_are_bounded_and_cannot_select_the_current_run(self):
@@ -121,6 +126,38 @@ class QualifiedRunTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 self.prepare()
         self.artifacts = original
+
+    def test_partial_old_platform_set_cannot_resume_expanded_qualification(self):
+        self.artifacts = self.artifacts[:3] + self.artifacts[20:23]
+        with self.assertRaises(RuntimeError):
+            self.prepare()
+
+    def test_missing_new_os_or_python_job_refuses_resume(self):
+        original = deepcopy(self.jobs)
+        for fragment in ("cp315-linux-arm64", "cp312-macos-arm64-macos27", "OCCT SDK (windows-arm64)"):
+            self.jobs = [row for row in original if fragment not in row["name"]]
+            self.assertLess(len(self.jobs), len(original))
+            with self.subTest(fragment=fragment), self.assertRaises(RuntimeError):
+                self.prepare()
+        self.jobs = original
+
+    def test_only_expected_sdk_artifacts_can_accompany_qualified_wheels(self):
+        original = deepcopy(self.artifacts)
+        for index, name in enumerate(sorted(release.SDK_ARTIFACTS)):
+            record = deepcopy(original[0])
+            record.update(name=name, id=100 + index)
+            self.artifacts.append(record)
+        result = self.prepare()
+        self.assertEqual(len(result["builder-artifact-ids"].split(",")), 20)
+        self.assertEqual(len(result["consumer-artifact-ids"].split(",")), 28)
+        self.artifacts.append(dict(deepcopy(original[0]), name="unreviewed-wheel", id=999))
+        with self.assertRaises(RuntimeError):
+            self.prepare()
+
+    def test_distinct_artifact_names_cannot_share_an_immutable_id(self):
+        self.artifacts[-1]["id"] = self.artifacts[0]["id"]
+        with self.assertRaises(RuntimeError):
+            self.prepare()
 
     def test_expired_or_unidentified_artifact_refuses_resume(self):
         original = deepcopy(self.artifacts)

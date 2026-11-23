@@ -20,18 +20,19 @@ from urllib.request import Request, urlopen
 from packaging.version import Version
 
 from build_python_wheel import source_revision
+from python_compatibility import PLATFORM_TAGS, consumers, platforms, targets
 
 
 REPOSITORY = "PAACS-Software/paacs-mesh"
 WORKFLOW = ".github/workflows/publish-python.yml"
-BUILDERS = ("paacs-mesh-cp312-win_amd64", "paacs-mesh-cp312-macosx_15_0_arm64",
-            "paacs-mesh-cp312-manylinux_2_28_x86_64")
-CONSUMERS = tuple("paacs-mesh-installed-" + p for p in
-                  ("windows-x86_64", "macos-arm64", "linux-x86_64"))
+BUILDERS = tuple(row["artifact"] for row in targets())
+CONSUMERS = tuple(row["consumer_artifact"] for row in consumers())
+SDK_ARTIFACTS = {row["sdk_artifact"] for row in platforms()}
 QUALIFY = {"qualify / " + name for name in (
-    "release-assembly-checks", "windows-cp312", "macos-cp312", "linux-cp312",
-    "installed wheel (windows-x86_64)", "installed wheel (macos-arm64)",
-    "installed wheel (linux-x86_64)")}
+    ["release-assembly-checks", "compatibility-matrix"]
+    + ["OCCT SDK (" + platform + ")" for platform in PLATFORM_TAGS]
+    + [row["job_name"] for row in targets()]
+    + [row["job_name"] for row in consumers()])}
 
 
 def run_id(value: str) -> str:
@@ -135,8 +136,11 @@ def qualification(identifier: str, sha: str, workflow_id: int) -> tuple[str, str
     artifacts = pages("actions/runs/" + identifier + "/artifacts", "artifacts")
     required = set(BUILDERS + CONSUMERS)
     selected = {a["name"]: a for a in artifacts if a["name"] in required}
-    if len(selected) != 6 or sum(a["name"] in required for a in artifacts) != 6:
-        raise RuntimeError("The source run lacks six distinct builder and consumer artifacts")
+    if (set(selected) != required or sum(a["name"] in required for a in artifacts) != len(required)
+            or len({a["name"] for a in artifacts}) != len(artifacts)
+            or len({a.get("id") for a in artifacts}) != len(artifacts)
+            or any(a["name"] not in required | SDK_ARTIFACTS for a in artifacts)):
+        raise RuntimeError("The source run lacks the complete distinct builder/consumer artifact matrix")
     now = datetime.now(timezone.utc)
     for artifact in selected.values():
         run = artifact.get("workflow_run", {})

@@ -18,6 +18,8 @@ from urllib.request import urlopen
 import venv
 
 from build_python_wheel import isolated_environment
+from prepare_python_release import verify_matrix
+from python_compatibility import targets
 
 
 def main():
@@ -31,8 +33,9 @@ def main():
         raise RuntimeError("Refusing to overwrite an existing index-install test")
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
     version = manifest["version"]
-    if manifest.get("schema") != "paacs-python-release-v1" or len(manifest.get("wheels", {})) != 3:
-        raise RuntimeError("Expected the qualified three-platform publication manifest")
+    if manifest.get("schema") != "paacs-python-release-v1" or len(manifest.get("wheels", {})) != len(targets()):
+        raise RuntimeError("Expected the complete qualified Python/platform publication manifest")
+    verify_matrix(manifest)
     if not re.fullmatch(r"[A-Za-z0-9.!+_-]+", version):
         raise RuntimeError("Invalid release version")
     for attempt in range(6):
@@ -47,7 +50,7 @@ def main():
             if attempt == 5:
                 raise
         if attempt == 5:
-            raise RuntimeError("PyPI does not expose the exact three qualified wheels")
+            raise RuntimeError("PyPI does not expose the complete exact qualified wheel set")
         time.sleep(5)
     args.output.mkdir(parents=True)
     environment = args.output / "environment"

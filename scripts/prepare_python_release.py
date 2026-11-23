@@ -21,14 +21,13 @@ from packaging.specifiers import SpecifierSet
 from packaging.utils import canonicalize_name, parse_wheel_filename
 from packaging.version import Version
 
-from build_python_wheel import NUMPY_TEST_VERSIONS, PLATFORM_TAGS, occt_pin, sha256
+from build_python_wheel import occt_pin, sha256
+from python_compatibility import PLATFORM_TAGS, REQUIRES_PYTHON, consumers as compatibility_consumers, targets
 
 
-ARTIFACTS = {
-    "windows-x86_64": "paacs-mesh-cp312-win_amd64",
-    "macos-arm64": "paacs-mesh-cp312-macosx_15_0_arm64",
-    "linux-x86_64": "paacs-mesh-cp312-manylinux_2_28_x86_64",
-}
+TARGETS = {row["id"]: row for row in targets()}
+CONSUMERS = {row["id"]: row for row in compatibility_consumers()}
+ARTIFACTS = {name: row["artifact"] for name, row in TARGETS.items()}
 
 
 def load(path: Path):
@@ -89,12 +88,13 @@ def tests_passed(receipt: dict):
         raise RuntimeError("The artifact lacks a nonempty successful installed-test result")
 
 
-def numpy_passed(rows: list):
-    if (not isinstance(rows, list) or len(rows) != len(NUMPY_TEST_VERSIONS)
-            or {row.get("version") for row in rows} != set(NUMPY_TEST_VERSIONS)
+def numpy_passed(rows: list, expected):
+    if (not isinstance(rows, list) or len(rows) != len(expected)
+            or any(not isinstance(row, dict) for row in rows)
+            or {row.get("version") for row in rows} != set(expected)
             or any(row.get("status") != "passed" or type(row.get("tests")) is not int
                    or row["tests"] <= 0 for row in rows)):
-        raise RuntimeError("Both supported NumPy compatibility tests must pass")
+        raise RuntimeError("Every NumPy version required for this Python/platform must pass")
 
 
 def check_source(receipt: dict, expected: str):
@@ -103,15 +103,17 @@ def check_source(receipt: dict, expected: str):
         raise RuntimeError("Artifact qualification came from another or dirty source revision")
 
 
-def wheel_metadata(path: Path, version: Version, platform: str):
+def wheel_metadata(path: Path, version: Version, platform: str, python_version="3.12"):
     name, parsed, build, tags = parse_wheel_filename(path.name)
     expected_platform = PLATFORM_TAGS[platform]
     allowed_platforms = {expected_platform}
-    if platform == "linux-x86_64":
-        allowed_platforms.add("manylinux_2_27_x86_64")
+    if platform in ("linux-x86_64", "linux-arm64"):
+        architecture = "x86_64" if platform == "linux-x86_64" else "aarch64"
+        allowed_platforms.add("manylinux_2_27_" + architecture)
+    python_tag = "cp" + python_version.replace(".", "")
     platforms = {t.platform for t in tags}
     if (canonicalize_name(name) != "paacs-mesh" or parsed != version or build
-            or not tags or any(t.interpreter != "cp312" or t.abi != "cp312"
+            or not tags or any(t.interpreter != python_tag or t.abi != python_tag
                                for t in tags)
             or expected_platform not in platforms or not platforms <= allowed_platforms):
         raise RuntimeError("Wheel name, version or CPython/platform tags differ from the qualified release")
@@ -122,8 +124,50 @@ def wheel_metadata(path: Path, version: Version, platform: str):
         record = BytesParser().parsebytes(archive.read(metadata[0]))
         if (canonicalize_name(record["Name"] or "") != "paacs-mesh"
                 or Version(record["Version"]) != version
-                or SpecifierSet(record["Requires-Python"] or "") != SpecifierSet(">=3.12,<3.13")):
-            raise RuntimeError("Wheel metadata must identify the CPython 3.12 PAACS release")
+                or SpecifierSet(record["Requires-Python"] or "") != SpecifierSet(REQUIRES_PYTHON)):
+            raise RuntimeError("Wheel metadata must identify the qualified PAACS Python release")
+
+
+def receipt_target(receipt: dict, row: dict, *, consumer=False):
+    expected = {"target_id": row.get("target_id", row["id"]), "platform": row["platform"],
+                "python_version": row["python"], "python_tag": row["python_tag"]}
+    if consumer:
+        expected.update(consumer_id=row["id"], consumer_os=row["consumer_os"])
+    if any(receipt.get(key) != value for key, value in expected.items()):
+        raise RuntimeError("Qualification receipt does not identify its exact Python/platform consumer")
+    host = receipt.get("host", {})
+    if not isinstance(host, dict):
+        raise RuntimeError("Qualification receipt lacks actual host evidence")
+    platform = row["platform"]
+    system = "Windows" if platform.startswith("windows-") else "Darwin" if platform == "macos-arm64" else "Linux"
+    machines = {"AMD64", "x86_64", "x64"} if platform.endswith("x86_64") else {"ARM64", "arm64", "aarch64"}
+    if host.get("system") != system or host.get("machine") not in machines:
+        raise RuntimeError("Qualification host operating system or architecture differs from its target")
+    if system == "Darwin":
+        actual = str(host.get("macos_version", "")).split(".")[0]
+        required = row.get("required_os_major") if consumer else 15
+        if not actual.isdigit() or int(actual) < 15 or (consumer and int(actual) != required):
+            raise RuntimeError("macOS consumer did not execute on its required OS major")
+    elif platform == "windows-arm64":
+        build = str(host.get("version", "")).split(".")
+        windows11 = host.get("release") == "11" or (
+            len(build) >= 3 and all(value.isdigit() for value in build[:3])
+            and int(build[0]) >= 10 and int(build[2]) >= 22000)
+        if not windows11:
+            raise RuntimeError("Windows ARM64 qualification requires Windows 11 host evidence")
+    elif system == "Linux":
+        libc = str(host.get("libc", "")).lower()
+        version = str(host.get("libc_version", ""))
+        if libc not in ("glibc", "gnu libc") or not re.fullmatch(r"[0-9]+\.[0-9]+(?:\.[0-9]+)*", version):
+            raise RuntimeError("Linux qualification requires glibc host evidence")
+        if tuple(int(value) for value in version.split(".")[:2]) < (2, 28):
+            raise RuntimeError("Linux qualification requires glibc 2.28 or newer")
+
+
+def artifact_directories(directory: Path, expected: set[str]):
+    records = list(directory.iterdir())
+    if any(not path.is_dir() for path in records) or {path.name for path in records} != expected:
+        raise RuntimeError("Release artifact directories do not match the complete compatibility matrix")
 
 
 def assemble(source: Path, builders: Path, consumers: Path, expected: str, output: Path):
@@ -132,29 +176,37 @@ def assemble(source: Path, builders: Path, consumers: Path, expected: str, outpu
         raise RuntimeError("Refusing to overwrite an existing release staging directory")
     version = Version((source / "VERSION.txt").read_text(encoding="utf-8").strip())
     pin = occt_pin(source)
-    selected, evidence, archives = [], {}, {}
-    for platform, artifact in ARTIFACTS.items():
+    artifact_directories(builders, set(ARTIFACTS.values()))
+    artifact_directories(consumers, {row["consumer_artifact"] for row in CONSUMERS.values()})
+    selected, evidence, archives, qualified = [], {}, {}, {}
+    for identifier, row in TARGETS.items():
+        platform, artifact = row["platform"], row["artifact"]
         directory = builders / artifact
         receipt_path = artifact_file(directory, "wheel-validation.json")
         receipt = load(receipt_path)
         check_source(receipt, expected)
+        receipt_target(receipt, row)
         if receipt.get("platform") != platform or not str(receipt.get("installed_smoke", "")).startswith("passed "):
             raise RuntimeError("Builder did not qualify this platform")
         tests_passed(receipt.get("installed_tests", {}))
-        numpy_passed(receipt.get("numpy_validation"))
+        numpy_passed(receipt.get("numpy_validation"), row["numpy_versions"])
         wheel = checked_file(directory, {"file": receipt["wheel"], "sha256": receipt["sha256"]})
         if list(directory.glob("*.whl")) != [wheel]:
             raise RuntimeError("Builder artifact must contain exactly its qualified wheel")
-        wheel_metadata(wheel, version, platform)
-        consumer_path = artifact_file(consumers / ("paacs-mesh-installed-" + platform), "consumer-validation.json")
-        consumer = load(consumer_path)
-        check_source(consumer, expected)
-        if (consumer.get("platform") != platform or consumer.get("wheel") != wheel.name
-                or consumer.get("sha256") != receipt["sha256"]
-                or not str(consumer.get("qualification", "")).startswith("passed ")):
-            raise RuntimeError("The independent consumer did not qualify this exact wheel")
-        tests_passed(consumer.get("installed_tests", {}))
-        numpy_passed(consumer.get("numpy_validation"))
+        wheel_metadata(wheel, version, platform, row["python"])
+        target_consumers = [item for item in CONSUMERS.values() if item["target_id"] == identifier]
+        consumer_evidence = {}
+        for consumer_row in target_consumers:
+            consumer_path = artifact_file(consumers / consumer_row["consumer_artifact"], "consumer-validation.json")
+            consumer = load(consumer_path)
+            check_source(consumer, expected)
+            receipt_target(consumer, consumer_row, consumer=True)
+            if (consumer.get("wheel") != wheel.name or consumer.get("sha256") != receipt["sha256"]
+                    or not str(consumer.get("qualification", "")).startswith("passed ")):
+                raise RuntimeError("The independent consumer did not qualify this exact wheel")
+            tests_passed(consumer.get("installed_tests", {}))
+            numpy_passed(consumer.get("numpy_validation"), row["numpy_versions"])
+            consumer_evidence[consumer_row["id"]] = consumer_path
         archive = checked_file(directory, receipt["occt_source"])
         if archive.name != f"occt-{pin['VERSION']}.tar.gz":
             raise RuntimeError("OCCT source version does not match the build recipe")
@@ -167,8 +219,14 @@ def assemble(source: Path, builders: Path, consumers: Path, expected: str, outpu
         parity_result = load(parity)
         if parity_result.get("status") != "passed" or len(parity_result.get("cases", [])) != 3:
             raise RuntimeError("Native/Python parity qualification is missing")
-        evidence[platform] = {"builder": receipt_path, "consumer": consumer_path, "parity": parity, "dependencies": audit}
+        evidence[identifier] = {"builder": receipt_path, "parity": parity, "dependencies": audit}
+        for consumer_id, consumer_path in consumer_evidence.items():
+            evidence[consumer_id] = {"consumer": consumer_path}
+        qualified[identifier] = {"wheel": wheel.name, "platform": platform, "python": row["python"],
+                                "python_tag": row["python_tag"], "consumer_ids": sorted(consumer_evidence)}
         selected.append(wheel)
+    if len({wheel.name for wheel in selected}) != len(TARGETS):
+        raise RuntimeError("Release targets must identify distinct Python/platform wheels")
     # Validation finishes before staging; a failed gate cannot leave an upload set.
     dist, assets = output / "dist", output / "release-assets"
     dist.mkdir(parents=True)
@@ -177,13 +235,14 @@ def assemble(source: Path, builders: Path, consumers: Path, expected: str, outpu
         shutil.copyfile(wheel, dist / wheel.name)
     for name, path in archives.items():
         shutil.copyfile(path, assets / name)
-    for platform, records in evidence.items():
+    for identifier, records in evidence.items():
         for kind, path in records.items():
-            shutil.copyfile(path, assets / f"{platform}-{kind}{path.suffix}")
+            shutil.copyfile(path, assets / f"{identifier}-{kind}{path.suffix}")
     manifest = {"schema": "paacs-python-release-v1", "source_commit": expected, "version": str(version),
         "wheels": {p.name: sha256(p) for p in selected},
         "source_and_receipts": {p.name: sha256(p) for p in assets.iterdir()},
-        "qualification": "Three repaired platform wheels and their separate installed consumers; same clean immutable source"}
+        "targets": qualified, "qualified_consumers": sorted(CONSUMERS),
+        "qualification": "Complete Python/platform wheels and independent OS consumers; same clean immutable source"}
     write(output / "release-manifest.json", manifest)
     shutil.copyfile(output / "release-manifest.json", assets / "release-manifest.json")
     return manifest
@@ -192,14 +251,51 @@ def assemble(source: Path, builders: Path, consumers: Path, expected: str, outpu
 def verify(manifest: dict, directory: Path, expected: str):
     expected_revision(expected)
     if (manifest.get("schema") != "paacs-python-release-v1" or manifest.get("source_commit") != expected
-            or len(manifest.get("wheels", {})) != 3):
+            or len(manifest.get("wheels", {})) != len(TARGETS)):
         raise RuntimeError("Publication manifest has the wrong source or platform set")
+    verify_matrix(manifest)
     files = {p.name for p in directory.iterdir() if p.is_file()}
     if files != set(manifest["wheels"]):
         raise RuntimeError("Publication directory must contain exactly the qualified wheels")
     for name, digest in manifest["wheels"].items():
         if sha256(artifact_file(directory, name)) != digest:
             raise RuntimeError("Publication wheel changed after assembly")
+
+
+def verify_matrix(manifest: dict):
+    """Bind every wheel and OS consumer to the same exact compatibility contract."""
+    if (set(manifest.get("targets", {})) != set(TARGETS)
+            or manifest.get("qualified_consumers") != sorted(CONSUMERS)):
+        raise RuntimeError("Publication manifest lacks the complete Python/platform/OS matrix")
+    wheels = manifest.get("wheels", {})
+    if not isinstance(wheels, dict) or len(wheels) != len(TARGETS):
+        raise RuntimeError("Publication manifest lacks the exact qualified wheel set")
+    selected = set()
+    version = Version(manifest["version"])
+    for identifier, row in TARGETS.items():
+        record = manifest["targets"][identifier]
+        expected_consumers = sorted(name for name, item in CONSUMERS.items() if item["target_id"] == identifier)
+        if (record.get("platform") != row["platform"] or record.get("python") != row["python"]
+                or record.get("python_tag") != row["python_tag"] or record.get("consumer_ids") != expected_consumers):
+            raise RuntimeError("Publication target differs from its required Python or OS consumers")
+        name = record.get("wheel")
+        if not isinstance(name, str) or Path(name).name != name or name not in wheels or name in selected:
+            raise RuntimeError("Publication targets do not map to distinct qualified wheels")
+        _, parsed, build, tags = parse_wheel_filename(name)
+        required_platform = row["platform_tag"]
+        allowed = {required_platform}
+        if row["platform"].startswith("linux-"):
+            allowed.add(required_platform.replace("manylinux_2_28_", "manylinux_2_27_"))
+        if (parsed != version or build or not tags
+                or any(tag.interpreter != row["python_tag"] or tag.abi != row["python_tag"] for tag in tags)
+                or required_platform not in {tag.platform for tag in tags}
+                or not {tag.platform for tag in tags} <= allowed
+                or canonicalize_name(parse_wheel_filename(name)[0]) != "paacs-mesh"
+                or not re.fullmatch(r"[0-9a-f]{64}", str(wheels[name]))):
+            raise RuntimeError("Publication wheel tags or checksum differ from the target contract")
+        selected.add(name)
+    if selected != set(wheels):
+        raise RuntimeError("Publication manifest has unqualified wheels")
 
 
 def publish_sources(directory: Path, tag: str, expected: str):
