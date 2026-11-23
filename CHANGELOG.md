@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Add capability discovery, paginated CAD inspection, saved-recipe execution and
+  shared human/JSON diagnostic summaries without changing native meshing checks.
+- Prepare CPython 3.12–3.15 wheels on Windows and Linux x64/ARM64 and macOS ARM64,
+  with macOS 15/26/27 installation checks and reusable verified CAD SDKs.
+  Expanded compatibility remains subject to the complete qualification matrix.
+
 ## 1.2.0-rc.2
 
 - Construct initial native Tet4 wall sites before filling interior gaps, with

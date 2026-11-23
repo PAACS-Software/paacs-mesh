@@ -15,6 +15,8 @@ on:
       - 'VERSION.txt'
       - 'pyproject.toml'
       - 'scripts/build_python_wheel.py'
+      - 'scripts/build_python_sdk.py'
+      - 'scripts/python_compatibility.py'
       - 'scripts/check_python_wheel.py'
       - 'scripts/check_python_parity.py'
       - 'scripts/prepare_python_release.py'
@@ -36,10 +38,31 @@ on:
         type: string
 permissions:
   contents: read
-env:
-  # Verified registry manifest bytes and linux/amd64 config on 2026-11-21.
-  PAACS_MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_x86_64@sha256:55a36963bc0504cdf004011001c1072306402f0b8b83be5a5eba7068f93eec53
+concurrency:
+  group: python-step-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  compatibility-matrix:
+    runs-on: ubuntu-24.04
+    outputs:
+      platforms: ${{ steps.matrix.outputs.platforms }}
+      targets: ${{ steps.matrix.outputs.targets }}
+      consumers: ${{ steps.matrix.outputs.consumers }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source-ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - id: matrix
+        run: |
+          python scripts/python_compatibility.py --platforms --github-output "$GITHUB_OUTPUT"
+          python scripts/python_compatibility.py --targets --github-output "$GITHUB_OUTPUT"
+          python scripts/python_compatibility.py --consumers --github-output "$GITHUB_OUTPUT"
+
   release-assembly-checks:
     runs-on: ubuntu-24.04
     steps:
@@ -51,130 +74,174 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install packaging==25.0
-      - run: python -m unittest discover -s scripts/tests -p 'test_python_release*.py' -v
+      - run: python -m unittest discover -s scripts/tests -p 'test_python_*.py' -v
 
-  windows-cp312:
-    runs-on: windows-2022
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-          ref: ${{ inputs.source-ref || github.sha }}
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-          architecture: x64
-      - name: Install wheel build tools
-        run: python -m pip install build==1.6.1 delvewheel==1.13.2 cmake==4.4.3 ninja==1.13.2
-      - name: Build pinned OCCT, repair wheel and test installed STEP workflow
-        run: python scripts/build_python_wheel.py --jobs 4
-      - name: Save wheel, matching OCCT source and validation receipt
-        uses: actions/upload-artifact@v6
-        with:
-          name: paacs-mesh-cp312-win_amd64
-          path: dist/*
-          if-no-files-found: error
-
-  macos-cp312:
-    runs-on: macos-15
-    timeout-minutes: 120
-    env:
-      MACOSX_DEPLOYMENT_TARGET: '15.0'
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-          ref: ${{ inputs.source-ref || github.sha }}
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-          architecture: arm64
-      - name: Install wheel build tools
-        run: python -m pip install build==1.6.1 delocate==0.13.0 cmake==4.4.3 ninja==1.13.2
-      - name: Build pinned OCCT, repair ARM64 wheel and qualify installation
-        run: python scripts/build_python_wheel.py --jobs 3
-      - name: Save wheel, source and qualification receipts
-        uses: actions/upload-artifact@v6
-        with:
-          name: paacs-mesh-cp312-macosx_15_0_arm64
-          path: dist/*
-          if-no-files-found: error
-
-  linux-cp312:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 120
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-          ref: ${{ inputs.source-ref || github.sha }}
-      - name: Build and qualify inside the pinned manylinux 2.28 image
-        shell: bash
-        run: |
-          docker run --rm -v "$PWD:/io" -w /io \
-            -e PAACS_MANYLINUX_IMAGE "$PAACS_MANYLINUX_IMAGE" bash -euc '
-              export PATH="/opt/python/cp312-cp312/bin:$PATH"
-              python -m pip install build==1.6.1 auditwheel==6.8.2 cmake==4.4.3 ninja==1.13.2
-              python scripts/build_python_wheel.py --jobs 3
-            '
-      - name: Save wheel, source and qualification receipts
-        uses: actions/upload-artifact@v6
-        with:
-          name: paacs-mesh-cp312-manylinux_2_28_x86_64
-          path: dist/*
-          if-no-files-found: error
-
-  installed-cp312:
-    needs: [windows-cp312, macos-cp312, linux-cp312]
-    name: installed wheel (${{ matrix.platform }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+  occt-sdk:
+    needs: compatibility-matrix
+    name: OCCT SDK (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ matrix.timeout_minutes }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - platform: windows-x86_64
-            os: windows-2022
-            architecture: x64
-            artifact: paacs-mesh-cp312-win_amd64
-          - platform: macos-arm64
-            os: macos-15
-            architecture: arm64
-            artifact: paacs-mesh-cp312-macosx_15_0_arm64
-          - platform: linux-x86_64
-            os: ubuntu-24.04
-            architecture: x64
-            artifact: paacs-mesh-cp312-manylinux_2_28_x86_64
+      matrix: ${{ fromJSON(needs.compatibility-matrix.outputs.platforms) }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '15.0'
+      PAACS_MANYLINUX_IMAGE: ${{ matrix.image }}
+      PAACS_MSVC_TOOLSET: ${{ matrix.msvc_toolset || '' }}
+      SDK_JOBS: ${{ matrix.jobs }}
     steps:
       - uses: actions/checkout@v7
         with:
-          persist-credentials: false
           ref: ${{ inputs.source-ref || github.sha }}
+          persist-credentials: false
       - uses: actions/setup-python@v6
         if: runner.os != 'Linux'
         with:
           python-version: '3.12'
           architecture: ${{ matrix.architecture }}
+      - name: Install native SDK build tools
+        if: runner.os != 'Linux'
+        run: python -m pip install cmake==4.4.3 ninja==1.13.2
+      - name: Fingerprint the compiler, source recipe and pinned environment
+        id: fingerprint
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            # The runner must own the cache parent before Docker creates probe files.
+            mkdir -p build
+            docker run --rm -v "$PWD:/io" -w /io \
+              -e PAACS_MANYLINUX_IMAGE "$PAACS_MANYLINUX_IMAGE" bash -euc '
+                export PATH="/opt/python/cp312-cp312/bin:$PATH"
+                python -m pip install cmake==4.4.3 ninja==1.13.2
+                python scripts/build_python_sdk.py key --github-output build/sdk-key-output.txt
+              '
+            cat build/sdk-key-output.txt >> "$GITHUB_OUTPUT"
+          else
+            python scripts/build_python_sdk.py key --github-output "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/cache@v4
+        with:
+          path: build/python-sdk
+          key: ${{ steps.fingerprint.outputs.cache-key }}
+      - name: Build or fully verify the reusable shared SDK
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            docker run --rm -v "$PWD:/io" -w /io \
+              -e PAACS_MANYLINUX_IMAGE -e SDK_JOBS "$PAACS_MANYLINUX_IMAGE" bash -euc '
+                export PATH="/opt/python/cp312-cp312/bin:$PATH"
+                python -m pip install cmake==4.4.3 ninja==1.13.2
+                python scripts/build_python_sdk.py build --jobs "$SDK_JOBS"
+                python scripts/build_python_sdk.py pack
+              '
+          else
+            python scripts/build_python_sdk.py build --jobs "$SDK_JOBS"
+            python scripts/build_python_sdk.py pack
+          fi
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.sdk_artifact }}
+          path: build/python-sdk.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  wheel:
+    needs: [compatibility-matrix, occt-sdk]
+    name: ${{ matrix.job_name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ matrix.timeout_minutes }}
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix: ${{ fromJSON(needs.compatibility-matrix.outputs.targets) }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '15.0'
+      PAACS_MANYLINUX_IMAGE: ${{ matrix.image }}
+      PAACS_MSVC_TOOLSET: ${{ matrix.msvc_toolset || '' }}
+      WHEEL_JOBS: ${{ matrix.jobs }}
+      PYTHON_TAG: ${{ matrix.python_tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source-ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        if: runner.os != 'Linux'
+        with:
+          python-version: ${{ matrix.python }}
+          architecture: ${{ matrix.architecture }}
+      - uses: actions/download-artifact@v6
+        with:
+          name: ${{ matrix.sdk_artifact }}
+          path: build
+      - name: Install Windows wheel tools
+        if: runner.os == 'Windows'
+        run: python -m pip install build==1.6.1 delvewheel==1.13.2 cmake==4.4.3 ninja==1.13.2
+      - name: Install macOS wheel tools
+        if: runner.os == 'macOS'
+        run: python -m pip install build==1.6.1 delocate==0.13.0 cmake==4.4.3 ninja==1.13.2
+      - name: Verify the SDK and qualify the repaired wheel
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            docker run --rm -v "$PWD:/io" -w /io \
+              -e PAACS_MANYLINUX_IMAGE -e WHEEL_JOBS -e PYTHON_TAG "$PAACS_MANYLINUX_IMAGE" bash -euc '
+                export PATH="/opt/python/$PYTHON_TAG-$PYTHON_TAG/bin:$PATH"
+                python -m pip install build==1.6.1 auditwheel==6.8.2 cmake==4.4.3 ninja==1.13.2
+                python scripts/build_python_sdk.py unpack
+                python scripts/build_python_wheel.py --jobs "$WHEEL_JOBS" --occt-dir build/python-sdk/occt/lib/cmake/opencascade
+              '
+          else
+            python scripts/build_python_sdk.py unpack
+            python scripts/build_python_wheel.py --jobs "$WHEEL_JOBS" --occt-dir build/python-sdk/occt/lib/cmake/opencascade
+          fi
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/*
+          if-no-files-found: error
+
+  installed-wheel:
+    needs: [compatibility-matrix, wheel]
+    name: ${{ matrix.job_name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix: ${{ fromJSON(needs.compatibility-matrix.outputs.consumers) }}
+    env:
+      PAACS_MANYLINUX_IMAGE: ${{ matrix.image }}
+      PYTHON_TAG: ${{ matrix.python_tag }}
+      CONSUMER_ID: ${{ matrix.id }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source-ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        if: runner.os != 'Linux'
+        with:
+          python-version: ${{ matrix.python }}
+          architecture: ${{ matrix.architecture }}
       - uses: actions/download-artifact@v6
         with:
           name: ${{ matrix.artifact }}
           path: build/python-wheel-artifacts
-      - name: Install and test on a fresh Windows or macOS runner
-        if: runner.os != 'Linux'
-        run: python scripts/check_python_wheel.py --artifact-dir build/python-wheel-artifacts
-      - name: Install and test in a fresh manylinux 2.28 container
-        if: runner.os == 'Linux'
+      - name: Qualify installation without the build SDK or a compiler setup
         shell: bash
         run: |
-          docker run --rm -v "$PWD:/project" -w /project \
-            "$PAACS_MANYLINUX_IMAGE" bash -euc '
-              export PATH="/opt/python/cp312-cp312/bin:$PATH"
-              python scripts/check_python_wheel.py --artifact-dir build/python-wheel-artifacts
-            '
-      - name: Save independent installation result
-        uses: actions/upload-artifact@v6
+          if [ "$RUNNER_OS" = Linux ]; then
+            docker run --rm -v "$PWD:/project" -w /project \
+              -e PYTHON_TAG -e CONSUMER_ID "$PAACS_MANYLINUX_IMAGE" bash -euc '
+                export PATH="/opt/python/$PYTHON_TAG-$PYTHON_TAG/bin:$PATH"
+                python scripts/check_python_wheel.py --artifact-dir build/python-wheel-artifacts --consumer-id "$CONSUMER_ID"
+              '
+          else
+            python scripts/check_python_wheel.py --artifact-dir build/python-wheel-artifacts --consumer-id "$CONSUMER_ID"
+          fi
+      - uses: actions/upload-artifact@v6
         with:
-          name: paacs-mesh-installed-${{ matrix.platform }}
+          name: ${{ matrix.consumer_artifact }}
           path: build/python-wheel-consumer/consumer-validation.json
           if-no-files-found: error

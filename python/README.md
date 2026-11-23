@@ -4,10 +4,18 @@ PAACS Mesh imports STEP geometry, builds audited Tet4 volume meshes and exports
 tagged VTK or native mesh archives. The Python package calls the C++ engine in
 process and bundles its CAD runtime.
 
-The qualified wheels support **64-bit CPython 3.12** on Windows x64, macOS 15 or
-newer on ARM64, and Linux x64 with glibc 2.28 or newer. These wheels need no C++
+The published **1.2.0rc2** wheels support **64-bit CPython 3.12** on Windows x64,
+macOS 15 or newer on ARM64, and Linux x64 with glibc 2.28 or newer. These wheels need no C++
 compiler, separate OCCT installation or loader-path configuration. NumPy is
 optional.
+
+The development branch is qualifying CPython 3.12–3.15, Linux ARM64 and Windows 11
+ARM64, with the macOS 15 ARM64 wheels also tested on macOS 26 and 27. Those
+additional configurations are **not yet qualified or published**. Package
+metadata in development describes the intended interpreter range; the
+[compatibility plan](https://github.com/PAACS-Software/paacs-mesh/blob/main/docs/PYTHON_COMPATIBILITY.md)
+records the required artifacts and validation gates. Intel macOS and free-threaded
+Python builds are outside this plan.
 
 ```sh
 python -m pip install paacs-mesh

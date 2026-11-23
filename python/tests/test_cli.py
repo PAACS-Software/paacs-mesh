@@ -72,6 +72,39 @@ class DiscoveryCliTests(unittest.TestCase):
         usage = self.command("inspect", "--kind", "nonsense", "--json", expected=2)
         self.assertEqual(usage["reason"], "invalid_argument")
 
+    def test_json_preserves_unicode_with_ascii_redirected_stdout(self):
+        code = (
+            "import sys; sys.stdout.reconfigure(encoding='ascii'); "
+            "from paacs_mesh.__main__ import main; raise SystemExit(main(sys.argv[1:]))"
+        )
+
+        def inspect(path, expected):
+            child = subprocess.run(
+                [sys.executable, "-I", "-c", code, "inspect", str(path), "--limit", "1", "--json"],
+                capture_output=True, timeout=30,
+            )
+            self.assertEqual(child.returncode, expected, repr(child.stdout) + repr(child.stderr))
+            self.assertNotIn(b"Traceback", child.stderr)
+            return json.loads(child.stdout.decode("ascii"))
+
+        missing = self.directory / "missing-\u5b54.step"
+        failure = inspect(missing, 1)
+        self.assertEqual(failure["schema"], "paacs-mesh-cli-error-v1")
+        self.assertEqual(failure["stage"], "import")
+        self.assertEqual(failure["reason"], "file-unavailable")
+        self.assertIn(missing.name, json.dumps(failure, ensure_ascii=False))
+
+        source = self.directory / "unicode-cli.step"
+        original = self.fixture.read_text(encoding="ascii")
+        needle = "#17 = ADVANCED_FACE('',"
+        self.assertIn(needle, original)
+        # STEP's standard Unicode escape changes only an existing face name.
+        source.write_text(original.replace(needle, r"#17 = ADVANCED_FACE('\X2\5B54\X0\ wall',"),
+                          encoding="ascii")
+        success = inspect(source, 0)
+        self.assertEqual(success, pm.read_step(source).inspect(limit=1))
+        self.assertEqual(success["entities"][0]["names"], ["\u5b54 wall"])
+
     def test_diagnose_uses_same_authoritative_report_as_python(self):
         report = self.command("diagnose", self.report, "--json")
         self.assertEqual(report, pm.diagnose(self.mesh.report))

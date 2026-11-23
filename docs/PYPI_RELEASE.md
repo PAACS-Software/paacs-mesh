@@ -1,10 +1,26 @@
 # Python package releases
 
-The first package-index distribution targets CPython 3.12 on Windows x64,
-macOS 15 ARM64 and Linux x64 with glibc 2.28 or newer. Metadata restricts Python
-to `>=3.12,<3.13` until other interpreter versions have qualified wheels.
+The published `1.2.0rc2` package-index distribution targets CPython 3.12 on Windows
+x64, macOS 15 ARM64 and Linux x64 with glibc 2.28 or newer. Its metadata restricts
+Python to `>=3.12,<3.13`.
 Runtime CAD libraries are bundled. Only PAACS wheels enter PyPI; the matching
 OCCT source archive and build recipes remain available with the GitHub release.
+
+## Expanded qualification matrix
+
+The development release pipeline uses [python/compatibility.json](../python/compatibility.json)
+for **20 repaired wheels and 28 independent installation results**: CPython
+3.12–3.15 on Windows x64/ARM64, Linux x64/ARM64 and macOS ARM64. macOS wheels retain
+deployment target 15.0 and are each installed on macOS 15, 26 and 27. The macOS 27
+runner is a public preview, with its actual OS version checked and its result
+required. Intel macOS and free-threaded Python are excluded.
+
+Development metadata uses `>=3.12,<3.16` to enable these builds. This is a
+qualification plan, **not yet qualified or published compatibility**. The existing
+PyPI release is unchanged. No new release is authorized by this expansion; all
+required combinations and native regression checks must pass before publication.
+See [Python compatibility](PYTHON_COMPATIBILITY.md) for exact tags, NumPy versions,
+CAD SDK reuse and upstream runner references.
 
 ## One-time account setup
 
@@ -40,7 +56,7 @@ reserve its name beforehand. See [PyPI's setup instructions](https://docs.pypi.o
 The workflow resolves one immutable release commit and uses it for every producer
 and consumer checkout. Release operations run from the selected main revision,
 which can contain a later packaging fix without changing the tagged engine.
-It builds three repaired wheels and tests them on separate
+It builds the complete manifest-defined wheel set and tests it on separate
 clean runners, without a configured OCCT SDK. Installation tests exercise import,
 meshing, controls, tags, exports, optional NumPy versions and the installed command.
 
@@ -52,13 +68,13 @@ are reused only when their hashes match; they are never silently replaced.
 
 The `pypi` job rechecks the selected wheel hashes and uploads through Trusted
 Publishing. It does not skip existing PyPI filenames or replace published files.
-After upload, a separate job verifies all three index hashes and performs a fresh,
+After upload, a separate job verifies every qualified wheel's index hash and performs a fresh,
 hash-pinned install from PyPI, then imports, meshes, exports and runs the command.
 That job can be rerun independently if index propagation delays the first check.
 
 ## Resume after an assembly failure
 
-If all seven qualification jobs passed but assembly failed before source assets
+If all required qualification jobs passed but assembly failed before source assets
 or wheels were published, a packaging fix can reuse those exact artifacts.
 Merge the fix, then run **Publish Python package** from `main` with the unchanged
 release tag and the previous publication run's numeric `qualified-run-id`.
@@ -66,10 +82,10 @@ Do not move the release tag or rebuild a different engine under that version.
 
 Preparation verifies that the previous run is a completed `workflow_dispatch`
 of this repository's publication workflow on `main`, at the tagged source
-commit. Its preparation and all seven qualification jobs must have passed;
+commit. Its preparation and the complete qualification job set must have passed;
 assembly must have failed and source publication, PyPI upload and index checks
 must have been skipped. A version already present on PyPI cannot be resumed.
-All six builder/consumer artifacts must be unexpired and have GitHub SHA-256
+Every required builder and consumer artifact must be unexpired and have GitHub SHA-256
 digests. Downloads bind their immutable artifact IDs as well as the run ID.
 
 Only new qualification is skipped. Assembly still checks the original wheel

@@ -3,9 +3,9 @@
 # Project author: Paul LeDewhurst
 # Copyright PAACS Software Ltd.
 # SPDX-License-Identifier: MPL-2.0
-"""Build, repair and qualify a CPython 3.12 STEP wheel with its CAD runtime.
+"""Build, repair and qualify a STEP wheel with its bundled CAD runtime.
 
-Supports Windows x64, macOS 15 ARM64 and manylinux 2.28 x64. Build isolation
+Supports the Python/platform targets in the compatibility manifest. Build isolation
 installs the pinned backend/binding headers. The platform repair tool bundles
 the shared CAD dependencies; no package index publication is performed.
 """
@@ -23,9 +23,12 @@ import shutil
 import struct
 import subprocess
 import sys
+import sysconfig
 import urllib.request
 import venv
 import zipfile
+
+from python_compatibility import PLATFORM_TAGS, numpy_versions, python_tag, target
 
 
 CRT_NAMES = {
@@ -33,12 +36,19 @@ CRT_NAMES = {
     "msvcp140_atomic_wait.dll", "msvcp140_codecvt_ids.dll", "concrt140.dll",
     "vcruntime140.dll", "vcruntime140_1.dll", "vcruntime140_threads.dll",
 }
-NUMPY_TEST_VERSIONS = ("1.26.4", "2.5.5")
-PLATFORM_TAGS = {
-    "windows-x86_64": "win_amd64",
-    "macos-arm64": "macosx_15_0_arm64",
-    "linux-x86_64": "manylinux_2_28_x86_64",
-}
+
+def python_configuration() -> dict:
+    """Accept only the regular, release CPython ABI named by a target wheel."""
+    if (sys.implementation.name != "cpython" or struct.calcsize("P") != 8
+            or sysconfig.get_config_var("Py_GIL_DISABLED")
+            or sysconfig.get_config_var("Py_DEBUG") or getattr(sys, "abiflags", "")):
+        raise RuntimeError("Wheel qualification requires regular-GIL, release 64-bit CPython")
+    version = f"{sys.version_info[0]}.{sys.version_info[1]}"
+    try:
+        tag = python_tag(version)
+    except ValueError as error:
+        raise RuntimeError(str(error)) from error
+    return {"python_version": version, "python_tag": tag}
 
 
 def source_revision(source: Path) -> dict:
@@ -55,30 +65,56 @@ def source_revision(source: Path) -> dict:
 
 
 def host_platform(*, building: bool = False) -> str:
-    if (sys.implementation.name != "cpython" or sys.version_info[:2] != (3, 12)
-            or struct.calcsize("P") != 8):
-        raise RuntimeError("Wheel qualification requires 64-bit CPython 3.12")
+    """Identify the native platform independently of the Python minor version."""
+    if struct.calcsize("P") != 8:
+        raise RuntimeError("Supported wheels require a 64-bit process")
     architecture = platform.machine().lower()
-    if sys.platform == "win32" and architecture in {"amd64", "x86_64"}:
-        return "windows-x86_64"
+    if sys.platform == "win32":
+        if architecture in {"amd64", "x86_64"}:
+            return "windows-x86_64"
+        if architecture in {"arm64", "aarch64"}:
+            return "windows-arm64"
     if sys.platform == "darwin" and architecture in {"arm64", "aarch64"}:
         if int(platform.mac_ver()[0].split(".")[0]) < 15:
             raise RuntimeError("The supported macOS wheel requires macOS 15 or newer")
         return "macos-arm64"
-    if sys.platform == "linux" and architecture in {"amd64", "x86_64"}:
+    if sys.platform == "linux" and architecture in {"amd64", "x86_64", "arm64", "aarch64"}:
         libc, release = platform.libc_ver()
-        if libc != "glibc" or tuple(map(int, release.split(".")[:2])) < (2, 28):
+        try:
+            compatible = libc == "glibc" and tuple(map(int, release.split(".")[:2])) >= (2, 28)
+        except ValueError:
+            compatible = False
+        if not compatible:
             raise RuntimeError("The supported Linux wheel requires glibc 2.28 or newer")
         if building and release != "2.28":
-            raise RuntimeError("Build Linux wheels inside the pinned manylinux 2.28 x64 image")
-        return "linux-x86_64"
-    raise RuntimeError("Supported wheels are Windows x64, macOS 15 ARM64 and Linux x64")
+            raise RuntimeError("Build Linux wheels inside the pinned manylinux 2.28 image")
+        return "linux-arm64" if architecture in {"arm64", "aarch64"} else "linux-x86_64"
+    raise RuntimeError("Supported wheels require Windows x64/ARM64, macOS 15+ ARM64 or Linux x64/ARM64")
+
+
+def host_details() -> dict:
+    result = {"system": platform.system(), "release": platform.release(),
+              "version": platform.version(), "machine": platform.machine()}
+    if sys.platform == "darwin":
+        result["macos_version"] = platform.mac_ver()[0]
+    elif sys.platform == "linux":
+        result["libc"], result["libc_version"] = platform.libc_ver()
+    return result
+
+
+def target_identity() -> dict:
+    configuration = python_configuration()
+    current_platform = host_platform()
+    selected = target(current_platform, configuration["python_version"])
+    return {"target_id": selected["id"], **configuration,
+            "platform": current_platform, "host": host_details()}
 
 
 def wheel_platform(wheel: Path) -> str:
+    configuration = python_configuration()
     fields = wheel.name.removesuffix(".whl").rsplit("-", 3)
-    if len(fields) != 4 or fields[1:3] != ["cp312", "cp312"]:
-        raise RuntimeError("Expected a CPython 3.12 wheel with its native ABI")
+    if len(fields) != 4 or fields[1:3] != [configuration["python_tag"]] * 2:
+        raise RuntimeError("Expected a wheel matching the running CPython interpreter and native ABI")
     return fields[3]
 
 
@@ -112,23 +148,172 @@ def sdk_prefix(config_dir: Path) -> Path:
     raise RuntimeError("Use a shared OCCT SDK with its TKernel library and CMake configuration")
 
 
-def runtime_directory(explicit: Path | None) -> Path:
-    candidates = [explicit] if explicit else []
-    if os.environ.get("VCToolsRedistDir"):
-        candidates.append(Path(os.environ["VCToolsRedistDir"]) / "x64/Microsoft.VC143.CRT")
+def _visual_studio_installations() -> list[dict]:
     program_files = Path(os.environ.get("ProgramFiles(x86)", "C:/Program Files (x86)"))
     vswhere = program_files / "Microsoft Visual Studio/Installer/vswhere.exe"
-    if vswhere.is_file():
-        installation = subprocess.check_output(
-            [str(vswhere), "-latest", "-products", "*", "-property", "installationPath"],
-            text=True).strip()
-        if installation:
-            redist = Path(installation) / "VC/Redist/MSVC"
-            candidates.extend(sorted(redist.glob("*/x64/Microsoft.VC143.CRT"), reverse=True))
+    if not vswhere.is_file():
+        return []
+    return json.loads(subprocess.check_output(
+        [str(vswhere), "-all", "-products", "*", "-format", "json", "-utf8"],
+        encoding="utf-8"))
+
+
+def _numeric_version(value: str) -> tuple[int, ...]:
+    return tuple(map(int, value.split("."))) if re.fullmatch(r"\d+(?:\.\d+)*", value) else ()
+
+
+def visual_studio_toolchain(selected: str | None = None) -> dict:
+    """Choose one installed instance and its default target-capable C++ toolset."""
+    selected = selected or host_platform()
+    architecture = "arm64" if selected == "windows-arm64" else "x64"
+    capabilities = json.loads(subprocess.check_output(["cmake", "-E", "capabilities"], text=True))
+    generators = {}
+    for item in capabilities.get("generators", []):
+        match = re.match(r"Visual Studio (\d+) ", item["name"])
+        if match:
+            generators[int(match.group(1))] = item["name"]
+    requested = os.environ.get("CMAKE_GENERATOR")
+    requested_instance = os.environ.get("CMAKE_GENERATOR_INSTANCE")
+    requested_toolset = os.environ.get("PAACS_MSVC_TOOLSET", "")
+    if requested_toolset and not re.fullmatch(r"\d+\.\d+(?:\.\d+)?", requested_toolset):
+        raise RuntimeError("PAACS_MSVC_TOOLSET must name an installed numeric toolset version, for example 14.44")
+    candidates = []
+    for installation in _visual_studio_installations():
+        version = _numeric_version(installation.get("installationVersion", ""))
+        if not version:
+            continue
+        name = generators.get(version[0])
+        if not name or (requested and name != requested):
+            continue
+        root = Path(installation["installationPath"])
+        if requested_instance and root.resolve() != Path(requested_instance).resolve():
+            continue
+        tools = root / "VC/Tools/MSVC"
+        defaults = root / "VC/Auxiliary/Build"
+        default_file = defaults / "Microsoft.VCToolsVersion.default.txt"
+        default_version = default_file.read_text(encoding="utf-8-sig").strip() if default_file.is_file() else None
+        toolsets = [tools / default_version] if default_version and not requested_toolset else sorted(
+            (entry for entry in tools.glob("*") if _numeric_version(entry.name)),
+            key=lambda entry: _numeric_version(entry.name), reverse=True)
+        if requested_toolset:
+            prefix = _numeric_version(requested_toolset)
+            toolsets = [entry for entry in toolsets if _numeric_version(entry.name)[:len(prefix)] == prefix]
+        compiler = None
+        for toolset in toolsets:
+            # Native ARM64 hosts and x64-hosted cross compilers are both valid.
+            available = [entry for entry in toolset.glob(f"bin/Host*/{architecture}/cl.exe") if entry.is_file()]
+            if available:
+                native_host = "hostarm64" if platform.machine().lower() in {"arm64", "aarch64"} else "hostx64"
+                compiler = min(available, key=lambda entry: (entry.parent.parent.name.lower() != native_host,
+                                                            entry.as_posix().lower()))
+                break
+        if compiler is None:
+            continue
+        actual_tools_version = compiler.parents[3].name
+        cmake_toolset = None
+        if requested_toolset:
+            families = []
+            for entry in defaults.glob("Microsoft.VCToolsVersion.v*.default.*"):
+                match = re.fullmatch(r"Microsoft\.VCToolsVersion\.(v\d+)\.default\.(?:txt|props)", entry.name)
+                if not match:
+                    continue
+                contents = entry.read_text(encoding="utf-8-sig")
+                versions = re.findall(r"\b\d+\.\d+(?:\.\d+)+\b", contents)
+                if any(_numeric_version(value)[:2] == _numeric_version(actual_tools_version)[:2] for value in versions):
+                    families.append(match.group(1))
+            if not families:
+                continue
+            cmake_toolset = f"{max(set(families))},version={requested_toolset}"
+        host_architecture = compiler.parent.parent.name[4:].lower()
+        if requested_toolset or host_architecture != ("arm64" if native_host == "hostarm64" else "x64"):
+            host_option = "host=" + ("ARM64" if host_architecture == "arm64" else host_architecture)
+            cmake_toolset = ",".join(value for value in (cmake_toolset, host_option) if value)
+        redist_file = defaults / "Microsoft.VCRedistVersion.default.txt"
+        redist_version = redist_file.read_text(encoding="utf-8-sig").strip() if redist_file.is_file() else None
+        if requested_toolset:
+            compatible = sorted((entry.name for entry in (root / "VC/Redist/MSVC").glob("*")
+                                 if _numeric_version(entry.name)[:2] == _numeric_version(actual_tools_version)[:2]),
+                                key=_numeric_version, reverse=True)
+            redist_version = compatible[0] if compatible else redist_version
+            if redist_version and _numeric_version(redist_version)[:2] < _numeric_version(actual_tools_version)[:2]:
+                redist_version = None
+        record = {"installation": str(root.resolve()), "generator": name, "architecture": architecture,
+                  "compiler": str(compiler.resolve()), "tools_version": actual_tools_version,
+                  "host_architecture": host_architecture, "requested_toolset": requested_toolset or None,
+                  "toolset": cmake_toolset, "redist_version": redist_version}
+        candidates.append((version, str(root).lower(), record))
+    if not candidates:
+        raise RuntimeError("No installed Visual Studio instance has a supported generator and target C++ compiler")
+    return max(candidates, key=lambda item: item[:2])[2]
+
+
+def cmake_generator(platform: str | None = None) -> list[str]:
+    """Pin the same installed toolchain used for compiler and CRT selection."""
+    selected = platform or host_platform()
+    if not selected.startswith("windows-"):
+        return ["-G", "Ninja"]
+    selected_toolchain = visual_studio_toolchain(selected)
+    result = ["-G", selected_toolchain["generator"], "-A",
+              "ARM64" if selected == "windows-arm64" else "x64",
+              "-DCMAKE_GENERATOR_INSTANCE:INTERNAL=" + selected_toolchain["installation"]]
+    if selected_toolchain["toolset"]:
+        result.extend(["-T", selected_toolchain["toolset"]])
+    return result
+
+
+def binary_architecture(payload: bytes) -> tuple[str, str]:
+    """Inspect binary headers without executing a bundled dependency."""
+    if payload.startswith(b"MZ") and len(payload) >= 64:
+        offset = struct.unpack_from("<I", payload, 0x3c)[0]
+        if offset + 6 <= len(payload) and payload[offset:offset + 4] == b"PE\0\0":
+            machine = struct.unpack_from("<H", payload, offset + 4)[0]
+            return "pe", {0x8664: "x86_64", 0xaa64: "arm64"}.get(machine, "unsupported")
+    if payload.startswith(b"\x7fELF") and len(payload) >= 20:
+        if payload[4] != 2 or payload[5] not in (1, 2):
+            raise RuntimeError("Expected a 64-bit ELF image with known byte order")
+        machine = struct.unpack_from("<H" if payload[5] == 1 else ">H", payload, 18)[0]
+        return "elf", {62: "x86_64", 183: "arm64"}.get(machine, "unsupported")
+    endian = {b"\xcf\xfa\xed\xfe": "<", b"\xfe\xed\xfa\xcf": ">"}.get(payload[:4])
+    if endian and len(payload) >= 12:
+        machine = struct.unpack_from(endian + "I", payload, 4)[0]
+        return "mach-o", {0x01000007: "x86_64", 0x0100000c: "arm64"}.get(machine, "unsupported")
+    raise RuntimeError("Expected a PE, ELF64 or thin Mach-O64 binary")
+
+
+def validate_binary(payload: bytes, name: str, selected: str | None = None) -> None:
+    selected = selected or host_platform()
+    expected_format = {"windows": "pe", "linux": "elf", "macos": "mach-o"}[selected.split("-")[0]]
+    expected_arch = "x86_64" if selected.endswith("x86_64") else "arm64"
+    try:
+        actual = binary_architecture(payload)
+    except RuntimeError as error:
+        raise RuntimeError(f"Invalid bundled binary {name}: {error}") from error
+    if actual != (expected_format, expected_arch):
+        raise RuntimeError(f"Binary {name} has {actual}, expected {(expected_format, expected_arch)}")
+
+
+def runtime_directory(explicit: Path | None) -> Path:
+    selected = host_platform()
+    architecture = "arm64" if selected == "windows-arm64" else "x64"
+    candidates = [explicit] if explicit else []
+    if not explicit:
+        toolchain = visual_studio_toolchain(selected)
+        redist = Path(toolchain["installation"]) / "VC/Redist/MSVC"
+        default_version = toolchain["redist_version"]
+        if default_version:
+            candidates.extend(sorted((redist / default_version).glob(f"{architecture}/Microsoft.VC*.CRT")))
+        else:
+            toolset = _numeric_version(toolchain["tools_version"])
+            versions = sorted((entry for entry in redist.glob("*")
+                               if _numeric_version(entry.name)[:2] == toolset[:2]),
+                              key=lambda entry: _numeric_version(entry.name), reverse=True)
+            for version in versions:
+                candidates.extend(sorted(version.glob(f"{architecture}/Microsoft.VC*.CRT")))
     for candidate in candidates:
         if candidate is not None and (candidate / "msvcp140.dll").is_file():
+            validate_binary((candidate / "msvcp140.dll").read_bytes(), str(candidate / "msvcp140.dll"), selected)
             return candidate.resolve()
-    raise RuntimeError("Visual C++ redistributable files not found; set --vc-runtime-dir")
+    raise RuntimeError(f"Visual C++ {architecture} redistributable files not found; set --vc-runtime-dir")
 
 
 def occt_pin(source: Path) -> dict[str, str]:
@@ -163,25 +348,42 @@ def source_archive(source: Path, sdk: Path, output: Path) -> Path:
     return target
 
 
-def crt_dependencies(wheel: Path, sdk: Path, runtime: Path) -> list[str]:
+def _binary_crt_imports(payload: bytes, name: str) -> set[str]:
     import pefile  # Installed by delvewheel; inspect actual binary imports.
-    required = set()
-    binaries = list((sdk / "bin").glob("*.dll"))
-    with zipfile.ZipFile(wheel) as archive:
-        payloads = [archive.read(name) for name in archive.namelist() if name.endswith(".pyd")]
-    payloads.extend(binary.read_bytes() for binary in binaries)
-    for payload in payloads:
-        image = pefile.PE(data=payload, fast_load=True)
-        image.parse_data_directories(directories=[pefile.DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_IMPORT"]])
-        for entry in getattr(image, "DIRECTORY_ENTRY_IMPORT", ()):
-            name = entry.dll.decode("ascii").lower()
-            if name in CRT_NAMES:
-                required.add(name)
+    image = pefile.PE(data=payload, fast_load=True)
+    try:
+        directories = ("IMAGE_DIRECTORY_ENTRY_IMPORT", "IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT")
+        image.parse_data_directories(directories=[pefile.DIRECTORY_ENTRY[key] for key in directories])
+        imports = [entry.dll.decode("ascii").lower() for attribute in
+                   ("DIRECTORY_ENTRY_IMPORT", "DIRECTORY_ENTRY_DELAY_IMPORT")
+                   for entry in getattr(image, attribute, ())]
+        return set(imports) & CRT_NAMES
+    finally:
         image.close()
-    for name in required:
-        if not (runtime / name).is_file():
-            raise RuntimeError(f"Required redistributable is missing: {runtime / name}")
+
+
+def crt_dependency_closure(payloads: list[tuple[str, bytes]], runtime: Path) -> list[str]:
+    """Follow only imported CRT files, validating every required dependency's CPU."""
+    required, pending = set(), list(payloads)
+    while pending:
+        name, payload = pending.pop()
+        validate_binary(payload, name)
+        for dependency in _binary_crt_imports(payload, name):
+            if dependency in required:
+                continue
+            binary = runtime / dependency
+            if not binary.is_file():
+                raise RuntimeError(f"Required redistributable is missing: {binary}")
+            required.add(dependency)
+            pending.append((str(binary), binary.read_bytes()))
     return sorted(required)
+
+
+def crt_dependencies(wheel: Path, sdk: Path, runtime: Path) -> list[str]:
+    with zipfile.ZipFile(wheel) as archive:
+        payloads = [(name, archive.read(name)) for name in archive.namelist() if name.endswith(".pyd")]
+    payloads.extend((str(binary), binary.read_bytes()) for binary in (sdk / "bin").glob("*.dll"))
+    return crt_dependency_closure(payloads, runtime)
 
 
 def validate_contents(wheel: Path, runtime: Path | None = None,
@@ -192,8 +394,9 @@ def validate_contents(wheel: Path, runtime: Path | None = None,
     with zipfile.ZipFile(wheel) as archive:
         names = archive.namelist()
         extension = ".pyd" if sys.platform == "win32" else ".so"
-        if not any(name.startswith("paacs_mesh/_native") and name.endswith(extension) for name in names):
-            raise RuntimeError("The wheel has no native STEP binding")
+        extensions = [name for name in names if name.startswith("paacs_mesh/_native") and name.endswith(extension)]
+        if len(extensions) != 1:
+            raise RuntimeError("The wheel must contain exactly one native STEP binding")
         if any(name.endswith((".lib", ".a", ".hpp", ".hxx", ".cmake", ".exe"))
                or Path(name).name in {"paacs-mesh", "paacs-cad-mesh", "paacs-native-cad-preview"}
                for name in names):
@@ -205,6 +408,8 @@ def validate_contents(wheel: Path, runtime: Path | None = None,
             raise RuntimeError("The repaired wheel does not contain the OCCT STEP library")
         if not any(Path(name).name.lower().startswith(("tkernel", "libtkernel")) for name in libraries):
             raise RuntimeError("The repaired wheel does not contain the OCCT kernel library")
+        for name in [*extensions, *libraries]:
+            validate_binary(archive.read(name), name, current_platform)
         # Microsoft redist files must remain unmodified: exclude them from name mangling.
         for name in crt:
             matches = [entry for entry in dlls if Path(entry).name.lower() == name]
@@ -219,7 +424,7 @@ def validate_contents(wheel: Path, runtime: Path | None = None,
             prefix = f"paacs_mesh/_occt/resources/{resource}/"
             if not any(name.startswith(prefix) and not name.endswith("/") for name in names):
                 raise RuntimeError(f"The wheel omits the OCCT {resource} resources")
-        result = {"wheel": wheel.name, "sha256": sha256(wheel), "platform": current_platform,
+        result = {"wheel": wheel.name, "sha256": sha256(wheel), **target_identity(),
                   "platform_tag": PLATFORM_TAGS[current_platform], "libraries": libraries}
         if sys.platform == "win32":
             result.update(dlls=dlls, unmodified_microsoft_runtime=list(crt))
@@ -250,7 +455,7 @@ def repair_wheel(wheel: Path, sdk: Path, output: Path, source: Path,
         tool = "delocate"
     else:
         environment["LD_LIBRARY_PATH"] = str(sdk / "lib")
-        command = [sys.executable, "-m", "auditwheel", "repair", "--plat", "manylinux_2_28_x86_64",
+        command = [sys.executable, "-m", "auditwheel", "repair", "--plat", PLATFORM_TAGS[host_platform()],
                    "--wheel-dir", str(output), str(wheel)]
         audit = [sys.executable, "-m", "auditwheel", "show"]
         tool = "auditwheel"
@@ -306,13 +511,14 @@ def prepare_native_runtime(native_cli: Path, sdk: Path, runtime: Path | None) ->
         raise RuntimeError("The native CLI requires the matching Microsoft runtime")
     # The CLI is a build-time parity tool. Give it the same unmodified runtime
     # used by the repaired wheel, independent of the machine's system version.
-    for name in CRT_NAMES:
-        original = runtime / name
-        if original.is_file():
-            shutil.copyfile(original, native_cli.parent / name)
+    payloads = [(str(native_cli), native_cli.read_bytes())]
+    payloads.extend((str(binary), binary.read_bytes()) for binary in (sdk / "bin").glob("*.dll"))
+    for name in crt_dependency_closure(payloads, runtime):
+        shutil.copyfile(runtime / name, native_cli.parent / name)
 
 
 def installed_smoke(source: Path, wheel: Path, build_dir: Path) -> list[dict]:
+    configuration = python_configuration()
     environment = build_dir / "installed-test"
     venv.EnvBuilder(with_pip=True, clear=True).create(environment)
     python = environment / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
@@ -356,7 +562,7 @@ def installed_smoke(source: Path, wheel: Path, build_dir: Path) -> list[dict]:
     if (source / "python/tests/test_numpy.py").is_file():
         clean.pop("PAACS_EXPECT_NO_NUMPY", None)
         clean["PAACS_REQUIRE_NUMPY"] = "1"
-        for version in NUMPY_TEST_VERSIONS:
+        for version in numpy_versions(host_platform(), configuration["python_version"]):
             run([str(python), "-m", "pip", "install", "--disable-pip-version-check",
                  "--only-binary=:all:", "--no-deps", "--force-reinstall", f"numpy=={version}"],
                 cwd=environment, env=clean)
@@ -379,11 +585,12 @@ def main() -> None:
     parser.add_argument("--build-dir", type=Path)
     parser.add_argument("--out-dir", type=Path)
     parser.add_argument("--occt-dir", type=Path, help="Reuse a source-built shared SDK's CMake config directory")
-    parser.add_argument("--vc-runtime-dir", type=Path, help="Licensed x64 Microsoft.VC143.CRT directory")
+    parser.add_argument("--vc-runtime-dir", type=Path, help="Licensed Microsoft CRT directory matching this architecture")
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--no-isolation", action="store_true", help="Use already installed pinned build requirements")
     args = parser.parse_args()
     try:
+        python_configuration()
         current_platform = host_platform(building=True)
     except RuntimeError as error:
         parser.error(str(error))
@@ -413,7 +620,18 @@ def main() -> None:
         config_dir = build_dir / "cmake/_occt-build/occt/lib/cmake/opencascade"
     env = dict(os.environ, CMAKE_BUILD_PARALLEL_LEVEL=str(args.jobs))
     if sys.platform == "win32":
-        env.update(CMAKE_GENERATOR="Visual Studio 17 2022", CMAKE_GENERATOR_PLATFORM="x64")
+        generator = cmake_generator(current_platform)
+        env.update(CMAKE_GENERATOR=generator[1], CMAKE_GENERATOR_PLATFORM=generator[3])
+        env.pop("CMAKE_GENERATOR_TOOLSET", None)
+        settings = iter(generator[4:])
+        for setting in settings:
+            if setting == "-T":
+                value = next(settings)
+                env["CMAKE_GENERATOR_TOOLSET"] = value
+                command.append(f"-Ccmake.define.CMAKE_GENERATOR_TOOLSET={value}")
+            else:
+                key, value = setting.removeprefix("-D").split("=", 1)
+                command.append(f"-Ccmake.define.{key.split(':')[0]}={value}")
         command.append("-Ccmake.define.CMAKE_VS_GLOBALS=VcpkgEnabled=false;VcpkgApplocalDeps=false")
     else:
         env["CMAKE_GENERATOR"] = "Ninja"
@@ -439,7 +657,15 @@ def main() -> None:
     prepare_native_runtime(native_cli, sdk, runtime)
     wheel, receipt = repair_wheel(wheels[0], sdk, output, source, runtime)
     receipt["source_revision"] = source_revision(source)
-    if current_platform == "linux-x86_64":
+    if sys.platform == "win32":
+        receipt["toolchain"] = visual_studio_toolchain(current_platform)
+    build_info = build_dir / "cmake/build-info-Release.txt"
+    if not build_info.is_file():
+        raise RuntimeError("The native build omitted its compiler and configuration record")
+    build_info_output = output / "native-build-info.txt"
+    shutil.copyfile(build_info, build_info_output)
+    receipt["build_info"] = {"file": build_info_output.name, "sha256": sha256(build_info_output)}
+    if current_platform.startswith("linux-"):
         receipt["minimum_glibc"] = "2.28"
         receipt["build_image"] = os.environ.get("PAACS_MANYLINUX_IMAGE")
     elif current_platform == "macos-arm64":

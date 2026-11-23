@@ -1,4 +1,4 @@
-"""Release gates use receipts and hashes from all three platform consumers."""
+"""Release gates require every Python/platform wheel and independent OS consumer."""
 # PAACS Mesh
 # Project author: Paul LeDewhurst
 # Copyright PAACS Software Ltd.
@@ -34,29 +34,65 @@ class PythonReleaseTests(unittest.TestCase):
             f'set(PAACS_OCCT_SHA512 "{hashlib.sha512(source).hexdigest()}")\n')
         self.builders, self.consumers = self.root / "builders", self.root / "consumers"
         self.output = self.root / "release"
-        for platform, artifact in release.ARTIFACTS.items():
+        for identifier, row in release.TARGETS.items():
+            platform, artifact = row["platform"], row["artifact"]
             directory = self.builders / artifact
             directory.mkdir(parents=True)
-            wheel = directory / f"paacs_mesh-1.2.0rc2-cp312-cp312-{release.PLATFORM_TAGS[platform]}.whl"
+            wheel = directory / f"paacs_mesh-1.2.0rc2-{row['python_tag']}-{row['python_tag']}-{row['platform_tag']}.whl"
             with zipfile.ZipFile(wheel, "w") as archive:
                 archive.writestr("paacs_mesh-1.2.0rc2.dist-info/METADATA",
-                    "Metadata-Version: 2.4\nName: paacs-mesh\nVersion: 1.2.0rc2\nRequires-Python: >=3.12,<3.13\n")
+                    "Metadata-Version: 2.4\nName: paacs-mesh\nVersion: 1.2.0rc2\nRequires-Python: " + release.REQUIRES_PYTHON + "\n")
             (directory / "occt-8.0.1.tar.gz").write_bytes(source)
             (directory / "dependency-audit.txt").write_text("test audited dependencies\n")
+            compiler = "MSVC 19.44.35207.1" if platform.startswith("windows-") else (
+                "AppleClang 17.0.0" if platform == "macos-arm64" else "GNU 14.2.1")
+            (directory / "native-build-info.txt").write_text(
+                "release=1.2.0-rc.2\ncompiler=" + compiler + "\ncmake=4.4.3\nstandard=23\n"
+                "configuration=Release\nflags=\nstrict_fp=ON\nipo=OFF\nnative=OFF\nsanitizer=none\n")
             release.write(directory / "native-parity.json", {"status": "passed", "cases": [{}, {}, {}]})
             record = {"source_revision": {"commit": self.sha, "clean": True}, "platform": platform,
+                "target_id": identifier, "python_version": row["python"], "python_tag": row["python_tag"],
+                "host": self.host(platform),
                 "wheel": wheel.name, "sha256": release.sha256(wheel),
                 "installed_smoke": "passed with isolated Python", "qualification": "passed with isolated Python",
                 "installed_tests": {"discovered": 10, "passed": 9, "skipped": 1},
                 "numpy_validation": [{"version": v, "status": "passed", "tests": 9}
-                                     for v in release.NUMPY_TEST_VERSIONS],
+                                     for v in row["numpy_versions"]],
                 "occt_source": {"file": "occt-8.0.1.tar.gz", "sha256": release.sha256(directory / "occt-8.0.1.tar.gz")},
                 "repair": {"audit": "dependency-audit.txt", "audit_sha256": release.sha256(directory / "dependency-audit.txt")},
+                "build_info": {"file": "native-build-info.txt", "sha256": release.sha256(directory / "native-build-info.txt")},
                 "native_parity": {"file": "native-parity.json", "sha256": release.sha256(directory / "native-parity.json")}}
+            if platform.startswith("windows-"):
+                record["toolchain"] = {"tools_version": "14.44.35207", "requested_toolset": row.get("msvc_toolset")}
             release.write(directory / "wheel-validation.json", record)
-            consumer = self.consumers / ("paacs-mesh-installed-" + platform)
-            consumer.mkdir(parents=True)
-            release.write(consumer / "consumer-validation.json", record)
+            for consumer_row in release.CONSUMERS.values():
+                if consumer_row["target_id"] != identifier:
+                    continue
+                consumer = self.consumers / consumer_row["consumer_artifact"]
+                consumer.mkdir(parents=True)
+                release.write(consumer / "consumer-validation.json", {
+                    **record, "consumer_id": consumer_row["id"], "consumer_os": consumer_row["consumer_os"],
+                    "host": self.host(platform, consumer_row.get("required_os_major")),
+                })
+
+    def host(self, platform, macos_major=None):
+        if platform.startswith("windows-"):
+            return {"system": "Windows", "machine": "ARM64" if platform == "windows-arm64" else "AMD64",
+                    "release": "11", "version": "10.0.26100"}
+        if platform == "macos-arm64":
+            return {"system": "Darwin", "machine": "arm64", "release": "24.0.0", "version": "Darwin",
+                    "macos_version": f"{macos_major or 15}.0"}
+        return {"system": "Linux", "machine": "aarch64" if platform == "linux-arm64" else "x86_64",
+                "release": "6.0", "version": "Linux", "libc": "glibc", "libc_version": "2.28"}
+
+    def builder_directory(self, platform, python="3.12"):
+        return self.builders / release.ARTIFACTS["cp" + python.replace(".", "") + "-" + platform]
+
+    def consumer_receipt(self, platform, python="3.12", os=None):
+        identifier = "cp" + python.replace(".", "") + "-" + platform
+        row = next(row for row in release.CONSUMERS.values()
+                   if row["target_id"] == identifier and (os is None or row["consumer_os"] == os))
+        return self.consumers / row["consumer_artifact"] / "consumer-validation.json"
 
     def assemble(self):
         return release.assemble(self.root, self.builders, self.consumers, self.sha, self.output)
@@ -72,19 +108,21 @@ class PythonReleaseTests(unittest.TestCase):
             self.assemble()
         self.assertFalse(self.output.exists(), "A failed gate left a publication set")
 
-    def use_qualified_dual_linux_wheel(self):
-        directory = self.builders / release.ARTIFACTS["linux-x86_64"]
+    def use_qualified_dual_linux_wheel(self, platform="linux-x86_64", python="3.12"):
+        directory = self.builder_directory(platform, python)
         original = next(directory.glob("*.whl"))
+        architecture = "x86_64" if platform == "linux-x86_64" else "aarch64"
+        tag = "cp" + python.replace(".", "")
         wheel = original.with_name(
-            "paacs_mesh-1.2.0rc2-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl")
+            f"paacs_mesh-1.2.0rc2-{tag}-{tag}-manylinux_2_27_{architecture}.manylinux_2_28_{architecture}.whl")
         original.rename(wheel)
         with zipfile.ZipFile(wheel, "a") as archive:
             archive.writestr("paacs_mesh-1.2.0rc2.dist-info/WHEEL",
                 "Wheel-Version: 1.0\nRoot-Is-Purelib: false\n"
-                "Tag: cp312-cp312-manylinux_2_27_x86_64\n"
-                "Tag: cp312-cp312-manylinux_2_28_x86_64\n")
+                f"Tag: {tag}-{tag}-manylinux_2_27_{architecture}\n"
+                f"Tag: {tag}-{tag}-manylinux_2_28_{architecture}\n")
         for path in (directory / "wheel-validation.json",
-                     self.consumers / "paacs-mesh-installed-linux-x86_64/consumer-validation.json"):
+                     self.consumer_receipt(platform, python)):
             record = release.load(path)
             record.update(wheel=wheel.name, sha256=release.sha256(wheel))
             release.write(path, record)
@@ -94,12 +132,12 @@ class PythonReleaseTests(unittest.TestCase):
         wheel = self.use_qualified_dual_linux_wheel()
         manifest = self.assemble()
         self.assertEqual(manifest["wheels"][wheel.name], release.sha256(wheel))
-        self.assertEqual(len(manifest["wheels"]), 3)
+        self.assertEqual(len(manifest["wheels"]), 20)
         self.assertEqual(release.sha256(self.output / "dist" / wheel.name), release.sha256(wheel))
         release.verify(manifest, self.output / "dist", self.sha)
 
     def test_linux_tags_require_expected_policy_and_only_reviewed_architecture(self):
-        original = next((self.builders / release.ARTIFACTS["linux-x86_64"]).glob("*.whl"))
+        original = next(self.builder_directory("linux-x86_64").glob("*.whl"))
         for tags in ("manylinux_2_27_x86_64", "manylinux_2_28_aarch64",
                      "manylinux_2_28_x86_64.manylinux_2_29_x86_64",
                      "manylinux_2_26_x86_64.manylinux_2_28_x86_64",
@@ -112,7 +150,7 @@ class PythonReleaseTests(unittest.TestCase):
                     release.wheel_metadata(candidate, release.Version("1.2.0rc2"), "linux-x86_64")
 
     def test_dual_linux_tags_do_not_relax_python_abi_name_version_or_build(self):
-        original = next((self.builders / release.ARTIFACTS["linux-x86_64"]).glob("*.whl"))
+        original = next(self.builder_directory("linux-x86_64").glob("*.whl"))
         dual = "manylinux_2_27_x86_64.manylinux_2_28_x86_64"
         for prefix in ("paacs_mesh-1.2.0rc2-cp311-cp312", "paacs_mesh-1.2.0rc2-cp312-cp311",
                        "paacs_mesh-1.2.0rc2-cp311.cp312-cp312", "paacs_mesh-1.2.0rc2-cp312-abi3.cp312",
@@ -126,7 +164,7 @@ class PythonReleaseTests(unittest.TestCase):
 
     def test_windows_and_macos_platform_tags_remain_exact(self):
         for platform in ("windows-x86_64", "macos-arm64"):
-            original = next((self.builders / release.ARTIFACTS[platform]).glob("*.whl"))
+            original = next(self.builder_directory(platform).glob("*.whl"))
             candidate = self.root / original.name.replace(".whl", ".manylinux_2_28_x86_64.whl")
             candidate.write_bytes(original.read_bytes())
             with self.subTest(platform=platform), self.assertRaises(RuntimeError):
@@ -138,17 +176,20 @@ class PythonReleaseTests(unittest.TestCase):
         wheel.write_bytes(original + b"changed after qualification")
         self.assert_gate_refuses()
         wheel.write_bytes(original)
-        path = self.consumers / "paacs-mesh-installed-linux-x86_64/consumer-validation.json"
+        path = self.consumer_receipt("linux-x86_64")
         record = release.load(path)
         record["sha256"] = "0" * 64
         release.write(path, record)
         self.assert_gate_refuses()
 
-    def test_three_qualified_wheels_and_matching_source_are_staged_separately(self):
+    def test_complete_qualified_wheels_and_matching_source_are_staged_separately(self):
         manifest = self.assemble()
-        self.assertEqual(len(list((self.output / "dist").iterdir())), 3)
+        self.assertEqual(len(list((self.output / "dist").iterdir())), 20)
+        self.assertEqual(len(manifest["qualified_consumers"]), 28)
         self.assertTrue(all(p.suffix == ".whl" for p in (self.output / "dist").iterdir()))
         self.assertTrue((self.output / "release-assets/occt-8.0.1.tar.gz").is_file())
+        for identifier in release.TARGETS:
+            self.assertTrue((self.output / f"release-assets/{identifier}-native-build-info.txt").is_file())
         release.verify(manifest, self.output / "dist", self.sha)
         with self.assertRaises(RuntimeError):
             self.assemble()
@@ -164,7 +205,7 @@ class PythonReleaseTests(unittest.TestCase):
                 release.preflight(self.root, "v1.2.0-rc.2", "b" * 40)
 
     def test_an_unqualified_or_missing_consumer_blocks_release(self):
-        path = self.consumers / "paacs-mesh-installed-linux-x86_64/consumer-validation.json"
+        path = self.consumer_receipt("linux-x86_64")
         path.unlink()
         self.assert_gate_refuses()
 
@@ -182,6 +223,150 @@ class PythonReleaseTests(unittest.TestCase):
     def test_missing_numpy_qualification_blocks_release(self):
         self.change_builder(lambda r: r["numpy_validation"].pop())
         self.assert_gate_refuses()
+
+    def test_every_new_python_and_architecture_has_its_own_receipt(self):
+        self.assertEqual(len(release.TARGETS), 20)
+        self.assertEqual(len(release.CONSUMERS), 28)
+        for platform, python in (("windows-arm64", "3.15"), ("linux-arm64", "3.14")):
+            path = self.builder_directory(platform, python) / "wheel-validation.json"
+            record = release.load(path)
+            path.unlink()
+            with self.subTest(platform=platform, python=python):
+                self.assert_gate_refuses()
+            release.write(path, record)
+
+    def test_cross_python_abi_receipt_blocks_release(self):
+        self.change_builder(lambda r: r.update(python_version="3.13", python_tag="cp313"))
+        self.assert_gate_refuses()
+
+    def test_missing_or_altered_compiler_proof_blocks_release(self):
+        path = self.builder_directory("windows-arm64") / "native-build-info.txt"
+        original = path.read_bytes()
+        path.unlink()
+        self.assert_gate_refuses()
+        path.write_bytes(original + b"compiler=MSVC 19.50.1\n")
+        self.assert_gate_refuses()
+
+    def test_compiler_proof_must_match_configuration_even_with_updated_hash(self):
+        directory = self.builder_directory("linux-arm64")
+        path = directory / "native-build-info.txt"
+        original = path.read_text()
+        receipt_path = directory / "wheel-validation.json"
+        receipt = release.load(receipt_path)
+        for before, after in (("strict_fp=ON", "strict_fp=OFF"), ("configuration=Release", "configuration=Debug"),
+                              ("standard=23", "standard=26"), ("native=OFF", "native=ON"),
+                              ("sanitizer=none", "sanitizer=thread"), ("flags=", "flags=-ffast-math")):
+            path.write_text(original.replace(before, after))
+            receipt["build_info"]["sha256"] = release.sha256(path)
+            release.write(receipt_path, receipt)
+            with self.subTest(after=after):
+                self.assert_gate_refuses()
+
+    def test_windows_arm64_actual_compiler_must_match_pinned_toolset(self):
+        directory = self.builder_directory("windows-arm64")
+        path = directory / "native-build-info.txt"
+        path.write_text(path.read_text().replace("MSVC 19.44.35207.1", "MSVC 19.50.1"))
+        receipt_path = directory / "wheel-validation.json"
+        receipt = release.load(receipt_path)
+        receipt["build_info"]["sha256"] = release.sha256(path)
+        receipt["toolchain"]["tools_version"] = "14.50.1"
+        release.write(receipt_path, receipt)
+        self.assert_gate_refuses()
+
+    def test_selected_and_actual_compiler_proofs_cannot_be_mixed(self):
+        directory = self.builder_directory("windows-arm64")
+        receipt_path = directory / "wheel-validation.json"
+        receipt = release.load(receipt_path)
+        receipt["toolchain"]["tools_version"] = "14.50.1"
+        release.write(receipt_path, receipt)
+        self.assert_gate_refuses()
+
+    def test_consumer_must_verify_the_exact_native_compiler_proof(self):
+        path = self.consumer_receipt("windows-arm64")
+        record = release.load(path)
+        record["build_info"]["sha256"] = "b" * 64
+        release.write(path, record)
+        self.assert_gate_refuses()
+
+    def test_consumer_receipt_cannot_substitute_another_python_or_target(self):
+        path = self.consumer_receipt("linux-arm64", "3.15")
+        original = release.load(path)
+        for fields in ({"target_id": "cp314-linux-arm64"}, {"python_tag": "cp314"},
+                       {"consumer_id": "cp315-linux-x86_64-linuxglibc228"}):
+            release.write(path, {**original, **fields})
+            with self.subTest(fields=fields):
+                self.assert_gate_refuses()
+
+    def test_macos_consumer_os_requires_actual_host_major_not_only_claimed_name(self):
+        path = self.consumer_receipt("macos-arm64", os="macos27")
+        record = release.load(path)
+        record["host"]["macos_version"] = "26.1"
+        release.write(path, record)
+        self.assert_gate_refuses()
+
+    def test_macos15_consumer_cannot_stand_in_for_newer_os(self):
+        path = self.consumer_receipt("macos-arm64", "3.15", os="macos26")
+        record = release.load(self.consumer_receipt("macos-arm64", "3.15", os="macos15"))
+        release.write(path, record)
+        self.assert_gate_refuses()
+
+    def test_arm_hosts_and_linux_libc_are_verified(self):
+        for platform, field, value in (("windows-arm64", "machine", "AMD64"),
+                                       ("windows-arm64", "version", "10.0.19045"),
+                                       ("linux-arm64", "libc_version", "2.27"),
+                                       ("linux-arm64", "machine", "x86_64")):
+            path = self.builder_directory(platform) / "wheel-validation.json"
+            record = release.load(path)
+            changed = json.loads(json.dumps(record))
+            changed["host"][field] = value
+            if platform == "windows-arm64" and field == "version":
+                changed["host"]["release"] = "10"
+            release.write(path, changed)
+            with self.subTest(platform=platform, field=field):
+                self.assert_gate_refuses()
+            release.write(path, record)
+
+    def test_aarch64_dual_linux_tags_remain_supported(self):
+        wheel = self.use_qualified_dual_linux_wheel("linux-arm64", "3.15")
+        manifest = self.assemble()
+        self.assertEqual(manifest["wheels"][wheel.name], release.sha256(wheel))
+        release.verify(manifest, self.output / "dist", self.sha)
+
+    def test_unexpected_or_duplicate_artifact_directory_blocks_release(self):
+        (self.builders / "paacs-mesh-cp312-win32").mkdir()
+        self.assert_gate_refuses()
+
+    def test_publisher_rechecks_target_and_consumer_completeness(self):
+        manifest = self.assemble()
+        for key in ("targets", "qualified_consumers"):
+            changed = json.loads(json.dumps(manifest))
+            if key == "targets":
+                changed[key].pop(next(iter(changed[key])))
+            else:
+                changed[key].pop()
+            with self.subTest(key=key), self.assertRaises(RuntimeError):
+                release.verify(changed, self.output / "dist", self.sha)
+
+    def test_publisher_rejects_mixed_python_target_even_when_file_hashes_match(self):
+        manifest = self.assemble()
+        first, second = "cp312-linux-arm64", "cp313-linux-arm64"
+        manifest["targets"][first]["wheel"] = manifest["targets"][second]["wheel"]
+        with self.assertRaises(RuntimeError):
+            release.verify(manifest, self.output / "dist", self.sha)
+
+    def test_index_install_refuses_partial_matrix_before_network_or_environment(self):
+        manifest = self.assemble()
+        manifest["qualified_consumers"].pop()
+        release.write(self.output / "release-manifest.json", manifest)
+        with patch.object(sys, "argv", ["check_pypi_release.py", "--manifest",
+                str(self.output / "release-manifest.json"), "--fixture", str(self.root / "cylinder.step"),
+                "--output", str(self.root / "index-install")]), \
+                patch.object(index_release, "urlopen") as network, \
+                patch.object(index_release.venv, "EnvBuilder") as environment:
+            with self.assertRaises(RuntimeError):
+                index_release.main()
+            network.assert_not_called()
+            environment.assert_not_called()
 
     def test_empty_installed_test_result_blocks_release(self):
         self.change_builder(lambda r: r.update(installed_tests={"discovered": 0, "passed": 0, "skipped": 0}))
@@ -254,7 +439,7 @@ class PythonReleaseTests(unittest.TestCase):
                 requirement = Path(install[install.index("-r") + 1])
                 self.assertTrue(requirement.is_absolute())
                 self.assertEqual(requirement, expected_environment / "release.txt")
-                self.assertEqual(requirement.read_text().count("--hash=sha256:"), 3)
+                self.assertEqual(requirement.read_text().count("--hash=sha256:"), 20)
                 self.assertEqual((expected_environment / "cylinder.step").read_bytes(), fixture.read_bytes())
                 self.assertTrue((expected_output / "index-validation.json").is_file())
         finally:

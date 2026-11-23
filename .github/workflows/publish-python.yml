@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       qualified-run-id:
-        description: Optional completed publication run whose seven qualification jobs passed before assembly failed
+        description: Optional completed publication run whose complete compatibility matrix passed before assembly failed
         required: false
         default: ''
         type: string
@@ -35,6 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
           fetch-depth: 0
       - uses: actions/setup-python@v6
@@ -80,14 +81,14 @@ jobs:
           github-token: ${{ github.token }}
           run-id: ${{ needs.prepare.outputs.artifact-run-id }}
           artifact-ids: ${{ needs.prepare.outputs.builder-artifact-ids }}
-          pattern: paacs-mesh-cp312-*
+          pattern: paacs-mesh-cp3*-*
           path: release-builders
       - uses: actions/download-artifact@v6
         with:
           github-token: ${{ github.token }}
           run-id: ${{ needs.prepare.outputs.artifact-run-id }}
           artifact-ids: ${{ needs.prepare.outputs.consumer-artifact-ids }}
-          pattern: paacs-mesh-installed-*
+          pattern: paacs-mesh-consumer-*
           path: release-consumers
       - name: Verify all builders and clean consumers from the same source
         env:
@@ -191,6 +192,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+      - run: python -m pip install packaging==25.0
       - uses: actions/download-artifact@v6
         with:
           name: paacs-mesh-release-manifest
