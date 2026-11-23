@@ -39,7 +39,7 @@ The same operation is available from a terminal:
 paacs-mesh part.step part.vtk --size 0.7
 ```
 
-Discover the available operations and inspect CAD faces before selecting controls:
+Development wheels also provide discovery and CAD inspection before selecting controls:
 
 ```sh
 paacs-mesh capabilities --json

@@ -213,6 +213,8 @@ def _advanced(command, argv):
             else:
                 print(format_diagnostics(report))
             return 0 if report["status"] in ("valid", "valid_with_warnings") else 1
+        if os.path.lexists(args.output):
+            raise WorkflowError("output_exists", "Publication never replaces an existing output", stage="publication")
         with _native_output_to_stderr():
             result = run_saved_recipe(args.recipe, args.source)
         diagnostics = diagnose(result.report)

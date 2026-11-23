@@ -1,5 +1,9 @@
 # Inspection and diagnostics
 
+These discovery commands and diagnostic helpers are available in development
+wheels built from this revision. The existing PyPI `1.2.0rc2` release predates
+them; installing that release alone does not add these commands.
+
 PAACS Mesh provides the same inspection, recipe and diagnostic operations to
 Python programs, shell users and agents. Discover the supported operations,
 inspect the CAD model, make an explicit selection, then evaluate the native
