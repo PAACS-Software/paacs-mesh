@@ -114,6 +114,20 @@ remaining targets. An automatic fallback is recorded separately in
 `initial_front_fallback`; it does not claim the new constructor ran. The CLI
 provides `--advancing-interior-front` and `--no-advancing-interior-front`.
 
+### Construction effort and limits (development)
+
+Rebuilt development wheels also expose `construction_effort="legacy"` and four
+optional positive integer caps: `max_surface_points`,
+`max_surface_chord_points`, `max_interior_candidates` and `max_interior_sites`.
+The `auto` and `thorough` effort policies are opt-in. They adjust bounded
+construction effort in the compatible single-solid Tet4 route, within the
+overall work, memory, node, output and time limits. They do not weaken native
+validity checks or guarantee achieved sizing or improved quality.
+
+See [construction effort and caps](CONSTRUCTION_BUDGETS.md) for per-face surface
+scope, native stage receipts, CLI flags and saved-recipe behaviour. These
+controls are not included in published RC3 wheels.
+
 ## Package distribution
 
 The [publishing workflow](../.github/workflows/publish-python.yml) prepares the

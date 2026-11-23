@@ -13,7 +13,9 @@ contains `package_version`, `engine_version`, `units`, `operations`,
 `cli_commands`, formats, selection predicates, controls, recovery and assembly
 restrictions, diagnostic limits and explicit limitations. Development builds
 also describe `mesh_inspection`, `cad_proximity`, `mesh_visualization` and
-`mesh_comparison`. For example:
+`mesh_comparison`. The development `controls` object additionally lists
+`construction_efforts`, `construction_default`, `construction_stage_caps` and
+`construction_caps_override_overall_resources=False`. For example:
 
 ```python
 import paacs_mesh as pm
@@ -53,6 +55,7 @@ different geometries. Actions are suggestions, not automatic operations.
 | `native_validity_failed` | Reported audit/quality validity or invalid-cell counts fail. |
 | `preferred_quality_not_met` | Preferred shape quality was missed; warning policy applies. |
 | `strict_quality_not_met` | An explicit strict quality threshold was missed. |
+| `construction_budget_limited` | A native construction stage reports a bounded stop. This is a warning, not a sizing certificate or a replacement for native validity checks. |
 | `body_meshing_failed` | A body reports a meshing failure. |
 | `assembly_interference` | Preserved parts have material overlap. |
 | `assembly_interference_unresolved` | Part interference could not be established. |
@@ -63,6 +66,51 @@ different geometries. Actions are suggestions, not automatic operations.
 Native `reason`, `surface_reason`, `volume_reason` and selection reasons are
 separate fields, not aliases for these summary issue codes. Inspect their
 recorded evidence rather than matching human message text.
+
+### Construction receipts (development)
+
+See [construction effort and caps](CONSTRUCTION_BUDGETS.md) for request scope and
+replay behaviour. The native report's additive `construction` object records
+`effort` (`legacy`, `auto` or `thorough`) and the four requested optional caps:
+`max_surface_points`, `max_surface_chord_points`, `max_interior_candidates` and
+`max_interior_sites`. An automatic cap is `null`; effective limits appear in
+stage receipts. `diagnose()` copies this object to `summary.construction`.
+Historical reports can omit these fields.
+
+Each native body can provide `surface_spacing`, a list of rebuilt-face receipts:
+
+| Fields | Meaning |
+| --- | --- |
+| `face_tag` | Imported CAD face identity for the reported stage. |
+| `point_limit`, `chord_point_limit`, `chart_node_limit` | Effective stage ceilings within overall resources. |
+| `added_points`, `chord_added_points` | Points actually inserted by the two stages. |
+| `pending_entries`, `blocked_candidates` | Recorded unresolved triangle entries and blocked proposals. |
+| `termination`, `queue_exhausted`, `budget_limited` | Stop diagnostic and queue/allowance state. |
+
+Pending entries can increase as triangles subdivide. They are not a monotone
+error measure, a count of bad final cells or evidence of complete achieved
+sizing. Queue exhaustion does not certify CAD fidelity or cell quality. Routes
+that do not rebuild charts need not provide face receipts.
+
+The body's `initial_front` adds `budget_reason`, effective `candidate_limit`,
+`site_limit`, `query_limit`, `work_limit`, and allocation counters
+`reserved_bulk_candidates`, `reserved_bulk_sites`, `source_candidates`,
+`source_deferred_faces` and `source_phase_deferred`. Reservations record effort
+allocation, not guaranteed accepted bulk points. A nonfinite
+`maximum_unresolved_void_ratio` is emitted as `null`, indicating unavailable
+completion evidence rather than zero unresolved space. The full native body
+also exposes `native_surface_work`, `native_volume_work`,
+`native_surface_seconds` and `native_volume_seconds`.
+
+`construction_budget_limited` carries `surface_stages`, an available
+`initial_stage`, `sizing_completion_certified=False` and
+`native_validity_gates_changed=False` in its evidence. Body/face identities come
+from those receipts; no cell identity or cause of poor quality is inferred.
+Diagnostics preserve native refusal status and do not automatically retry.
+Diagnostic summaries bound nested face-stage and identity lists by
+`max_issues`, with explicit totals and truncation flags. Consult the full native
+report for the complete receipts; an omitted identity is not evidence that its
+stage completed.
 
 ## Mesh exploration contracts
 

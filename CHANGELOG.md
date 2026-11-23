@@ -8,8 +8,14 @@
   highlights, plus common-region comparisons of reported-valid mesh snapshots.
 - Expose Python meshing signatures, guarded selection sizing and native hints;
   preserve the distinction between requested policy and native body routes.
-- Retain native meshing algorithms, validity gates and archive v1. These
-  development interfaces are not part of the published RC3 wheels.
+- Expose bounded surface/interior construction caps in C++, Python, recipes and
+  the STEP CLI, with per-stage limit and termination receipts. Keep established
+  allowances as the default; opt-in adaptive policies reserve interior effort
+  for bulk placement and remain subordinate to overall resource limits.
+- Report construction-limit warnings separately from geometric validity,
+  achieved sizing and element quality. Preserve historical recipe defaults.
+- Retain native validity gates and archive v1. These development changes are
+  not part of the published RC3 wheels.
 
 ## 1.2.0-rc.3
 

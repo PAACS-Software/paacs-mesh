@@ -18,6 +18,7 @@ matched after normalizing the OCCT checked-state flag and line endings.
 
 | Figures | Origin |
 | --- | --- |
+| `docs/images/construction-budget-study.png` (1) | Actual archived Tet4 meshes of the project-owned cylinder fixture. The [study](CONSTRUCTION_BUDGET_STUDY.md), [adjacent figure receipt](images/construction-budget-study-provenance.json) and [renderer](../benchmarks/render_construction_budgets.py) retain source/mesh/report hashes, native cell IDs, common camera and whole-element cut. Saved native reports are hash-paired, without a new native audit. |
 | `docs/images/refinement-rc3-*` (5) | Actual published-RC3 meshes of the project-owned cylinder fixture, rendered from exact saved archive coordinates. The [study](REFINEMENT_FINDINGS.md) and [numerical/figure receipt](data/refinement-cylinder-rc3.json) record settings, IDs, hashes and limitations. These are scientific renderings, not generated interpretations of geometry. |
 | Cantilever, plate with a hole, straight duct and hybrid duct (7) | PAACS meshes and solver results from the generated example fixtures above. Their READMEs link the source generators and give plotting commands. The README uses the plate example's `achieved-sizing.png`. |
 | `examples/python_step_sizing/sizing-sections.png` (1) | Actual native STEP meshes generated through the Python interface from the project-owned cylinder fixture. The [example](../examples/python_step_sizing/README.md) gives commands, control settings, achieved-size measurements and archive hashes. |
