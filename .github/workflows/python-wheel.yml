@@ -107,12 +107,12 @@ jobs:
         run: |
           if [ "$RUNNER_OS" = Linux ]; then
             docker run --rm -v "$PWD:/io" -w /io \
-              -v "$GITHUB_OUTPUT:/tmp/github-output" \
               -e PAACS_MANYLINUX_IMAGE "$PAACS_MANYLINUX_IMAGE" bash -euc '
                 export PATH="/opt/python/cp312-cp312/bin:$PATH"
                 python -m pip install cmake==4.4.3 ninja==1.13.2
-                python scripts/build_python_sdk.py key --github-output /tmp/github-output
+                python scripts/build_python_sdk.py key --github-output build/sdk-key-output.txt
               '
+            cat build/sdk-key-output.txt >> "$GITHUB_OUTPUT"
           else
             python scripts/build_python_sdk.py key --github-output "$GITHUB_OUTPUT"
           fi
