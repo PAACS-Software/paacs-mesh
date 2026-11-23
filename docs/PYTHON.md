@@ -1,7 +1,7 @@
 # Python STEP interface
 
 The Python distribution calls the C++ STEP importer and Tet4 mesher in process.
-Wheels target **CPython 3.12** on these platforms:
+The published **1.2.0rc2** wheels support **64-bit CPython 3.12** on these platforms:
 
 | System | Architecture | Compatibility target |
 |---|---|---|
@@ -11,6 +11,13 @@ Wheels target **CPython 3.12** on these platforms:
 
 Each repaired wheel contains the shared CAD libraries and runtime dependencies.
 Installation needs Python and pip, with no compiler, OCCT SDK or `PATH` setup.
+
+The development qualification plan covers CPython 3.12–3.15, adds Linux ARM64 and
+Windows 11 ARM64, and tests the same macOS 15 ARM64 wheels on macOS 15, 26 and 27.
+These additional configurations are **not yet qualified or published**. Development
+metadata accepts the planned interpreters; it does not change the existing PyPI
+release. See the [compatibility matrix](PYTHON_COMPATIBILITY.md) for exact targets
+and the checks required before another release.
 
 Install the release candidate in a Python 3.12 environment:
 
@@ -24,7 +31,8 @@ process.
 
 Development wheels are also available from the
 [Python STEP wheel workflow](../.github/workflows/python-wheel.yml). Choose the
-artifact matching the system and architecture above, extract it and install its
+artifact matching the interpreter, system and architecture, check its qualification
+receipts, extract it and install its
 `.whl` file. For example, on Windows:
 
 ```powershell
@@ -98,10 +106,12 @@ provides `--advancing-interior-front` and `--no-advancing-interior-front`.
 ## Package distribution
 
 The [publishing workflow](../.github/workflows/publish-python.yml) prepares the
-three repaired CPython 3.12 wheels and requires fresh installed-wheel consumers
-from the same source commit. The qualified release candidate is available on
-PyPI through Trusted Publishing; development artifacts remain available for
-testing changes before the next qualified release.
+complete wheel set from the [compatibility plan](PYTHON_COMPATIBILITY.md) and
+requires independent installed-wheel consumers from the same source commit.
+The published CPython 3.12 release candidate remains available on PyPI through
+Trusted Publishing. Development artifacts test the expanded matrix before the
+next qualified release; no additional compatibility is implied by the current
+package-index files.
 The [release guide](PYPI_RELEASE.md) records that setup
 and the publication checks.
 
