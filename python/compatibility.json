@@ -1,0 +1,71 @@
+{
+  "schema": "paacs-python-compatibility-v1",
+  "python_versions": ["3.12", "3.13", "3.14", "3.15"],
+  "requires_python": ">=3.12,<3.16",
+  "numpy_current": "2.5.5",
+  "numpy_legacy": "1.26.4",
+  "platforms": [
+    {
+      "id": "windows-x86_64",
+      "platform_tag": "win_amd64",
+      "runner": "windows-2022",
+      "architecture": "x64",
+      "jobs": 4,
+      "timeout_minutes": 90,
+      "legacy_numpy": true,
+      "consumers": [{"id": "windows2022", "runner": "windows-2022", "required_os_major": null, "preview": false}]
+    },
+    {
+      "id": "macos-arm64",
+      "platform_tag": "macosx_15_0_arm64",
+      "runner": "macos-15",
+      "architecture": "arm64",
+      "jobs": 3,
+      "timeout_minutes": 120,
+      "legacy_numpy": true,
+      "minimum_macos": "15.0",
+      "consumers": [
+        {"id": "macos15", "runner": "macos-15", "required_os_major": 15, "preview": false},
+        {"id": "macos26", "runner": "macos-26", "required_os_major": 26, "preview": false},
+        {"id": "macos27", "runner": "xcode-27", "required_os_major": 27, "preview": true}
+      ]
+    },
+    {
+      "id": "linux-x86_64",
+      "platform_tag": "manylinux_2_28_x86_64",
+      "runner": "ubuntu-24.04",
+      "architecture": "x64",
+      "jobs": 3,
+      "timeout_minutes": 120,
+      "legacy_numpy": true,
+      "minimum_glibc": "2.28",
+      "image": "quay.io/pypa/manylinux_2_28_x86_64@sha256:55a36963bc0504cdf004011001c1072306402f0b8b83be5a5eba7068f93eec53",
+      "image_architecture": "amd64",
+      "consumers": [{"id": "linuxglibc228", "runner": "ubuntu-24.04", "required_os_major": null, "preview": false}]
+    },
+    {
+      "id": "linux-arm64",
+      "platform_tag": "manylinux_2_28_aarch64",
+      "runner": "ubuntu-24.04-arm",
+      "architecture": "arm64",
+      "jobs": 3,
+      "timeout_minutes": 120,
+      "legacy_numpy": true,
+      "minimum_glibc": "2.28",
+      "image": "quay.io/pypa/manylinux_2_28_aarch64@sha256:126d9eea9d6b1717f3e17b2b3ac51da04ef159a5f935dac36fe92d621dc8f246",
+      "image_architecture": "arm64",
+      "image_config_sha256": "cdf3baddb993faeb77abbebed7d49c8eaedcf5f7f0ff6e0019ef1cbf72cdc424",
+      "consumers": [{"id": "linuxglibc228", "runner": "ubuntu-24.04-arm", "required_os_major": null, "preview": false}]
+    },
+    {
+      "id": "windows-arm64",
+      "platform_tag": "win_arm64",
+      "runner": "windows-11-arm",
+      "architecture": "arm64",
+      "jobs": 4,
+      "timeout_minutes": 120,
+      "legacy_numpy": false,
+      "consumers": [{"id": "windows11arm", "runner": "windows-11-arm", "required_os_major": null, "preview": false}]
+    }
+  ]
+}
