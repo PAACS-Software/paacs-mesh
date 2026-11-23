@@ -1042,6 +1042,7 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
     detail::OcctStageTrace meshTrace("native_mesh");
     const bool spatialSizing=o.useSpatialSizing||!o.sizeBoxes.empty()||o.useAdvancingInteriorFront.value_or(false);
     if(o.maximumRecoveryRandomRetries>4||o.maximumEdgeRecoverySteinerCandidates>64||o.maximumRecoveryPatchStates>65536||o.curvaturePointsPerTurn>64||
+       (o.construction.effort!=CadConstructionEffort::Legacy&&o.construction.effort!=CadConstructionEffort::Automatic&&o.construction.effort!=CadConstructionEffort::Thorough)||
        (o.recoveryMode!=NativeCadRecoveryMode::Standard&&o.recoveryMode!=NativeCadRecoveryMode::Advanced)||
        (o.assemblyPolicy!=NativeCadAssemblyPolicy::ConformingDomain&&o.assemblyPolicy!=NativeCadAssemblyPolicy::IndependentParts)){NativeCadMeshOutcome invalid;invalid.reason=NativeCadMeshReason::InvalidRequest;return invalid;}
     if(spatialSizing&&(!o.useNativeSurfaceFallback||
@@ -1325,6 +1326,7 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
                         report.recoveryRegions=recovered.regionRecovery;
                         report.constraintRecovery=recovered.constraintRecovery;
                         report.initialFront=recovered.initialFront;
+                        report.surfaceSpacing=std::move(recovered.surfaceSpacing);
                         report.interiorFrontDiagnostic=recovered.interiorFrontDiagnostic;
                         report.interiorFrontNodes=recovered.interiorFrontNodes;
                         report.interiorFrontCandidates=recovered.interiorFrontCandidates;

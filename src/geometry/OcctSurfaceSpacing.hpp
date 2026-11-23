@@ -9,6 +9,7 @@
 #include "OcctChartTrim.hpp"
 #include "paacs/algo/Delaunay2D.hpp"
 #include "paacs/predicates/Predicates.hpp"
+#include "paacs/geometry/CadConstructionBudget.hpp"
 #include <limits>
 #include <stdexcept>
 #include <tuple>
@@ -25,7 +26,9 @@ bool spaceOcctChart(const OcctModel& model,int faceTag,std::vector<Vec2>& uv,
     const std::set<std::array<int,2>>& protectedEdges,double targetSize,double chord,
     Position position,Append append,Charge charge,AdmitStorage admitStorage,bool regularFront=false,
     unsigned pointsPerTurn=16,OcctChartTrim* trimClassifier=nullptr,
-    const OcctSpatialSizing* sizeField=nullptr) {
+    const OcctSpatialSizing* sizeField=nullptr,const CadConstructionBudget& construction={},
+    std::uint64_t maximumAdditionalNodes=(std::numeric_limits<std::uint64_t>::max)(),
+    std::size_t maximumChartNodes=4096,CadSurfaceSpacingReport* report=nullptr) {
     using Sign=predicates::Sign;
     using Edge=std::array<Index,2>;
     const auto* face=model.face(faceTag);
@@ -37,7 +40,7 @@ bool spaceOcctChart(const OcctModel& model,int faceTag,std::vector<Vec2>& uv,
     const auto edgeKey=[](Index a,Index b){return Edge{std::min(a,b),std::max(a,b)};};
     const auto protectedEdge=[&](Edge edge){return protectedEdges.contains({int(edge[0]),int(edge[1])});};
     constexpr auto noTriangle=std::numeric_limits<std::size_t>::max();
-    constexpr unsigned maximumPoints=256,maximumCavity=96;
+    constexpr unsigned maximumCavity=96;
     // Extend the size from shared curves toward the target in the interior.
     std::vector<double> curveSize(uv.size(),targetSize);
     struct CurveSegment { Vec3 origin, direction; double squaredLength, size; };
@@ -85,6 +88,45 @@ bool spaceOcctChart(const OcctModel& model,int faceTag,std::vector<Vec2>& uv,
     std::vector<double> nodeSizes;
     if(regularFront)for(std::size_t i=0;i<uv.size();++i)
         nodeSizes.push_back(std::min(curveSize[i],localSize(uv[i],position(ids[i]))));
+    const bool legacy=construction.effort==CadConstructionEffort::Legacy;
+    std::uint64_t maximumPoints=construction.surfacePointsPerFace?construction.surfacePointsPerFace:256;
+    if(!legacy&&!construction.surfacePointsPerFace) {
+        // One regular surface vertex occupies approximately sqrt(3)/2*h^2.
+        // This is an effort estimate, not a geometric or sizing certificate.
+        // Sample the actual retained triangles and requested local field; a
+        // heavily refined small region therefore contributes its own density.
+        long double desiredVertices=0;
+        const auto additionalAllowance=static_cast<long double>(maximumAdditionalNodes);
+        for(const auto& triangle:triangles) {
+            charge(1);
+            const auto a=triangle.v[0],b=triangle.v[1],c=triangle.v[2];
+            const auto p=position(ids[a]),q=position(ids[b]),r=position(ids[c]);
+            const auto center=(uv[a]+uv[b]+uv[c])*(1./3.);
+            auto h=localSize(center,face->pointAt(center));
+            if(regularFront)h=std::min({h,nodeSizes[a],nodeSizes[b],nodeSizes[c]});
+            const auto twiceArea=(q-p).cross(r-p).norm();
+            if(!(std::isfinite(h)&&h>0&&std::isfinite(twiceArea))) {
+                desiredVertices=additionalAllowance;
+                break;
+            }
+            desiredVertices+=static_cast<long double>(twiceArea)/(std::sqrt(3.L)*h*h);
+            if(desiredVertices>=additionalAllowance+static_cast<long double>(uv.size()))break;
+        }
+        const auto scale=construction.effort==CadConstructionEffort::Thorough?2.L:1.L;
+        const auto need=std::max(0.L,desiredVertices-static_cast<long double>(uv.size()))*scale;
+        const auto floor=construction.effort==CadConstructionEffort::Thorough?512ULL:256ULL;
+        maximumPoints=need>=additionalAllowance?maximumAdditionalNodes:
+            std::max<std::uint64_t>(floor,static_cast<std::uint64_t>(std::ceil(need)));
+    }
+    // Preserve the exact old ceilings and refusal path for untouched Legacy.
+    if(!legacy||construction.surfacePointsPerFace||construction.surfaceChordPointsPerFace)
+        maximumPoints=std::min(maximumPoints,maximumAdditionalNodes);
+    if(report) {
+        report->faceTag=faceTag;
+        report->pointLimit=maximumPoints;
+        report->chartNodeLimit=maximumChartNodes;
+        report->termination="constructing";
+    }
     std::map<Edge,double> edgeDeviations;
     const auto edgeDeviation=[&](Edge edge) {
         if (!curved||protectedEdge(edge)) return 0.;
@@ -128,6 +170,13 @@ bool spaceOcctChart(const OcctModel& model,int faceTag,std::vector<Vec2>& uv,
     std::map<Edge,std::array<EdgeUse,2>> edgeUses;
     std::set<Priority> front;
     unsigned blocked=0;
+    std::uint64_t livePending=0;
+    const auto originalNodeCount=uv.size();
+    const auto blockCandidate=[&] {
+        ++blocked;
+        if(report)report->blockedCandidates=blocked;
+        return blocked>128;
+    };
     const auto scoreTriangle=[&](const std::array<Index,3>& t){
             const auto a=position(ids[t[0]]),b=position(ids[t[1]]),c=position(ids[t[2]]);
             const auto ab=(b-a).norm(),bc=(c-b).norm(),ca=(a-c).norm();
@@ -161,6 +210,8 @@ bool spaceOcctChart(const OcctModel& model,int faceTag,std::vector<Vec2>& uv,
     const auto addCell=[&](algo::Tri triangle){
         const auto index=chart.size();
         chart.push_back({triangle,scoreTriangle(triangle.v),{noTriangle,noTriangle,noTriangle}});
+        livePending+=std::max(chart.back().score.chord,chart.back().score.spacing)>1;
+        if(report)report->pendingEntries=livePending;
         for(unsigned j=0;j<3;++j) {
             charge(1);
             const auto edge=edgeKey(triangle.v[j],triangle.v[(j+1)%3]);
@@ -209,7 +260,8 @@ bool spaceOcctChart(const OcctModel& model,int faceTag,std::vector<Vec2>& uv,
         }
     };
     for(std::size_t i=0;i<chart.size();++i)refresh(i);
-    for(unsigned added=0;added<maximumPoints&&uv.size()<4096&&!front.empty();) {
+    std::uint64_t added=0;
+    for(;added<maximumPoints&&uv.size()<maximumChartNodes&&!front.empty();) {
         const auto worst=std::get<2>(*front.begin());
         front.erase(front.begin());
         const auto t=chart[worst].triangle.v;
@@ -218,7 +270,7 @@ bool spaceOcctChart(const OcctModel& model,int faceTag,std::vector<Vec2>& uv,
         const auto metric=occtChartMetricAt(surface,center);
         if (!metric) {
             chart[worst].blocked=true;
-            if (++blocked>128) break;
+            if (blockCandidate()) break;
             continue;
         }
         const auto x=metric->physical(uv[t[0]]-center);
@@ -327,9 +379,12 @@ bool spaceOcctChart(const OcctModel& model,int faceTag,std::vector<Vec2>& uv,
             const auto id=append(candidate,p);
             uv.push_back(candidate);
             ids.push_back(id);
+            if(report)report->addedPoints=uv.size()-originalNodeCount;
             if(regularFront)nodeSizes.push_back(spacing);
             std::vector<std::size_t> neighbours;
             for(const auto i:cavity) {
+                livePending-=std::max(chart[i].score.chord,chart[i].score.spacing)>1;
+                if(report)report->pendingEntries=livePending;
                 chart[i].live=false;
                 refresh(i);
                 const auto& vertices=chart[i].triangle.v;
@@ -407,13 +462,26 @@ bool spaceOcctChart(const OcctModel& model,int faceTag,std::vector<Vec2>& uv,
             ++added;
         } else {
             chart[worst].blocked=true;
-            if (++blocked>128) break;
+            if (blockCandidate()) break;
         }
     }
     triangles.clear();
+    std::uint64_t pending=0;
     for(const auto& cell:chart) {
         charge(1);
-        if(cell.live)triangles.push_back(cell.triangle);
+        if(cell.live) {
+            triangles.push_back(cell.triangle);
+            pending+=std::max(cell.score.chord,cell.score.spacing)>1;
+        }
+    }
+    if(report) {
+        report->addedPoints=added;
+        report->pendingEntries=pending;
+        report->blockedCandidates=blocked;
+        report->queueExhausted=pending==0;
+        report->budgetLimited=pending&&(added==maximumPoints||uv.size()>=maximumChartNodes||blocked>128);
+        report->termination=!pending?"queue_exhausted":uv.size()>=maximumChartNodes?"chart_node_limit":
+            added==maximumPoints?"point_limit":blocked>128?"blocked_candidate_limit":"stalled";
     }
     return true;
 }

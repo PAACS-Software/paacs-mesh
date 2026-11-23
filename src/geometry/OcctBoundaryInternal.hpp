@@ -44,6 +44,7 @@ struct OcctBoundaryAliasOptions {
 struct OcctBoundaryAliasReceipt {
     std::uint64_t flips=0,maximumWorkingPayloadEstimate=0,rebuiltCharts=0,reusedMidpoints=0,rephasedEdges=0;
     double projectionSeconds=0;
+    std::vector<CadSurfaceSpacingReport> surfaceSpacing;
 };
 // Build one solid from the original CAD curve and face uses. A caller still
 // needs the geometric shell certificate before using it for volume meshing.

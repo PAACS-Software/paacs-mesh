@@ -612,6 +612,57 @@ mesh::Mesh extract(const OcctModel& model, int bodyTag, BRepBuilderAPI_Copy* cop
                 context.require(owners.size()==1&&owners.front().solidTag==bodyTag,OcctBoundaryReason::UnsupportedTopology);
                 std::vector<detail::OcctChartTriangle> replacements;
                 detail::OcctStageTrace chartTrace("surface_face_chart",bodyTag);
+                const auto& construction=context.options.construction;
+                const bool legacyConstruction=construction.effort==CadConstructionEffort::Legacy&&
+                    !construction.surfacePointsPerFace&&!construction.surfaceChordPointsPerFace;
+                // An inserted chart point adds two live surface triangles.
+                // This allowance only plans effort; each allocation, append,
+                // output facet and work unit keeps its existing admission.
+                const auto pointCapacity=[&](std::uint64_t localTriangles){
+                    constexpr std::uint64_t nodeBytes=sizeof(Vec3)+sizeof(mesh::Classification)+sizeof(OcctBoundaryNodeKey);
+                    constexpr std::uint64_t triangleBytes=sizeof(mesh::Cell)+3*sizeof(Index);
+                    const auto nodes=std::uint64_t(points.size());
+                    const auto facets=std::uint64_t(triangles.size())+localTriangles;
+                    if(nodes>=context.options.maximumNodes||facets>=context.options.maximumTriangles||
+                       nodes>=std::uint64_t((std::numeric_limits<int>::max)())||
+                       nodes>context.options.maximumOutputBytes/nodeBytes)return std::uint64_t{0};
+                    auto output=context.options.maximumOutputBytes-nodes*nodeBytes;
+                    if(facets>output/triangleBytes)return std::uint64_t{0};
+                    output-=facets*triangleBytes;
+                    const auto units=aliasOptions.maximumWorkingBytes/1024;
+                    const auto memory=nodes+facets<units?(units-nodes-facets)/8:0;
+                    return std::min({context.options.maximumNodes-nodes,
+                        (context.options.maximumTriangles-facets)/2,output/(nodeBytes+2*triangleBytes),
+                        memory,context.options.maximumWork-result.work,
+                        std::uint64_t((std::numeric_limits<int>::max)())-nodes});
+                };
+                std::size_t chartNodeLimit=4096;
+                if(!legacyConstruction){
+                    std::uint64_t initial=face->interior.size();
+                    context.require(initial<=std::uint64_t((std::numeric_limits<int>::max)()),
+                                    OcctBoundaryReason::BudgetExceeded);
+                    for(const auto& wire:model.boundaryUses(face->tag))for(const auto& use:wire.edges){
+                        const auto samples=edges.at(use.edgeTag).ids.size()-1;
+                        context.require(samples<=std::uint64_t((std::numeric_limits<int>::max)())-initial,
+                                        OcctBoundaryReason::BudgetExceeded);
+                        initial+=samples;
+                    }
+                    const auto room=pointCapacity(0);
+                    const auto spacing=construction.surfacePointsPerFace?
+                        std::min(construction.surfacePointsPerFace,room):
+                        construction.effort==CadConstructionEffort::Legacy?std::min<std::uint64_t>(256,room):room;
+                    const auto chord=construction.surfaceChordPointsPerFace?
+                        std::min(construction.surfaceChordPointsPerFace,room):
+                        construction.effort==CadConstructionEffort::Legacy?std::min<std::uint64_t>(regularFront?96:48,room):room;
+                    const auto extra=std::min(room,spacing+chord);
+                    const auto units=aliasOptions.maximumWorkingBytes/1024;
+                    const auto retained=std::uint64_t(points.size())+triangles.size();
+                    const auto memoryLimit=retained<units?(units-retained)/4:0;
+                    chartNodeLimit=std::size_t(std::min({std::max<std::uint64_t>(4096,initial+extra),
+                        memoryLimit,std::uint64_t((std::numeric_limits<int>::max)())}));
+                    context.require(chartNodeLimit>=initial,OcctBoundaryReason::BudgetExceeded);
+                    admitRepair(chartNodeLimit*2);
+                }
                 std::optional<detail::OcctChartTrim> chartTrim;
                 if(spaceSurface&&aliasOptions.curvaturePointsPerTurn)
                     chartTrim.emplace(*model.face(face->tag),face->face,model.tolerance(2,face->tag));
@@ -634,17 +685,46 @@ mesh::Mesh extract(const OcctModel& model, int bodyTag, BRepBuilderAPI_Copy* cop
                     };
                     if(spaceSurface){
                         const auto chord=context.options.maximumChordError;
+                        aliasReceipt.surfaceSpacing.emplace_back();
+                        auto& spacingReport=aliasReceipt.surfaceSpacing.back();
+                        spacingReport.faceTag=face->tag;
+                        spacingReport.chartNodeLimit=chartNodeLimit;
+                        std::optional<std::size_t> chordStart;
+                        try {
                         detail::OcctStageTrace chartStep("surface_front_insertion",bodyTag);
                         if(!detail::spaceOcctChart(model,face->tag,uv,ids,cells,protectedEdges,
                             aliasOptions.curveMetricSizeCap,chord,position,append,tick,
                             [&](std::uint64_t cells){admitRepair(std::max<std::uint64_t>(4096,cells));},
                             regularFront,aliasOptions.curvaturePointsPerTurn?aliasOptions.curvaturePointsPerTurn:16,
-                            chartTrim?&*chartTrim:nullptr,aliasOptions.sizeField))return false;
+                            chartTrim?&*chartTrim:nullptr,aliasOptions.sizeField,construction,
+                            legacyConstruction?(std::numeric_limits<std::uint64_t>::max)():pointCapacity(cells.size()),
+                            chartNodeLimit,&spacingReport)){
+                            spacingReport.termination="invalid_chart";
+                            return false;
+                        }
                         // Keep a short, trim-constrained chord pass for edges
                         // whose local Delaunay cavities cannot accept a point.
                         chartStep.next("surface_chord_refinement");
-                        detail::refineOcctUvTriangles(uv,ids,cells,protectedEdges,
-                            chord*.96,regularFront?96:48,position,evaluate,inside,append,tick,deviation);
+                        auto chordLimit=construction.surfaceChordPointsPerFace?construction.surfaceChordPointsPerFace:
+                            std::uint64_t(regularFront?96:48);
+                        if(construction.effort!=CadConstructionEffort::Legacy&&!construction.surfaceChordPointsPerFace)
+                            chordLimit=std::max(chordLimit,spacingReport.pointLimit/2);
+                        if(!legacyConstruction)chordLimit=std::min(chordLimit,pointCapacity(cells.size()));
+                        chordLimit=std::min<std::uint64_t>(chordLimit,(std::numeric_limits<unsigned>::max)());
+                        spacingReport.chordPointLimit=chordLimit;
+                        chordStart=uv.size();
+                        const auto refined=detail::refineOcctUvTriangles(uv,ids,cells,protectedEdges,
+                            chord*.96,unsigned(chordLimit),position,evaluate,inside,append,tick,deviation,chartNodeLimit);
+                        spacingReport.chordAddedPoints=refined.added;
+                        spacingReport.pendingEntries+=refined.pendingTriangles;
+                        spacingReport.queueExhausted=spacingReport.queueExhausted&&refined.completed;
+                        if(!refined.completed){
+                            const bool limited=refined.added==chordLimit||uv.size()>=chartNodeLimit;
+                            if(!spacingReport.budgetLimited)
+                                spacingReport.termination=uv.size()>=chartNodeLimit?"chord_chart_node_limit":
+                                    refined.added==chordLimit?"chord_point_limit":"chord_stalled";
+                            spacingReport.budgetLimited=spacingReport.budgetLimited||limited;
+                        }
                         chartStep.next("surface_vertex_relaxation");
                         if(regularFront)
                             detail::relaxOcctSurface(model,face->tag,uv,ids,cells,protectedEdges,chord,
@@ -655,13 +735,32 @@ mesh::Mesh extract(const OcctModel& model, int bodyTag, BRepBuilderAPI_Copy* cop
                                 position,[&](int id,Vec3 p){points[id].point=p;},tick,true,chartTrim?&*chartTrim:nullptr);
                         }
                         return true; // Facet witnesses below make the final decision.
+                        } catch(const Failure& failure) {
+                            if(chordStart)spacingReport.chordAddedPoints=uv.size()-*chordStart;
+                            spacingReport.budgetLimited=spacingReport.budgetLimited||failure.reason==OcctBoundaryReason::BudgetExceeded;
+                            spacingReport.termination=failure.reason==OcctBoundaryReason::BudgetExceeded?"global_budget":
+                                failure.reason==OcctBoundaryReason::Cancelled?"cancelled":"construction_refused";
+                            spacingReport.queueExhausted=false;
+                            throw;
+                        } catch(const std::bad_alloc&) {
+                            if(chordStart)spacingReport.chordAddedPoints=uv.size()-*chordStart;
+                            spacingReport.termination="allocation_failed";
+                            spacingReport.queueExhausted=false;
+                            throw;
+                        } catch(const Standard_Failure&) {
+                            if(chordStart)spacingReport.chordAddedPoints=uv.size()-*chordStart;
+                            spacingReport.termination="kernel_failure";
+                            spacingReport.queueExhausted=false;
+                            throw;
+                        }
                     }
                     const auto refined=detail::refineOcctUvTriangles(uv,ids,cells,protectedEdges,
                         context.options.maximumChordError*.9,256,position,evaluate,inside,append,tick,deviation);
                     return refined.completed;
                 };
                 const auto complete=detail::rebuildOcctWireChart(model,face->tag,edges,face->interior,
-                    position,tick,remaining,replacements,nullptr,spaceSurface||aliasReceipt.rephasedEdges!=0,refine,spaceSurface&&aliasOptions.curvaturePointsPerTurn);
+                    position,tick,remaining,replacements,nullptr,spaceSurface||aliasReceipt.rephasedEdges!=0,refine,
+                    spaceSurface&&aliasOptions.curvaturePointsPerTurn,chartNodeLimit);
                 context.require(complete,OcctBoundaryReason::NonconformingEdge);
                 chartTrace.next("surface_facet_witnesses");
                 // Only new interior chart vertices used the fast trim

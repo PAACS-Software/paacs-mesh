@@ -32,9 +32,9 @@ template<class Chains, class Position, class Tick, class Remaining, class Refine
 bool rebuildOcctWireChart(const OcctModel& model, int faceTag, const Chains& chains,
     std::span<const std::pair<int,Vec2>> interior, Position position, Tick tick,
     Remaining remaining, std::vector<OcctChartTriangle>& output,
-    std::set<int>* crossingEdges, bool physicalMetric, Refine refine, bool fitPcurves=false) {
+    std::set<int>* crossingEdges, bool physicalMetric, Refine refine, bool fitPcurves=false,
+    std::size_t maximumChartNodes=4096) {
     struct Segment { Index a, b; bool degenerate; double tolerance; int tag; };
-    constexpr std::size_t maximumChartNodes=4096;
     const auto* face=model.face(faceTag);
     std::vector<int> ids;
     std::vector<Vec2> uv;

@@ -38,6 +38,7 @@ struct OcctFrontOutcome {
     std::uint64_t surfaceTriangles=0,rebuiltSurfaceCharts=0;
     OcctNativeValidationOutcome nativeValidation;
     OcctNativeValidationOutcome chordSampleValidation;
+    std::vector<CadSurfaceSpacingReport> surfaceSpacing;
 };
 OcctFrontOutcome buildOcctFrontVolume(const OcctModel&,int solidTag,
     const NativeCadMeshOptions&,std::uint64_t maximumWork,mesh::Mesh&,

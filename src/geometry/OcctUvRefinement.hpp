@@ -22,6 +22,7 @@ struct OcctUvRefinementResult {
     unsigned added=0;
     bool completed=false;
     std::uint64_t samples=0,uniqueSamples=0,physicalQueries=0,physicalFailures=0;
+    std::uint64_t pendingTriangles=0;
     double remainingError=0;
 };
 
@@ -29,7 +30,7 @@ template<class Position,class Evaluate,class Inside,class Append,class Charge,cl
 OcctUvRefinementResult refineOcctUvTriangles(std::vector<Vec2>& uv,std::vector<int>& global,
     std::vector<algo::Tri>& triangles,const std::set<std::array<int,2>>& protectedEdges,
     double maximumError,unsigned maximumAdded,Position position,Evaluate evaluate,Inside inside,
-    Append append,Charge charge,Deviation deviation=nullptr) {
+    Append append,Charge charge,Deviation deviation=nullptr,std::size_t maximumChartNodes=4096) {
     using Edge=std::array<int,2>;
     struct Observation { Vec2 parameter{}; double error=0; };
     struct TriangleSamples {
@@ -97,6 +98,7 @@ OcctUvRefinementResult refineOcctUvTriangles(std::vector<Vec2>& uv,std::vector<i
     std::vector<algo::Tri> next;
     std::vector<TriangleSamples> nextObservations;
     for(;;) {
+        result.pendingTriangles=0;
         std::optional<std::size_t> selected;
         std::optional<Edge> splitEdge;
         Vec2 proposed;
@@ -117,9 +119,11 @@ OcctUvRefinementResult refineOcctUvTriangles(std::vector<Vec2>& uv,std::vector<i
             charge(1);
             const auto& f=triangles[i].v;
             const auto& observed=observations[i];
+            bool pending=observed.center.error>maximumError;
             for(unsigned side=0;side<3;++side) {
                 const auto* sample=observed.edges[side];
                 if(!sample)continue;
+                pending=pending||sample->error>maximumError;
                 ++result.samples;
                 if(sample->error>maximumError&&(!splitEdge||sample->error>selectedError))
                     select(i,*sample,edgeKey(int(f[side]),int(f[(side+1)%3])));
@@ -128,13 +132,14 @@ OcctUvRefinementResult refineOcctUvTriangles(std::vector<Vec2>& uv,std::vector<i
             // Resolve edges before face centers and retain the earliest witness
             // in chart order when several samples report the same error.
             if(!splitEdge&&observed.center.error>selectedError)select(i,observed.center,{});
+            result.pendingTriangles+=pending;
         }
         result.remainingError=selected?selectedError:0;
         if(!selected) {
             result.completed=!unresolved;
             return result;
         }
-        if(result.added==maximumAdded||uv.size()>=4096)return result;
+        if(result.added==maximumAdded||uv.size()>=maximumChartNodes)return result;
 
         next.clear();
         nextObservations.clear();

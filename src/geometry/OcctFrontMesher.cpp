@@ -59,6 +59,9 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
     const bool curvatureSurface=surfaceMode==OcctFrontSurface::Curvature;
     const bool regularSurface=surfaceMode==OcctFrontSurface::Regular||improveQuality||curvatureSurface||spatialSizing;
     const bool completeDiscreteSeed=liveTrial||curvatureSurface;
+    const bool customConstruction=options.construction.effort!=CadConstructionEffort::Legacy||
+        options.construction.surfacePointsPerFace||options.construction.surfaceChordPointsPerFace||
+        options.construction.interiorCandidates||options.construction.interiorSites;
     const char* stage="surface";OcctStageTrace trace(stage,tag);OcctFrontOutcome out;const auto began=Clock::now();const auto& o=options.geometry;std::stop_source stop;
     const auto tick=[&](std::uint64_t n=1){if(o.cancellation&&o.cancellation->load()){stop.request_stop();throw Stop{NativeCadMeshReason::Cancelled,"cancelled"};}
         need(out.workUsed<=maximumWork&&n<=maximumWork-out.workUsed,NativeCadMeshReason::BudgetExceeded,"native-plc-work-budget");out.workUsed+=n;};
@@ -91,16 +94,21 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
         const bool largerRecoveryBudget=options.maximumPrimitiveWorkingBytes>=1024ULL*1024*1024&&options.maximumRecoveryPatchStates>=8192;
         const unsigned regionVertices=256,expandedRegionVertices=largerRecoveryBudget?512:256;
         OcctBoundaryOptions bo;bo.linearDeflection=out.chord*.4;bo.maximumChordError=out.chord;bo.maximumNodes=std::min<std::uint64_t>(largerRecoveryBudget?50000:10000,o.maximumNodes);bo.maximumTriangles=std::min<std::uint64_t>(largerRecoveryBudget?100000:20000,o.maximumCells/2);bo.maximumWork=remaining();bo.maximumOutputBytes=o.maximumOutputBytes;bo.cancellation=o.cancellation;
+        bo.construction=options.construction;
+        if(customConstruction){bo.maximumNodes=o.maximumNodes;bo.maximumTriangles=o.maximumCells/2;}
         mesh::Mesh boundary;
         OcctBoundaryOutcome surface;
         if(spaceSurface){
-            bo.maximumNodes=std::min<std::uint64_t>(bo.maximumNodes,curvatureSurface||spatialSizing?6'000:1'200);
-            bo.maximumTriangles=std::min<std::uint64_t>(bo.maximumTriangles,curvatureSurface||spatialSizing?10'000:1'800);
+            if(!customConstruction){
+                bo.maximumNodes=std::min<std::uint64_t>(bo.maximumNodes,curvatureSurface||spatialSizing?6'000:1'200);
+                bo.maximumTriangles=std::min<std::uint64_t>(bo.maximumTriangles,curvatureSurface||spatialSizing?10'000:1'800);
+            }
             OcctBoundaryAliasReceipt spacing;
             surface=buildSpacedOcctBoundary(model,tag,bo,o.targetSize,options.maximumPrimitiveWorkingBytes/4,
                 boundary,spacing,regularSurface,improveQuality,
                 curvatureSurface||spatialSizing?options.curvaturePointsPerTurn:0,sizeField?&*sizeField:nullptr);
             out.rebuiltSurfaceCharts=spacing.rebuiltCharts;
+            out.surfaceSpacing=std::move(spacing.surfaceSpacing);
         }else if(options.recoveryMode==NativeCadRecoveryMode::Advanced){
             OcctBoundaryOutcome preparation;
             auto session=OcctBoundarySession::prepare(model,bo,preparation);
@@ -123,6 +131,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 }
                 surface.work+=preparation.work;
                 out.rebuiltSurfaceCharts=repairs.rebuiltCharts;
+                out.surfaceSpacing=std::move(repairs.surfaceSpacing);
             }else surface=std::move(preparation);
         }else surface=buildOcctBoundary(model,tag,bo,boundary);
         tick(surface.work);
@@ -187,32 +196,119 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             const auto placementStarted=Clock::now();
             struct SiteLimit {};
             mesh::Mesh sites;
+            const auto& construction=options.construction;
+            const bool fairConstruction=construction.effort!=CadConstructionEffort::Legacy;
+            const bool expandedConstruction=fairConstruction||construction.interiorCandidates||construction.interiorSites;
             const auto siteBudget=advancingInteriorFront?
-                std::min<std::uint64_t>(42'000'000,remaining()/2):
+                (expandedConstruction?(construction.effort==CadConstructionEffort::Thorough?
+                    remaining()-remaining()/3:remaining()/2):std::min<std::uint64_t>(42'000'000,remaining()/2)):
                 std::min<std::uint64_t>(1'000'000,remaining()/8);
+            std::uint64_t siteWork=0,siteQueries=0;
+            const auto siteCharge=[&](std::uint64_t amount=1){
+                if(siteWork>siteBudget||amount>siteBudget-siteWork)throw SiteLimit{};
+                tick(amount);siteWork+=amount;
+            };
             constexpr auto nodeBytes=sizeof(Vec3)+sizeof(mesh::Classification);
             constexpr auto tetBytes=sizeof(mesh::Cell)+4*sizeof(Index);
             const auto boundaryBytes=std::uint64_t(ns)*nodeBytes+
                 std::uint64_t(nf)*(sizeof(mesh::Cell)+3*sizeof(Index));
             const auto outputRoom=boundaryBytes<o.maximumOutputBytes?
                 o.maximumOutputBytes-boundaryBytes:0;
-            const auto siteCap=std::min({std::uint64_t(512),
-                o.maximumNodes-std::uint64_t(ns),outputRoom/(nodeBytes+16*tetBytes)});
+            using occt_initial_point_front_detail::saturatedAdd;
+            using occt_initial_point_front_detail::saturatedMultiply;
+            const auto maximumSites=std::min(o.maximumNodes-std::uint64_t(ns),
+                outputRoom/(nodeBytes+16*tetBytes));
+            std::uint64_t requestedSites=512;
+            if(expandedConstruction){
+                if(construction.interiorSites)requestedSites=construction.interiorSites;
+                else if(!fairConstruction){
+                    const auto factor=construction.interiorCandidates/16'384+
+                        (construction.interiorCandidates%16'384!=0);
+                    requestedSites=saturatedMultiply(512,std::max<std::uint64_t>(1,factor));
+                }else{
+                    // Budget estimates never place points. Integrate bounded
+                    // actual field samples rather than imposing one local fine
+                    // control's minimum over the entire body's bounding box.
+                    const auto effort=construction.effort==CadConstructionEffort::Thorough?4.:2.;
+                    const auto densityAt=[&](double h){
+                        if(!maximumSites)return static_cast<long double>(0.);
+                        long double logarithm=std::log(effort);
+                        for(const auto span:std::array{hi.x-lo.x,hi.y-lo.y,hi.z-lo.z}){
+                            if(!(span>0.))return static_cast<long double>(0.);
+                            logarithm+=std::log(static_cast<long double>(span))-std::log(static_cast<long double>(h));
+                        }
+                        return logarithm>=std::log(static_cast<long double>(maximumSites))?
+                            static_cast<long double>(maximumSites):std::exp(logarithm);
+                    };
+                    auto demand=densityAt(o.targetSize);
+                    const auto queryWork=saturatedAdd(sizeField->queryWork(),1);
+                    const auto sampleWork=saturatedMultiply(queryWork,27);
+                    if((!options.faceSizes.empty()||!options.sizeBoxes.empty())&&sampleWork<=siteBudget/64){
+                        long double integrated=0.;
+                        for(unsigned x=0;x<3;++x)for(unsigned y=0;y<3;++y)for(unsigned z=0;z<3;++z){
+                            const auto coordinate=[](double low,double high,unsigned i){
+                                const auto f=(double(i)+.5)/3.;return low*(1-f)+high*f;
+                            };
+                            const Vec3 p{coordinate(lo.x,hi.x,x),coordinate(lo.y,hi.y,y),coordinate(lo.z,hi.z,z)};
+                            siteCharge(queryWork);const auto h=sizeField->eval(p);
+                            need(h>0.&&std::isfinite(h),NativeCadMeshReason::GeometryError,"invalid-initial-density-field");
+                            integrated+=densityAt(h)/27.;
+                        }
+                        demand=integrated;
+                    }
+                    const auto density=std::isfinite(demand)&&demand<static_cast<long double>(maximumSites)?
+                        std::uint64_t(std::ceil(demand)):maximumSites;
+                    requestedSites=std::max({std::uint64_t(512),density,saturatedMultiply(ns,2)});
+                    const auto memory=options.maximumPrimitiveWorkingBytes-retained;
+                    requestedSites=std::min({requestedSites,maximumSites,(siteBudget-siteWork)/8192});
+                    const auto modeledBytes=[&](std::uint64_t sites){
+                        const auto cones=std::min(o.maximumCells,std::max<std::uint64_t>(2048,saturatedMultiply(sites,4)));
+                        const auto states=saturatedAdd(nf,saturatedMultiply(cones,3));
+                        const auto front=occt_initial_point_front_detail::initialFrontStorageBytes(ns,nf,sites,cones,states);
+                        const auto cells=std::min(o.maximumCells,
+                            saturatedMultiply(saturatedAdd(saturatedAdd(ns,sites),8),8));
+                        return saturatedAdd(front,saturatedAdd(32ULL*1024*1024,saturatedMultiply(cells,8320)));
+                    };
+                    std::uint64_t low=0,high=requestedSites;
+                    while(low<high){const auto middle=low+(high-low)/2+1;
+                        if(modeledBytes(middle)<=memory)low=middle;else high=middle-1;}
+                    requestedSites=low;
+                }
+            }
+            const auto siteCap=std::min(requestedSites,maximumSites);
             // Bound the copied shell, point/hash arrays and cached edge sizes.
-            const auto preparationBytes=(std::uint64_t(ns)+std::uint64_t(nf)+siteCap)*1024;
-            std::uint64_t siteWork=0,siteQueries=0;
-            const auto siteCharge=[&](std::uint64_t amount=1){
-                if(amount>siteBudget-siteWork)throw SiteLimit{};
-                tick(amount);siteWork+=amount;
-            };
-            if(advancingInteriorFront)out.initialFront.diagnostic="budget_limited";
+            const auto preparationBytes=saturatedMultiply(saturatedAdd(saturatedAdd(ns,nf),siteCap),1024);
+            const auto candidateLimit=expandedConstruction?(construction.interiorCandidates?
+                construction.interiorCandidates:
+                std::max<std::uint64_t>(16'384,saturatedAdd(saturatedMultiply(siteCap,32),saturatedMultiply(nf,12)))):16'384;
+            const auto queryLimit=expandedConstruction?std::min(siteBudget,
+                std::max<std::uint64_t>(12'000,saturatedMultiply(candidateLimit,16))):12'000;
+            if(advancingInteriorFront){
+                auto& report=out.initialFront;
+                report.diagnostic="budget_limited";report.siteLimit=siteCap;
+                report.candidateLimit=candidateLimit;report.queryLimit=queryLimit;report.workLimit=siteBudget;
+                report.budgetReason=siteBudget<=siteWork?"work_limit":!siteCap?
+                    (o.maximumNodes<=std::uint64_t(ns)?"node_limit":!maximumSites?"output_limit":"modeled_memory_or_work"):
+                    preparationBytes>options.maximumPrimitiveWorkingBytes-retained?"modeled_memory":"initial_admission";
+            }
             try {if(siteCap&&siteBudget&&preparationBytes<=options.maximumPrimitiveWorkingBytes-retained){
                 if(advancingInteriorFront){
                     OcctInitialPointFrontLimits limits;
-                    limits.work=siteBudget;limits.queries=12'000;limits.sites=std::size_t(siteCap);
+                    limits.work=siteBudget-siteWork;limits.queries=queryLimit;limits.sites=std::size_t(siteCap);
+                    limits.balanceSourceAndBulk=fairConstruction;
                     limits.cancellation=o.cancellation;
                     limits.workingBytes=std::min<std::uint64_t>(128ULL*1024*1024,
                         options.maximumPrimitiveWorkingBytes-retained);
+                    if(expandedConstruction){
+                        limits.candidates=std::size_t(std::min<std::uint64_t>(candidateLimit,SIZE_MAX));
+                        limits.workingBytes=options.maximumPrimitiveWorkingBytes-retained;
+                        limits.cones=std::size_t(std::min(o.maximumCells,
+                            std::max<std::uint64_t>(2048,saturatedMultiply(siteCap,4))));
+                        limits.frontStates=std::size_t(std::min<std::uint64_t>(SIZE_MAX,
+                            saturatedAdd(nf,saturatedMultiply(limits.cones,3))));
+                        limits.maximumAuxiliaryCells=std::size_t(std::min<std::uint64_t>(
+                            std::min(o.maximumCells,limits.work/24),SIZE_MAX));
+                    }
                     OcctInitialPointFrontReport built;
                     sites=appendOcctInitialPointFrontSites(boundary,*sizeField,o.targetSize,
                         mesh::Classification{3,tag},limits,[&](Vec3 p){
@@ -224,6 +320,14 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                         },siteCharge,&built);
                     need(!built.cancelled,NativeCadMeshReason::Cancelled,"cancelled");
                     auto& report=out.initialFront;
+                    report.budgetReason=built.budgetReason;
+                    report.candidateLimit=built.candidateLimit;report.siteLimit=built.siteLimit;
+                    report.queryLimit=built.queryLimit;report.workLimit=siteBudget;
+                    report.reservedBulkCandidates=built.reservedBulkCandidates;
+                    report.reservedBulkSites=built.reservedBulkSites;
+                    report.sourceCandidates=built.sourceCandidates;
+                    report.sourceDeferredFaces=built.sourceDeferredFaces;
+                    report.sourcePhaseDeferred=built.sourcePhaseDeferred;
                     report.diagnostic=built.budgetLimited?"budget_limited":!built.initialized?
                         "unavailable":built.frontClosed?"front_closed":"stalled";
                     report.nodes=built.sites;report.candidates=built.candidates;
@@ -269,8 +373,10 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 throw Stop{NativeCadMeshReason::Cancelled,"cancelled"};
             }catch(const SiteLimit&){
                 // This optional preparation leaves the original shell intact.
+                if(advancingInteriorFront)out.initialFront.budgetReason="work_limit";
             }catch(const std::bad_alloc&){
                 // Preparation is transactional; retain the ordinary seed route.
+                if(advancingInteriorFront)out.initialFront.budgetReason="allocation_failed";
             }
             if(advancingInteriorFront){
                 out.initialFront.work=siteWork;out.initialFront.queries=siteQueries;
@@ -316,8 +422,8 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             apexStorage/sizeof(std::pair<double,bnd::TetFacetVertexId>);
         const auto pointKey=[](Vec3 p){return std::array{std::bit_cast<std::uint64_t>(p.x),
             std::bit_cast<std::uint64_t>(p.y),std::bit_cast<std::uint64_t>(p.z)};};
-        const std::uint64_t maximumSpacedCandidateQueries=curvatureSurface||spatialSizing?
-            (options.useLocalDelaunayRefinement&&liveTrial?40'000:24'000):3'000;
+        const std::uint64_t maximumSpacedCandidateQueries=customConstruction?maximumWork:
+            curvatureSurface||spatialSizing?(options.useLocalDelaunayRefinement&&liveTrial?40'000:24'000):3'000;
         const auto admitQueries=[&](std::uint64_t n) {
             need(!spaceSurface||(out.nativeQueries<=maximumSpacedCandidateQueries&&
                  n<=maximumSpacedCandidateQueries-out.nativeQueries),

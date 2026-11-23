@@ -5,6 +5,7 @@
 
 #pragma once
 #include "paacs/geometry/OcctModel.hpp"
+#include "paacs/geometry/CadConstructionBudget.hpp"
 #include "paacs/algo/GeometryMesher.hpp"
 #include "paacs/algo/PrimitiveMesher.hpp"
 #include <cstddef>
@@ -169,6 +170,7 @@ struct NativeCadMeshOptions {
     [[nodiscard]] bool regularMeshQualityEnabled() const noexcept {
         return improveRegularMeshQuality.value_or(recoveryMode==NativeCadRecoveryMode::Advanced);
     }
+    CadConstructionBudget construction;
 };
 struct NativeCadConstraintRecoveryReport {
     const char* diagnostic="not_attempted";
@@ -205,6 +207,11 @@ struct NativeCadInitialFrontReport {
     // Modeled auxiliary payload during compaction, not peak process RSS.
     std::uint64_t compactionPeakModeledBytes=0,auxiliaryWorkingBytes=0;
     double seconds=0;
+    const char* budgetReason="none";
+    std::uint64_t candidateLimit=0,siteLimit=0,queryLimit=0,workLimit=0;
+    std::uint64_t reservedBulkCandidates=0,reservedBulkSites=0;
+    std::uint64_t sourceCandidates=0,sourceDeferredFaces=0;
+    bool sourcePhaseDeferred=false;
 };
 // AUTO may retry the legacy route only after a bounded source-stage refusal,
 // before any initial point construction. This records the discarded trial;
@@ -281,6 +288,7 @@ struct NativeCadBodyMeshReport {
     bool localDelaunayUsedGlobalFallback=false;
     NativeCadRegionRecoveryReport recoveryRegions;
     NativeCadConstraintRecoveryReport constraintRecovery;
+    std::vector<CadSurfaceSpacingReport> surfaceSpacing;
 };
 struct NativeCadMeshOutcome {
     bool published = false, destinationUnchanged = true;
