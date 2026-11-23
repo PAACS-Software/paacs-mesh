@@ -10,7 +10,34 @@ import hashlib
 import json
 from pathlib import Path
 
-from build_python_wheel import host_platform, installed_smoke, occt_pin, sha256, source_revision, validate_contents
+from build_python_wheel import installed_smoke, occt_pin, sha256, source_revision, target_identity, validate_contents
+from python_compatibility import consumer
+
+
+def consumer_identity(identifier: str) -> dict:
+    """Bind independent qualification to its declared interpreter, CPU and OS."""
+    selected = consumer(identifier)
+    actual = target_identity()
+    if actual["target_id"] != selected["target_id"]:
+        raise RuntimeError("The consumer does not match this native platform and CPython interpreter")
+    required_major = selected.get("required_os_major")
+    if required_major is not None:
+        try:
+            major = int(actual["host"]["macos_version"].split(".")[0])
+        except (KeyError, ValueError) as error:
+            raise RuntimeError("The macOS consumer must identify its actual operating-system version") from error
+        if major != required_major:
+            raise RuntimeError(f"The consumer requires macOS {required_major}, found macOS {major}")
+    if selected["platform"] == "windows-arm64":
+        host = actual["host"]
+        version = host["version"].split(".")
+        try:
+            build = int(version[2])
+        except (IndexError, ValueError) as error:
+            raise RuntimeError("Windows ARM64 qualification requires an identifiable Windows 11 build") from error
+        if build < 22000:
+            raise RuntimeError("Windows ARM64 qualification requires Windows 11 or newer")
+    return {**actual, "consumer_id": identifier, "consumer_os": selected["consumer_os"]}
 
 
 def artifact_file(directory: Path, name: str) -> Path:
@@ -27,16 +54,21 @@ def main() -> None:
     parser.add_argument("--artifact-dir", type=Path, required=True)
     parser.add_argument("--source", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--build-dir", type=Path)
+    parser.add_argument("--consumer-id", required=True, help="exact independent consumer ID from the compatibility manifest")
     args = parser.parse_args()
     source, directory = args.source.resolve(), args.artifact_dir.resolve()
     build_dir = (args.build_dir or source / "build/python-wheel-consumer").resolve()
-    current_platform = host_platform()
+    identity = consumer_identity(args.consumer_id)
+    current_platform = identity["platform"]
     receipt = json.loads((directory / "wheel-validation.json").read_text(encoding="utf-8"))
     source_record = source_revision(source)
     if (source_record["clean"] is not True or receipt.get("source_revision") != source_record):
         raise RuntimeError("Independent qualification requires the same clean source revision as its builder")
     if receipt["platform"] != current_platform:
         raise RuntimeError("The downloaded wheel was qualified for a different platform")
+    for field in ("target_id", "python_version", "python_tag"):
+        if receipt.get(field) != identity[field]:
+            raise RuntimeError(f"The downloaded wheel's {field} does not match this consumer")
     wheel = artifact_file(directory, receipt["wheel"])
     if sha256(wheel) != receipt["sha256"]:
         raise RuntimeError("The wheel does not match the builder's receipt")
@@ -63,7 +95,7 @@ def main() -> None:
     numpy_results = installed_smoke(source, wheel, build_dir)
     result = {
         "source_revision": source_record,
-        "platform": current_platform,
+        **identity,
         "wheel": wheel.name,
         "sha256": sha256(wheel),
         "installed_tests": json.loads((build_dir / "installed-validation.json").read_text(encoding="utf-8")),
