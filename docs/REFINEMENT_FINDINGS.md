@@ -8,8 +8,9 @@ is in native construction rather than recipe replay.
 
 This test does **not** reproduce the reported geometry refusals on the original
 Claude-generated geometry. That geometry has not been established as the same
-input. All 14 attempts on this owned fixture pass the existing native validity
-checks. Passing those checks does not establish suitability for a simulation.
+input. All 28 attempts on this owned fixture, 14 each on Windows and Linux,
+pass the existing native validity checks. Passing those checks does not
+establish suitability for a simulation.
 
 ![Actual whole-cell cuts and original sliver](images/refinement-rc3-gallery.png)
 
@@ -106,6 +107,37 @@ are achieved-size observations, not geodesic lengths or strict certificates
 under the current sizing contract. The 0.08 case has 417 of 3,280 tetrahedra
 below mean ratio 0.1, compared with 12 of 5,061 for the 0.2 case.
 
+## Independent Linux/Python 3.12 reproduction
+
+The [Linux evidence run](https://github.com/PAACS-Software/paacs-mesh/actions/runs/45137832876)
+installed the published RC3 wheel on x86-64 Linux with CPython 3.12.16. Its
+[retained numerical receipt](data/refinement-cylinder-rc3-linux312.json) records
+the downloaded wheel hash, verified artifact digest, exact fixture hash, all
+14 attempts and native initial-front counters. All seven direct/recipe pairs
+are byte-identical on that host too, with no retries or geometry refusals.
+
+| Wall request (mm) | Linux Tet4 | Minimum mean ratio | Mean mean ratio | Wall maximum edge (mm) | Cells below 0.1 | Native seconds |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| No face control | 1,701 | 0.104 | 0.770 | 0.300 | 0 | 0.34 |
+| 0.5 | 1,701 | 0.104 | 0.770 | 0.300 | 0 | 0.34 |
+| 0.3 | 2,287 | 0.245 | 0.809 | 0.300 | 0 | 0.91 |
+| 0.2 | 4,934 | 0.0153 | 0.819 | 0.457 | 17 | 2.92 |
+| 0.15 | 5,681 | 0.0178 | 0.753 | 0.611 | 77 | 3.77 |
+| 0.1 | 3,705 | 0.00582 | 0.494 | 0.735 | 145 | 5.94 |
+| 0.08 | 3,369 | 0.000371 | 0.377 | 0.767 | 436 | 5.81 |
+
+The same count reversal, achieved-size shortfall and fine-wall quality decline
+occur on both platforms, while exact meshes and worst values differ. At 0.1,
+the Linux wall again reaches 352 face-interior nodes. At 0.15, 0.1 and 0.08 the
+16,384 initial-candidate limit stops the source sweep before any bulk proposals;
+accepted initial sites are 345, 150 and 14. This supports the shared construction
+diagnosis without attributing every numerical difference to one cause.
+
+These are single runs on different machines/builds, not a controlled Windows
+versus Linux speed comparison. Same-host direct/recipe determinism is measured;
+cross-platform bitwise identity is not demonstrated or promised. Cell 3295 and
+the pictured 417-cell group belong specifically to the Windows mesh hashes.
+
 ## Confirmed construction limits
 
 `OcctSurfaceSpacing.hpp` bounds insertion to 256 points per face and returns
@@ -193,7 +225,7 @@ it does not claim a numerical reproduction of an unknown input.
 | Finer wall requests reduce minimum Tet4 quality | Reproduced; construction fix deferred | Minimum native mean ratio falls from 0.171 to 5.80 × 10⁻¹¹; boundary slivers and incomplete point construction are measured separately. |
 | Element counts reverse as the requested wall gets finer | Reproduced and partly explained | Counts fall from 5,761 to 3,280 after proposal budgets stop before bulk construction. No claim that one counter explains every rejected site. |
 | Requested and achieved wall sizes differ | Reproduced and explained; sizing completion deferred | Wall edge populations and long axial chords expose missing spacing even when CAD chord checks pass. New summaries separate requests, effective policy and achieved measurements. |
-| Geometry-error refusals at fine sizes | Not reproduced on this fixture | All 14 attempts pass unchanged native checks. The exact original geometry/settings are needed to establish the reported refusal. |
+| Geometry-error refusals at fine sizes | Not reproduced on this fixture | All 28 Windows/Linux attempts pass unchanged native checks. The exact original geometry/settings are needed to establish the reported refusal. |
 | Direct and recipe controls may differ | Not reproduced here; interface consistency improved | All seven original pairs are byte-identical; direct guarded selections now use the same conversion as saved recipes. |
 | Only aggregate/worst-cell diagnostics are available | Resolved for opt-in linear Tet4 analysis | Every cell is queryable by native ID, with paginated/filterable metrics, geometry, classification and spatial distributions. Other families remain explicitly unsupported for shape metrics. |
 | Bad interior elements are hidden in surface views | Resolved for the new SVG path | All threshold matches are drawn as x-ray overlays, with whole-cell cuts, close-ups, legends and hash/ID-linked VTK/SVG evidence. |
