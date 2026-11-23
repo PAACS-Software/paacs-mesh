@@ -208,7 +208,8 @@ def _profile(inspected, report, extent, bins, budget):
     sort_work = tetrahedra * max(1, (tetrahedra - 1).bit_length())
     for name in METRICS + SIZE_METRICS:
         budget.take(cells + sort_work)
-        measured = distribution(inspected._metric(index, name) for index in range(cells))
+        measured = distribution(inspected._metric(index, name) for index in range(cells)
+                                if inspected._orientation[index] != 2)
         budget.check()
         (quality if name in METRICS else achieved)[name] = measured
     boundary_sizes = {}
@@ -251,6 +252,17 @@ def _cad_errors(first, second, budget):
             budget.reserve(2048)
             found[tag] = {key: body.get(key) for key in CAD_MEASUREMENTS}
         maps.append(found)
+    kernels = [report.get("kernel_version") for report in (first, second)]
+    paired = isinstance(kernels[0], str) and bool(kernels[0]) and kernels[0] == kernels[1]
+    common = {"basis": "reported_native_body_measurements_not_independent_CAD_reaudit",
+              "body_comparison_available": paired, "kernel_versions": kernels,
+              "length_units": "mm", "volume_units": "mm3"}
+    if not paired:
+        return {**common, "body_identity_basis": "unavailable_without_matching_known_source_and_kernel",
+                "reason": "CAD body tags cannot be paired across missing or different kernel identities",
+                "first_body_measurements": [{"body_tag": tag, **value} for tag, value in sorted(maps[0].items())],
+                "second_body_measurements": [{"body_tag": tag, **value} for tag, value in sorted(maps[1].items())],
+                "bodies": []}
     bodies = []
     for tag in sorted(maps[0].keys() | maps[1].keys()):
         budget.take(8)
@@ -258,9 +270,8 @@ def _cad_errors(first, second, budget):
         bodies.append({"body_tag": tag, "first": before, "second": after,
                        "delta": {key: _difference((before or {}).get(key), (after or {}).get(key))
                                  for key in CAD_MEASUREMENTS}})
-    return {"basis": "reported_native_body_measurements_not_independent_CAD_reaudit",
-            "body_identity_basis": "reported_positive_CAD_body_tags_with_same_source_hash",
-            "length_units": "mm", "volume_units": "mm3", "bodies": bodies}
+    return {**common, "body_identity_basis": "reported_positive_CAD_body_tags_with_same_source_hash_and_kernel",
+            "bodies": bodies}
 
 
 def _timing(report):

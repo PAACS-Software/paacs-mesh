@@ -13,6 +13,7 @@ import mmap
 import os
 from pathlib import Path
 import shutil
+import stat
 import struct
 import tempfile
 import time
@@ -48,11 +49,19 @@ def file_hash(path):
 
 def _metadata(path, *, max_length, available):
     """Admit JSON object/copy overhead before a size-bounded immutable read."""
-    size = Path(path).stat().st_size
+    metadata_stat = Path(path).stat()
+    if not stat.S_ISREG(metadata_stat.st_mode):
+        raise InspectionError("bundle_metadata", "Metadata must be a regular local file")
+    size = metadata_stat.st_size
     reservation = 64 * size + 65536
     if size > max_length or reservation > available:
         raise InspectionError("memory_budget", "Metadata parsing exceeds its byte allowance")
-    with Path(path).open("rb") as stream:
+    # Nonblocking open plus descriptor validation also rejects a POSIX FIFO
+    # substituted between stat and open; no read is attempted on special files.
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NONBLOCK", 0))
+    with os.fdopen(descriptor, "rb") as stream:
+        if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+            raise InspectionError("bundle_metadata", "Metadata must be a regular local file")
         payload = stream.read(size + 1)
     if len(payload) != size:
         raise InspectionError("metadata_changed", "Metadata changed during its snapshot read")

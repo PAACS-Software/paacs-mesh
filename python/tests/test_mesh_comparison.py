@@ -39,7 +39,7 @@ def write_bundle(directory, *, points=None, cells=None, source="a" * 64, units="
         payload.extend(struct.pack("<" + "q" * len(nodes), *nodes))
     report = {
         "status": "succeeded", "reason": "none", "mesh_published": True,
-        "source_sha256": source, "units": units, "nodes": len(points), "cells": len(cells),
+        "source_sha256": source, "kernel_version": "synthetic-test-kernel-A", "units": units, "nodes": len(points), "cells": len(cells),
         "tetrahedra": sum(row[0] == 5 for row in cells), "mesh_scope": "conforming_domain",
         "interbody_nonoverlap_certified": True,
         "audit": {"complete": True, "valid": True, "missing_boundary": 0,
@@ -216,9 +216,8 @@ class MeshComparisonTests(unittest.TestCase):
 
     def test_work_time_memory_and_argument_budgets_are_enforced(self):
         first, second = self.inspected(), self.inspected()
-        used = compare_meshes(first, second)["limits"]["work_used"]
         with self.assertRaises(InspectionError) as caught:
-            compare_meshes(first, second, max_work=used - 1)
+            compare_meshes(first, second, max_work=1)
         self.assertEqual(caught.exception.reason, "work_budget")
         with self.assertRaises(InspectionError) as caught:
             compare_meshes(first, second, max_seconds=1e-12)
@@ -231,6 +230,18 @@ class MeshComparisonTests(unittest.TestCase):
                                ("max_work", 0), ("max_seconds", 0), ("max_seconds", math.inf)):
             with self.subTest(keyword=keyword, value=value), self.assertRaises(ValueError):
                 compare_meshes(first, second, **{keyword: value})
+
+    def test_missing_or_changed_kernel_does_not_pair_CAD_body_tags(self):
+        first = self.inspected()
+        for kernel in (None, "synthetic-test-kernel-B"):
+            with self.subTest(kernel=kernel):
+                second = self.inspected(changes={"kernel_version": kernel})
+                comparison = compare_meshes(first, second)
+                self.assertEqual(comparison["counts_delta"]["tetrahedron_count"], 0)
+                self.assertFalse(comparison["cad_error"]["body_comparison_available"])
+                self.assertEqual(comparison["cad_error"]["bodies"], [])
+                self.assertEqual(comparison["cad_error"]["first_body_measurements"][0]["body_tag"], 7)
+                self.assertEqual(comparison["cad_error"]["second_body_measurements"][0]["relative_volume_error"], .01)
 
     def test_output_budget_rejects_large_valid_input_metadata(self):
         # Each source report is within 8 MiB. Their combined preserved policy

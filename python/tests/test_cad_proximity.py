@@ -130,6 +130,24 @@ class ProximityContractTests(unittest.TestCase):
         self.assertEqual(filtered["cad_proximity"]["evaluations"], 0)
         self.assertFalse(self.native.calls)
 
+    def test_query_scan_and_new_boundary_index_leave_only_remaining_cad_work(self):
+        self.inspection.max_work = 260
+        with self.assertRaises(pm.InspectionError):
+            self.inspection.query(cad=self.model, cad_face_tags=[1, 2], associations=False, limit=1)
+        self.assertFalse(self.native.calls)
+        # The first association request also scans all130 cells to build its
+        # index. Its remaining129 units cannot admit130 one-face evaluations.
+        self.inspection.max_work = 389
+        with self.assertRaises(pm.InspectionError):
+            self.inspection.query(cad=self.model, cad_face_tags=[1], associations=True, limit=1)
+        self.assertFalse(self.native.calls)
+        self.assertIsNotNone(self.inspection._boundary)
+        # The cached index consumes no new scan;130+130 fits exactly.
+        self.inspection.max_work = 260
+        page = self.inspection.query(cad=self.model, cad_face_tags=[1], associations=True, limit=1)
+        self.assertEqual(page["total"], 130)
+        self.assertEqual(page["cad_proximity"]["evaluations"], 130)
+
     def test_missing_or_different_source_kernel_and_units_refuse_before_queries(self):
         archive = self.inspection._archive
         for attribute, bad in (("source_sha256", None), ("source_sha256", "b" * 64), ("units", None)):
@@ -208,7 +226,7 @@ class NativeTrimmedProximityTests(unittest.TestCase):
 
     def test_outside_disk_projection_measures_trim_not_infinite_plane(self):
         top = self.model.select_faces(normal=[0, 0, 1]).tags
-        face = self.model.inspect(tags=top)["entities"][0]
+        face = next(face for face in self.model.inspect()["entities"] if face["tag"] == top[0])
         center = face["area_centroid"]
         sample = [center[0] + 2, center[1], center[2]]
         result = self.model._native._face_distances([sample], list(top), include_faces=True)
