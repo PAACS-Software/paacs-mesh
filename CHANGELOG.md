@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Add a Normal resource policy with demand-driven construction storage and no
+  practical logical-work ceiling when `max_work` is omitted. Explicit work,
+  memory, count, output and cancellation limits remain authoritative. Bounded
+  admission remains available and old recipes preserve its meaning.
+- Admit the actual initial numerical mesh before growing its live storage;
+  account for queue growth, compaction and overlapping temporary allocations.
+  Separate construction stages that do not coexist in memory.
+- Replace Normal curve and constraint-source count cutoffs with admitted
+  resource limits; retain native boundary, material and publication checks.
+- Record effective resource settings and completed cancelled-stage work. Add
+  resource-policy parity to installed-wheel qualification.
 - Add opt-in, bounded Tet4 quality inspection, native-ID pagination, spatial
   distributions, trimmed CAD centroid distances and quality-field VTK export.
 - Add deterministic SVG mesh views with whole-element cuts and visible interior

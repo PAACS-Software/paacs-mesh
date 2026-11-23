@@ -57,15 +57,112 @@ def _global_budget(case):
     return values
 
 
+def _native_report_pairing(case, report_bytes):
+    fields = ("native_report_file", "native_report_sha256")
+    if not any(name in case for name in fields):
+        return {"basis": "legacy_unavailable", "verified": False}
+    if case.get("native_report_file") != "native-report.json":
+        raise ValueError("Saved native report filename must be native-report.json")
+    expected = _hash(case.get("native_report_sha256"), "native_report_sha256")
+    if hashlib.sha256(report_bytes).hexdigest() != expected:
+        raise ValueError("Native report differs from the recorded file SHA-256")
+    return {"basis": "saved_file_sha256", "verified": True, "sha256": expected}
+
+
+def _resource_receipt(case, report):
+    requested_work, requested_memory = _global_budget(case)
+    resources = report.get("resources")
+    requested_policy = case.get("options", {}).get("resource_policy")
+    if resources is None:
+        if requested_policy is not None:
+            raise ValueError("Case resource policy lacks a saved native resource receipt")
+        return {"basis": "legacy_requested_only", "policy": None,
+                "requested_work": requested_work, "requested_working_bytes": requested_memory,
+                "effective_work": None, "effective_working_bytes": None,
+                "logical_work_cap_disabled": None}
+    if not isinstance(resources, dict) or resources.get("policy") not in {"normal", "bounded"}:
+        raise ValueError("Saved native resource policy is missing or invalid")
+    policy = resources["policy"]
+    if requested_policy is not None and requested_policy != policy:
+        raise ValueError("Case and native report differ on resource policy")
+    required = {"requested_max_work", "effective_max_work", "max_working_bytes", "logical_work_cap_disabled"}
+    if not required.issubset(resources):
+        raise ValueError("Saved native resource limits are incomplete")
+    native_requested = resources["requested_max_work"]
+    if native_requested is not None and (isinstance(native_requested, bool)
+            or not isinstance(native_requested, int) or native_requested <= 0):
+        raise ValueError("Saved native requested work limit is invalid")
+    if native_requested != requested_work:
+        raise ValueError("Case and native report differ on requested global work")
+    effective_work, effective_memory = resources["effective_max_work"], resources["max_working_bytes"]
+    if any(isinstance(value, bool) or not isinstance(value, int) or value <= 0
+           for value in (effective_work, effective_memory)):
+        raise ValueError("Saved native effective resource limits must be positive integers")
+    disabled = resources["logical_work_cap_disabled"]
+    if not isinstance(disabled, bool) or disabled != (policy == "normal" and native_requested is None):
+        raise ValueError("Saved native work-cap state contradicts its policy and request")
+    if requested_work is not None and effective_work != requested_work:
+        raise ValueError("Saved native effective work differs from the requested global ceiling")
+    if requested_work is None and policy == "bounded" and effective_work != 50_000_000:
+        raise ValueError("Saved native bounded default work differs from its declared policy")
+    if requested_work is None and policy == "normal" and effective_work < 2**60:
+        raise ValueError("Saved native disabled work cap has an inconsistent practical ceiling")
+    if requested_memory is not None and effective_memory != requested_memory:
+        raise ValueError("Case and native report differ on the global working allowance")
+    return {"basis": "saved_native_resources", "policy": policy,
+            "requested_work": requested_work, "requested_working_bytes": requested_memory,
+            "effective_work": effective_work, "effective_working_bytes": effective_memory,
+            "logical_work_cap_disabled": disabled}
+
+
+def _budget_identity(resources):
+    if resources["basis"] == "legacy_requested_only":
+        return (resources["basis"], resources["requested_work"], resources["requested_working_bytes"])
+    return (resources["basis"], resources["policy"], resources["effective_work"],
+            resources["effective_working_bytes"], resources["logical_work_cap_disabled"])
+
+
+def _sizing_targets(case, report):
+    if "wall_size_mm" not in case:
+        raise ValueError("Saved case lacks its wall/global-only sizing declaration")
+    wall_value = case.get("wall_size_mm")
+    wall = None if wall_value is None else _number(wall_value, "wall_size_mm")
+    global_size = _number(case.get("global_size_mm"), "global_size_mm")
+    reported_size = _number(report.get("requested_size"), "requested_size")
+    if (wall is not None and wall <= 0) or global_size <= 0 or reported_size != global_size:
+        raise ValueError("Case and native report must agree on the positive global size")
+    sizing = report.get("sizing", {})
+    if not isinstance(sizing, dict) or not isinstance(sizing.get("face_sizes", []), list):
+        raise ValueError("Saved native face-sizing controls are invalid")
+    controls = sizing.get("face_sizes", [])
+    if wall is None:
+        if "face_sizes" not in sizing:
+            raise ValueError("A global-only case needs its saved native face-sizing list")
+        if controls:
+            raise ValueError("A global-only case must not contain native face-sizing controls")
+    elif not any(isinstance(control, dict) and control.get("size") == wall for control in controls):
+        raise ValueError("The displayed wall target differs from the saved native face-sizing request")
+    return wall, global_size
+
+
 def _caption(stats):
     count = stats["tet4"]
     poor = stats["below_threshold"]
-    work, memory = stats["global_budgets"]
+    resources = stats["effective_resources"]
+    if resources["basis"] == "legacy_requested_only":
+        work = f'effective unavailable (requested {_display(resources["requested_work"])})'
+        memory = resources["requested_working_bytes"]
+        memory = f'effective unavailable (requested {"unavailable" if memory is None else f"{memory / MIB:g} MiB"})'
+    else:
+        work = ("no practical work ceiling" if resources["logical_work_cap_disabled"]
+                else _display(resources["effective_work"])) + f' ({resources["policy"]})'
+        memory = f'{resources["effective_working_bytes"] / MIB:g} MiB modeled'
     return [
         f'{count:,} Tet4; {stats["nodes"]:,} nodes; {stats["native_seconds"]:.2f} s saved native time; one attempt',
         f'Mean ratio: min {_display(stats["mean_ratio"]["minimum"])}; p05 {_display(stats["mean_ratio"]["p05"])}; median {_display(stats["mean_ratio"]["median"])}',
         f'Below {stats["threshold"]:g}: {poor:,}/{count:,} ({100 * poor / count if count else 0:.2f}%); dihedral p05 {_display(stats["dihedral"]["p05"])} deg; SJ p05 {_display(stats["jacobian"]["p05"])}',
-        f'Global work {_display(work)}; working allowance {"not recorded" if memory is None else f"{memory / MIB:g} MiB"}; native SHA {stats["native_sha256"][:12]}',
+        f'Global work {work}; working allowance {memory}',
+        f'Native SHA {stats["native_sha256"][:12]}; saved report file SHA {"verified" if stats.get("native_report_pairing", {}).get("verified") else "unavailable (legacy)"}',
     ]
 
 
@@ -231,6 +328,8 @@ def render(args):
         staging.mkdir()
         (staging / "bundles").mkdir()
         records, shared, hashes, globals_seen = [], None, set(), set()
+        unknown_resources = False
+        unknown_report_pairing = False
         common = None
         for index, (label, raw_directory) in enumerate(args.case):
             directory = Path(raw_directory).resolve(strict=True)
@@ -238,6 +337,7 @@ def render(args):
                 raise ValueError("Every case input must be a result directory")
             case = budget.json(directory / "case.json")
             report_bytes = budget.read(directory / "native-report.json", metadata=True)
+            report_pairing = _native_report_pairing(case, report_bytes)
             report = json.loads(report_bytes, object_pairs_hook=_pairs, parse_constant=_constant, parse_float=_finite_float)
             if (case.get("schema") != "paacs-construction-budget-case-v1" or case.get("status") != "succeeded"
                     or case.get("native_status") != "succeeded" or case.get("retry_count") != 0
@@ -250,14 +350,7 @@ def render(args):
             source = _hash(report.get("source_sha256"), "source_sha256")
             if case.get("source_sha256") != source or report.get("units") != "mm" or not report.get("kernel_version"):
                 raise ValueError("Saved case/report source, millimetre units and kernel identity must agree")
-            wall = _number(case.get("wall_size_mm"), "wall_size_mm")
-            global_size = _number(case.get("global_size_mm"), "global_size_mm")
-            if wall <= 0 or global_size <= 0 or report.get("requested_size") != global_size:
-                raise ValueError("Case and native report must agree on the positive global size")
-            sizing = report.get("sizing", {})
-            controls = sizing.get("face_sizes", []) if isinstance(sizing, dict) else []
-            if not any(isinstance(control, dict) and control.get("size") == wall for control in controls):
-                raise ValueError("The displayed wall target differs from the saved native face-sizing request")
+            wall, global_size = _sizing_targets(case, report)
             native_seconds = _number(case.get("native_seconds"), "native_seconds")
             seconds = report.get("seconds", {})
             if not isinstance(seconds, dict) or seconds.get("meshing_total") != native_seconds:
@@ -266,16 +359,21 @@ def render(args):
             if not isinstance(options, dict) or not isinstance(construction, dict):
                 raise ValueError("Saved construction settings are missing")
             for name, value in options.items():
+                if name == "resource_policy":
+                    continue  # Resource intent has its own native report block.
                 recorded = "effort" if name == "construction_effort" else name
                 if construction.get(recorded) != value:
                     raise ValueError("Case and native report differ on construction settings")
+            resources = _resource_receipt(case, report)
             identity = (source, report["units"], report["kernel_version"], global_size)
             if shared is not None and identity != shared:
                 raise ValueError("Cases differ in CAD source, units, kernel or requested global size")
             shared = identity
             native_hash = _hash(case.get("native_extension_sha256"), "native_extension_sha256")
             hashes.add(native_hash)
-            globals_seen.add(_global_budget(case))
+            globals_seen.add(_budget_identity(resources))
+            unknown_resources |= resources["basis"] == "legacy_requested_only"
+            unknown_report_pairing |= not report_pairing["verified"]
             case_id = f"case-{index + 1:02}"
             bundle = staging / "bundles" / case_id
             bundle.mkdir()
@@ -293,6 +391,10 @@ def render(args):
                 count = summary["cell_counts"]["tet4"]
                 if case.get("nodes") != inspected.node_count or case.get("tetrahedra") != count:
                     raise ValueError("Recorded counts differ from the actual archive")
+                for field, actual in (("nodes", inspected.node_count), ("tetrahedra", count)):
+                    if field in report and (isinstance(report[field], bool)
+                            or not isinstance(report[field], int) or report[field] != actual):
+                        raise ValueError("Saved native report counts differ from the actual archive")
                 poor = inspected.query(quality_below=args.highlight_below, limit=1, associations=False)["total"]
                 extent = summary["bounds"]
                 if extent is None:
@@ -300,15 +402,18 @@ def render(args):
                 common = extent if common is None else [[min(common[0][a], extent[0][a]) for a in range(3)],
                                                         [max(common[1][a], extent[1][a]) for a in range(3)]]
                 stats = {"tet4": count, "nodes": inspected.node_count, "wall_size_mm": wall,
+                         "global_size_mm": global_size,
                          "native_seconds": native_seconds,
                          "mean_ratio": summary["quality"]["mean_ratio"],
                          "dihedral": summary["quality"]["minimum_dihedral_deg"],
                          "jacobian": summary["quality"]["scaled_jacobian"], "threshold": args.highlight_below,
                          "below_threshold": poor, "native_sha256": native_hash,
-                         "global_budgets": _global_budget(case), "profile": case.get("profile"),
+                         "global_budgets": _global_budget(case), "effective_resources": resources,
+                         "native_report_pairing": report_pairing,
+                         "profile": case.get("profile"),
                          "reported_peak_process_bytes_after_mesh": case.get("peak_process_bytes_after_mesh")}
                 records.append({"input_case": case_id, "label": label, "input_directory": str(directory),
-                                "heading": f"Wall {wall:g} mm / {label}", "stats": stats,
+                                "heading": (f"Global size {global_size:g} mm" if wall is None else f"Wall {wall:g} mm") + f" / {label}", "stats": stats,
                                 "mesh_sha256": archive_hash, "source_sha256": source,
                                 "validation": inspected.validation, "native_reaudit_performed": False})
             budget.check()
@@ -321,6 +426,10 @@ def render(args):
             warnings.append("Different recorded native binaries: retained-run evidence, not an isolated algorithm comparison.")
         if len(globals_seen) > 1:
             warnings.append("Global budgets differ. Larger stage caps can worsen quality when the remaining global allowance is tighter.")
+        if unknown_resources or unknown_report_pairing:
+            unavailable = [name for name, missing in (("effective resource limits", unknown_resources),
+                           ("saved report file hash", unknown_report_pairing)) if missing]
+            warnings.append("Legacy evidence unavailable: " + " and ".join(unavailable) + "; corresponding claims remain unverified.")
         frame = [args.view_bounds[:3], args.view_bounds[3:]] if args.view_bounds else _padded(common, .05)
         axis = "xyz".index(args.cut_axis)
         cut = args.cut_value if args.cut_value is not None else common[0][axis] / 2 + common[1][axis] / 2

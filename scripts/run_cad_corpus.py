@@ -15,6 +15,8 @@ File/work/output budgets are mesher limits. The timeout kills the direct child;
 peak process memory is measured, not limited. Refusal is reported separately
 from a successful mesh and does not qualify unsupported geometry.
 Use --native-cad for the native BRep adapter; recovery extensions are explicit.
+The historical runner work cap remains 2,000,000. Use --resource-policy normal
+with --max-work none to inherit the selected CLI's Normal work policy.
 Run --self-test alone to check both report schemas without a CAD SDK.
 """
 import argparse
@@ -38,6 +40,7 @@ SCHEMA = "paacs-cad-corpus-v1"
 MAGIC = b"PAACSM8\0"
 REPORT_SCHEMAS = {"paacs-cad-report-v1", "paacs-native-cad-report-v1"}
 MODE_FLAGS = ("native_cad", "planar_recovery", "general_recovery", "separate_contact_bodies", "separate_matched_box_faces", "reuse_native_queries", "defer_discarded_native_facet_checks", "separate_matched_native_faces", "retain_auxiliary_geometry", "native_kernel_admission", "longitudinal_recovery", "independent_parts", "allow_centroids_within_chord_tolerance")
+OPTIONAL_NATIVE_FLAGS = ("local_partition_recovery", "adaptive_tet_recovery", "trace_native_stages")
 STAGES = ("import_seconds", "preparation_seconds", "generation_seconds",
           "validation_seconds", "audit_seconds", "quality_seconds",
           "archive_seconds", "total_seconds")
@@ -179,6 +182,44 @@ def mode_arguments(args):
     return ["--" + key.replace("_", "-") for key in MODE_FLAGS if getattr(args, key, False)]
 
 
+def native_profile_arguments(args):
+    flags = []
+    for key in ("recovery_mode", "elements"):
+        value = getattr(args, key, None)
+        if value is not None:
+            flags += ["--" + key.replace("_", "-"), value]
+    flags += ["--" + key.replace("_", "-") for key in OPTIONAL_NATIVE_FLAGS if getattr(args, key, False)]
+    if flags and not args.native_cad:
+        raise ValueError("native recovery profile requires --native-cad")
+    return flags
+
+
+def resource_cap(text):
+    """None inherits CLI policy; an explicit cap must fit native uint64."""
+    if text.lower() == "none":
+        return None
+    try:
+        value = int(text)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("resource cap must be a positive integer or none") from error
+    if not 1 <= value <= 2**64 - 1:
+        raise argparse.ArgumentTypeError("resource cap must fit a positive native 64-bit integer")
+    return value
+
+
+def work_arguments(args):
+    """Keep the historical default flag; omit only an explicitly inherited cap."""
+    flags = []
+    if args.max_work is not None:
+        flags += ["--max-work", str(args.max_work)]
+    policy = getattr(args, "resource_policy", None)
+    if policy is not None:
+        if not args.native_cad:
+            raise ValueError("resource policy requires --native-cad")
+        flags += ["--resource-policy", policy]
+    return flags
+
+
 def self_test():
     """Independent report fixtures retain legacy classification guarantees."""
     legacy = {"schema": "paacs-cad-report-v1", "status": "complete",
@@ -207,6 +248,11 @@ def self_test():
     assert mode_arguments(argparse.Namespace(native_cad=True, planar_recovery=True,
                                             general_recovery=True)) == [
                                                 "--native-cad", "--planar-recovery", "--general-recovery"]
+    assert work_arguments(argparse.Namespace(max_work=2_000_000, resource_policy=None,
+                                              native_cad=False)) == ["--max-work", "2000000"]
+    assert work_arguments(argparse.Namespace(max_work=None, resource_policy="normal",
+                                              native_cad=True)) == ["--resource-policy", "normal"]
+    assert native_profile_arguments(argparse.Namespace(native_cad=False)) == []
     manifest = {"files": [{"path": "fixture.step"}], "corpus_files": 1,
                 "settings": {"repeats": 1}}
     rows = [{"path": "fixture.step", "outcome": "succeeded", "wall_seconds": .7,
@@ -336,13 +382,16 @@ def main(argv=None):
     parser.add_argument("--size-factor", type=float, default=.15, help="target / imported bbox diagonal")
     parser.add_argument("--threads", type=int, default=1)
     parser.add_argument("--max-file-bytes", type=int, default=64 * 1024 * 1024)
-    parser.add_argument("--max-work", type=int, default=2_000_000)
+    parser.add_argument("--max-work", type=resource_cap, default=2_000_000,
+                        help="positive logical-work cap; none omits the flag and inherits the CLI policy")
+    parser.add_argument("--resource-policy", choices=("bounded", "normal"), default=None,
+                        help="optional native resource policy; omitted preserves the selected CLI's default")
     parser.add_argument("--max-nodes", type=int, default=200_000)
     parser.add_argument("--max-cells", type=int, default=1_000_000)
     parser.add_argument("--max-bytes", type=int, default=128 * 1024 * 1024)
     parser.add_argument("--max-audit-bytes", type=int, default=128 * 1024 * 1024)
     parser.add_argument("--max-native-pieces", type=int, default=None, help="explicit native partition-piece admission; preserves the CLI default when omitted")
-    parser.add_argument("--max-working-bytes", type=int, default=None, help="optional native working-payload admission")
+    parser.add_argument("--max-working-bytes", type=resource_cap, default=None, help="optional positive native working-payload cap; none inherits policy")
     parser.add_argument("--recovery-patch-states", type=int, default=None, help="optional bounded local-region search admission")
     parser.add_argument("--native-validation-threads", type=int, default=None, help="1..8 independent native CAD validation workers; meshing thread count is separate")
     parser.add_argument("--jobs", type=int, default=1, help="1..4 independent CAD processes; timings record this concurrency")
@@ -354,6 +403,13 @@ def main(argv=None):
     parser.add_argument("--longitudinal-recovery", action="store_true", help="optional native lengthwise partitions and bounded local Tet4 recovery")
     parser.add_argument("--independent-parts", action="store_true", help="preserve original parts and report interference; no global nonoverlap claim")
     parser.add_argument("--allow-centroids-within-chord-tolerance", action="store_true", help="explicit CAD chord policy for PLC centroids and interior samples; interior nodes remain strictly IN/ON")
+    parser.add_argument("--local-partition-recovery", action="store_true", help="optional native local partition recovery")
+    parser.add_argument("--adaptive-tet-recovery", action="store_true", help="optional native adaptive tetrahedron recovery")
+    parser.add_argument("--trace-native-stages", action="store_true", help="record native stage traces without changing mesh validity settings")
+    parser.add_argument("--recovery-mode", choices=("standard", "advanced"), default=None,
+                        help="optional native recovery mode; omitted preserves the CLI default")
+    parser.add_argument("--elements", choices=("tet4",), default=None,
+                        help="explicit Tet4 native corpus profile; omitted preserves the CLI default")
     parser.add_argument("--native-cad", action="store_true", help="use the optional native OCCT adapter")
     parser.add_argument("--planar-recovery", action="store_true", help="enable bounded planar surface recovery")
     parser.add_argument("--general-recovery", action="store_true", help="enable bounded general tet edge recovery")
@@ -367,17 +423,20 @@ def main(argv=None):
     if not (args.timeout > 0 and math.isfinite(args.timeout) and
             args.size_factor > 0 and math.isfinite(args.size_factor)):
         parser.error("timeout and size factor must be finite and positive")
-    if min(args.max_file_bytes, args.max_work, args.max_nodes, args.max_cells,
+    if min(args.max_file_bytes, args.max_nodes, args.max_cells,
            args.max_bytes, args.max_audit_bytes) < 0:
         parser.error("resource budgets must be nonnegative")
+    if (args.resource_policy is not None or args.recovery_mode is not None or args.elements is not None
+            or any(getattr(args, key) for key in OPTIONAL_NATIVE_FLAGS)) and not args.native_cad:
+        parser.error("resource policy and native recovery controls require --native-cad")
     if not math.isfinite(args.warning_quality) or not 0 <= args.warning_quality <= 1 or (args.warning_quality > 0 and not args.native_cad):
         parser.error("warning quality must be in [0,1] and requires --native-cad")
     if args.max_native_pieces is not None and (args.max_native_pieces < 1 or not args.native_cad):
         parser.error("native piece admission must be positive and requires --native-cad")
     if args.native_validation_threads is not None and (not 1 <= args.native_validation_threads <= 8 or not args.native_cad):
         parser.error("native validation workers must be in [1,8] and require --native-cad")
-    if args.max_working_bytes is not None and (args.max_working_bytes<0 or not args.native_cad):
-        parser.error("native working admission must be nonnegative and requires --native-cad")
+    if args.max_working_bytes is not None and not args.native_cad:
+        parser.error("native working admission requires --native-cad")
     if args.recovery_patch_states is not None and (not 0<=args.recovery_patch_states<=65536 or not args.native_cad):
         parser.error("region search admission must be in [0,65536] and requires --native-cad")
     if not 1 <= args.jobs <= 4:
@@ -395,8 +454,9 @@ def main(argv=None):
         parser.error("evidence output must be outside the input corpus")
     settings = {key: value for key, value in vars(args).items()
                 if key not in {"executable", "corpus", "output", "resume"}
-                and (key not in MODE_FLAGS or value) and (key != "warning_quality" or value)
+                and (key not in (*MODE_FLAGS, *OPTIONAL_NATIVE_FLAGS) or value) and (key != "warning_quality" or value)
                 and (key not in {"max_working_bytes","recovery_patch_states"} or value is not None)
+                and (key not in {"resource_policy", "recovery_mode", "elements"} or value is not None)
                 and (key != "max_native_pieces" or value is not None)}
     output.mkdir(parents=True, exist_ok=True)
     manifest_path, records_path = output / "manifest.json", output / "results.jsonl"
@@ -444,7 +504,9 @@ def main(argv=None):
             archive = directory / "mesh.paacsmesh"
             command = prefix + [str(root / source["path"]), "1", str(archive), "--report-json",
                                 "--size-factor", str(args.size_factor), "--threads", str(args.threads)]
-            for key in ("max_file_bytes", "max_work", "max_nodes", "max_cells", "max_bytes", "max_audit_bytes"):
+            command += ["--max-file-bytes", str(args.max_file_bytes)]
+            command += work_arguments(args)
+            for key in ("max_nodes", "max_cells", "max_bytes", "max_audit_bytes"):
                 command += ["--" + key.replace("_", "-"), str(getattr(args, key))]
             command += mode_arguments(args)
             if args.warning_quality > 0:
@@ -453,11 +515,18 @@ def main(argv=None):
                 command += ["--max-native-pieces", str(args.max_native_pieces)]
             if args.native_validation_threads is not None:
                 command += ["--native-validation-threads", str(args.native_validation_threads)]
+            command += native_profile_arguments(args)
             for key in ("max_working_bytes","recovery_patch_states"):
                 if getattr(args,key) is not None:
                     command += ["--"+key.replace("_","-"),str(getattr(args,key))]
             row = run_case(command, args.timeout, directory / "stdout.log", directory / "stderr.log",
                            archive, memory)
+            if args.native_cad:
+                reported_resources = (row.get("result") or {}).get("resources")
+                row.update(resource_policy_requested=args.resource_policy,
+                           max_work_requested=args.max_work,
+                           max_working_bytes_requested=args.max_working_bytes,
+                           resources_reported=reported_resources)
             row.update(path=source["path"], input_sha256=source["sha256"], repeat=repeat,
                        command=command, run_directory=str(directory.relative_to(output)),
                        output=str(archive.relative_to(output)))

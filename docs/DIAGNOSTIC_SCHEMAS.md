@@ -92,6 +92,22 @@ error measure, a count of bad final cells or evidence of complete achieved
 sizing. Queue exhaustion does not certify CAD fidelity or cell quality. Routes
 that do not rebuild charts need not provide face receipts.
 
+A route can fail during shared-edge sampling before rebuilding any chart;
+an empty `surface_spacing` list therefore does not certify surface completion.
+The final body's route also need not describe every earlier failed trial.
+Retain stage traces and their retry costs when diagnosing a fallback. A generic
+`nonconforming_edge` surface refusal can describe a numerical sampling failure;
+it does not by itself establish invalid source CAD.
+
+Normal's curve integration measures a growth-prepared metric: endpoint feature
+targets extend continuously by physical distance, and local integration
+stencils lower sizes under the existing internal growth slope before comparing
+coarse/fine estimates. Raw sampled requests and final global growth preparation
+are retained separately. This is not an exact integration-error certificate
+for raw curvature, a new public per-curve receipt, or a final sizing certificate.
+Internal numerical probes can record the last refused parameter interval and
+raw/prepared samples; those private fields are not promised by this JSON schema.
+
 The body's `initial_front` adds `budget_reason`, effective `candidate_limit`,
 `site_limit`, `query_limit`, `work_limit`, and allocation counters
 `reserved_bulk_candidates`, `reserved_bulk_sites`, `source_candidates`,
@@ -167,7 +183,7 @@ Development native mesh reports add `resources`, copied by `diagnose()` to
 | `effective_max_work` | Finite internal logical-work ceiling used by native admission. |
 | `logical_work_cap_disabled` | True only for normal policy with omitted work; a finite overflow guard remains. |
 | `max_working_bytes` | Effective modeled working allowance, not a hard process RSS cap. |
-| `scope` | Native description of accounting scope and restrictions. |
+| `scope` | Explanatory accounting restrictions in Python reports; the native CLI emits the five policy/limit fields above. |
 
 Explicit positive work ceilings apply to both policies. Historical reports can
 omit this object; diagnostics then leave the summary field unavailable rather

@@ -114,6 +114,26 @@ remaining node, work and memory limits. Native shared-edge, trim, orientation,
 chord and volume checks still apply. Increasing capacity does not remove
 geometric refusal or bounded local recovery/stall checks.
 
+Normal curve quadrature prepares the sizing metric before estimating its
+numerical error. Incident-edge feature sizes influence a continuous endpoint
+neighbourhood through the existing internal slope `sqrt(1.8)-1`, using physical
+distance to each endpoint. Each five-point integration stencil then applies
+forward/backward growth bounds to copies of its requested sizes. Both steps
+can only lower sizes. Euclidean distance is no greater than arclength, so these
+local envelopes are conservative relative to the corresponding arclength
+growth bound. Raw cached requests and the final global arclength growth pass
+remain separate.
+
+This preparation prevents isolated endpoint or curvature-size jumps from
+forcing relative-error subdivision down to machine precision. It deliberately
+integrates a prepared sizing metric, rather than claiming an error certificate
+for a discontinuous raw curvature field. The internal slope is a construction
+rule, not a certificate that the user's requested growth or every final edge
+size has been achieved. Sampling work remains charged, Bounded sampling retains
+its historical path, and no permissive numerical fallback or relaxed CAD check
+is introduced. The [resource study](RESOURCE_POLICY_STUDY.md) separates the
+curve-level regression evidence from full volume-mesh qualification.
+
 These are logical stage-admission estimates, not a measurement or hard bound
 on whole-process resident memory. Native kernel workspaces, allocator overhead
 and other process state can differ from the model. A larger allowance also
