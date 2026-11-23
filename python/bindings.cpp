@@ -10,6 +10,7 @@
 #include "NumpyArrays.hpp"
 
 #include "paacs/algo/Meshers.hpp"
+#include "paacs/geometry/OcctBoundary.hpp"
 #include "paacs/geometry/OcctMesher.hpp"
 #include "paacs/geometry/OcctPreview.hpp"
 #include "paacs/sdk/MeshArchive.hpp"
@@ -315,6 +316,7 @@ struct MeshResult {
         r["mesh_published"] = outcome.published;
         r["source_path"] = utf8(source);
         r["source_sha256"] = sourceSha256;
+        r["kernel_version"] = geo::occtKernelVersion();
         r["units"] = "mm";
         r["requested_size"] = requestedSize;
         r["recovery"] = recovery;
@@ -375,7 +377,7 @@ struct MeshResult {
         times["quality"] = finiteValue(outcome.qualitySeconds);
         times["meshing_total"] = finiteValue(outcome.totalSeconds);
         r["seconds"] = times;
-        py::list bodies, interferences;
+        py::list bodies, interferences, bodyRoutes;
         for (const auto& body : outcome.bodies) {
             py::dict b;
             b["solid_tag"] = body.solidTag;
@@ -411,6 +413,26 @@ struct MeshResult {
             placement["seconds"] = finiteValue(initial.seconds);
             b["initial_front"] = std::move(placement);
             b["initial_front_fallback"] = initialFallbackReport(body.initialFrontFallback);
+            // This is the native adaptive stage after the initial point set.
+            // Its diagnostic distinguishes completion from a bounded stop;
+            // a route name alone does not certify achieved sizing.
+            py::dict interior;
+            interior["diagnostic"] = body.interiorFrontDiagnostic;
+            interior["nodes"] = body.interiorFrontNodes;
+            interior["candidates"] = body.interiorFrontCandidates;
+            interior["work"] = body.interiorFrontWork;
+            interior["queries"] = body.interiorFrontQueries;
+            interior["remaining_oversized"] = body.interiorFrontRemainingOversized;
+            interior["front_activations"] = body.interiorFrontActivations;
+            interior["void_activations"] = body.interiorVoidActivations;
+            interior["front_advances"] = body.interiorFrontAdvances;
+            interior["seconds"] = finiteValue(body.interiorFrontSeconds);
+            b["interior_front"] = std::move(interior);
+            py::dict route;
+            route["solid_tag"] = body.solidTag;
+            route["route"] = body.route;
+            route["reason"] = geo::nativeCadMeshReasonName(body.reason);
+            bodyRoutes.append(std::move(route));
             bodies.append(std::move(b));
         }
         for (const auto& pair : outcome.interferences) {
@@ -425,6 +447,17 @@ struct MeshResult {
         }
         r["bodies"] = bodies;
         r["interferences"] = interferences;
+        // Preserve the legacy sizing report, which describes wrapper policy.
+        // AUTO may select a different construction route in the native core.
+        // Retain requests and actual body reports separately, including refused
+        // attempts; none of these fields asserts that size targets were met.
+        py::dict policy;
+        policy["requested_native_sizing"] = py::cast(sizing.requestedNative);
+        policy["requested_advancing_interior_front"] = py::cast(requestedAdvancingInteriorFront);
+        policy["wrapper_native_sizing"] = sizing.native;
+        policy["wrapper_sizing_mode"] = sizing.native ? "spatial" : "standard";
+        policy["body_routes"] = std::move(bodyRoutes);
+        r["effective_policy"] = std::move(policy);
         return r;
     }
 
@@ -693,6 +726,115 @@ std::unique_ptr<CadModel> readStep(const fs::path& path, const py::object& maxFi
 #include "CadInspection.hpp"
 #include "CadPreview.hpp"
 
+// Private diagnostic query: distances are to trimmed faces, including their
+// edges/vertices, not merely projections onto the underlying infinite surface.
+// PAACS bounds samples/output and checks time between OCCT calls. One OCCT
+// distance solve is not preemptible and its internal allocations are not capped.
+py::dict faceDistances(const CadModel& holder, const py::object& pointValues,
+                      const py::object& faceValues, const py::object& maxWork,
+                      const py::object& maxSeconds, bool includeFaces,
+                      const py::object& maxResultBytes) {
+    const auto maximumWork = positiveInteger(maxWork, "max_work");
+    const auto maximumBytes = positiveInteger(maxResultBytes, "max_result_bytes");
+    const auto seconds = positiveNumber(maxSeconds, "max_seconds");
+    if (maximumWork > 100000 || maximumBytes > 8ULL * 1024 * 1024)
+        throw std::invalid_argument("CAD proximity caps are 100000 evaluations and 8 MiB output scratch");
+    auto sequence = [](const py::object& value, const char* name, py::ssize_t maximum) {
+        if (!PySequence_Check(value.ptr()) || py::isinstance<py::str>(value) || py::isinstance<py::bytes>(value))
+            throw std::invalid_argument(std::string(name) + " must be a bounded sequence");
+        auto result = py::reinterpret_borrow<py::sequence>(value);
+        if (py::len(result) < 1 || py::len(result) > maximum)
+            throw std::invalid_argument(std::string(name) + " count exceeds its diagnostic cap");
+        return result;
+    };
+    const auto pointSequence = sequence(pointValues, "points", 256);
+    const auto faceSequence = sequence(faceValues, "face_tags", 1000);
+    const auto evaluations = static_cast<std::uint64_t>(py::len(pointSequence)) * py::len(faceSequence);
+    if (evaluations > maximumWork)
+        throw std::length_error("CAD proximity exceeds max_work; restrict cells or face tags");
+    const auto scratch = evaluations * (includeFaces ? 1024 : 160) + py::len(pointSequence) * 4096 + 65536;
+    if (scratch > maximumBytes)
+        throw std::length_error("CAD proximity output exceeds max_result_bytes; request a smaller chunk");
+    std::vector<Vec3> points;
+    std::vector<int> tags;
+    points.reserve(py::len(pointSequence));
+    tags.reserve(py::len(faceSequence));
+    for (const auto point : pointSequence) points.push_back(point3(py::reinterpret_borrow<py::object>(point), "point"));
+    for (const auto value : faceSequence) {
+        const auto tag = positiveInteger(py::reinterpret_borrow<py::object>(value), "face tag");
+        if (tag > static_cast<std::uint64_t>((std::numeric_limits<int>::max)()))
+            throw std::invalid_argument("Face tag exceeds the native integer range");
+        tags.push_back(static_cast<int>(tag));
+    }
+    std::sort(tags.begin(), tags.end());
+    if (std::adjacent_find(tags.begin(), tags.end()) != tags.end())
+        throw std::invalid_argument("face_tags must be unique");
+    struct Distance { Vec3 closest; double distance, tolerance; int tag; };
+    std::vector<Distance> measured;
+    measured.reserve(evaluations);
+    const auto started = std::chrono::steady_clock::now();
+    const auto checkTime = [&] {
+        if (std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count() > seconds)
+            throw std::runtime_error("CAD proximity exceeded cooperative max_seconds; no partial result published");
+    };
+    {
+        py::gil_scoped_release release;
+        std::unique_lock lock(nativeOperationMutex, std::defer_lock);
+        while (!lock.try_lock()) { checkTime(); std::this_thread::sleep_for(std::chrono::milliseconds(1)); }
+        if (!holder.imported.model) throw std::invalid_argument("CAD proximity requires an imported model");
+        for (const auto tag : tags)
+            if (!holder.imported.model->face(tag)) throw std::invalid_argument("CAD proximity has an unknown face tag");
+        for (const auto point : points) for (const auto tag : tags) {
+            checkTime();
+            Vec3 closest;
+            if (!geo::closestPointOnOcctFace(*holder.imported.model, tag, point, closest))
+                throw std::runtime_error("Trimmed CAD face distance failed; no partial result published");
+            const auto distance = std::hypot(point.x - closest.x, point.y - closest.y, point.z - closest.z);
+            const auto tolerance = holder.imported.model->tolerance(2, tag);
+            if (!std::isfinite(distance) || !std::isfinite(tolerance) || tolerance < 0)
+                throw std::runtime_error("Trimmed CAD distance is outside the supported numerical range");
+            measured.push_back({closest, distance, tolerance, tag});
+            checkTime();
+        }
+    }
+    py::list rows;
+    for (std::size_t index = 0; index < points.size(); ++index) {
+        const auto begin = measured.begin() + index * tags.size(), end = begin + tags.size();
+        const auto best = std::min_element(begin, end, [](const auto& a, const auto& b) { return a.distance < b.distance; });
+        py::dict row;
+        row["point"] = cad_inspection_detail::pointObject(points[index]);
+        row["minimum_distance"] = best->distance;
+        row["closest_face_tag"] = best->tag;
+        row["closest_point"] = cad_inspection_detail::pointObject(best->closest);
+        row["face_tolerance"] = best->tolerance;
+        row["measured_face_count"] = tags.size();
+        py::list nearest, faces;
+        const auto roundoff = 32 * std::numeric_limits<double>::epsilon() * std::max(1., best->distance);
+        for (auto current = begin; current != end; ++current) {
+            if (current->distance - best->distance <= std::max({roundoff, current->tolerance, best->tolerance}))
+                nearest.append(current->tag);
+            if (includeFaces) {
+                py::dict face;
+                face["face_tag"] = current->tag; face["distance"] = current->distance;
+                face["closest_point"] = cad_inspection_detail::pointObject(current->closest);
+                face["tolerance"] = current->tolerance;
+                faces.append(std::move(face));
+            }
+        }
+        row["nearest_face_tags"] = std::move(nearest);
+        if (includeFaces) row["faces"] = std::move(faces);
+        rows.append(std::move(row));
+        checkTime();
+    }
+    py::dict result;
+    result["schema"] = "paacs-cad-face-distances-v1";
+    result["source_sha256"] = holder.sourceSha256;
+    result["kernel_version"] = geo::occtKernelVersion();
+    result["evaluations"] = evaluations;
+    result["rows"] = std::move(rows);
+    return result;
+}
+
 } // namespace
 
 PYBIND11_MODULE(_native, m) {
@@ -767,6 +909,10 @@ PYBIND11_MODULE(_native, m) {
              py::arg("topology") = false, py::arg("max_uses") = 10000)
         .def("_preview", &previewCad, py::kw_only(), py::arg("linear_deflection"),
              py::arg("max_points") = py::int_(50000), py::arg("max_triangles") = py::int_(100000))
+        .def("_face_distances", &faceDistances, py::arg("points"), py::arg("face_tags"), py::kw_only(),
+             py::arg("max_work") = py::int_(100000), py::arg("max_seconds") = py::float_(10.0),
+             py::arg("include_faces") = false, py::arg("max_result_bytes") = py::int_(8 * 1024 * 1024),
+             "Private centroid diagnostics use true trimmed-face distances; one OCCT call is not preemptible.")
         .def("mesh", &CadModel::mesh, py::arg("size"), py::kw_only(),
              py::arg("recovery") = "standard", py::arg("assembly") = "preserve_parts",
              py::arg("workers") = py::int_(1), py::arg("validation_workers") = py::int_(1),

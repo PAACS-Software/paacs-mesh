@@ -30,8 +30,9 @@ def capabilities():
     return {
         "schema": CAPABILITY_SCHEMA, "package_version": __version__, "engine_version": native_version,
         "units": {"length": "mm", "volume": "mm3"},
-        "operations": ["inspect", "select_faces", "preview", "mesh", "diagnose", "run_recipe", "publish_result"],
-        "cli_commands": ["capabilities", "inspect", "run", "diagnose"],
+        "operations": ["inspect", "select_faces", "preview", "mesh", "diagnose", "run_recipe", "publish_result",
+                       "inspect_mesh", "query_facial_proximity", "visualize_mesh", "compare_meshes"],
+        "cli_commands": ["capabilities", "inspect", "run", "diagnose", "inspect-mesh", "visualize", "compare"],
         "input_formats": ["STEP"], "output_formats": ["VTK", "paacsmesh"],
         "step_volume_cell_families": ["Tet4"],
         "selection": {"predicates": ["tags", "name", "group", "surface", "body", "area", "radius",
@@ -46,9 +47,29 @@ def capabilities():
         "assemblies": {"default": "preserve_parts", "interference": "reported_without_fusing",
                        "independent_parts_certify_global_nonoverlap": False},
         "diagnostics": {"schema": DIAGNOSTIC_SCHEMA, "native_report_summary": True,
-                        "body_cad_error": True, "local_cell_quality": False,
+                        "body_cad_error": True, "local_cell_quality": True,
+                        "local_cell_quality_requires": "opt_in_inspect_mesh",
+                        "diagnose_includes_per_cell_quality": False,
                         "face_achieved_size": False, "solver_error_estimation": False,
                         "maximum_issues": 256, "report_budget_bytes": 8 * 1024 * 1024},
+        "mesh_inspection": {"api": "inspect_mesh", "cell_id_scheme": "zero_based_native_archive_cell_index_v1",
+                            "mesh_identity": "exact_archive_sha256", "page_limit": 1000,
+                            "all_cells_available_by_pagination": True, "numpy_required": False,
+                            "metrics": ["mean_ratio", "minimum_dihedral_deg", "scaled_jacobian"],
+                            "metric_scope": "linear_Tet4_only; other_families_return_null",
+                            "archive_only_provenance": "units_source_and_native_validation_unavailable",
+                            "saved_reports_are_reaudited": False, "quality_field_export": "VTK"},
+        "cad_proximity": {"method": "occt_trimmed_face_distance", "sample": "cell_node_centroid",
+                          "requires_matching_source_kernel_and_units": True,
+                          "ownership_or_quality_causation_inferred": False,
+                          "maximum_face_evaluations": 100000,
+                          "limit_scope": "bounded_inputs_outputs; OCCT_workspace_and_single_solve_not_OS_capped"},
+        "mesh_visualization": {"format": "SVG", "deterministic_camera": True,
+                               "interior_visibility": "explicit_xray_highlights",
+                               "cut_rule": "whole_cells_by_centroid", "cad_context": "source_matched_display_tessellation"},
+        "mesh_comparison": {"api": "compare_meshes", "requires_reported_native_validity": True,
+                            "requires_same_source_and_units": True, "cell_id_correspondence_assumed": False,
+                            "spatial_comparison": "common_world_grid", "solver_accuracy_inferred": False},
         "limitations": ["arbitrary_STEP_geometry_is_not_guaranteed",
                         "shape_quality_is_not_simulation_convergence",
                         "diagnostics_interpret_reported_checks_and_do_not_recertify_meshes",
@@ -83,6 +104,17 @@ def _positive(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0
 
 
+def _report_input(value):
+    """Copy structured exceptions into the same envelope used by the CLI."""
+    if isinstance(value, Exception):
+        stage, reason = getattr(value, "stage", None), getattr(value, "reason", None)
+        if not isinstance(stage, str) or not isinstance(reason, str):
+            raise ValueError("Expected a PAACS exception with stage, reason and report")
+        return {"schema": "paacs-mesh-cli-error-v1", "status": "failed", "stage": stage,
+                "reason": reason, "message": str(value), "report": getattr(value, "report", None)}
+    return value if isinstance(value, dict) else getattr(value, "report", None)
+
+
 def _native_report(report):
     """Select the final attempt, never a successful earlier attempt from a failed run."""
     workflow = None
@@ -100,8 +132,15 @@ def _native_report(report):
             native = attempts[-1].get("native_report")
         report = {} if native is None else _mapping(native, "native_report")
     if envelopes:
+        operation = report if workflow is None and "mesh_published" not in report else None
         workflow = dict(workflow or {})
-        workflow.update(status="failed", outer_failure={key: envelopes[0].get(key) for key in ("stage", "reason")})
+        workflow.update(status="failed", outer_failure={key: envelopes[0].get(key)
+                        for key in ("stage", "reason", "message")})
+        if operation is not None:
+            workflow["operation_failure"] = {**workflow["outer_failure"], "details": operation}
+            if operation.get("source_sha256") is not None:
+                workflow["source_sha256"] = operation["source_sha256"]
+            report = {}
     if "mesh_published" not in report and workflow is None:
         raise ValueError("Expected a native mesh report or paacs-mesh-workflow-v1 report")
     if "mesh_published" in report and not isinstance(report["mesh_published"], bool):
@@ -110,6 +149,8 @@ def _native_report(report):
 
 
 def _validate_measurements(native, audit, quality):
+    if native.get("hint") is not None and not isinstance(native["hint"], str):
+        raise ValueError("hint must be a string or null")
     for record, fields in ((audit, ("complete", "valid")), (quality, ("complete", "valid"))):
         for key in fields:
             if key in record and not isinstance(record[key], bool):
@@ -128,16 +169,19 @@ def _validate_measurements(native, audit, quality):
 def diagnose(report_or_mesh, *, max_issues=32):
     """Return owned JSON evidence, stable issue IDs and suggestions, with no retries.
 
-    Accept a native ``Mesh``, its report, a workflow result/report, or a CLI
-    failure envelope. Saved reports are interpreted as supplied, not authenticated
-    against a mesh file. Missing local evidence is reported explicitly.
+    Accept a native ``Mesh``, its report, a workflow result/report, a PAACS
+    exception, or a CLI failure envelope. Selection and request errors retain
+    their stage and actual evidence; they do not imply a volume mesh was tried.
+    Saved reports are interpreted as supplied, not authenticated against a mesh
+    file. Missing local evidence is reported explicitly.
     """
     maximum = integer(max_issues, "max_issues")
     if maximum > 256:
         raise ValueError("max_issues must not exceed 256")
-    raw = report_or_mesh if isinstance(report_or_mesh, dict) else getattr(report_or_mesh, "report", None)
+    raw = _report_input(report_or_mesh)
     raw = json_copy(_mapping(raw, "report"))
     native, workflow = _native_report(raw)
+    operation_failure = (workflow or {}).get("operation_failure")
     source = _source(native.get("source_sha256", (workflow or {}).get("source_sha256")))
     if native.get("units", "mm") != "mm":
         raise ValueError("Native mesh reports must use mm")
@@ -175,9 +219,15 @@ def diagnose(report_or_mesh, *, max_issues=32):
     reason = native.get("reason")
     if published and native.get("status") not in (None, "succeeded"):
         issue("native_report_inconsistent", "error", {"status": native.get("status"), "mesh_published": True})
-    if not published or reason not in (None, "none"):
+    if operation_failure is not None:
+        stage = operation_failure.get("stage")
+        code = "selection_failed" if stage in ("selection", "inspection") else (
+            "control_request_failed" if stage == "sizing" else "operation_failed")
+        issue(code, "error", operation_failure, scope="selection" if code == "selection_failed" else "request",
+              actions=("review_selection_candidates" if code == "selection_failed" else "review_request_and_report",))
+    elif not published or reason not in (None, "none"):
         issue("mesh_refused", "error", {"reason": reason or (workflow or {}).get("reason", "unavailable"),
-                                       "mesh_published": published},
+                                       "mesh_published": published, "hint": native.get("hint")},
               actions=("review_native_failure",))
     if published and not complete:
         issue("validation_incomplete", "error", {"audit_complete": audit.get("complete"),
@@ -229,7 +279,7 @@ def diagnose(report_or_mesh, *, max_issues=32):
         nonoverlap = False
     workflow_failed = workflow is not None and workflow.get("status") != "succeeded"
     workflow_incomplete = workflow is not None and workflow.get("diagnostics_complete") is False
-    if workflow_failed or workflow_incomplete:
+    if (workflow_failed or workflow_incomplete) and operation_failure is None:
         issue("workflow_incomplete" if workflow_incomplete else "workflow_failed", "error",
               {"status": workflow.get("status"), "reason": workflow.get("reason"),
                "diagnostics_complete": workflow.get("diagnostics_complete"),
@@ -252,6 +302,7 @@ def diagnose(report_or_mesh, *, max_issues=32):
                        "interbody_nonoverlap_certified": nonoverlap},
         "summary": {"nodes": native.get("nodes"), "cells": native.get("cells"),
                     "tetrahedra": native.get("tetrahedra"),
+                    "native_hint": native.get("hint"),
                     "quality": {key: quality.get(key) for key in _QUALITY}},
         "bodies": [{key: body.get(key) for key in _BODY} for body in bodies[:maximum]],
         "bodies_truncated": len(bodies) > maximum,
@@ -271,9 +322,14 @@ def format_diagnostics(report):
     if report.get("schema") != DIAGNOSTIC_SCHEMA:
         raise ValueError("Expected paacs-mesh-diagnostics-v1")
     summary = report["summary"]
-    lines = [f"Mesh status: {report['status']}",
+    request_only = summary["cells"] is None and any(
+        item["scope"] in ("selection", "request") for item in report["issues"])
+    label = "Request" if request_only else "Mesh"
+    lines = [f"{label} status: {report['status']}",
              f"Cells: {summary['cells']}; nodes: {summary['nodes']}; units: mm",
              f"Validation: reported native checks; scope: {report['validation']['mesh_scope']}"]
+    if summary.get("native_hint"):
+        lines.append("Native hint: " + summary["native_hint"])
     for item in report["issues"]:
         body = f" (bodies {', '.join(map(str, item['body_tags']))})" if item["body_tags"] else ""
         lines.append(f"{item['severity']}: {item['code']}{body}")
