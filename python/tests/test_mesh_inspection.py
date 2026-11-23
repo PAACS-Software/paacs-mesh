@@ -131,6 +131,14 @@ class MeshInspectionTests(unittest.TestCase):
         with pm.open_mesh(self.archive) as inspection:
             json.dumps(inspection.summary(), allow_nan=False)
 
+    def test_distinct_body_summary_admits_dictionary_and_JSON_copy_storage(self):
+        write_archive(self.archive, cells=[(5, 3, tag + 1, (0, 1, 2, 3)) for tag in range(20000)])
+        with pm.open_mesh(self.archive, max_bytes=6 * 1024 * 1024) as inspection:
+            self.assertEqual(inspection.query(cell_id=0, associations=False)["cells"][0]["body_tag"], 1)
+            with self.assertRaises(pm.InspectionError) as caught:
+                inspection.summary()
+            self.assertEqual(caught.exception.reason, "memory_budget")
+
     def test_input_snapshot_is_immutable(self):
         with pm.open_mesh(self.archive) as inspection:
             digest = inspection.mesh_sha256

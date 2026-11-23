@@ -381,7 +381,7 @@ class MeshInspection:
         # A boundary triangle can introduce a distinct face group. Admit each
         # group's distribution, dictionary keys and JSON-copy overhead before
         # building the map, rather than budgeting only its three edge values.
-        self._reserve(128 * self.cell_count + 4096 * self._archive.type_counts[2] + 8192 * bins**3,
+        self._reserve(384 * self.cell_count + 4096 * self._archive.type_counts[2] + 8192 * bins**3,
                       "Quality distributions")
         started = time.perf_counter()
         self._deadline(started, 12 * self.cell_count + self.node_count)
