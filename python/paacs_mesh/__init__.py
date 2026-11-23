@@ -55,12 +55,14 @@ from .workflow import (  # noqa: E402
     WorkflowError, WorkflowResult, create_recipe, load_recipe, publish_result,
     run_recipe, run_saved_recipe, save_recipe,
 )
+from .diagnostics import capabilities, diagnose, format_diagnostics  # noqa: E402
 
 __all__ = [
     "BoxSize", "CadImportError", "CadModel", "ExportError", "FaceSize", "Mesh", "MeshingError", "read_step",
     "native_version", "FaceSelection", "SelectionError", "IntentError",
     "CadPreview", "WorkflowError", "WorkflowResult", "create_recipe", "load_recipe",
     "publish_result", "run_recipe", "run_saved_recipe", "save_recipe",
+    "capabilities", "diagnose", "format_diagnostics",
 ]
 
 try:

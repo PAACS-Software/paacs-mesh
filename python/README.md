@@ -39,6 +39,17 @@ The same operation is available from a terminal:
 paacs-mesh part.step part.vtk --size 0.7
 ```
 
+Development wheels also provide discovery and CAD inspection before selecting controls:
+
+```sh
+paacs-mesh capabilities --json
+paacs-mesh inspect part.step --topology --json
+```
+
+Saved recipes, readable diagnostics and the complete inspect/select/mesh/compare
+example are covered in the
+[inspection guide](https://github.com/PAACS-Software/paacs-mesh/blob/main/docs/AGENT_WORKFLOW.md).
+
 Face refinement, volume regions, growth controls, optional NumPy arrays,
 geometric selections and bounded saved recipes are described in the
 [Python guide](https://github.com/PAACS-Software/paacs-mesh/blob/main/docs/PYTHON.md).
