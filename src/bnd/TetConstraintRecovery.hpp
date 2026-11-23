@@ -31,6 +31,7 @@ using Complex = BistellarComplex;
 using Face = Complex::Face;
 using Edge = Complex::Edge;
 struct WorkLimit {};
+struct CellLimit {};
 struct Cancelled {};
 using Clock=std::chrono::steady_clock;
 struct StageTime {
@@ -245,7 +246,8 @@ inline std::uint64_t recoverPiercedFace(Complex& complex, Face face, mesh::Class
 // remain private and excluded from the partial seed.
 inline bool carve(Complex& complex, const std::map<Face,Face>& source, const mesh::Mesh& boundary,
                   mesh::Classification region, bool complete, std::uint64_t maximumCells,
-                  mesh::Mesh& destination, TetConstraintRecoveryReport& report) {
+                  mesh::Mesh& destination, TetConstraintRecoveryReport& report,
+                  bool progressiveResources=false) {
     enum Label : std::uint8_t { Unknown, Exterior, Material, Blocked };
     std::vector<Label> labels(complex.cells.size(),Unknown);
     std::vector<std::size_t> queue;
@@ -303,7 +305,10 @@ inline bool carve(Complex& complex, const std::map<Face,Face>& source, const mes
         if (!complex.alive[id]) continue;
         if (complete&&labels[id]==Unknown) return false;
         if (labels[id]!=Material) continue;
-        if (std::uint64_t(seed.cellCount())>=maximumCells) throw WorkLimit{};
+        if (std::uint64_t(seed.cellCount())>=maximumCells) {
+            if (progressiveResources) throw CellLimit{};
+            throw WorkLimit{};
+        }
         std::array<Index,4> ids;
         for(unsigned j=0;j<4;++j){
             const auto v=complex.cells[id].vertices[j];
@@ -504,27 +509,58 @@ inline TetConstraintRecoveryReport recoverTetConstraints(const mesh::Mesh& bound
     mesh::Classification region, std::uint64_t maximumWork, std::uint64_t maximumBytes,
     std::uint64_t maximumCells, const std::atomic_bool* cancellation, mesh::Mesh& destination,
     std::uint64_t maximumSteinerNodes=64, bool profile=false, bool expandResidualEdges=true,
-    bool boundedConstruction=false) {
+    bool boundedConstruction=false, bool progressiveResources=false) {
     using namespace constraint_detail;
     TetConstraintRecoveryReport report;
     const auto start=Clock::now();
     std::uint64_t workLimit=maximumWork;
-    const auto charge=[&](std::uint64_t n) {
-        if (cancellation&&cancellation->load()) throw Cancelled{};
+    const auto account=[&](std::uint64_t n) {
         if (n>workLimit-report.work) throw WorkLimit{};
         report.work+=n;
+    };
+    const auto charge=[&](std::uint64_t n) {
+        if (cancellation&&cancellation->load()) throw Cancelled{};
+        account(n);
     };
     const auto run=[&]() -> const char* {
         charge(0);
         const auto ns=boundary.nodeCount(),nf=boundary.cellCount();
         if (ns<4||nf<4||&boundary==&destination) return "invalid_source";
-        if (ns>12000||nf>24000||maximumWork<100000||maximumBytes<64ULL*1024*1024)
+        if (!progressiveResources &&
+            (ns>12000||nf>24000||maximumWork<100000||maximumBytes<64ULL*1024*1024))
             return "admission_budget";
+        const bool onlineConstruction=boundedConstruction||progressiveResources;
+        std::uint64_t sourceEnvelope=32ULL*1024*1024;
+        auto steinerNodeLimit=maximumSteinerNodes;
+        if (progressiveResources) {
+            if (region.dim!=3) return "invalid_source";
+            if (!maximumWork) return "work_budget";
+            if (!maximumCells) return "cell_budget";
+            if (maximumBytes<64ULL*1024*1024) return "memory_budget";
+            const auto nodes=std::uint64_t(ns),faces=std::uint64_t(nf);
+            // The source and eight exterior guards must have valid dense IDs.
+            // Steiner admission is also bounded by this remaining ID space.
+            const auto vertexCeiling=std::uint64_t(kInvalidTetFacetVertex);
+            if (nodes>vertexCeiling-8) return "node_index_budget";
+            steinerNodeLimit=std::min(maximumSteinerNodes,vertexCeiling-nodes-8);
+            // Preserve the established recovery/map allowance for small input,
+            // then scale it with retained input rather than imposing fixed
+            // source-count ceilings. These conservative terms cover point
+            // copies/mappings and source, required/protected edge/face maps.
+            if (nodes>maximumBytes/256) return "memory_budget";
+            const auto nodeBytes=nodes*256;
+            if (faces>(maximumBytes-nodeBytes)/512) return "memory_budget";
+            sourceEnvelope=std::max(sourceEnvelope,nodeBytes+faces*512);
+            if (sourceEnvelope>=maximumBytes) return "memory_budget";
+        }
         Complex complex;
         complex.chargeWork=charge;
-        const auto availablePayload=maximumBytes-32ULL*1024*1024;
-        complex.maximumStoredCells=static_cast<std::size_t>(
-            availablePayload/(boundedConstruction?4096:1536));
+        const auto availablePayload=maximumBytes-sourceEnvelope;
+        auto storedCells=availablePayload/(onlineConstruction?4096:1536);
+        if (progressiveResources) storedCells=std::min<std::uint64_t>(storedCells,
+            (std::numeric_limits<std::size_t>::max)());
+        complex.maximumStoredCells=static_cast<std::size_t>(storedCells);
+        if (progressiveResources&&!complex.maximumStoredCells) return "storage_budget";
         complex.useLookahead=false;
         complex.walkConstraints=true;
         complex.profile=profile;
@@ -541,46 +577,57 @@ inline TetConstraintRecoveryReport recoverTetConstraints(const mesh::Mesh& bound
             for (unsigned j=0;j<3;++j) complex.requiredEdges.insert(complex.key(Edge{face[j],face[(j+1)%3]}));
         }
         std::vector<Vec3> points(boundary.nodes().begin(),boundary.nodes().end());
+        const auto finitePoint=[](Vec3 p) {
+            return std::isfinite(p.x)&&std::isfinite(p.y)&&std::isfinite(p.z);
+        };
         Vec3 lo=points.front(),hi=lo;
         for (const auto p:points) {
             charge(1);
+            if (progressiveResources&&!finitePoint(p)) return "invalid_source";
             lo={std::min(lo.x,p.x),std::min(lo.y,p.y),std::min(lo.z,p.z)};
             hi={std::max(hi.x,p.x),std::max(hi.y,p.y),std::max(hi.z,p.z)};
         }
         const auto span=std::max({hi.x-lo.x,hi.y-lo.y,hi.z-lo.z});
         if (!(std::isfinite(span)&&span>0)) return "invalid_source";
-        for (unsigned i=0;i<8;++i) points.push_back({(i&1)?hi.x+span:lo.x-span,
-            (i&2)?hi.y+span:lo.y-span,(i&4)?hi.z+span:lo.z-span});
+        for (unsigned i=0;i<8;++i) {
+            const Vec3 guard{(i&1)?hi.x+span:lo.x-span,
+                (i&2)?hi.y+span:lo.y-span,(i&4)?hi.z+span:lo.z-span};
+            if (progressiveResources&&!finitePoint(guard)) return "invalid_source";
+            points.push_back(guard);
+        }
         // Roll out online construction limits with the experimental initial
         // front. Keep the established constructor and accounting unchanged
         // for callers that have not selected that mode.
         algo::TetCandidateBuildOutcome built;
-        if (boundedConstruction) {
+        if (onlineConstruction) {
             algo::TetCandidateBuildLimits limits;
             limits.maxWork=maximumWork-report.work;
             limits.maxCells=complex.maximumStoredCells;
-            // Source constraints, the input point copy, and recovery maps
-            // retain their existing 32 MiB allowance during construction.
-            limits.maxTemporaryBytes=maximumBytes-32ULL*1024*1024;
+            // Source constraints, point copies and recovery maps remain live
+            // throughout construction, separately from the bounded workspace.
+            limits.maxTemporaryBytes=availablePayload;
             limits.cancellation=cancellation;
             built=algo::buildTetCandidate(points,limits);
         } else built=algo::buildTetCandidate(points);
         const auto& m=built.metrics;
-        const auto candidateWork=boundedConstruction?m.boundedWork:
+        const auto candidateWork=onlineConstruction?m.boundedWork:
             m.construction.conflictInsphereTests+m.construction.conflictOrientationTests+
             m.validationFaceUses+m.validationHullTests+m.candidateCells+m.discardedCandidateWork;
         // Include every constructor attempt once, including failed retries.
         const auto charged=std::min(candidateWork,maximumWork-report.work);
-        charge(charged);
-        if (built.reason==algo::TetCandidateReason::Cancelled) throw Cancelled{};
+        if (progressiveResources) account(charged); else charge(charged);
+        // Retain the bounded builder's completed work even when its stop token
+        // is still set. A cancellation never publishes the candidate or seed.
+        if (built.reason==algo::TetCandidateReason::Cancelled||
+            (progressiveResources&&cancellation&&cancellation->load())) throw Cancelled{};
         if (built.reason==algo::TetCandidateReason::BudgetExceeded) return "construction_budget";
         if (built.reason==algo::TetCandidateReason::AllocationFailed) throw std::bad_alloc{};
         if (charged!=candidateWork) throw WorkLimit{};
         if (!built.built()||built.candidate->points.size()!=points.size()) return "delaunay_refused";
         report.candidateCells=m.candidateCells;
         if (report.candidateCells>complex.maximumStoredCells||
-            m.constructionCandidateConservativeBytes>maximumBytes) return "admission_budget";
-        if (boundedConstruction &&
+            (!progressiveResources&&m.constructionCandidateConservativeBytes>maximumBytes)) return "admission_budget";
+        if (onlineConstruction &&
             (report.candidateCells>availablePayload/4096 ||
              m.candidateAccountedBytes>availablePayload-4096*report.candidateCells))
             return "construction_budget";
@@ -629,7 +676,7 @@ inline TetConstraintRecoveryReport recoverTetConstraints(const mesh::Mesh& bound
             // survived the flip and existing-node passes.
             const auto steinerLimit=std::min<std::uint64_t>(maximumWork/8,20'000'000);
             for (auto edge:missingEdges) {
-                if(report.steinerNodes>=maximumSteinerNodes||report.steinerWork>=steinerLimit)break;
+                if(report.steinerNodes>=steinerNodeLimit||report.steinerWork>=steinerLimit)break;
                 charge(1);
                 if(complex.edges.contains(edge))continue;
                 recoverEdgeCavity(complex,edge,0,std::min({std::uint64_t{160000},
@@ -669,7 +716,8 @@ inline TetConstraintRecoveryReport recoverTetConstraints(const mesh::Mesh& bound
         const bool complete=report.missingFacesAfter==0;
         {
             StageTime timer{report.carveSeconds};
-            if (!carve(complex,source,boundary,region,complete,maximumCells,destination,report)) return "material_carve_refused";
+            if (!carve(complex,source,boundary,region,complete,maximumCells,destination,report,
+                       progressiveResources)) return "material_carve_refused";
         }
         report.seedCells=destination.cellCount();
         return complete?"complete_seed":limited?"partial_seed_budget":"partial_seed";
@@ -677,6 +725,7 @@ inline TetConstraintRecoveryReport recoverTetConstraints(const mesh::Mesh& bound
     try {report.diagnostic=run();}
     catch (const Cancelled&) {report.diagnostic="cancelled";}
     catch (const WorkLimit&) {report.diagnostic="work_budget";}
+    catch (const CellLimit&) {report.diagnostic="cell_budget";}
     catch (const std::length_error&) {report.diagnostic="storage_budget";}
     catch (const std::bad_alloc&) {report.diagnostic="allocation_failed";}
     report.seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();

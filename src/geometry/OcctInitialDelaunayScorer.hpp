@@ -23,6 +23,7 @@
 #include <new>
 #include <optional>
 #include <set>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <unordered_set>
@@ -48,6 +49,11 @@ public:
     std::uint64_t coneCertificateAttempts=0,coneCertificates=0,coneCertificateFallbacks=0;
     std::uint64_t bootstrapWork=0,bootstrapPeakTemporaryBytes=0;
     std::uint64_t bootstrapWorkLimit=0,bootstrapTemporaryLimitBytes=0;
+    std::uint64_t bootstrapImportedCells=0,bootstrapImportWork=0,bootstrapImportModeledBytes=0;
+    std::uint64_t capacityGrowthAttempts=0,capacityGrowths=0,growthWork=0;
+    std::uint64_t maximumGrowthModeledBytes=0,maximumResourceModeledBytes=0;
+    std::size_t initialStorageCapacity=0;
+    const char* resourceDiagnostic="none";
     std::uint64_t evaluations=0,fullCertifications=0,certificationRefusals=0;
     std::uint64_t scoreStateRejects=0,scoreSizeRejects=0,scoreMappingRejects=0;
     std::uint64_t scoreLocateMisses=0,scoreCavityUnavailable=0,scoreStorageRejects=0,scorePositiveRejects=0;
@@ -83,7 +89,7 @@ public:
         std::function<void(std::uint64_t)> charge,
         std::function<bool(Vec3)> materialWitness={},std::size_t maximumCavityCells=0,
         std::uint64_t maximumBootstrapWork=4'000'000,
-        const std::atomic_bool* cancellation=nullptr) {
+        const std::atomic_bool* cancellation=nullptr,bool progressiveResources=false) {
         cancellation_=cancellation;checkCancellation();
         if(initialized_||region.dim!=3||boundary.nodeCount()<4||!maximumStoredCells)return false;
         // Zero means a complete connected conflict cavity, bounded by the
@@ -92,16 +98,19 @@ public:
         cavityLimit=maximumCavityCells;
         const auto ns=std::size_t(boundary.nodeCount());
         if(ns+1032>=bnd::kInvalidTetFacetVertex)return false;
-        const auto fixed=8ULL*1024*1024+std::uint64_t(ns+1032)*512;
-        if(fixed>=workingBytes){budgetLimited=true;return false;}
+        progressiveResources_=progressiveResources;
+        requestedStorageCeiling_=maximumStoredCells;
+        const std::uint64_t fixed=8ULL*1024*1024+std::uint64_t(ns+1032)*512;
+        if(fixed>=workingBytes){budgetLimited=true;resourceDiagnostic="bootstrap_fixed_memory";return false;}
         maximumStoredCells=std::min<std::size_t>(maximumStoredCells,
             std::size_t((workingBytes-fixed)/8192));
-        if(!maximumStoredCells){budgetLimited=true;return false;}
+        if(!maximumStoredCells){budgetLimited=true;resourceDiagnostic="bootstrap_cell_memory";return false;}
         workingBytes_=workingBytes;fixedBytes_=fixed;
+        if(progressiveResources_)maximumResourceModeledBytes=fixed;
         charge_=std::move(charge);materialWitness_=std::move(materialWitness);
         auto remainingBootstrapWork=maximumBootstrapWork;
         const auto accountInitialization=[&](std::uint64_t n=1){
-            if(n>remainingBootstrapWork){budgetLimited=true;return false;}
+            if(n>remainingBootstrapWork){budgetLimited=true;resourceDiagnostic="bootstrap_work";return false;}
             // Accounting a completed bounded attempt must not forget its work
             // when its cancellation token has since been reset by a caller.
             if(charge_)charge_(n);
@@ -136,11 +145,13 @@ public:
             const Face f{Vertex(v[0]),Vertex(v[1]),Vertex(v[2])};
             if(!sourceFaces_.emplace(Complex::key(f),f).second)return false;
         }
-        // Reserve exact mapping/positive-import accounting before granting the
-        // remaining work to construction. The online builder covers all of its
-        // retries, canonicalization and validation; never run an unbounded retry.
-        const auto importReserve=std::uint64_t(points.size())+12*std::uint64_t(maximumStoredCells);
-        if(importReserve>=remainingBootstrapWork){budgetLimited=true;return false;}
+        // Historical allocation reserves future-capacity import up front.
+        // Progressive allocation instead checks the actual completed seed's
+        // import before staging it. The builder charges all of its own retries,
+        // canonicalization and validation in either policy.
+        const auto importReserve=progressiveResources?0:
+            std::uint64_t(points.size())+12*std::uint64_t(maximumStoredCells);
+        if(importReserve>=remainingBootstrapWork){budgetLimited=true;resourceDiagnostic="bootstrap_import_work";return false;}
         algo::TetCandidateBuildLimits buildLimits;
         buildLimits.maxWork=remainingBootstrapWork-importReserve;
         buildLimits.maxCells=maximumStoredCells;
@@ -152,23 +163,81 @@ public:
         auto built=algo::buildTetCandidate(points,buildLimits);
         const auto& m=built.metrics;
         bootstrapWork=m.boundedWork;bootstrapPeakTemporaryBytes=m.boundedPeakTemporaryBytes;
+        if(progressiveResources_)maximumResourceModeledBytes=std::max(maximumResourceModeledBytes,
+            fixed+bootstrapPeakTemporaryBytes);
         if(built.reason==algo::TetCandidateReason::Cancelled)cancelled=true;
         if(!accountInitialization(m.boundedWork))return false;
         if(cancelled)throw OcctInitialConstructionCancelled{};
-        if(built.reason==algo::TetCandidateReason::BudgetExceeded){budgetLimited=true;return false;}
+        if(built.reason==algo::TetCandidateReason::BudgetExceeded){budgetLimited=true;resourceDiagnostic="bootstrap_construction_budget";return false;}
         if(built.reason==algo::TetCandidateReason::AllocationFailed)throw std::bad_alloc{};
         if(!built.built()||built.candidate->points.size()!=points.size())return false;
+        if(progressiveResources){
+            // Future capacity is a ceiling, not current content. Import only
+            // this one completed seed, retaining the candidate until a staged
+            // exact-positive complex is ready for an atomic installation.
+            const auto count=built.candidate->cells.size();
+            if(!count||count>maximumStoredCells){
+                budgetLimited=true;resourceDiagnostic="bootstrap_cell_limit";return false;
+            }
+            const auto candidateBytes=m.candidateAccountedBytes;
+            if(candidateBytes>workingBytes-fixed){
+                budgetLimited=true;resourceDiagnostic="bootstrap_candidate_memory";return false;
+            }
+            const auto importCapacity=std::min<std::uint64_t>(maximumStoredCells,
+                (workingBytes-fixed-candidateBytes)/4096);
+            if(count>importCapacity){
+                budgetLimited=true;resourceDiagnostic="bootstrap_import_memory";return false;
+            }
+            const auto capacity=growthTarget(count,std::size_t(importCapacity));
+            const auto importPeak=fixed+candidateBytes+4096*std::uint64_t(capacity);
+            const auto steadyPeak=fixed+8192*std::uint64_t(capacity);
+            bootstrapImportModeledBytes=importPeak;
+            maximumResourceModeledBytes=std::max({fixed+bootstrapPeakTemporaryBytes,importPeak,steadyPeak});
+            if(points.size()>remainingBootstrapWork||
+                count>(remainingBootstrapWork-std::uint64_t(points.size()))/12){
+                budgetLimited=true;resourceDiagnostic="bootstrap_actual_import_work";return false;
+            }
+            static_assert(std::is_nothrow_move_assignable_v<Complex>,"atomic initial numerical import");
+            Complex imported;imported.walkConstraints=true;imported.maximumStoredCells=capacity;
+            imported.chargeWork=[this](std::uint64_t n){tick(n);};
+            std::vector<Vertex> mapping;std::vector<unsigned char> relevance;
+            imported.vertices.reserve(ns+1032);mapping.reserve(ns+1032);
+            reserveCellArrays(imported,relevance,capacity);
+            for(std::size_t i=0;i<points.size();++i){
+                if(!initializationTick())return false;++bootstrapImportWork;
+                imported.vertices.push_back({points[i],std::uint64_t(i)+1});
+                mapping.push_back(i<ns?Vertex(i):bnd::kInvalidTetFacetVertex);
+            }
+            for(const auto& src:built.candidate->cells){
+                Cell cell{{},0,region};
+                for(unsigned j=0;j<4;++j)
+                    cell.vertices[j]=Vertex(built.candidate->pointToInput[src.vertices[j]]);
+                if(!initializationTick(12))return false;bootstrapImportWork+=12;
+                const auto& v=cell.vertices;
+                if(predicates::orient3dFiltered(imported.vertices[v[0]].position,imported.vertices[v[1]].position,
+                    imported.vertices[v[2]].position,imported.vertices[v[3]].position)!=predicates::Sign::Positive)return false;
+                imported.insert(cell,false);relevance.push_back(0);
+            }
+            checkCancellation();
+            live_=std::move(imported);auxToFront_.swap(mapping);relevance_.swap(relevance);
+            activeCells_=live_.cells.size();peakStoredCells=live_.cells.size();
+            bootstrapImportedCells=live_.cells.size();initialStorageCapacity=capacity;
+            initialized_=true;return true;
+        }
         // Construction scratch has gone away, but the returned candidate and
         // imported numerical complex overlap until this method returns.
         const auto retainedImportBytes=4096*std::uint64_t(maximumStoredCells);
         if(m.candidateCells>maximumStoredCells||
             m.candidateAccountedBytes>buildLimits.maxTemporaryBytes-retainedImportBytes){
-            budgetLimited=true;return false;
+            budgetLimited=true;resourceDiagnostic="bootstrap_import_memory";return false;
         }
+        bootstrapImportModeledBytes=fixed+m.candidateAccountedBytes+retainedImportBytes;
+        maximumResourceModeledBytes=std::max({fixed+bootstrapPeakTemporaryBytes,
+            bootstrapImportModeledBytes,fixed+8192*std::uint64_t(maximumStoredCells)});
         live_.vertices.reserve(ns+1032);auxToFront_.reserve(ns+1032);
         relevance_.reserve(maximumStoredCells);
         for(std::size_t i=0;i<points.size();++i){
-            if(!initializationTick())return false;
+            if(!initializationTick())return false;++bootstrapImportWork;
             live_.vertices.push_back({points[i],std::uint64_t(i)+1});
             auxToFront_.push_back(i<ns?Vertex(i):bnd::kInvalidTetFacetVertex);
         }
@@ -176,13 +245,14 @@ public:
             Cell cell{{},0,region};
             for(unsigned j=0;j<4;++j)
                 cell.vertices[j]=Vertex(built.candidate->pointToInput[src.vertices[j]]);
-            if(!initializationTick(12))return false;
+            if(!initializationTick(12))return false;bootstrapImportWork+=12;
             const auto& v=cell.vertices;
             if(predicates::orient3dFiltered(live_.vertices[v[0]].position,live_.vertices[v[1]].position,
                 live_.vertices[v[2]].position,live_.vertices[v[3]].position)!=predicates::Sign::Positive)return false;
             live_.insert(cell,false);relevance_.push_back(0);
         }
         activeCells_=live_.cells.size();peakStoredCells=live_.cells.size();
+        bootstrapImportedCells=live_.cells.size();initialStorageCapacity=maximumStoredCells;
         initialized_=true;return true;
     }
 
@@ -213,7 +283,7 @@ public:
         if(!patch){++scoreCavityUnavailable;return {};}
         maximumPlannedCavity=std::max(maximumPlannedCavity,patch->removed.size());
         if(patch->added.size()>live_.maximumStoredCells-live_.cells.size()){
-            if(compactionEnabled&&live_.cells.size()>activeCells_)compactionRequested_=true;else budgetLimited=true;
+            storagePressure(patch->added.size());
             ++scoreStorageRejects;return {};
         }
         live_.vertices.push_back({site,std::uint64_t(staged)+1});
@@ -275,7 +345,7 @@ public:
             ++commitStateRejects;return false;
         }
         if(plan.patch.added.size()>live_.maximumStoredCells-live_.cells.size()){
-            if(compactionEnabled&&live_.cells.size()>activeCells_)compactionRequested_=true;else budgetLimited=true;
+            storagePressure(plan.patch.added.size());
             ++commitStorageRejects;return false;
         }
         // Plans are mutable values. Recheck the actual removed set before its
@@ -331,6 +401,32 @@ public:
     std::size_t liveCells()const noexcept{return activeCells_;}
     std::uint64_t workingBytes()const noexcept{return workingBytes_;}
     std::size_t storageCapacity()const noexcept{return live_.maximumStoredCells;}
+    std::uint64_t currentModeledBytes()const noexcept{
+        return initialized_?fixedBytes_+8192*std::uint64_t(live_.maximumStoredCells):0;
+    }
+    std::size_t hardStorageLimit()const noexcept{
+        if(fixedBytes_>=workingBytes_)return 0;
+        return std::size_t(std::min<std::uint64_t>(requestedStorageCeiling_,(workingBytes_-fixedBytes_)/8192));
+    }
+    // The caller owns the enclosing front/heap budget. Shrinking this share
+    // never invalidates existing topology or removes its cavity scratch reserve.
+    // Refusal leaves the current quota and all geometric state unchanged.
+    bool setWorkingBudget(std::uint64_t bytes){
+        checkCancellation();
+        if(!initialized_||bytes<fixedBytes_||
+            live_.maximumStoredCells>(bytes-fixedBytes_)/8192)return false;
+        const auto previous=workingBytes_;workingBytes_=bytes;
+        // A larger share can resume a memory-only stop. An explicit hard-cell
+        // ceiling remains terminal; raising memory must never override it.
+        if(bytes>previous&&progressiveResources_&&growthBlocked_&&resourceDiagnostic&&
+            std::string_view(resourceDiagnostic)=="auxiliary_memory_limit"){
+            const auto hard=hardStorageLimit();
+            if(live_.cells.size()<=hard&&requestedAddedCells_<=hard-live_.cells.size()){
+                growthBlocked_=false;budgetLimited=false;resourceDiagnostic="none";
+            }
+        }
+        return true;
+    }
     std::size_t acceptedSites()const noexcept{return std::size_t(generation_);}
     const std::vector<Vertex>& auxiliaryToFront()const noexcept{return auxToFront_;}
     const Complex& complexForDiagnostics()const noexcept{return live_;}
@@ -339,6 +435,10 @@ public:
     bool compactionRequested()const noexcept {
         return compactionEnabled&&!compactionBlocked_&&compactionRequested_&&live_.cells.size()>activeCells_;
     }
+    bool growthRequested()const noexcept{
+        return progressiveResources_&&requestedAddedCells_&&!growthBlocked_;
+    }
+    bool resourceRetryRequested()const noexcept{return compactionRequested()||growthRequested();}
 
     bool compactionPending()const noexcept {
         if(!compactionEnabled||!initialized_||compactionBlocked_||live_.cells.size()<=activeCells_)return false;
@@ -348,8 +448,15 @@ public:
     }
 
     // Caller runs this between face batches, before any candidate Plan exists.
-    // Force is a private diagnostic/test control; it never raises capacity.
+    // Force requests compaction. Progressive admission may also raise its
+    // soft capacity for a previously refused patch, within the hard ceiling.
     bool prepareForBatch(bool force=false) {
+        if(progressiveResources_)return prepareProgressiveBatch(force);
+        return compactForBatch(force);
+    }
+
+private:
+    bool compactForBatch(bool force=false) {
         if(!compactionEnabled||!initialized_||compactionBlocked_||live_.cells.size()<=activeCells_||
             (!force&&!compactionPending()))return false;
         ++compactionAttempts;
@@ -372,12 +479,14 @@ public:
         const auto peak=fixedBytes_+perComplexCell*(live_.maximumStoredCells+activeCells_);
         if(peak>workingBytes_){budgetLimited=true;compactionBlocked_=true;return false;}
         maximumCompactionModeledBytes=std::max(maximumCompactionModeledBytes,peak);
+        if(progressiveResources_)maximumResourceModeledBytes=std::max(maximumResourceModeledBytes,peak);
         if(!live_.protectedFaces.empty()||!live_.protectedEdges.empty()||
             !live_.requiredFaces.empty()||!live_.requiredEdges.empty())
             throw std::logic_error("auxiliary compaction requires unprotected numerical complex");
         const auto chargeCompaction=[&](std::uint64_t n=1){tick(n);compactionWork+=n;};
         Complex next;
-        next.maximumStoredCells=live_.maximumStoredCells;
+        next.maximumStoredCells=progressiveResources_?
+            growthTarget(activeCells_,live_.maximumStoredCells):live_.maximumStoredCells;
         next.useLookahead=live_.useLookahead;next.walkConstraints=live_.walkConstraints;next.profile=live_.profile;
         next.metrics=live_.metrics;next.edgeWalks=live_.edgeWalks;
         next.facetWalks=live_.facetWalks;next.walkFallbacks=live_.walkFallbacks;
@@ -403,7 +512,6 @@ public:
         return true;
     }
 
-private:
     Complex live_;
     std::function<void(std::uint64_t)> charge_;
     std::function<bool(Vec3)> materialWitness_;
@@ -415,10 +523,78 @@ private:
     std::uint64_t generation_=0;
     std::uint64_t planEpoch_=0;
     std::uint64_t workingBytes_=0,fixedBytes_=0;
+    std::size_t requestedStorageCeiling_=0,requestedAddedCells_=0;
     const std::atomic_bool* cancellation_=nullptr;
     std::size_t activeCells_=0;
     bool compactionRequested_=false,compactionBlocked_=false;
+    bool progressiveResources_=false,growthBlocked_=false;
     bool initialized_=false;
+    static std::size_t growthTarget(std::size_t current,std::size_t limit){
+        if(current>=limit)return limit;
+        const auto extra=std::max<std::size_t>(64,current/2);
+        return extra>limit-current?limit:current+extra;
+    }
+    static void reserveCellArrays(Complex& complex,std::vector<unsigned char>& relevance,std::size_t capacity){
+        complex.cells.reserve(capacity);complex.alive.reserve(capacity);
+        complex.cellBoxes.reserve(capacity);complex.neighbours.reserve(capacity);
+        relevance.reserve(capacity);
+    }
+    void storagePressure(std::size_t added){
+        if(!progressiveResources_){
+            if(compactionEnabled&&live_.cells.size()>activeCells_)compactionRequested_=true;else budgetLimited=true;
+            return;
+        }
+        requestedAddedCells_=std::max(requestedAddedCells_,added);
+        if(compactionEnabled&&live_.cells.size()>activeCells_)compactionRequested_=true;
+        if(!compactionRequested()&&
+            (live_.cells.size()>hardStorageLimit()||added>hardStorageLimit()-live_.cells.size())){
+            budgetLimited=true;growthBlocked_=true;
+            resourceDiagnostic=hardStorageLimit()==requestedStorageCeiling_?"auxiliary_cell_limit":"auxiliary_memory_limit";
+        }
+    }
+    bool prepareProgressiveBatch(bool force){
+        checkCancellation();
+        if(!initialized_)return false;
+        const bool compacted=compactForBatch(force);
+        if(!requestedAddedCells_||growthBlocked_)return compacted;
+        const auto stored=live_.cells.size();
+        if(stored<=live_.maximumStoredCells&&requestedAddedCells_<=live_.maximumStoredCells-stored){
+            requestedAddedCells_=0;return compacted;
+        }
+        ++capacityGrowthAttempts;
+        const auto hard=hardStorageLimit();
+        if(stored>hard||requestedAddedCells_>hard-stored){
+            budgetLimited=true;growthBlocked_=true;
+            resourceDiagnostic=hard==requestedStorageCeiling_?"auxiliary_cell_limit":"auxiliary_memory_limit";
+            return compacted;
+        }
+        const auto target=std::max(stored+requestedAddedCells_,growthTarget(live_.maximumStoredCells,hard));
+        // No candidate Plan may coexist with this call. Retain old arrays
+        // while staging new arrays; maps and spatial-index topology stay put.
+        // 4096 per old/new capacity dominates their vector-copy overlap;
+        // 8192 per new capacity also reserves later full cavity scratch.
+        const auto growthPeak=fixedBytes_+4096*(std::uint64_t(live_.maximumStoredCells)+target);
+        const auto steadyPeak=fixedBytes_+8192*std::uint64_t(target);
+        maximumGrowthModeledBytes=std::max(maximumGrowthModeledBytes,growthPeak);
+        maximumResourceModeledBytes=std::max(maximumResourceModeledBytes,std::max(growthPeak,steadyPeak));
+        const auto copyWork=std::uint64_t(live_.cells.size())+live_.alive.size()+live_.cellBoxes.size()+
+            live_.neighbours.size()+relevance_.size();
+        tick(copyWork);growthWork+=copyWork;
+        Complex arrays;std::vector<unsigned char> relevance;
+        reserveCellArrays(arrays,relevance,target);
+        arrays.cells.assign(live_.cells.begin(),live_.cells.end());
+        arrays.alive.assign(live_.alive.begin(),live_.alive.end());
+        arrays.cellBoxes.assign(live_.cellBoxes.begin(),live_.cellBoxes.end());
+        arrays.neighbours.assign(live_.neighbours.begin(),live_.neighbours.end());
+        relevance.assign(relevance_.begin(),relevance_.end());
+        checkCancellation();
+        live_.cells.swap(arrays.cells);live_.alive.swap(arrays.alive);
+        live_.cellBoxes.swap(arrays.cellBoxes);live_.neighbours.swap(arrays.neighbours);
+        relevance_.swap(relevance);live_.maximumStoredCells=target;
+        requestedAddedCells_=0;++capacityGrowths;resourceDiagnostic="none";
+        // IDs, point mappings and plan epoch do not change on capacity growth.
+        return true;
+    }
     void checkCancellation()const{
         if(cancelled||(cancellation_&&cancellation_->load())){
             cancelled=true;throw OcctInitialConstructionCancelled{};

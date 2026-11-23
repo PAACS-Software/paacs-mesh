@@ -88,9 +88,11 @@ bool spaceOcctChart(const OcctModel& model,int faceTag,std::vector<Vec2>& uv,
     std::vector<double> nodeSizes;
     if(regularFront)for(std::size_t i=0;i<uv.size();++i)
         nodeSizes.push_back(std::min(curveSize[i],localSize(uv[i],position(ids[i]))));
-    const bool legacy=construction.effort==CadConstructionEffort::Legacy;
+    const bool progressive=construction.resourcePolicy==CadResourcePolicy::Normal;
+    const bool legacy=construction.effort==CadConstructionEffort::Legacy&&!progressive;
     std::uint64_t maximumPoints=construction.surfacePointsPerFace?construction.surfacePointsPerFace:256;
-    if(!legacy&&!construction.surfacePointsPerFace) {
+    if(progressive&&!construction.surfacePointsPerFace)maximumPoints=maximumAdditionalNodes;
+    else if(!legacy&&!construction.surfacePointsPerFace) {
         // One regular surface vertex occupies approximately sqrt(3)/2*h^2.
         // This is an effort estimate, not a geometric or sizing certificate.
         // Sample the actual retained triangles and requested local field; a

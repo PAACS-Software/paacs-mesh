@@ -136,6 +136,10 @@ mesh::Mesh extract(const OcctModel& model, int bodyTag, BRepBuilderAPI_Copy* cop
     const bool repairCharts=aliasOptions.maximumRebuiltCharts!=0;
     const bool curveMetric=repairCharts&&aliasOptions.curveMetricSizeCap>0&&model.solids().size()==1;
     const bool spaceSurface=copy==nullptr;
+    const bool normalResources=context.options.construction.resourcePolicy==CadResourcePolicy::Normal;
+    if(normalResources&&repairCharts)
+        context.require(model.faceUses(bodyTag).size()<=aliasOptions.maximumWorkingBytes/1024,
+                        OcctBoundaryReason::BudgetExceeded);
     std::vector<Sample> points;
     std::vector<std::array<int,3>> triangles;
     std::vector<int> faceTags;
@@ -533,7 +537,8 @@ mesh::Mesh extract(const OcctModel& model, int bodyTag, BRepBuilderAPI_Copy* cop
         const auto remaining=[&]{return context.options.maximumWork-result.work;};
         const auto noRefine=[](auto&,auto&,auto&,const auto&){return true;};
         const auto admitRepair=[&](std::uint64_t reserve){
-            const auto count=std::uint64_t(points.size())+triangles.size()+reserve;
+            const auto topology=normalResources?std::uint64_t(faces.size())+edges.size():0;
+            const auto count=std::uint64_t(points.size())+triangles.size()+topology+reserve;
             context.require(count<=aliasOptions.maximumWorkingBytes/1024,OcctBoundaryReason::BudgetExceeded);
             aliasReceipt.maximumWorkingPayloadEstimate=std::max(aliasReceipt.maximumWorkingPayloadEstimate,count*1024);
         };
@@ -554,8 +559,13 @@ mesh::Mesh extract(const OcctModel& model, int bodyTag, BRepBuilderAPI_Copy* cop
                     context.require(complete,OcctBoundaryReason::NonconformingEdge);
                 }
             }
-            const std::size_t maximumRephasedEdges=spaceSurface?(aliasOptions.curvaturePointsPerTurn?256:96):32;
+            const std::size_t maximumRephasedEdges=normalResources?edges.size():
+                spaceSurface?(aliasOptions.curvaturePointsPerTurn?256:96):32;
             context.require(crossed.size()<=maximumRephasedEdges,OcctBoundaryReason::BudgetExceeded);
+            if(normalResources){
+                admitRepair(0);
+                context.require(crossed.size()<=remaining(),OcctBoundaryReason::BudgetExceeded);
+            }
             if(!crossed.empty()){
                 detail::OcctCurveUses uses;
                 detail::OcctVertexEdges incident;
@@ -575,8 +585,26 @@ mesh::Mesh extract(const OcctModel& model, int bodyTag, BRepBuilderAPI_Copy* cop
                     detail::OcctCurveSpacing spacing;
                     if(spaceSurface)spacing={aliasOptions.curvaturePointsPerTurn?aliasOptions.curvaturePointsPerTurn:16,
                                              context.options.maximumChordError*.8};
+                    detail::OcctCurveSamplingReport sampling;
+                    if(normalResources){
+                        admitRepair(0);
+                        constexpr std::uint64_t nodeBytes=sizeof(Vec3)+sizeof(mesh::Classification)+sizeof(OcctBoundaryNodeKey);
+                        constexpr std::uint64_t triangleBytes=sizeof(mesh::Cell)+3*sizeof(Index);
+                        const auto retained=std::uint64_t(points.size())+triangles.size()+faces.size()+edges.size();
+                        const auto curveBytes=aliasOptions.maximumWorkingBytes-retained*1024;
+                        const auto outputUsed=std::uint64_t(points.size())*nodeBytes+std::uint64_t(triangles.size())*triangleBytes;
+                        context.require(outputUsed<=context.options.maximumOutputBytes,OcctBoundaryReason::BudgetExceeded);
+                        spacing.resourcePolicy=CadResourcePolicy::Normal;
+                        spacing.maximumSegments=std::min({context.options.maximumNodes-std::uint64_t(points.size())+1,
+                            std::uint64_t((std::numeric_limits<int>::max)())-points.size(),
+                            (context.options.maximumOutputBytes-outputUsed)/nodeBytes+1,remaining()});
+                        spacing.maximumIntegrationIntervals=std::min<std::uint64_t>(curveBytes/4096,remaining());
+                        spacing.maximumWorkingBytes=curveBytes;spacing.report=&sampling;
+                    }
                     const auto schedule=detail::sampleOcctCurveMetric(model,tag,aliasOptions.curveMetricSizeCap,
                         uses,incident,tick,spacing,aliasOptions.sizeField);
+                    if(normalResources&&sampling.budgetLimited)
+                        context.require(false,OcctBoundaryReason::BudgetExceeded);
                     context.require(schedule.size()>=2,OcctBoundaryReason::NonconformingEdge);
                     admitRepair(schedule.size()+4096);
                     for(std::size_t j=1;j+1<chain.ids.size();++j){context.tick();retiredWireNodes.insert(chain.ids[j]);}
@@ -613,7 +641,8 @@ mesh::Mesh extract(const OcctModel& model, int bodyTag, BRepBuilderAPI_Copy* cop
                 std::vector<detail::OcctChartTriangle> replacements;
                 detail::OcctStageTrace chartTrace("surface_face_chart",bodyTag);
                 const auto& construction=context.options.construction;
-                const bool legacyConstruction=construction.effort==CadConstructionEffort::Legacy&&
+                const bool progressiveConstruction=construction.resourcePolicy==CadResourcePolicy::Normal;
+                const bool legacyConstruction=!progressiveConstruction&&construction.effort==CadConstructionEffort::Legacy&&
                     !construction.surfacePointsPerFace&&!construction.surfaceChordPointsPerFace;
                 // An inserted chart point adds two live surface triangles.
                 // This allowance only plans effort; each allocation, append,
@@ -629,8 +658,9 @@ mesh::Mesh extract(const OcctModel& model, int bodyTag, BRepBuilderAPI_Copy* cop
                     auto output=context.options.maximumOutputBytes-nodes*nodeBytes;
                     if(facets>output/triangleBytes)return std::uint64_t{0};
                     output-=facets*triangleBytes;
+                    const auto topology=normalResources?std::uint64_t(faces.size())+edges.size():0;
                     const auto units=aliasOptions.maximumWorkingBytes/1024;
-                    const auto memory=nodes+facets<units?(units-nodes-facets)/8:0;
+                    const auto memory=nodes+facets+topology<units?(units-nodes-facets-topology)/8:0;
                     return std::min({context.options.maximumNodes-nodes,
                         (context.options.maximumTriangles-facets)/2,output/(nodeBytes+2*triangleBytes),
                         memory,context.options.maximumWork-result.work,
@@ -650,13 +680,14 @@ mesh::Mesh extract(const OcctModel& model, int bodyTag, BRepBuilderAPI_Copy* cop
                     const auto room=pointCapacity(0);
                     const auto spacing=construction.surfacePointsPerFace?
                         std::min(construction.surfacePointsPerFace,room):
-                        construction.effort==CadConstructionEffort::Legacy?std::min<std::uint64_t>(256,room):room;
+                        !progressiveConstruction&&construction.effort==CadConstructionEffort::Legacy?std::min<std::uint64_t>(256,room):room;
                     const auto chord=construction.surfaceChordPointsPerFace?
                         std::min(construction.surfaceChordPointsPerFace,room):
-                        construction.effort==CadConstructionEffort::Legacy?std::min<std::uint64_t>(regularFront?96:48,room):room;
+                        !progressiveConstruction&&construction.effort==CadConstructionEffort::Legacy?std::min<std::uint64_t>(regularFront?96:48,room):room;
                     const auto extra=std::min(room,spacing+chord);
                     const auto units=aliasOptions.maximumWorkingBytes/1024;
-                    const auto retained=std::uint64_t(points.size())+triangles.size();
+                    const auto retained=std::uint64_t(points.size())+triangles.size()+
+                        (normalResources?std::uint64_t(faces.size())+edges.size():0);
                     const auto memoryLimit=retained<units?(units-retained)/4:0;
                     chartNodeLimit=std::size_t(std::min({std::max<std::uint64_t>(4096,initial+extra),
                         memoryLimit,std::uint64_t((std::numeric_limits<int>::max)())}));
@@ -707,6 +738,8 @@ mesh::Mesh extract(const OcctModel& model, int bodyTag, BRepBuilderAPI_Copy* cop
                         chartStep.next("surface_chord_refinement");
                         auto chordLimit=construction.surfaceChordPointsPerFace?construction.surfaceChordPointsPerFace:
                             std::uint64_t(regularFront?96:48);
+                        if(progressiveConstruction&&!construction.surfaceChordPointsPerFace)
+                            chordLimit=pointCapacity(cells.size());
                         if(construction.effort!=CadConstructionEffort::Legacy&&!construction.surfaceChordPointsPerFace)
                             chordLimit=std::max(chordLimit,spacingReport.pointLimit/2);
                         if(!legacyConstruction)chordLimit=std::min(chordLimit,pointCapacity(cells.size()));
@@ -1066,7 +1099,8 @@ OcctBoundaryOutcome detail::OcctBoundarySession::boundary(int tag, mesh::Mesh& d
         Context context{options,result};
         context.require(impl_->model->solid(tag) != nullptr,OcctBoundaryReason::InvalidRequest); context.tick();
         context.require(aliases.maximumFlips<=256,OcctBoundaryReason::InvalidRequest);
-        context.require(aliases.maximumRebuiltCharts<=64,OcctBoundaryReason::InvalidRequest);
+        context.require(options.construction.resourcePolicy==CadResourcePolicy::Normal||
+                        aliases.maximumRebuiltCharts<=64,OcctBoundaryReason::InvalidRequest);
         context.require(std::isfinite(aliases.curveMetricSizeCap)&&aliases.curveMetricSizeCap>=0,
                         OcctBoundaryReason::InvalidRequest);
         for(int face:aliases.faceTags){context.tick();context.require(impl_->model->face(face)!=nullptr,OcctBoundaryReason::InvalidRequest);}
@@ -1111,9 +1145,13 @@ OcctBoundaryOutcome detail::buildSpacedOcctBoundary(const OcctModel& model,int t
         context.require(model.solid(tag)&&model.solids().size()==1&&
                         std::isfinite(targetSize)&&targetSize>0&&std::isfinite(options.maximumChordError)&&
                         options.maximumChordError>0,OcctBoundaryReason::InvalidRequest);
-        const unsigned maximumCharts=curvaturePointsPerTurn?128:32;
-        context.require(model.faceUses(tag).size()<=maximumCharts&&maximumWorkingBytes>=4096*1024,
+        const auto faceCount=model.faceUses(tag).size();
+        const bool normal=options.construction.resourcePolicy==CadResourcePolicy::Normal;
+        const auto chartAllowance=normal?std::min({options.maximumWork-result.work,maximumWorkingBytes/1024,
+            std::uint64_t((std::numeric_limits<unsigned>::max)())}):std::uint64_t(curvaturePointsPerTurn?128:32);
+        context.require(faceCount<=chartAllowance&&maximumWorkingBytes>=4096*1024,
                         OcctBoundaryReason::BudgetExceeded);
+        const unsigned maximumCharts=normal?static_cast<unsigned>(faceCount):(curvaturePointsPerTurn?128:32);
         const auto& shape=OcctModelAccess::shape(model);
         const auto snapshotLimit=std::min<std::uint64_t>(64ULL*1024*1024,maximumWorkingBytes/8);
         const auto before=facetSnapshot(shape,snapshotLimit);

@@ -172,6 +172,17 @@ struct NativeCadMeshOptions {
     }
     CadConstructionBudget construction;
 };
+
+// Existing aggregate options retain their bounded defaults. This preset opts
+// into progressive construction; explicit work fields assigned afterwards
+// remain authoritative, including a caller's deliberately small limit.
+inline NativeCadMeshOptions normalNativeCadMeshOptions() {
+    NativeCadMeshOptions options;
+    options.construction.resourcePolicy=CadResourcePolicy::Normal;
+    options.geometry.maximumMeshingWork=cadNormalWorkAllowance;
+    options.maximumValidationWork=cadNormalWorkAllowance;
+    return options;
+}
 struct NativeCadConstraintRecoveryReport {
     const char* diagnostic="not_attempted";
     std::uint64_t candidateCells=0,missingEdgesBefore=0,missingFacesBefore=0;
@@ -212,6 +223,11 @@ struct NativeCadInitialFrontReport {
     std::uint64_t reservedBulkCandidates=0,reservedBulkSites=0;
     std::uint64_t sourceCandidates=0,sourceDeferredFaces=0;
     bool sourcePhaseDeferred=false;
+    std::uint64_t auxiliaryImportedCells=0,auxiliaryImportWork=0,auxiliaryImportModeledBytes=0;
+    std::uint64_t auxiliaryInitialCapacity=0,auxiliaryHardCapacity=0;
+    std::uint64_t auxiliaryGrowthAttempts=0,auxiliaryGrowths=0,auxiliaryGrowthWork=0;
+    std::uint64_t maximumCombinedModeledBytes=0,maximumHeapCapacity=0,resourceRetries=0;
+    const char* auxiliaryResourceDiagnostic="not_attempted";
 };
 // AUTO may retry the legacy route only after a bounded source-stage refusal,
 // before any initial point construction. This records the discarded trial;

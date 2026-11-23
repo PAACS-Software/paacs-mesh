@@ -114,8 +114,28 @@ void exerciseExpandedSiteAllowance(){
     std::cout<<"expanded initial cloud: sites="<<result.report.sites<<" bulk="<<result.report.bulkSites
         <<" candidates="<<result.report.candidates<<" work="<<result.report.workUsed<<'\n';
 }
+void exerciseProgressiveUnusedCeilings(){
+    const auto source=boundary();const Field field;
+    OcctInitialPointFrontLimits limits;
+    limits.progressiveResources=true;limits.work=16'000'000;limits.queries=20'000;
+    limits.workingBytes=512ULL*1024*1024;limits.candidates=20'000;
+    const auto small=run(source,field,limits);
+    limits.sites=1'000'000;limits.cones=5'000'000;limits.frontStates=15'000'192;
+    const auto large=run(source,field,limits);
+    require(large.report.initialized&&large.report.auxiliaryInitialized&&large.report.sites>0,
+        "unused future front ceilings prevented progressive construction");
+    require(large.report.maximumCombinedModeledBytes>0&&
+        large.report.maximumCombinedModeledBytes<=limits.workingBytes,
+        "front, heap and numerical scratch exceeded combined admission");
+    require(large.mesh.nodeCount()==small.mesh.nodeCount(),"inactive future ceilings changed initial point count");
+    for(Index i=0;i<large.mesh.nodeCount();++i)
+        require(bits(large.mesh.node(i))==bits(small.mesh.node(i)),"inactive future ceilings changed initial point positions");
+    std::cout<<"progressive front: sites="<<large.report.sites<<" peak_model="
+        <<large.report.maximumCombinedModeledBytes<<" retries="<<large.report.resourceRetries<<'\n';
+}
 }
 int main(){try{
     exerciseCandidateFairness();exerciseWorkAndQueryFairness();exerciseExpandedSiteAllowance();
+    exerciseProgressiveUnusedCeilings();
     std::cout<<"initial construction allowances and fair phase scheduling passed\n";return 0;
 }catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}

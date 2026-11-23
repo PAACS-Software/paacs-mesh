@@ -9,11 +9,14 @@
 #include "OcctSpatialSizing.hpp"
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_Surface.hxx>
+#include <NCollection_Array1.hxx>
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <map>
+#include <limits>
 #include <numbers>
+#include <numeric>
 #include <optional>
 #include <set>
 #include <span>
@@ -25,10 +28,171 @@ namespace paacs::geo::detail {
 using OcctCurveUses = std::map<int, std::vector<std::pair<int, std::uint64_t>>>;
 using OcctVertexEdges = std::map<int, std::vector<int>>;
 
+struct OcctCurveSamplingReport {
+    std::uint64_t evaluations=0,integrationIntervals=0,segments=0,maximumModeledWorkingBytes=0;
+    double metricLength=0,estimatedMetricError=0;
+    bool completed=false,budgetLimited=false;
+    const char* diagnostic="not_attempted";
+};
 struct OcctCurveSpacing {
     unsigned pointsPerTurn = 32;
     double maximumChordError = 0;
+    CadResourcePolicy resourcePolicy=CadResourcePolicy::Bounded;
+    std::uint64_t maximumSegments=256,maximumIntegrationIntervals=256;
+    std::uint64_t maximumWorkingBytes=1024*1024;
+    OcctCurveSamplingReport* report=nullptr;
 };
+
+namespace curve_metric_detail {
+struct Sample {double at,speed,size;Vec3 point;};
+struct SamplingStop {};
+
+// A numerical metric estimate, not a CAD-error certificate. Native face/curve
+// identity, trim, chord and final mesh audits remain the consumer's obligation.
+// Cache adaptive samples once, then prepare the same bidirectional growth field
+// along approximate physical arclength. Integrate its piecewise linear size
+// exactly with the logarithmic mean rather than a fixed parameter grid.
+template<class Evaluate,class Tick>
+std::vector<double> progressive(BRepAdaptor_Curve& curve,double first,double last,
+    bool closed,const OcctCurveSpacing& spacing,Evaluate evaluate,Tick tick) {
+    OcctCurveSamplingReport local;
+    auto& report=spacing.report?*spacing.report:local;report={};report.diagnostic="sampling";
+    const auto fail=[&](const char* why,bool budget){
+        report.diagnostic=why;report.budgetLimited=budget;throw SamplingStop{};
+    };
+    const auto segments=std::min<std::uint64_t>(spacing.maximumSegments,
+        std::uint64_t((std::numeric_limits<unsigned>::max)())-1);
+    const auto intervals=std::min<std::uint64_t>(spacing.maximumIntegrationIntervals,
+        (std::uint64_t((std::numeric_limits<std::size_t>::max)())-1)/4);
+    try{
+        if(!segments||!intervals||spacing.maximumWorkingBytes<4096)fail("curve_resource_limit",true);
+        if(!std::isfinite(first)||!std::isfinite(last)||!(last>first)||!std::isfinite(last-first))
+            fail("curve_parameter_range",false);
+        const auto span=last-first;
+        std::map<double,Sample> cache;
+        std::vector<double> breaks;
+        static_assert(sizeof(Sample)<=64,"adaptive curve sample payload model");
+        struct Interval{double first,last;};
+        std::vector<Interval> pending;
+        const auto admit=[&](std::uint64_t samples,std::uint64_t stackSlots,
+                             std::uint64_t breakSlots,std::uint64_t finalSamples,std::uint64_t outputSlots){
+            std::uint64_t bytes=4096;
+            for(const auto [count,unit]:std::array{
+                std::pair{samples,std::uint64_t(256)},std::pair{stackSlots,std::uint64_t(64)},
+                std::pair{breakSlots,std::uint64_t(32)},std::pair{finalSamples,std::uint64_t(192)},
+                std::pair{outputSlots,std::uint64_t(32)}}){
+                if(count>(spacing.maximumWorkingBytes-bytes)/unit)fail("curve_working_memory",true);
+                bytes+=count*unit;
+            }
+            report.maximumModeledWorkingBytes=std::max(report.maximumModeledWorkingBytes,bytes);
+        };
+        const auto nativeIntervals=curve.NbIntervals(GeomAbs_C2);
+        if(nativeIntervals<1)fail("curve_continuity_intervals",false);
+        if(std::uint64_t(nativeIntervals)>intervals||nativeIntervals==(std::numeric_limits<int>::max)())
+            fail("curve_integration_limit",true);
+        admit(0,0,2*(std::uint64_t(nativeIntervals)+17),0,0);
+        {
+            NCollection_Array1<double> native(1,nativeIntervals+1);curve.Intervals(native,GeomAbs_C2);
+            breaks.reserve(std::size_t(nativeIntervals)+18);
+            breaks.push_back(first);breaks.push_back(last);
+            for(int i=1;i<=nativeIntervals+1;++i)if(native(i)>first&&native(i)<last)breaks.push_back(native(i));
+            const auto initial=std::min<std::uint64_t>(16,intervals);
+            for(std::uint64_t i=1;i<initial;++i)breaks.push_back(std::lerp(first,last,double(i)/initial));
+        }
+        std::sort(breaks.begin(),breaks.end());breaks.erase(std::unique(breaks.begin(),breaks.end()),breaks.end());
+        if(breaks.size()-1>intervals)fail("curve_integration_limit",true);
+        admit(0,2*breaks.size(),breaks.capacity(),0,0);
+        pending.reserve(breaks.size());
+        for(std::size_t i=breaks.size()-1;i>0;--i)pending.push_back({breaks[i-1],breaks[i]});
+        const auto sample=[&](double at)->const Sample&{
+            if(auto found=cache.find(at);found!=cache.end())return found->second;
+            if(cache.size()>=4*intervals+1)fail("curve_integration_limit",true);
+            admit(cache.size()+1,2*pending.capacity(),breaks.capacity(),0,0);
+            tick(1);auto value=evaluate(at);++report.evaluations;
+            if(!(std::isfinite(value.speed)&&value.speed>=0&&std::isfinite(value.size)&&value.size>0&&
+                 std::isfinite(value.point.x)&&std::isfinite(value.point.y)&&std::isfinite(value.point.z)))
+                fail("curve_nonfinite_sample",false);
+            return cache.emplace(at,value).first->second;
+        };
+        const auto density=[](const Sample& p){return static_cast<long double>(p.speed)/p.size;};
+        long double estimatedError=0;
+        while(!pending.empty()){
+            tick(1);const auto interval=pending.back();pending.pop_back();
+            const auto a=interval.first,b=interval.last,m=std::midpoint(a,b);
+            const auto q1=std::midpoint(a,m),q3=std::midpoint(m,b);
+            if(!(a<q1&&q1<m&&m<q3&&q3<b))fail("curve_parameter_resolution",false);
+            const auto& s0=sample(a);const auto& s1=sample(q1);const auto& s2=sample(m);
+            const auto& s3=sample(q3);const auto& s4=sample(b);
+            const auto width=static_cast<long double>(b-a);
+            const auto coarse=width*(density(s0)+density(s4))*.5L;
+            const auto fine=width*(density(s0)+2*density(s1)+2*density(s2)+2*density(s3)+density(s4))*.125L;
+            const auto error=std::abs(fine-coarse)/15;
+            const auto coarseLength=width*(s0.speed+s4.speed)*.5L;
+            const auto fineLength=width*(s0.speed+2*s1.speed+2*s2.speed+2*s3.speed+s4.speed)*.125L;
+            const auto lengthError=std::abs(fineLength-coarseLength)/15;
+            const auto h=std::min({s0.size,s1.size,s2.size,s3.size,s4.size});
+            const auto mappingError=std::max({(s1.point-(s0.point*.75+s4.point*.25)).norm(),
+                (s2.point-(s0.point+s4.point)*.5).norm(),(s3.point-(s0.point*.25+s4.point*.75)).norm()});
+            const auto physicalTolerance=spacing.maximumChordError>0?std::min(h*.01,spacing.maximumChordError*.25):h*.01;
+            const bool accurate=std::isfinite(fine)&&std::isfinite(fineLength)&&fine<=1&&
+                error<=1e-4L*std::abs(fine)+1e-10L*((b-a)/span)&&
+                lengthError<=1e-5L*std::abs(fineLength)+1e-12L*h*((b-a)/span)&&
+                std::isfinite(mappingError)&&mappingError<=physicalTolerance;
+            if(accurate){++report.integrationIntervals;estimatedError+=error;continue;}
+            if(report.integrationIntervals+pending.size()+2>intervals)fail("curve_integration_limit",true);
+            admit(cache.size(),std::max<std::uint64_t>(2*pending.capacity(),2*(pending.size()+2)),breaks.capacity(),0,0);
+            pending.push_back({m,b});pending.push_back({a,m});
+        }
+        admit(cache.size(),2*pending.capacity(),breaks.capacity(),cache.size(),0);
+        std::vector<Sample> samples;samples.reserve(cache.size());
+        for(const auto& [at,value]:cache){(void)at;tick(1);samples.push_back(value);}
+        std::vector<double> length(samples.size()-1),metric(samples.size(),0.);
+        for(std::size_t i=0;i<length.size();++i){
+            tick(1);length[i]=(samples[i+1].at-samples[i].at)*(samples[i].speed+samples[i+1].speed)*.5;
+            if(!std::isfinite(length[i])||length[i]<0)fail("curve_nonfinite_length",false);
+        }
+        const double slope=std::sqrt(1.8)-1;
+        for(std::size_t i=0;i<length.size();++i){tick(1);samples[i+1].size=std::min(samples[i+1].size,samples[i].size+slope*length[i]);}
+        for(std::size_t i=length.size();i>0;--i){tick(1);samples[i-1].size=std::min(samples[i-1].size,samples[i].size+slope*length[i-1]);}
+        const auto logarithm=[](double a,double b){
+            const auto ratio=(b-a)/a;
+            return std::isfinite(ratio)&&ratio>-1?std::log1p(ratio):std::log(b)-std::log(a);
+        };
+        for(std::size_t i=0;i<length.size();++i){
+            tick(1);const auto a=samples[i].size,b=samples[i+1].size;
+            const auto amount=a==b?length[i]/a:length[i]*logarithm(a,b)/(b-a);
+            metric[i+1]=metric[i]+amount;
+            if(!std::isfinite(metric[i+1])||amount<0)fail("curve_metric_overflow",true);
+        }
+        report.metricLength=metric.back();report.estimatedMetricError=double(estimatedError);
+        if(!(metric.back()>0))fail("curve_zero_metric",false);
+        const auto minimum=spacing.maximumChordError>0&&closed?3u:1u;
+        const auto count=std::max<std::uint64_t>(minimum,std::uint64_t(std::ceil(std::min(metric.back(),double(segments)+1))));
+        if(count>segments)fail("curve_segment_limit",true);
+        admit(cache.size(),2*pending.capacity(),breaks.capacity(),samples.size(),count+1);
+        std::vector<double> schedule;schedule.reserve(std::size_t(count+1));schedule.push_back(first);
+        for(std::uint64_t i=1;i<count;++i){
+            tick(1);const auto target=metric.back()*double(i)/count;
+            const auto at=std::size_t(std::lower_bound(metric.begin(),metric.end(),target)-metric.begin());
+            if(!at||at>=metric.size()||!(metric[at]>metric[at-1]))fail("curve_metric_resolution",false);
+            const auto fraction=std::clamp((target-metric[at-1])/(metric[at]-metric[at-1]),0.,1.);
+            const auto a=samples[at-1].size,b=samples[at].size;
+            double physicalFraction=fraction;
+            if(a!=b){
+                const auto ratioLog=logarithm(a,b);
+                const auto change=std::abs(ratioLog)<.1?a*std::expm1(fraction*ratioLog):
+                    std::exp(std::lerp(std::log(a),std::log(b),fraction))-a;
+                physicalFraction=std::clamp(change/(b-a),0.,1.);
+            }
+            const auto parameter=std::lerp(samples[at-1].at,samples[at].at,physicalFraction);
+            if(!(parameter>schedule.back()&&parameter<last))fail("curve_parameter_resolution",false);
+            schedule.push_back(parameter);
+        }
+        schedule.push_back(last);report.segments=count;report.completed=true;report.diagnostic="completed";
+        return schedule;
+    }catch(const SamplingStop&){return {};}
+}
+} // namespace curve_metric_detail
 
 template<class Tick>
 std::vector<double> sampleOcctCurveMetric(const OcctModel& model, int tag, double sizeCap,
@@ -67,6 +231,22 @@ std::vector<double> sampleOcctCurveMetric(const OcctModel& model, int tag, doubl
     double first, last;
     edge->parameterBounds(first, last);
     BRepAdaptor_Curve curve(OcctModelAccess::edge(model, tag));
+    if(spacing.resourcePolicy==CadResourcePolicy::Normal){
+        const auto evaluate=[&](double at){
+            gp_Pnt point;gp_Vec derivative;curve.D1(at,point,derivative);
+            auto curvature=localCurvature(tag,at);
+            if(at==first)curvature=std::max(curvature,vertexCurvature(edge->startVertexTag()));
+            if(at==last)curvature=std::max(curvature,vertexCurvature(edge->endVertexTag()));
+            auto h=curvature>0?std::min(sizeCap,2*std::numbers::pi/(spacing.pointsPerTurn*curvature)):sizeCap;
+            if(curvature>0&&spacing.maximumChordError>0)
+                h=std::min(h,std::sqrt(8*spacing.maximumChordError/curvature));
+            const Vec3 position{point.X(),point.Y(),point.Z()};
+            if(sizeField){tick(sizeField->queryWork());h=std::min(h,sizeField->eval(position));}
+            return curve_metric_detail::Sample{at,derivative.Magnitude(),h,position};
+        };
+        return curve_metric_detail::progressive(curve,first,last,edge->startVertexTag()==edge->endVertexTag(),
+            spacing,evaluate,tick);
+    }
     std::array<double, intervals+1> t{}, speed{}, size{}, metric{};
     std::array<double, intervals> length{};
     for (std::size_t i = 0; i <= intervals; ++i) {

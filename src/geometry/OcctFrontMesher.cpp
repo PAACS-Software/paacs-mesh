@@ -59,12 +59,19 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
     const bool curvatureSurface=surfaceMode==OcctFrontSurface::Curvature;
     const bool regularSurface=surfaceMode==OcctFrontSurface::Regular||improveQuality||curvatureSurface||spatialSizing;
     const bool completeDiscreteSeed=liveTrial||curvatureSurface;
-    const bool customConstruction=options.construction.effort!=CadConstructionEffort::Legacy||
+    const bool progressiveResources=options.construction.resourcePolicy==CadResourcePolicy::Normal;
+    const bool customConstruction=progressiveResources||options.construction.effort!=CadConstructionEffort::Legacy||
         options.construction.surfacePointsPerFace||options.construction.surfaceChordPointsPerFace||
         options.construction.interiorCandidates||options.construction.interiorSites;
     const char* stage="surface";OcctStageTrace trace(stage,tag);OcctFrontOutcome out;const auto began=Clock::now();const auto& o=options.geometry;std::stop_source stop;
-    const auto tick=[&](std::uint64_t n=1){if(o.cancellation&&o.cancellation->load()){stop.request_stop();throw Stop{NativeCadMeshReason::Cancelled,"cancelled"};}
+    const auto account=[&](std::uint64_t n){
         need(out.workUsed<=maximumWork&&n<=maximumWork-out.workUsed,NativeCadMeshReason::BudgetExceeded,"native-plc-work-budget");out.workUsed+=n;};
+    const auto tick=[&](std::uint64_t n=1){if(o.cancellation&&o.cancellation->load()){stop.request_stop();throw Stop{NativeCadMeshReason::Cancelled,"cancelled"};}
+        account(n);};
+    // Independent stages return the work they have already performed, even
+    // when they observed cancellation. Retain that receipt before stopping;
+    // incremental callbacks still use tick before starting another operation.
+    const auto accountCompleted=[&](std::uint64_t n){account(n);tick(0);};
     const auto remaining=[&](){tick(0);need(out.workUsed<maximumWork,NativeCadMeshReason::BudgetExceeded,"native-plc-work-budget");return maximumWork-out.workUsed;};
     try {
         tick();need(model.solid(tag)&&maximumWork>0&&options.maximumRecoveryRandomRetries<=4&&options.maximumRecoveryPatchStates<=65536,NativeCadMeshReason::InvalidRequest,"native-plc-invalid-request");Vec3 lo,hi;model.solid(tag)->bbox(lo,hi);
@@ -134,13 +141,13 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 out.surfaceSpacing=std::move(repairs.surfaceSpacing);
             }else surface=std::move(preparation);
         }else surface=buildOcctBoundary(model,tag,bo,boundary);
-        tick(surface.work);
         out.surfaceWork=surface.work;
         out.surfaceTriangles=surface.triangles;
         out.maximumNodeError=surface.maximumNodeProjectionError;
         out.maximumFacetError=surface.maximumFacetSampleError;
         out.surfaceDiagnostic=occtBoundaryReasonName(surface.reason);
         out.surfaceSeconds=std::chrono::duration<double>(Clock::now()-began).count();
+        accountCompleted(surface.work);
         need(surface.reason!=OcctBoundaryReason::Cancelled,NativeCadMeshReason::Cancelled,"cancelled");need(surface.reason!=OcctBoundaryReason::AllocationFailed,NativeCadMeshReason::AllocationFailed,"allocation-failed");
         need(!spaceSurface||surface.reason!=OcctBoundaryReason::SourceChanged,NativeCadMeshReason::InternalError,"spaced-surface-source-changed");
         need(!spaceSurface||surface.published||surface.reason==OcctBoundaryReason::BudgetExceeded,
@@ -151,14 +158,43 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
         OcctStageTrace shellCheck("exact_shell_certificate",tag);
         auto certificate=certifyOcctBoundarySurface(boundary,certificateOptions);
         shellCheck.finish(certificate.diagnostic);
-        tick(certificate.workUsed);
+        accountCompleted(certificate.workUsed);
         need(certificate.reason!=OcctStarReason::WorkBudget&&certificate.reason!=OcctStarReason::OutputBudget,NativeCadMeshReason::BudgetExceeded,"native-plc-source-certificate-budget");need(certificate.reason!=OcctStarReason::Cancelled,NativeCadMeshReason::Cancelled,"cancelled");need(certificate.reason!=OcctStarReason::AllocationFailed,NativeCadMeshReason::AllocationFailed,"allocation-failed");need(certificate.certified,NativeCadMeshReason::GeometryError,"native-plc-source-not-embedded");
         stage="seeds";trace.next(stage);out.surfaceSeconds=std::chrono::duration<double>(Clock::now()-began).count();
-        const auto ns=boundary.nodeCount(),nf=boundary.cellCount();const auto frontCells=std::min<std::uint64_t>(o.maximumCells-nf,std::uint64_t(nf)*16);
+        const auto ns=boundary.nodeCount(),nf=boundary.cellCount();
+        auto frontCells=std::min<std::uint64_t>(o.maximumCells-nf,
+            progressiveResources?std::uint64_t(UINT_MAX):std::uint64_t(nf)*16);
         const auto apexStorage=completeDiscreteSeed?0:
             std::min<std::uint64_t>(256ULL*1024*1024,options.maximumPrimitiveWorkingBytes/4);
-        const auto retained=std::uint64_t(ns)*1024+std::uint64_t(nf)*16384+frontCells*512+apexStorage+96ULL*1024*1024;
+        std::uint64_t retained=progressiveResources?
+            std::uint64_t(ns)*1024+std::uint64_t(nf)*4096+96ULL*1024*1024:
+            std::uint64_t(ns)*1024+std::uint64_t(nf)*16384+frontCells*512+apexStorage+96ULL*1024*1024;
         need(retained<options.maximumPrimitiveWorkingBytes,NativeCadMeshReason::BudgetExceeded,"native-plc-front-storage-admission");
+        // Initial placement owns and releases its numerical complex/heap before
+        // the volume frontier, apex cache and recovery workspace are created.
+        // Retain the boundary/keys/size field and existing kernel slack here;
+        // the later volume stages keep their full, separate admission below.
+        const std::uint64_t placementRetained=progressiveResources?
+            std::uint64_t(ns)*1024+std::uint64_t(nf)*1024+96ULL*1024*1024:retained;
+        if(progressiveResources){
+            using occt_initial_point_front_detail::saturatedAdd;
+            using occt_initial_point_front_detail::saturatedMultiply;
+            const auto capacity=boundary.capacitySnapshot();
+            need(capacity.complete,NativeCadMeshReason::BudgetExceeded,"native-plc-boundary-capacity-overflow");
+            std::uint64_t bytes=0;
+            for(const auto [count,unit]:std::array<std::pair<std::uint64_t,std::uint64_t>,9>{{
+                {capacity.nodeCoordinateCapacity,sizeof(Vec3)},
+                {capacity.nodeClassificationCapacity,sizeof(mesh::Classification)},
+                {capacity.cellCapacity,sizeof(mesh::Cell)},
+                {capacity.connectivityCapacity,sizeof(Index)},
+                {capacity.dedupBucketCount,16},{capacity.dedupEntryCount,256},
+                {capacity.dedupIndexCapacity,sizeof(Index)},
+                {surface.nodeKeys.capacity(),sizeof(OcctBoundaryNodeKey)},
+                {out.surfaceSpacing.capacity(),sizeof(CadSurfaceSpacingReport)}}})
+                bytes=saturatedAdd(bytes,saturatedMultiply(count,unit));
+            need(bytes<=placementRetained-96ULL*1024*1024,
+                 NativeCadMeshReason::BudgetExceeded,"native-plc-placement-retained-capacity");
+        }
         mesh::Mesh pendingRecovery;
         const auto buildConstraintSeed=[&](const mesh::Mesh& sites,mesh::Mesh& seed,
                                           std::uint64_t maximumSeedTets=UINT64_MAX,
@@ -168,13 +204,19 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             const auto priorSeconds=out.constraintRecovery.seconds;
             auto constraintWork=earlyConstraintWork
                 ?std::min(remaining(),earlyConstraintWork)
-                :std::min<std::uint64_t>(remaining()/3,450'000'000);
+                :progressiveResources?remaining()/3:std::min<std::uint64_t>(remaining()/3,450'000'000);
             if(reserveRetry)constraintWork=std::min(constraintWork,remaining()/3);
+            const auto constraintRetained=placementRetained+std::uint64_t(sites.nodeCount())*128+
+                std::uint64_t(sites.cellCount())*128;
+            need(!progressiveResources||constraintRetained<options.maximumPrimitiveWorkingBytes,
+                 NativeCadMeshReason::BudgetExceeded,"native-plc-constraint-input-memory");
+            const auto constraintBytes=progressiveResources?
+                options.maximumPrimitiveWorkingBytes-constraintRetained:options.maximumPrimitiveWorkingBytes/2;
             const auto constraints=bnd::detail::recoverTetConstraints(sites,{3,tag},
-                constraintWork,options.maximumPrimitiveWorkingBytes/2,
+                constraintWork,constraintBytes,
                 std::min(frontCells,maximumSeedTets),o.cancellation,seed,
                 std::min<std::uint64_t>(64,o.maximumNodes-std::uint64_t(sites.nodeCount())),
-                false,true,advancingInteriorFront);
+                false,true,advancingInteriorFront,progressiveResources);
             out.constraintRecovery={constraints.diagnostic,constraints.candidateCells,
                 constraints.missingEdgesBefore,constraints.missingFacesBefore,
                 constraints.missingEdgesAfter,constraints.missingFacesAfter,constraints.patches,
@@ -183,7 +225,9 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 constraints.steinerAttempts,constraints.steinerWork,constraints.steinerNodes,
                 constraints.retainedSteinerNodes,constraints.piercingPatches};
             recovering.finish(constraints.diagnostic);
-            tick(constraints.work);
+            // The private recovery has already performed this work, including
+            // the last cancelled attempt. Record it before observing the stop.
+            accountCompleted(constraints.work);
             need(std::string_view(constraints.diagnostic)!="cancelled",NativeCadMeshReason::Cancelled,"cancelled");
             need(std::string_view(constraints.diagnostic)!="allocation_failed",NativeCadMeshReason::AllocationFailed,"allocation-failed");
         };
@@ -198,7 +242,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             mesh::Mesh sites;
             const auto& construction=options.construction;
             const bool fairConstruction=construction.effort!=CadConstructionEffort::Legacy;
-            const bool expandedConstruction=fairConstruction||construction.interiorCandidates||construction.interiorSites;
+            const bool expandedConstruction=progressiveResources||fairConstruction||construction.interiorCandidates||construction.interiorSites;
             const auto siteBudget=advancingInteriorFront?
                 (expandedConstruction?(construction.effort==CadConstructionEffort::Thorough?
                     remaining()-remaining()/3:remaining()/2):std::min<std::uint64_t>(42'000'000,remaining()/2)):
@@ -207,6 +251,13 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             const auto siteCharge=[&](std::uint64_t amount=1){
                 if(siteWork>siteBudget||amount>siteBudget-siteWork)throw SiteLimit{};
                 tick(amount);siteWork+=amount;
+            };
+            // The initial-front helper checks its stop token before ordinary
+            // operations. Its bootstrap also sends completed constructor work
+            // through this callback before propagating its observed stop.
+            const auto siteAccount=[&](std::uint64_t amount){
+                if(siteWork>siteBudget||amount>siteBudget-siteWork)throw SiteLimit{};
+                account(amount);siteWork+=amount;
             };
             constexpr auto nodeBytes=sizeof(Vec3)+sizeof(mesh::Classification);
             constexpr auto tetBytes=sizeof(mesh::Cell)+4*sizeof(Index);
@@ -219,7 +270,8 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             const auto maximumSites=std::min(o.maximumNodes-std::uint64_t(ns),
                 outputRoom/(nodeBytes+16*tetBytes));
             std::uint64_t requestedSites=512;
-            if(expandedConstruction){
+            if(progressiveResources)requestedSites=construction.interiorSites?construction.interiorSites:maximumSites;
+            else if(expandedConstruction){
                 if(construction.interiorSites)requestedSites=construction.interiorSites;
                 else if(!fairConstruction){
                     const auto factor=construction.interiorCandidates/16'384+
@@ -259,7 +311,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                     const auto density=std::isfinite(demand)&&demand<static_cast<long double>(maximumSites)?
                         std::uint64_t(std::ceil(demand)):maximumSites;
                     requestedSites=std::max({std::uint64_t(512),density,saturatedMultiply(ns,2)});
-                    const auto memory=options.maximumPrimitiveWorkingBytes-retained;
+                    const auto memory=options.maximumPrimitiveWorkingBytes-placementRetained;
                     requestedSites=std::min({requestedSites,maximumSites,(siteBudget-siteWork)/8192});
                     const auto modeledBytes=[&](std::uint64_t sites){
                         const auto cones=std::min(o.maximumCells,std::max<std::uint64_t>(2048,saturatedMultiply(sites,4)));
@@ -277,8 +329,8 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             }
             const auto siteCap=std::min(requestedSites,maximumSites);
             // Bound the copied shell, point/hash arrays and cached edge sizes.
-            const auto preparationBytes=saturatedMultiply(saturatedAdd(saturatedAdd(ns,nf),siteCap),1024);
-            const auto candidateLimit=expandedConstruction?(construction.interiorCandidates?
+            const auto preparationBytes=saturatedMultiply(saturatedAdd(saturatedAdd(ns,nf),progressiveResources?std::uint64_t(0):siteCap),1024);
+            const auto candidateLimit=progressiveResources?(construction.interiorCandidates?construction.interiorCandidates:siteBudget):expandedConstruction?(construction.interiorCandidates?
                 construction.interiorCandidates:
                 std::max<std::uint64_t>(16'384,saturatedAdd(saturatedMultiply(siteCap,32),saturatedMultiply(nf,12)))):16'384;
             const auto queryLimit=expandedConstruction?std::min(siteBudget,
@@ -289,36 +341,10 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 report.candidateLimit=candidateLimit;report.queryLimit=queryLimit;report.workLimit=siteBudget;
                 report.budgetReason=siteBudget<=siteWork?"work_limit":!siteCap?
                     (o.maximumNodes<=std::uint64_t(ns)?"node_limit":!maximumSites?"output_limit":"modeled_memory_or_work"):
-                    preparationBytes>options.maximumPrimitiveWorkingBytes-retained?"modeled_memory":"initial_admission";
+                    preparationBytes>options.maximumPrimitiveWorkingBytes-placementRetained?"modeled_memory":"initial_admission";
             }
-            try {if(siteCap&&siteBudget&&preparationBytes<=options.maximumPrimitiveWorkingBytes-retained){
-                if(advancingInteriorFront){
-                    OcctInitialPointFrontLimits limits;
-                    limits.work=siteBudget-siteWork;limits.queries=queryLimit;limits.sites=std::size_t(siteCap);
-                    limits.balanceSourceAndBulk=fairConstruction;
-                    limits.cancellation=o.cancellation;
-                    limits.workingBytes=std::min<std::uint64_t>(128ULL*1024*1024,
-                        options.maximumPrimitiveWorkingBytes-retained);
-                    if(expandedConstruction){
-                        limits.candidates=std::size_t(std::min<std::uint64_t>(candidateLimit,SIZE_MAX));
-                        limits.workingBytes=options.maximumPrimitiveWorkingBytes-retained;
-                        limits.cones=std::size_t(std::min(o.maximumCells,
-                            std::max<std::uint64_t>(2048,saturatedMultiply(siteCap,4))));
-                        limits.frontStates=std::size_t(std::min<std::uint64_t>(SIZE_MAX,
-                            saturatedAdd(nf,saturatedMultiply(limits.cones,3))));
-                        limits.maximumAuxiliaryCells=std::size_t(std::min<std::uint64_t>(
-                            std::min(o.maximumCells,limits.work/24),SIZE_MAX));
-                    }
-                    OcctInitialPointFrontReport built;
-                    sites=appendOcctInitialPointFrontSites(boundary,*sizeField,o.targetSize,
-                        mesh::Classification{3,tag},limits,[&](Vec3 p){
-                            // The builder charges and bounds both point and
-                            // cached material-witness queries before this call.
-                            ++siteQueries;++out.nativeQueries;
-                            classifier.Perform(gp_Pnt(p.x,p.y,p.z),tol);
-                            return classifier.State()==TopAbs_IN;
-                        },siteCharge,&built);
-                    need(!built.cancelled,NativeCadMeshReason::Cancelled,"cancelled");
+            OcctInitialPointFrontReport built;
+            const auto recordInitialPlacement=[&](){
                     auto& report=out.initialFront;
                     report.budgetReason=built.budgetReason;
                     report.candidateLimit=built.candidateLimit;report.siteLimit=built.siteLimit;
@@ -358,6 +384,55 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                     report.auxiliaryStorageCapacity=built.auxiliaryStorageCapacity;
                     report.compactionPeakModeledBytes=built.auxiliaryMaximumCompactionModeledBytes;
                     report.auxiliaryWorkingBytes=built.auxiliaryWorkingBytes;
+                    report.auxiliaryImportedCells=built.auxiliaryImportedCells;
+                    report.auxiliaryImportWork=built.auxiliaryImportWork;
+                    report.auxiliaryImportModeledBytes=built.auxiliaryImportModeledBytes;
+                    report.auxiliaryInitialCapacity=built.auxiliaryInitialCapacity;
+                    report.auxiliaryHardCapacity=built.auxiliaryHardCapacity;
+                    report.auxiliaryGrowthAttempts=built.auxiliaryGrowthAttempts;
+                    report.auxiliaryGrowths=built.auxiliaryGrowths;
+                    report.auxiliaryGrowthWork=built.auxiliaryGrowthWork;
+                    report.maximumCombinedModeledBytes=built.maximumCombinedModeledBytes?
+                        saturatedAdd(placementRetained,built.maximumCombinedModeledBytes):0;
+                    report.maximumHeapCapacity=built.maximumHeapCapacity;
+                    report.resourceRetries=built.resourceRetries;
+                    report.auxiliaryResourceDiagnostic=built.auxiliaryResourceDiagnostic;
+            };
+            try {if(siteCap&&siteBudget&&preparationBytes<=options.maximumPrimitiveWorkingBytes-placementRetained){
+                if(advancingInteriorFront){
+                    OcctInitialPointFrontLimits limits;
+                    limits.work=siteBudget-siteWork;limits.queries=queryLimit;limits.sites=std::size_t(siteCap);
+                    limits.balanceSourceAndBulk=fairConstruction;
+                    limits.progressiveResources=progressiveResources;
+                    limits.cancellation=o.cancellation;
+                    limits.workingBytes=std::min<std::uint64_t>(128ULL*1024*1024,
+                        options.maximumPrimitiveWorkingBytes-placementRetained);
+                    if(expandedConstruction){
+                        limits.candidates=std::size_t(std::min<std::uint64_t>(candidateLimit,SIZE_MAX));
+                        limits.workingBytes=options.maximumPrimitiveWorkingBytes-placementRetained;
+                        limits.cones=std::size_t(std::min(o.maximumCells,
+                            std::max<std::uint64_t>(2048,saturatedMultiply(siteCap,4))));
+                        limits.frontStates=std::size_t(std::min<std::uint64_t>(SIZE_MAX,
+                            saturatedAdd(nf,saturatedMultiply(limits.cones,3))));
+                        limits.maximumAuxiliaryCells=std::size_t(std::min<std::uint64_t>(
+                            std::min(o.maximumCells,limits.work/24),SIZE_MAX));
+                        if(progressiveResources){
+                            limits.maximumAuxiliaryCells=std::size_t(std::min<std::uint64_t>(o.maximumCells,SIZE_MAX));
+                            limits.cones=std::size_t(std::min<std::uint64_t>(o.maximumCells,SIZE_MAX));
+                            limits.frontStates=std::size_t(std::min<std::uint64_t>(SIZE_MAX,
+                                saturatedAdd(nf,saturatedMultiply(limits.cones,3))));
+                        }
+                    }
+                    sites=appendOcctInitialPointFrontSites(boundary,*sizeField,o.targetSize,
+                        mesh::Classification{3,tag},limits,[&](Vec3 p){
+                            // The builder charges and bounds both point and
+                            // cached material-witness queries before this call.
+                            ++siteQueries;++out.nativeQueries;
+                            classifier.Perform(gp_Pnt(p.x,p.y,p.z),tol);
+                            return classifier.State()==TopAbs_IN;
+                        },siteAccount,&built);
+                    recordInitialPlacement();
+                    need(!built.cancelled,NativeCadMeshReason::Cancelled,"cancelled");
                 }else{
                     sites=appendOcctInteriorSites(boundary,*sizeField,mesh::Classification{3,tag},
                         std::size_t(siteCap),[&](Vec3 p){
@@ -370,6 +445,11 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 }
             }
             }catch(const OcctInitialConstructionCancelled&){
+                recordInitialPlacement();
+                out.initialFront.diagnostic="cancelled";
+                out.initialFront.budgetReason="cancelled";
+                out.initialFront.work=siteWork;out.initialFront.queries=siteQueries;
+                out.initialFront.seconds=std::chrono::duration<double>(Clock::now()-placementStarted).count();
                 throw Stop{NativeCadMeshReason::Cancelled,"cancelled"};
             }catch(const SiteLimit&){
                 // This optional preparation leaves the original shell intact.
@@ -401,10 +481,32 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
         }else if(spaceSurface||options.recoveryMode==NativeCadRecoveryMode::Advanced)
             buildConstraintSeed(boundary,pendingRecovery);
         const bool usesConstraintSeed=pendingRecovery.cellCount()!=0;
+        if(progressiveResources){
+            if(usesConstraintSeed){
+                // This route never initializes the outer gift-wrapping front.
+                // Keep the actual seed and its copies/filters while recovery
+                // admits its own staging workspace; no future-cell quote.
+                retained+=std::uint64_t(std::max<Index>(0,pendingRecovery.nodeCount()-ns))*1024+
+                    std::uint64_t(pendingRecovery.cellCount())*1024;
+            }else{
+                // The legacy frontier can coexist with a recovery attempt.
+                // Derive its ceiling from the byte allowance, rather than a
+                // fixed surface-to-volume element-count ratio.
+                const std::uint64_t fixed=std::uint64_t(ns)*1024+std::uint64_t(nf)*16384+apexStorage+96ULL*1024*1024;
+                need(fixed<options.maximumPrimitiveWorkingBytes,NativeCadMeshReason::BudgetExceeded,
+                     "native-plc-front-storage-admission");
+                frontCells=std::min(frontCells,(options.maximumPrimitiveWorkingBytes-fixed)/1024);
+                retained=fixed+frontCells*512;
+            }
+            need(retained<options.maximumPrimitiveWorkingBytes,NativeCadMeshReason::BudgetExceeded,
+                 "native-plc-seed-storage-admission");
+        }
         if(advancingInteriorFront&&!usesConstraintSeed){
             const std::string_view diagnostic=out.constraintRecovery.diagnostic;
             need(diagnostic!="construction_budget"&&diagnostic!="work_budget"&&
-                 diagnostic!="storage_budget"&&diagnostic!="admission_budget",
+                 diagnostic!="storage_budget"&&diagnostic!="admission_budget"&&
+                 diagnostic!="memory_budget"&&diagnostic!="cell_budget"&&
+                 diagnostic!="node_index_budget",
                  NativeCadMeshReason::BudgetExceeded,"native-plc-constraint-construction-budget");
         }
         need(!spaceSurface||usesConstraintSeed,NativeCadMeshReason::MeshingFailed,"spaced-surface-constraint-seed-refused");
@@ -431,7 +533,9 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
         };
         std::map<std::array<std::uint64_t,3>,bool> nativeCache;
         const auto native=[&](Vec3 p){tick();const auto key=pointKey(p);auto known=nativeCache.find(key);if(known!=nativeCache.end())return known->second;
-            need(nativeCache.size()<1000000,NativeCadMeshReason::BudgetExceeded,"native-plc-query-cache-budget");admitQueries(1);++out.nativeQueries;classifier.Perform(gp_Pnt(p.x,p.y,p.z),tol);const bool yes=classifier.State()==TopAbs_IN||classifier.State()==TopAbs_ON;nativeCache.emplace(key,yes);return yes;};
+            need(progressiveResources||nativeCache.size()<1000000,NativeCadMeshReason::BudgetExceeded,"native-plc-query-cache-budget");admitQueries(1);++out.nativeQueries;classifier.Perform(gp_Pnt(p.x,p.y,p.z),tol);const bool yes=classifier.State()==TopAbs_IN||classifier.State()==TopAbs_ON;
+            if(nativeCache.size()<(progressiveResources?131072U:1000000U))nativeCache.emplace(key,yes);
+            return yes;};
         std::map<std::array<std::uint64_t,3>,bool> centroidCache;
         const auto nativeCentroid=[&](Vec3 p){
             const auto key=pointKey(p);
@@ -442,12 +546,17 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             if(native(p))return true;
             if(!options.allowCentroidsWithinChordTolerance)return false;
             if(auto known=centroidCache.find(key);known!=centroidCache.end())return known->second;
-            need(centroidCache.size()<1000000,NativeCadMeshReason::BudgetExceeded,"native-plc-query-cache-budget");tick();
+            need(progressiveResources||centroidCache.size()<1000000,NativeCadMeshReason::BudgetExceeded,"native-plc-query-cache-budget");tick();
             admitQueries(1);classifier.Perform(gp_Pnt(p.x,p.y,p.z),tol);++out.nativeQueries;
-            if(classifier.State()!=TopAbs_OUT){centroidCache.emplace(key,false);return false;}
+            if(classifier.State()!=TopAbs_OUT){
+                if(centroidCache.size()<(progressiveResources?131072U:1000000U))centroidCache.emplace(key,false);
+                return false;
+            }
             tick();BRepExtrema_DistShapeShape distance(BRepBuilderAPI_MakeVertex(gp_Pnt(p.x,p.y,p.z)).Vertex(),OcctModelAccess::solid(model,tag));
             need(distance.IsDone()&&std::isfinite(distance.Value())&&distance.Value()>=0,NativeCadMeshReason::GeometryError,"native-plc-centroid-distance-query");
-            const bool admitted=distance.Value()<=out.chord;centroidCache.emplace(key,admitted);return admitted;
+            const bool admitted=distance.Value()<=out.chord;
+            if(centroidCache.size()<(progressiveResources?131072U:1000000U))centroidCache.emplace(key,admitted);
+            return admitted;
         };
         if(!usesConstraintSeed){
         for(Index i=0;i<ns;++i){tick();front.vertices.push_back({boundary.node(i),std::uint64_t(i)+1});}
@@ -459,7 +568,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
         std::vector<Vec3> points;points.reserve(seedInputs.size()+8);for(auto i:seedInputs)points.push_back(boundary.node(i));
         const auto seedBoundaryCount=points.size();const auto span=std::max({hi.x-lo.x,hi.y-lo.y,hi.z-lo.z});
         for(unsigned i=0;i<8;++i)points.push_back({(i&1)?hi.x+span:lo.x-span,(i&2)?hi.y+span:lo.y-span,(i&4)?hi.z+span:lo.z-span});
-        auto seedCandidate=algo::buildTetCandidate(points);tick(seedCandidate.metrics.construction.conflictInsphereTests+seedCandidate.metrics.construction.conflictOrientationTests+seedCandidate.metrics.validationFaceUses+seedCandidate.metrics.validationHullTests+seedCandidate.metrics.candidateCells);
+        auto seedCandidate=algo::buildTetCandidate(points);accountCompleted(seedCandidate.metrics.construction.conflictInsphereTests+seedCandidate.metrics.construction.conflictOrientationTests+seedCandidate.metrics.validationFaceUses+seedCandidate.metrics.validationHullTests+seedCandidate.metrics.candidateCells);
         need(seedCandidate.reason!=algo::TetCandidateReason::AllocationFailed,NativeCadMeshReason::AllocationFailed,"allocation-failed");need(seedCandidate.built(),NativeCadMeshReason::MeshingFailed,"native-plc-seed-candidate-refused");
         struct Proposal{double volume;Vec3 point;std::size_t ordinal;};std::vector<Proposal> proposals;
         for(std::size_t i=0;i<seedCandidate.candidate->cells.size();++i){tick();const auto c=seedCandidate.candidate->cells[i];bool guard=false;std::array<Vec3,4> p;for(unsigned j=0;j<4;++j){guard|=std::size_t(seedCandidate.candidate->pointToInput[c.vertices[j]])>=seedBoundaryCount;p[j]=seedCandidate.candidate->points[c.vertices[j]];}if(!guard)proposals.push_back({(p[1]-p[0]).cross(p[2]-p[0]).dot(p[3]-p[0]),(p[0]+p[1]+p[2]+p[3])*.25,i});}
@@ -481,7 +590,8 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 profile.searchSeconds+=recovered.regionSearchSeconds;profile.preparationSeconds+=recovered.preparationSeconds;profile.visibilitySeconds+=recovered.visibilitySeconds;profile.publicationSeconds+=recovered.publicationSeconds;profile.validationSeconds+=recovered.validationSeconds;
                 profile.localFrontTets+=recovered.localFrontTets;profile.localFrontClosed+=recovered.localFrontClosed;
                 profile.localFrontSeconds+=recovered.localFrontSeconds;
-                tick(recovered.workUsed);out.randomCandidateProposals+=recovered.randomCandidatePointsProposed;out.mergedComponents+=recovered.mergedComponents;out.sourceBlockedCandidates+=recovered.sourceBlockedCandidates;out.otherComponentBlockedCandidates+=recovered.otherComponentBlockedCandidates;
+                out.randomCandidateProposals+=recovered.randomCandidatePointsProposed;out.mergedComponents+=recovered.mergedComponents;out.sourceBlockedCandidates+=recovered.sourceBlockedCandidates;out.otherComponentBlockedCandidates+=recovered.otherComponentBlockedCandidates;
+                accountCompleted(recovered.workUsed);
             };
             recovery.randomSeed=bnd::detail::PlcGiftWrapping::mix(options.recoverySeed+out.randomRetries);
             if(diversified)++out.randomRetries;
@@ -552,8 +662,8 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             limits.maximumLocalFrontTets=256;
             limits.patchSearch={8192,32768,256,4};
             const auto closed=bnd::recoverTetPlcCavities(boundary,seed,limits,filled);
-            tick(closed.workUsed);
             trial.finish(closed.diagnostic);
+            accountCompleted(closed.workUsed);
             need(closed.reason!=bnd::TetPlcCavityReason::AllocationFailed,NativeCadMeshReason::AllocationFailed,"allocation-failed");
             need(closed.reason!=bnd::TetPlcCavityReason::Cancelled,NativeCadMeshReason::Cancelled,"cancelled");
             return closed.published;
@@ -587,7 +697,11 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             o.minimumElementQuality==0.;
         const auto seedCentroids=[&](const mesh::Mesh& seed){
             const auto count=std::uint64_t(seed.countCells(mesh::CellType::Tet4));
-            need(count<=std::min<std::uint64_t>(1'000'000,availableBytes/128),
+            const auto maximumCenters=progressiveResources?
+                std::min({o.maximumCells,std::uint64_t(UINT32_MAX),
+                    std::uint64_t(SIZE_MAX/sizeof(Vec3)),availableBytes/128}):
+                std::min<std::uint64_t>(1'000'000,availableBytes/128);
+            need(count<=maximumCenters,
                  NativeCadMeshReason::BudgetExceeded,"native-plc-constraint-classifier-storage");
             std::vector<Vec3> centers;
             centers.reserve(count);
@@ -609,6 +723,8 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             OcctNativeValidationOptions admission;
             admission.maximumThreads=options.maximumNativeValidationThreads;
             admission.maximumWork=remaining();admission.maximumPoints=count;
+            need(!progressiveResources||(count<=availableBytes/128&&availableBytes-count*128>=4),
+                 NativeCadMeshReason::BudgetExceeded,"native-plc-constraint-classifier-memory");
             admission.maximumWorkingBytes=availableBytes-count*128;
             admission.maximumSnapshotBytes=std::min<std::uint64_t>(admission.maximumSnapshotBytes,admission.maximumWorkingBytes/4);
             admission.cancellation=o.cancellation;
@@ -618,8 +734,9 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             const auto batch=classifyOcctNativeInteriorPoints(model,tag,centers,admission,admitted,
                 reuseStrictAdmissions?&strictAdmissions:nullptr,prior);
             batchTrace.finish(occtNativeValidationReasonName(batch.reason));
-            tick(batch.workUsed);out.nativeQueries+=batch.nativeQueries+batch.trimmedRayAdmissions;
+            out.nativeQueries+=batch.nativeQueries+batch.trimmedRayAdmissions;
             out.nativeRayAdmissions+=batch.trimmedRayAdmissions;
+            accountCompleted(batch.workUsed);
             need(batch.reason!=OcctNativeValidationReason::Cancelled,NativeCadMeshReason::Cancelled,"cancelled");
             need(batch.reason!=OcctNativeValidationReason::AllocationFailed,NativeCadMeshReason::AllocationFailed,"allocation-failed");
             need(batch.reason!=OcctNativeValidationReason::BudgetExceeded,NativeCadMeshReason::BudgetExceeded,"native-plc-constraint-classifier-budget");
@@ -628,7 +745,8 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                  NativeCadMeshReason::GeometryError,"native-plc-constraint-classifier-refused");
             for(std::size_t i=0;i<centers.size();++i){
                 tick();
-                centroidCache.emplace(pointKey(centers[i]),admitted[i]!=0);
+                if(!progressiveResources||centroidCache.size()<131072U)
+                    centroidCache.emplace(pointKey(centers[i]),admitted[i]!=0);
             }
         };
         std::optional<OcctTrimmedRayWitness> localWitness;
@@ -655,7 +773,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 admitQueries(1);
                 ++out.nativeQueries;
                 ++out.nativeRayAdmissions;
-                centroidCache.emplace(key,true);
+                if(!progressiveResources||centroidCache.size()<131072U)centroidCache.emplace(key,true);
                 return true;
             };
             const auto sizeOfMesh=std::uint64_t(mesh.nodeCount())*(sizeof(Vec3)+sizeof(mesh::Classification))+
@@ -823,7 +941,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             need(!curvatureSurface,NativeCadMeshReason::MeshingFailed,"native-curvature-material-refused");
             for(unsigned pass=0;pass<4;++pass){
                 mesh::Mesh candidate;const auto changed=closeOcctBoundaryDiagonals(model,boundary,inside,128,candidate,[&](std::uint64_t n){tick(n);});if(!changed.flips)break;
-                bo.maximumWork=remaining();const auto facets=auditOcctBoundaryFacets(model,tag,candidate,bo);tick(facets.work);certificateOptions.maximumWork=remaining();const auto cert=certifyOcctBoundarySurface(candidate,certificateOptions);tick(cert.workUsed);
+                bo.maximumWork=remaining();const auto facets=auditOcctBoundaryFacets(model,tag,candidate,bo);accountCompleted(facets.work);certificateOptions.maximumWork=remaining();const auto cert=certifyOcctBoundarySurface(candidate,certificateOptions);accountCompleted(cert.workUsed);
                 
                 if(!(facets.completed&&facets.sourceModelUnmodified&&cert.certified))break;boundary.swap(candidate);
             }
@@ -838,7 +956,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 need(result.reason!=bnd::TetPlcCavityReason::AllocationFailed,NativeCadMeshReason::AllocationFailed,"allocation-failed");need(result.reason!=bnd::TetPlcCavityReason::Cancelled,NativeCadMeshReason::Cancelled,"cancelled");
                 {
                     mesh::Mesh candidate;const auto changed=closeOcctBoundaryDiagonals(model,boundary,inside,16,candidate,[&](std::uint64_t n){tick(n);});
-                    if(changed.flips){bo.maximumWork=remaining();const auto facets=auditOcctBoundaryFacets(model,tag,candidate,bo);tick(facets.work);certificateOptions.maximumWork=remaining();const auto cert=certifyOcctBoundarySurface(candidate,certificateOptions);tick(cert.workUsed);
+                    if(changed.flips){bo.maximumWork=remaining();const auto facets=auditOcctBoundaryFacets(model,tag,candidate,bo);accountCompleted(facets.work);certificateOptions.maximumWork=remaining();const auto cert=certifyOcctBoundarySurface(candidate,certificateOptions);accountCompleted(cert.workUsed);
                         
                         if(facets.completed&&facets.sourceModelUnmodified&&cert.certified){boundary.swap(candidate);result=recover(inside,repaired);continue;}
                     }
@@ -851,7 +969,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 // closed cycles here too, so their recovery does not depend
                 // on an unrelated facet subdivision enabling a later pass.
                 for(auto edge:edges){OcctWireRefinementOptions wire;wire.edgeTag=edge;wire.allowNonlinearWireCandidates=true;wire.allowClosedWireCandidates=true;wire.limits=certificateOptions;wire.limits.maximumWork=remaining();wire.limits.maximumBoundaryNodes=bo.maximumNodes;wire.limits.maximumBoundaryTriangles=bo.maximumTriangles;wire.limits.maximumNodes=o.maximumNodes;wire.limits.maximumCells=o.maximumCells;wire.limits.maximumOutputBytes=o.maximumOutputBytes;wire.limits.maximumWorkingBytes=options.maximumPrimitiveWorkingBytes;
-                    const std::array input{OcctWireBoundary{tag,&boundary}};const auto refined=refineOcctWireRefinement(model,input,wire);tick(refined.workUsed);need(refined.reason!=OcctWireRefinementReason::AllocationFailed,NativeCadMeshReason::AllocationFailed,"allocation-failed");need(refined.reason!=OcctWireRefinementReason::Cancelled,NativeCadMeshReason::Cancelled,"cancelled");
+                    const std::array input{OcctWireBoundary{tag,&boundary}};const auto refined=refineOcctWireRefinement(model,input,wire);accountCompleted(refined.workUsed);need(refined.reason!=OcctWireRefinementReason::AllocationFailed,NativeCadMeshReason::AllocationFailed,"allocation-failed");need(refined.reason!=OcctWireRefinementReason::Cancelled,NativeCadMeshReason::Cancelled,"cancelled");
                     if(refined.reason==OcctWireRefinementReason::BudgetExceeded){
                         // A refused local subdivision leaves the boundary
                         // unchanged. Other bounded strategies can still fit.
@@ -860,7 +978,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                     changed|=refined.published;
                 }
                 if(!changed){std::vector<OcctFacetSelection> selected;const auto& candidates=result.blockedSourceTriangles.empty()?result.unresolvedSourceTriangles:result.blockedSourceTriangles;for(auto i:candidates){need(i>=0&&i<boundary.cellCount(),NativeCadMeshReason::InternalError,"native-plc-diagnostic-face-index");selected.push_back({tag,i});if(selected.size()==8)break;}
-                    if(!selected.empty()){OcctFacetRefinementOptions facet;facet.selections=selected;facet.maximumProjectionDistance=out.chord;facet.maximumAddedNodes=8;facet.limits=certificateOptions;facet.limits.maximumWork=remaining();const std::array input{OcctFacetBoundary{tag,&boundary}};const auto refined=refineOcctFacets(model,input,facet);tick(refined.workUsed);need(refined.reason!=OcctFacetRefinementReason::Cancelled,NativeCadMeshReason::Cancelled,"cancelled");need(refined.reason!=OcctFacetRefinementReason::AllocationFailed,NativeCadMeshReason::AllocationFailed,"allocation-failed");if(refined.reason==OcctFacetRefinementReason::BudgetExceeded){localRefinementBound=true;need(out.workUsed<maximumWork,NativeCadMeshReason::BudgetExceeded,"native-plc-adaptive-facet-budget");}changed=refined.published;out.sourceFacetNodes+=refined.addedNodes;}}
+                    if(!selected.empty()){OcctFacetRefinementOptions facet;facet.selections=selected;facet.maximumProjectionDistance=out.chord;facet.maximumAddedNodes=8;facet.limits=certificateOptions;facet.limits.maximumWork=remaining();const std::array input{OcctFacetBoundary{tag,&boundary}};const auto refined=refineOcctFacets(model,input,facet);out.sourceFacetNodes+=refined.addedNodes;accountCompleted(refined.workUsed);need(refined.reason!=OcctFacetRefinementReason::Cancelled,NativeCadMeshReason::Cancelled,"cancelled");need(refined.reason!=OcctFacetRefinementReason::AllocationFailed,NativeCadMeshReason::AllocationFailed,"allocation-failed");if(refined.reason==OcctFacetRefinementReason::BudgetExceeded){localRefinementBound=true;need(out.workUsed<maximumWork,NativeCadMeshReason::BudgetExceeded,"native-plc-adaptive-facet-budget");}changed=refined.published;}}
                 if(!changed)break;
                 // Reclassify the retained partial mesh against the refined PLC.
                 // Any crossed cell is discarded before another recovery attempt.
@@ -869,7 +987,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 const auto offset=boundary.nodeCount()-previousNodes;for(Index i=0;i<inside.cellCount();++i){bnd::TetFacetCell c;const auto* p=inside.cellNodes(i);for(unsigned j=0;j<4;++j)c.vertices[j]=unsigned(p[j]>=previousNodes?p[j]+offset:p[j]);bnd::TetFacetCell valid;const auto face=bnd::tet_facet_detail::outwardFace(c,0);if(checked.valid(bnd::detail::PlcGiftWrapping::Front{face},c.vertices[0],valid))checked.insert(c);}
                 checked.interiorAdmission=native;checked.centroidAdmission=nativeCentroid;checked.run(static_cast<unsigned>(std::min<std::uint64_t>(frontCells,UINT_MAX)),10,stop.get_token(),100000);
                 mesh::Mesh next;for(Index i=0;i<Index(checked.vertices.size());++i)next.addNode(checked.vertices[i].position,i<boundary.nodeCount()?boundary.nodeClass(i):mesh::Classification{3,tag});for(auto c:checked.cells){std::array<Index,4> ids;for(unsigned j=0;j<4;++j)ids[j]=c.vertices[j];next.addCell(mesh::CellType::Tet4,ids,{3,tag});}inside.swap(next);
-                bo.maximumWork=remaining();const auto audited=auditOcctBoundaryFacets(model,tag,boundary,bo);tick(audited.work);need(audited.completed&&audited.sourceModelUnmodified,NativeCadMeshReason::GeometryError,"native-plc-adaptive-facet-error");out.maximumFacetError=std::max(out.maximumFacetError,audited.maximumFacetSampleError);
+                bo.maximumWork=remaining();const auto audited=auditOcctBoundaryFacets(model,tag,boundary,bo);out.maximumFacetError=std::max(out.maximumFacetError,audited.maximumFacetSampleError);accountCompleted(audited.work);need(audited.completed&&audited.sourceModelUnmodified,NativeCadMeshReason::GeometryError,"native-plc-adaptive-facet-error");
                 result=recover(inside,repaired);if(!result.published&&result.reason==bnd::TetPlcCavityReason::Unavailable&&out.randomRetries<options.maximumRecoveryRandomRetries)result=recover(inside,repaired,true);
             }
             // Only a final refusal reaches this path: previously accepted
@@ -894,9 +1012,11 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             const auto reserve=1024*(std::uint64_t(completed.nodeCount())+
                 std::uint64_t(completed.countCells(mesh::CellType::Tet4)));
             const auto room=remaining();
-            const auto budget=room>reserve?std::min<std::uint64_t>(42'000'000,(room-reserve)/2):0;
+            const auto budget=room>reserve?(progressiveResources?(room-reserve)/2:
+                std::min<std::uint64_t>(42'000'000,(room-reserve)/2)):0;
             const auto queries=out.nativeQueries<maximumSpacedCandidateQueries?
-                std::min<std::uint64_t>(12'000,(maximumSpacedCandidateQueries-out.nativeQueries)/2):0;
+                (progressiveResources?(maximumSpacedCandidateQueries-out.nativeQueries)/2:
+                 std::min<std::uint64_t>(12'000,(maximumSpacedCandidateQueries-out.nativeQueries)/2)):0;
             out.interiorFrontDiagnostic="budget_limited";
             if(budget&&queries&&used<availableBytes&&bytes<o.maximumOutputBytes){
                 const auto growth=(o.maximumOutputBytes-bytes)/(
@@ -980,10 +1100,13 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
         need(!spaceSurface||quality.minimumQuality>=o.minimumElementQuality,NativeCadMeshReason::QualityRequirementNotMet,"spaced-surface-quality-requirement");
         need(std::abs(quality.totalVolume-model.volume(tag))<=model.volume(tag)*options.maximumRelativeVolumeError,NativeCadMeshReason::GeometryError,"native-plc-final-volume-error");
         std::vector<Vec3> centroids;for(Index i=0;i<completed.cellCount();++i)if(completed.cell(i).type==mesh::CellType::Tet4){tick();const auto* p=completed.cellNodes(i);Vec3 center{};for(unsigned j=0;j<4;++j)center=center+completed.node(p[j])*.25;centroids.push_back(center);}
-        OcctNativeValidationOptions validation;validation.maximumThreads=options.maximumNativeValidationThreads;validation.maximumWork=remaining();validation.maximumPoints=o.maximumCells;validation.maximumWorkingBytes=options.maximumPrimitiveWorkingBytes;validation.cancellation=o.cancellation;validation.maximumOutsideDistance=options.allowCentroidsWithinChordTolerance?out.chord:0;
+        need(!progressiveResources||availableBytes>=4,NativeCadMeshReason::BudgetExceeded,
+             "native-plc-final-native-memory");
+        OcctNativeValidationOptions validation;validation.maximumThreads=options.maximumNativeValidationThreads;validation.maximumWork=remaining();validation.maximumPoints=o.maximumCells;validation.maximumWorkingBytes=progressiveResources?availableBytes:options.maximumPrimitiveWorkingBytes;validation.cancellation=o.cancellation;validation.maximumOutsideDistance=options.allowCentroidsWithinChordTolerance?out.chord:0;
+        if(progressiveResources)validation.maximumSnapshotBytes=std::min(validation.maximumSnapshotBytes,validation.maximumWorkingBytes/4);
         validation.useTrimmedRayWitnesses=useTrimmedRayWitnesses;
         out.nativeValidation=validateOcctNativeInteriorPoints(model,tag,centroids,validation,
-            strictAdmissions.retainedPayloadBytes()?&strictAdmissions:nullptr);tick(out.nativeValidation.workUsed);
+            strictAdmissions.retainedPayloadBytes()?&strictAdmissions:nullptr);accountCompleted(out.nativeValidation.workUsed);
         need(out.nativeValidation.reason!=OcctNativeValidationReason::Cancelled,NativeCadMeshReason::Cancelled,"cancelled");need(out.nativeValidation.reason!=OcctNativeValidationReason::AllocationFailed,NativeCadMeshReason::AllocationFailed,"allocation-failed");need(out.nativeValidation.reason!=OcctNativeValidationReason::BudgetExceeded,NativeCadMeshReason::BudgetExceeded,"native-plc-final-native-budget");need(out.nativeValidation.completed&&out.nativeValidation.sourceModelUnmodified,NativeCadMeshReason::GeometryError,"native-plc-final-native-validation");
         need(out.nativeValidation.nativeQueries+out.nativeValidation.strictAdmissionReuses+
              out.nativeValidation.trimmedRayAdmissions==centroids.size(),
@@ -994,7 +1117,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 need(samples.size()<=maximumSamples&&4<=maximumSamples-samples.size(),NativeCadMeshReason::BudgetExceeded,"native-plc-chord-sample-storage");
                 for(unsigned j=0;j<4;++j){tick();samples.push_back(center*.5+completed.node(p[j])*.5);}}
             validation.maximumPoints=std::uint64_t(completed.cellCount())*4;validation.maximumWork=remaining();
-            out.chordSampleValidation=validateOcctNativeInteriorPoints(model,tag,samples,validation);tick(out.chordSampleValidation.workUsed);
+            out.chordSampleValidation=validateOcctNativeInteriorPoints(model,tag,samples,validation);accountCompleted(out.chordSampleValidation.workUsed);
             need(out.chordSampleValidation.reason!=OcctNativeValidationReason::Cancelled,NativeCadMeshReason::Cancelled,"cancelled");
             need(out.chordSampleValidation.reason!=OcctNativeValidationReason::AllocationFailed,NativeCadMeshReason::AllocationFailed,"allocation-failed");
             need(out.chordSampleValidation.reason!=OcctNativeValidationReason::BudgetExceeded,NativeCadMeshReason::BudgetExceeded,"native-plc-chord-sample-budget");
