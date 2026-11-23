@@ -921,6 +921,16 @@ bool accumulateInitialFrontTrial(NativeCadMeshOutcome& result,const NativeCadMes
 }
 }
 NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOptions& o,mesh::Mesh& destination) noexcept {
+    // A positive allowance too small for even a snapshot header is resource
+    // exhaustion. Do not turn it into an invalid derived zero-sized snapshot.
+    // Preserve historical Bounded request handling and observed cancellation.
+    if(o.construction.resourcePolicy==CadResourcePolicy::Normal&&
+       o.maximumPrimitiveWorkingBytes>0&&o.maximumPrimitiveWorkingBytes<8){
+        NativeCadMeshOutcome limited;
+        limited.reason=o.geometry.cancellation&&o.geometry.cancellation->load(std::memory_order_relaxed)?
+            NativeCadMeshReason::Cancelled:NativeCadMeshReason::BudgetExceeded;
+        return limited;
+    }
     if(!o.useAdvancingInteriorFront.has_value()){
         const auto automaticStarted=Clock::now();
         NativeCadMeshOutcome trial;

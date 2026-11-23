@@ -24,9 +24,18 @@ _QUERY_FIELDS = {"tags", "name", "group", "surface", "body", "area", "radius",
                  "centroid_box", "normal", "adjacent_to", "expect", "tolerance"}
 _MAX_FACE_CONTROLS = 10000
 _DEFAULT_CONSTRUCTION_EFFORT = "legacy"
+_DEFAULT_RESOURCE_POLICY = "bounded"
+_RESOURCE_POLICIES = ("normal", "bounded")
+_RESOURCE_FIELDS = ("resource_policy",)
 _CONSTRUCTION_LIMITS = ("max_surface_points", "max_surface_chord_points",
                         "max_interior_candidates", "max_interior_sites")
 _CONSTRUCTION_FIELDS = ("construction_effort", *_CONSTRUCTION_LIMITS)
+
+
+def _resource_policy_value(value):
+    if not isinstance(value, str) or value not in _RESOURCE_POLICIES:
+        raise ValueError("resource_policy must be normal or bounded")
+    return value
 
 
 def _construction_options(construction_effort=_DEFAULT_CONSTRUCTION_EFFORT, *, max_surface_points=None,
@@ -288,7 +297,8 @@ class CadModel:
              native_sizing=None, warning_quality=None, minimum_quality=None,
              advancing_interior_front=None, construction_effort=_DEFAULT_CONSTRUCTION_EFFORT,
              max_surface_points=None, max_surface_chord_points=None,
-             max_interior_candidates=None, max_interior_sites=None):
+             max_interior_candidates=None, max_interior_sites=None,
+             resource_policy=_DEFAULT_RESOURCE_POLICY):
         """Generate an owned, audited Tet4 mesh; lengths and sizes are in mm.
 
         ``face_sizes`` contains native ``FaceSize`` controls. Alternatively,
@@ -299,7 +309,10 @@ class CadModel:
         ``assembly="conforming"`` request; this method preserves the default
         ``preserve_parts`` assembly policy rather than changing it for controls.
 
-        Optional budgets retain native defaults when None. ``max_seconds`` is
+        ``resource_policy`` selects normal or bounded resource admission.
+        An omitted ``max_work`` uses the selected policy; an explicit positive
+        limit always applies. Other omitted budgets retain native defaults.
+        ``max_seconds`` is
         cooperative and starts after the native operation gate is acquired.
         Quality warnings do not replace validity checks. Native refusal reasons
         and hints remain available on ``MeshingError.report``.
@@ -310,6 +323,7 @@ class CadModel:
         select a recovery mode or weaken geometry and validity checks.
         """
         self._assert_identity()
+        resource_policy = _resource_policy_value(resource_policy)
         construction = _construction_options(construction_effort,
             max_surface_points=max_surface_points, max_surface_chord_points=max_surface_chord_points,
             max_interior_candidates=max_interior_candidates, max_interior_sites=max_interior_sites)
@@ -328,7 +342,7 @@ class CadModel:
             max_seconds=max_seconds, face_sizes=face_sizes, volume_controls=volume_controls,
             min_size=min_size, growth=growth, native_sizing=native_sizing,
             warning_quality=warning_quality, minimum_quality=minimum_quality,
-            advancing_interior_front=advancing_interior_front, **construction)
+            advancing_interior_front=advancing_interior_front, resource_policy=resource_policy, **construction)
 
     def preview(self, selection=None, *, linear_deflection=.02, max_points=50000, max_triangles=100000):
         """Return owned, tagged display geometry for visual selection checks."""

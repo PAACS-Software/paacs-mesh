@@ -21,7 +21,8 @@ from ._cad_common import MAX_JSON_BYTES, json_text, load_json
 from .diagnostics import capabilities, diagnose, format_diagnostics
 from .mesh_archive import CELL_NAMES, atomic_bytes
 from .mesh_inspection import METRICS
-from .cad import _CONSTRUCTION_LIMITS, _DEFAULT_CONSTRUCTION_EFFORT
+from .cad import (_CONSTRUCTION_LIMITS, _DEFAULT_CONSTRUCTION_EFFORT, _DEFAULT_RESOURCE_POLICY,
+                  _RESOURCE_POLICIES)
 
 
 _COMMANDS = ("capabilities", "inspect", "diagnose", "run", "inspect-mesh", "visualize", "compare")
@@ -80,7 +81,19 @@ def _construction_cap(value):
     return result
 
 
+def _resource_cap(value):
+    try:
+        result = int(value)
+    except (TypeError, ValueError) as error:
+        raise argparse.ArgumentTypeError("resource limits must be positive integers") from error
+    if not 1 <= result <= 2 ** 63 - 1:
+        raise argparse.ArgumentTypeError("resource limits must be positive integers below 2^63")
+    return result
+
+
 def _construction_arguments(parser):
+    parser.add_argument("--resource-policy", choices=_RESOURCE_POLICIES, default=_DEFAULT_RESOURCE_POLICY,
+                        help="normal or bounded resource admission (default: %(default)s); explicit limits still apply")
     parser.add_argument("--construction-effort", choices=("legacy", "auto", "thorough"), default=_DEFAULT_CONSTRUCTION_EFFORT,
                         help="bounded construction allowance policy (default: %(default)s); validity checks stay enabled")
     for name in _CONSTRUCTION_LIMITS:
@@ -111,7 +124,10 @@ def _legacy(argv):
                         help="force spatial sizing or retain legacy cap sizing; automatic with controls")
     parser.add_argument("--advancing-interior-front", action=argparse.BooleanOptionalAction, default=None,
                         help="select advancing initial Tet4 placement or the legacy constructor; automatic by default")
-    parser.add_argument("--max-work", type=int, help="native meshing and validation work budget")
+    parser.add_argument("--max-work", type=_resource_cap, help="explicit native logical work ceiling; overrides the resource policy")
+    parser.add_argument("--max-working-bytes", type=_resource_cap, help="modeled native working memory allowance in bytes")
+    parser.add_argument("--max-nodes", type=_resource_cap, help="maximum output nodes")
+    parser.add_argument("--max-cells", type=_resource_cap, help="maximum output cells")
     parser.add_argument("--max-seconds", type=float, help="cooperative native cancellation deadline")
     parser.add_argument("--warning-quality", type=float,
                         help="preferred mean-ratio quality in [0,1]; 0 disables warnings")
@@ -129,6 +145,8 @@ def _legacy(argv):
                               face_sizes=face_sizes, volume_controls=volume_controls,
                               min_size=args.min_size, growth=args.growth,
                               native_sizing=args.native_sizing, max_work=args.max_work,
+                              max_working_bytes=args.max_working_bytes, max_nodes=args.max_nodes,
+                              max_cells=args.max_cells, resource_policy=args.resource_policy,
                               advancing_interior_front=args.advancing_interior_front,
                               max_seconds=args.max_seconds, warning_quality=args.warning_quality,
                               minimum_quality=args.minimum_quality,

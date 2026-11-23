@@ -29,7 +29,8 @@ from ._cad_common import (
 )
 from ._cad_intent import _group
 from .cad import (CadModel, FaceSelection, _CONSTRUCTION_FIELDS, _CONSTRUCTION_LIMITS, _DEFAULT_CONSTRUCTION_EFFORT,
-                  _construction_options, _selected_face_controls, read_step)
+                  _DEFAULT_RESOURCE_POLICY, _RESOURCE_FIELDS, _construction_options, _resource_policy_value,
+                  _selected_face_controls, read_step)
 
 
 RECIPE_SCHEMA = "paacs-mesh-recipe-v1"
@@ -40,7 +41,7 @@ _QUALITY_FIELDS = ("warning_quality", "minimum_quality")
 _PLACEMENT_FIELDS = ("advancing_interior_front",)
 _OPTION_FIELDS = {"size", "assembly", "workers", "validation_workers", "face_sizes",
                   "volume_controls", "min_size", "growth", "native_sizing", *_QUALITY_FIELDS,
-                  *_PLACEMENT_FIELDS, *_BUDGETS, *_CONSTRUCTION_FIELDS}
+                  *_PLACEMENT_FIELDS, *_BUDGETS, *_CONSTRUCTION_FIELDS, *_RESOURCE_FIELDS}
 _FATAL_REASONS = {"invalid_request", "unsupported_body", "unresolved_body_interface",
                   "unsupported_control", "budget_exceeded", "cancelled", "allocation_failed",
                   "internal_error", "publication_checks_failed"}
@@ -109,7 +110,8 @@ def _error_summary(report, original_reason):
             options = attempt.get("options", {})
             if isinstance(options, dict):
                 item["options_summary"] = {key: _small(options.get(key)) for key in
-                                            ("size", "recovery", "assembly", *_QUALITY_FIELDS, *_BUDGETS, *_CONSTRUCTION_FIELDS)}
+                                            ("size", "recovery", "assembly", *_QUALITY_FIELDS, *_BUDGETS,
+                                             *_CONSTRUCTION_FIELDS, *_RESOURCE_FIELDS)}
             result["attempts"].append(item)
     return result
 
@@ -225,10 +227,10 @@ def _intent(model):
 
 
 def _options(values):
-    # Older recipe-v1 files predate quality, placement and construction fields.
+    # Older recipe-v1 files predate quality, placement, construction and resource fields.
     # Construction absence is a historical legacy request, independent of any
     # future defaults for newly created requests. Unknown fields still fail.
-    required = _OPTION_FIELDS.difference(_QUALITY_FIELDS, _PLACEMENT_FIELDS, _CONSTRUCTION_FIELDS)
+    required = _OPTION_FIELDS.difference(_QUALITY_FIELDS, _PLACEMENT_FIELDS, _CONSTRUCTION_FIELDS, _RESOURCE_FIELDS)
     if not isinstance(values, dict) or not required <= values.keys() or values.keys() - _OPTION_FIELDS:
         raise ValueError("Recipe meshing options have unsupported or missing fields")
     result = {"size": _positive(values["size"], "size"), "assembly": values["assembly"],
@@ -236,6 +238,9 @@ def _options(values):
               "validation_workers": integer(values["validation_workers"], "validation_workers"),
               "growth": number(values["growth"], "growth", minimum=1),
               "native_sizing": values["native_sizing"], "min_size": values["min_size"]}
+    # Saved absence always means the historical policy, even if new requests
+    # adopt another default. Do not rewrite requested None work into a number.
+    result["resource_policy"] = _resource_policy_value(values.get("resource_policy", "bounded"))
     result.update(_construction_options(values.get("construction_effort", "legacy"),
         **{key: values.get(key) for key in _CONSTRUCTION_LIMITS}))
     result["advancing_interior_front"] = values.get("advancing_interior_front")
@@ -310,6 +315,7 @@ def create_recipe(model, size, *, face_sizes=(), selected_face_sizes=(), volume_
                   warning_quality=None, minimum_quality=None, advancing_interior_front=None,
                   construction_effort=_DEFAULT_CONSTRUCTION_EFFORT, max_surface_points=None,
                   max_surface_chord_points=None, max_interior_candidates=None, max_interior_sites=None,
+                  resource_policy=_DEFAULT_RESOURCE_POLICY,
                   workers=1, validation_workers=1, max_nodes=None, max_cells=None,
                   max_work=None, max_output_bytes=None, max_working_bytes=None, max_audit_bytes=None,
                   allow_advanced=False, finer_factors=(), max_attempts=1, max_seconds=90,
@@ -343,7 +349,8 @@ def create_recipe(model, size, *, face_sizes=(), selected_face_sizes=(), volume_
             min_size=min_size, growth=growth, native_sizing=native_sizing,
             warning_quality=warning_quality, minimum_quality=minimum_quality,
             advancing_interior_front=advancing_interior_front,
-            construction_effort=construction_effort, max_surface_points=max_surface_points,
+            construction_effort=construction_effort, resource_policy=resource_policy,
+            max_surface_points=max_surface_points,
             max_surface_chord_points=max_surface_chord_points,
             max_interior_candidates=max_interior_candidates, max_interior_sites=max_interior_sites,
             max_nodes=max_nodes, max_cells=max_cells, max_work=max_work,
@@ -465,7 +472,7 @@ def _retry_allowed(reason, report, route):
 
 
 def _native_options(options, size, recovery, seconds):
-    result = {key: options[key] for key in ("assembly", "workers", "validation_workers", "min_size", "growth", "native_sizing", *_QUALITY_FIELDS, *_PLACEMENT_FIELDS, *_BUDGETS, *_CONSTRUCTION_FIELDS)}
+    result = {key: options[key] for key in ("assembly", "workers", "validation_workers", "min_size", "growth", "native_sizing", *_QUALITY_FIELDS, *_PLACEMENT_FIELDS, *_BUDGETS, *_CONSTRUCTION_FIELDS, *_RESOURCE_FIELDS)}
     result.update(size=size, recovery=recovery, max_seconds=seconds,
                   face_sizes=[_native.FaceSize(control["tag"], control["size"], growth=control["growth"])
                               for control in options["face_sizes"]],

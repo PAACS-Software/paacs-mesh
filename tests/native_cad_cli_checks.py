@@ -36,6 +36,8 @@ def main():
     parser.add_argument("executable", type=Path)
     parser.add_argument("--fixtures", type=Path,
                         default=Path(__file__).resolve().parent / "fixtures" / "cad")
+    parser.add_argument("--resource-checks-only", action="store_true",
+                        help="run only resource-policy admission and preservation regressions")
     args = parser.parse_args()
     executable = args.executable.resolve()
     rows = []
@@ -73,6 +75,47 @@ def main():
             rows.append({"case": name, "passed": True, "returncode": child.returncode,
                          "archive_preserved": not success, "result": receipt})
             return receipt
+
+        normal = run("normal_resource_admission", "cylinder.step",
+                     ("--resource-policy", "normal"), success=True, size=".7")
+        resource = normal.get("resources", {})
+        if (resource.get("policy") != "normal" or resource.get("requested_max_work") is not None
+                or resource.get("logical_work_cap_disabled") is not True
+                or resource.get("effective_max_work", 0) < 2**60
+                or resource.get("max_working_bytes") != 512 * 1024**2
+                or normal.get("audit_valid") is not True):
+            raise RuntimeError(f"Normal admission did not retain explicit resource evidence: {normal}")
+        for name, options in (
+                ("normal_explicit_work_before_policy", ("--max-work", "100000000", "--resource-policy", "normal")),
+                ("normal_explicit_work_after_policy", ("--resource-policy", "normal", "--max-work", "100000000"))):
+            explicit = run(name, "cylinder.step", (*options, "--max-working-bytes", str(1024**3)),
+                           success=True, size=".7")
+            resource = explicit.get("resources", {})
+            if (resource.get("policy") != "normal" or resource.get("requested_max_work") != 100_000_000
+                    or resource.get("effective_max_work") != 100_000_000
+                    or resource.get("logical_work_cap_disabled") is not False
+                    or resource.get("max_working_bytes") != 1024**3):
+                raise RuntimeError(f"Explicit work did not override Normal independent of flag order: {explicit}")
+        for name, options in (
+                ("normal_tiny_work", ("--max-work", "1")),
+                ("normal_tiny_working_memory", ("--max-working-bytes", "1024")),
+                ("normal_one_byte_working_memory", ("--max-working-bytes", "1")),
+                ("normal_tiny_nodes", ("--max-nodes", "5")),
+                ("normal_tiny_cells", ("--max-cells", "8"))):
+            refused = run(name, "cylinder.step", ("--resource-policy", "normal", *options),
+                          reason="budget-exceeded", size=".7")
+            if refused.get("resources", {}).get("policy") != "normal":
+                raise RuntimeError("Resource refusal lost the requested Normal policy")
+            if name == "normal_tiny_work" and (
+                    refused["resources"].get("effective_max_work") != 1
+                    or refused["resources"].get("logical_work_cap_disabled") is not False):
+                raise RuntimeError("Normal bypassed an explicit tiny work ceiling")
+        run("invalid_resource_policy", "cylinder.step", ("--resource-policy", "unexpected"), reason="invalid-request")
+        run("missing_resource_policy", "cylinder.step", ("--resource-policy",), reason="invalid-request")
+        if args.resource_checks_only:
+            print(json.dumps({"schema": "paacs-native-cad-cli-checks-v1", "passed": len(rows),
+                              "cases": rows}, indent=2, allow_nan=False))
+            return
 
         cylinder = run("legacy_native_cylinder", "cylinder.step",
                        ("--no-advancing-interior-front",), success=True)

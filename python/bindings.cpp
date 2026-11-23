@@ -299,6 +299,8 @@ struct MeshResult {
     double warningQuality = 0, minimumQuality = 0;
     unsigned workers = 1, validationWorkers = 1;
     geo::CadConstructionBudget construction;
+    std::optional<std::uint64_t> requestedWork;
+    std::uint64_t effectiveWork=0,workingBytes=0;
 
     std::vector<int> tags(int dimension) const {
         std::set<int> found;
@@ -337,6 +339,14 @@ struct MeshResult {
         constructionReport["max_interior_sites"] = requestedCap(construction.interiorSites);
         constructionReport["scope"] = "stage ceilings subordinate to overall resource limits; not a sizing certificate";
         r["construction"] = std::move(constructionReport);
+        py::dict resources;
+        resources["policy"] = construction.resourcePolicy==geo::CadResourcePolicy::Normal?"normal":"bounded";
+        resources["requested_max_work"] = requestedWork?py::cast(*requestedWork):py::none();
+        resources["effective_max_work"] = effectiveWork;
+        resources["logical_work_cap_disabled"] = construction.resourcePolicy==geo::CadResourcePolicy::Normal&&!requestedWork;
+        resources["max_working_bytes"] = workingBytes;
+        resources["scope"] = "logical native admission and modeled memory; not CPU instructions or a process RSS limit";
+        r["resources"] = std::move(resources);
         r["workers"] = workers;
         r["validation_workers"] = validationWorkers;
         // Early refusals may retain the native outcome's default policy. With
@@ -438,6 +448,31 @@ struct MeshResult {
             placement["source_candidates"] = initial.sourceCandidates;
             placement["source_deferred_faces"] = initial.sourceDeferredFaces;
             placement["source_phase_deferred"] = initial.sourcePhaseDeferred;
+            placement["cones"] = initial.cones;
+            placement["propagated_sites"] = initial.propagatedSites;
+            placement["remaining_faces"] = initial.remainingFaces;
+            placement["storage_rejections"] = initial.storageRejections;
+            placement["compactions"] = initial.compactions;
+            placement["retired_cells_reclaimed"] = initial.retiredCellsReclaimed;
+            placement["compaction_work"] = initial.compactionWork;
+            placement["auxiliary_stored_cells"] = initial.auxiliaryStoredCells;
+            placement["auxiliary_live_cells"] = initial.auxiliaryLiveCells;
+            placement["auxiliary_stored_peak"] = initial.auxiliaryStoredPeak;
+            placement["auxiliary_storage_capacity"] = initial.auxiliaryStorageCapacity;
+            placement["compaction_peak_modeled_bytes"] = initial.compactionPeakModeledBytes;
+            placement["auxiliary_working_bytes"] = initial.auxiliaryWorkingBytes;
+            placement["auxiliary_imported_cells"] = initial.auxiliaryImportedCells;
+            placement["auxiliary_import_work"] = initial.auxiliaryImportWork;
+            placement["auxiliary_import_modeled_bytes"] = initial.auxiliaryImportModeledBytes;
+            placement["auxiliary_initial_capacity"] = initial.auxiliaryInitialCapacity;
+            placement["auxiliary_hard_capacity"] = initial.auxiliaryHardCapacity;
+            placement["auxiliary_growth_attempts"] = initial.auxiliaryGrowthAttempts;
+            placement["auxiliary_growths"] = initial.auxiliaryGrowths;
+            placement["auxiliary_growth_work"] = initial.auxiliaryGrowthWork;
+            placement["maximum_combined_modeled_bytes"] = initial.maximumCombinedModeledBytes;
+            placement["maximum_heap_capacity"] = initial.maximumHeapCapacity;
+            placement["resource_retries"] = initial.resourceRetries;
+            placement["auxiliary_resource_diagnostic"] = initial.auxiliaryResourceDiagnostic;
             b["initial_front"] = std::move(placement);
             py::list surfaceSpacing;
             for(const auto& face:body.surfaceSpacing){
@@ -585,8 +620,10 @@ struct CadModel {
         const py::object& minimumQuality, const py::object& advancingInteriorFront,
         const std::string& constructionEffort, const py::object& maxSurfacePoints,
         const py::object& maxSurfaceChordPoints, const py::object& maxInteriorCandidates,
-        const py::object& maxInteriorSites) {
-        geo::NativeCadMeshOptions options;
+        const py::object& maxInteriorSites, const std::string& resourcePolicy) {
+        if(resourcePolicy!="normal"&&resourcePolicy!="bounded")
+            throw py::value_error("resource_policy must be 'normal' or 'bounded'");
+        auto options=resourcePolicy=="normal"?geo::normalNativeCadMeshOptions():geo::NativeCadMeshOptions{};
         options.geometry.targetSize = positiveNumber(size, "size");
         if(constructionEffort=="legacy")options.construction.effort=geo::CadConstructionEffort::Legacy;
         else if(constructionEffort=="auto")options.construction.effort=geo::CadConstructionEffort::Automatic;
@@ -680,6 +717,9 @@ struct CadModel {
         result->requestedAssembly = assembly;
         result->sizing = std::move(sizing);
         result->construction = options.construction;
+        if(!maxWork.is_none())result->requestedWork=positiveInteger(maxWork,"max_work");
+        result->effectiveWork=std::min(options.maximumValidationWork,options.geometry.maximumMeshingWork);
+        result->workingBytes=options.maximumPrimitiveWorkingBytes;
         result->requestedWarningQuality = requestedWarningQuality;
         result->requestedMinimumQuality = requestedMinimumQuality;
         result->requestedAdvancingInteriorFront = requestedPlacement;
@@ -983,6 +1023,7 @@ PYBIND11_MODULE(_native, m) {
              py::arg("advancing_interior_front") = py::none(),
              py::arg("construction_effort") = "legacy",
              py::arg("max_surface_points") = py::none(), py::arg("max_surface_chord_points") = py::none(),
-             py::arg("max_interior_candidates") = py::none(), py::arg("max_interior_sites") = py::none());
+             py::arg("max_interior_candidates") = py::none(), py::arg("max_interior_sites") = py::none(),
+             py::arg("resource_policy") = "bounded");
     m.def("read_step", &readStep, py::arg("path"), py::kw_only(), py::arg("max_file_bytes") = py::none(), py::arg("names") = true, py::arg("retain_source") = false);
 }

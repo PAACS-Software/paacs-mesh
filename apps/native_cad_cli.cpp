@@ -46,6 +46,7 @@ int runNativeCadCli(int argc,char** argv) {
     geo::NativeCadImportOptions io;geo::NativeCadImportOutcome cad;
     geo::NativeCadMeshOptions options;geo::NativeCadMeshOutcome result;mesh::Mesh mesh;
     bool report=false,archivePublished=false;double sizeFactor=0,importSeconds=0,growth=1.3;
+    std::optional<std::uint64_t> requestedWork;
     const auto started=std::chrono::steady_clock::now();
     const auto receipt=[&](const char* status,const char* reason) {
         if(!report)return;
@@ -75,6 +76,11 @@ int runNativeCadCli(int argc,char** argv) {
             <<",\"max_surface_chord_points\":"<<cap(construction.surfaceChordPointsPerFace)
             <<",\"max_interior_candidates\":"<<cap(construction.interiorCandidates)
             <<",\"max_interior_sites\":"<<cap(construction.interiorSites)<<"}"
+            <<",\"resources\":{\"policy\":\""<<(construction.resourcePolicy==geo::CadResourcePolicy::Normal?"normal":"bounded")
+            <<"\",\"requested_max_work\":"<<(requestedWork?std::to_string(*requestedWork):"null")
+            <<",\"effective_max_work\":"<<std::min(options.maximumValidationWork,options.geometry.maximumMeshingWork)
+            <<",\"logical_work_cap_disabled\":"<<(construction.resourcePolicy==geo::CadResourcePolicy::Normal&&!requestedWork?"true":"false")
+            <<",\"max_working_bytes\":"<<options.maximumPrimitiveWorkingBytes<<"}"
             <<",\"faces\":"<<cad.faces<<",\"curved_faces\":"<<cad.curvedFaces<<",\"edges\":"<<cad.edges
             <<",\"vertices\":"<<cad.vertices<<",\"nodes\":"<<mesh.nodeCount()<<",\"cells\":"<<mesh.cellCount()
             <<",\"auxiliary_faces\":"<<cad.auxiliaryFaces<<",\"auxiliary_edges\":"<<cad.auxiliaryEdges
@@ -224,6 +230,18 @@ int runNativeCadCli(int argc,char** argv) {
                 <<",\"source_candidates\":"<<b.initialFront.sourceCandidates
                 <<",\"source_deferred_faces\":"<<b.initialFront.sourceDeferredFaces
                 <<",\"source_phase_deferred\":"<<(b.initialFront.sourcePhaseDeferred?"true":"false")
+                <<",\"auxiliary_imported_cells\":"<<b.initialFront.auxiliaryImportedCells
+                <<",\"auxiliary_import_work\":"<<b.initialFront.auxiliaryImportWork
+                <<",\"auxiliary_import_modeled_bytes\":"<<b.initialFront.auxiliaryImportModeledBytes
+                <<",\"auxiliary_initial_capacity\":"<<b.initialFront.auxiliaryInitialCapacity
+                <<",\"auxiliary_hard_capacity\":"<<b.initialFront.auxiliaryHardCapacity
+                <<",\"auxiliary_growth_attempts\":"<<b.initialFront.auxiliaryGrowthAttempts
+                <<",\"auxiliary_growths\":"<<b.initialFront.auxiliaryGrowths
+                <<",\"auxiliary_growth_work\":"<<b.initialFront.auxiliaryGrowthWork
+                <<",\"maximum_combined_modeled_bytes\":"<<b.initialFront.maximumCombinedModeledBytes
+                <<",\"maximum_heap_capacity\":"<<b.initialFront.maximumHeapCapacity
+                <<",\"resource_retries\":"<<b.initialFront.resourceRetries
+                <<",\"auxiliary_resource_diagnostic\":\""<<b.initialFront.auxiliaryResourceDiagnostic<<"\""
                 <<",\"source_sweep_complete\":"<<(b.initialFront.sourceSweepComplete?"true":"false")
                 <<",\"void_queue_exhausted\":"<<(b.initialFront.voidQueueExhausted?"true":"false")
                 <<",\"maximum_unresolved_void_ratio\":"<<JsonFinite{b.initialFront.maximumUnresolvedVoidRatio}
@@ -326,7 +344,7 @@ int runNativeCadCli(int argc,char** argv) {
     };
     for(int i=1;i<argc;++i)report|=std::string_view(argv[i])=="--report-json"||std::string_view(argv[i])=="--independent-parts";
     try {
-        if(argc<4)throw std::invalid_argument("usage: paacs-cad-mesh input.step size output.paacsmesh --native-cad [--face-size tag size] [--native-sizing] [--size-box x0 y0 z0 x1 y1 z1 size] [--min-size h] [--growth g] [--report-json] [--trace-native-stages] [--independent-parts] [--local-partition-recovery] [--adaptive-tet-recovery] [--live-material-recovery] [--curvature-points-per-turn 0..64] [--trimmed-ray-witnesses] [--local-delaunay-refinement] [--advancing-interior-front|--no-advancing-interior-front] [--improve-tet-quality] [--improve-surface-spacing] [--regular-surface-front] [--no-improve-regular-quality] [--recovery-mode standard|advanced] [--recovery-seed N] [--recovery-retries 0..4] [--recovery-steiner-candidates 0..64] [--construction-effort legacy|auto|thorough] [--max-surface-points N] [--max-surface-chord-points N] [--max-interior-candidates N] [--max-interior-sites N]");
+        if(argc<4)throw std::invalid_argument("usage: paacs-cad-mesh input.step size output.paacsmesh --native-cad [--face-size tag size] [--native-sizing] [--size-box x0 y0 z0 x1 y1 z1 size] [--min-size h] [--growth g] [--report-json] [--trace-native-stages] [--independent-parts] [--local-partition-recovery] [--adaptive-tet-recovery] [--live-material-recovery] [--curvature-points-per-turn 0..64] [--trimmed-ray-witnesses] [--local-delaunay-refinement] [--advancing-interior-front|--no-advancing-interior-front] [--improve-tet-quality] [--improve-surface-spacing] [--regular-surface-front] [--no-improve-regular-quality] [--recovery-mode standard|advanced] [--recovery-seed N] [--recovery-retries 0..4] [--recovery-steiner-candidates 0..64] [--resource-policy normal|bounded] [--max-work N] [--max-working-bytes N] [--construction-effort legacy|auto|thorough] [--max-surface-points N] [--max-surface-chord-points N] [--max-interior-candidates N] [--max-interior-sites N]");
         options.geometry.targetSize=number<double>(argv[2]);
         for(int i=4;i<argc;++i) {
             const std::string_view a(argv[i]);
@@ -398,7 +416,13 @@ int runNativeCadCli(int argc,char** argv) {
             else if(a=="--max-bytes"&&i+1<argc)options.geometry.maximumOutputBytes=number<std::uint64_t>(argv[++i]);
             else if(a=="--max-working-bytes"&&i+1<argc)options.maximumPrimitiveWorkingBytes=number<std::uint64_t>(argv[++i]);
             else if(a=="--max-audit-bytes"&&i+1<argc)options.geometry.maximumAuditTemporaryBytes=number<std::uint64_t>(argv[++i]);
-            else if(a=="--max-work"&&i+1<argc) { options.maximumValidationWork=number<std::uint64_t>(argv[++i]);options.geometry.maximumMeshingWork=options.maximumValidationWork; }
+            else if(a=="--resource-policy"&&i+1<argc){
+                const std::string_view policy(argv[++i]);
+                if(policy=="normal")options.construction.resourcePolicy=geo::CadResourcePolicy::Normal;
+                else if(policy=="bounded")options.construction.resourcePolicy=geo::CadResourcePolicy::Bounded;
+                else throw std::invalid_argument("resource policy must be normal or bounded");
+            }
+            else if(a=="--max-work"&&i+1<argc) { requestedWork=number<std::uint64_t>(argv[++i]);options.maximumValidationWork=*requestedWork;options.geometry.maximumMeshingWork=*requestedWork; }
             else if(a=="--max-chord-error"&&i+1<argc)options.maximumChordError=number<double>(argv[++i]);
             else if(a=="--max-volume-error"&&i+1<argc)options.maximumRelativeVolumeError=number<double>(argv[++i]);
             else if(a=="--min-quality"&&i+1<argc)options.geometry.minimumElementQuality=number<double>(argv[++i]);
@@ -420,6 +444,10 @@ int runNativeCadCli(int argc,char** argv) {
             else if(a=="--elements"&&i+1<argc) {const std::string_view e(argv[++i]);if(e=="tet4")options.elements=algo::PrimitiveElements::Tet4;
                 else if(e=="native"||e=="hex")options.elements=algo::PrimitiveElements::HexDominant;else throw std::invalid_argument("native CAD supports tet4 or native linear cells");}
             else throw std::invalid_argument("unknown or incomplete native CAD option");
+        }
+        if(options.construction.resourcePolicy==geo::CadResourcePolicy::Normal&&!requestedWork){
+            options.maximumValidationWork=geo::cadNormalWorkAllowance;
+            options.geometry.maximumMeshingWork=geo::cadNormalWorkAllowance;
         }
         if(!std::isfinite(sizeFactor)||sizeFactor<0)throw std::invalid_argument("invalid size factor");
         std::error_code aliasError;

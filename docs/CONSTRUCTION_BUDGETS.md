@@ -44,14 +44,17 @@ structured-constructor or kernel-tessellation support. A cap is a ceiling on
 added points or proposals, not a requested node count. Existing boundary points
 are not counted as new spacing points.
 
-`auto` estimates allowances from boundary density, requested sizes and available
-resources. `thorough` requests a larger estimate, still bounded by those
-resources. Both reserve construction effort for bulk placement before resuming
+With bounded admission, `auto` estimates allowances from boundary density,
+requested sizes and available resources. `thorough` requests a larger estimate,
+still bounded by those resources. Both reserve construction effort for bulk placement before resuming
 deferred wall-front work. A reservation does not guarantee that candidates will
 be accepted: the same geometric and cell-shape checks still apply. Neither mode
-adds a volume sizing region.
+adds a volume sizing region. With normal admission, unset stage caps instead
+derive their ceilings from the remaining overall resources. Explicit stage
+caps remain authoritative under either resource policy.
 
-Leaving all caps unset with `legacy` retains the established construction path.
+Leaving all caps unset with `legacy` and `resource_policy="bounded"` retains
+the established construction path.
 Supplying an explicit cap also resolves its supporting query, storage and work
 allowances within the global budgets. Consequently, explicitly supplying an old
 point limit need not produce the same mesh as leaving every cap unset.
@@ -60,14 +63,75 @@ point limit need not produce the same mesh as leaving every cap unset.
 advancing interior front. Use the separate `advancing_interior_front` and
 `recovery` options to request their existing behaviour.
 
-Historical allocation is preserved by `legacy` with all four caps unset.
-Setting a cap explicitly also scales its supporting query, work and storage
-allowances within the overall limits. Even an explicit historical cap value
-can therefore produce different points.
+## Resource policy
+
+`resource_policy` is independent of construction effort and recovery. The
+initial development default is `bounded` while normal admission is qualified.
+
+| Policy | Omitted `max_work` | Explicit positive `max_work` |
+| --- | --- | --- |
+| `bounded` | Historical 50 million logical work allowance. | The supplied ceiling applies. |
+| `normal` | No practical logical-work ceiling; a finite internal overflow guard remains. | The supplied ceiling applies. |
+
+Normal admission uses the same validity requirements. It does not promote the
+experimental `auto` or `thorough` construction effort policies. Other resource
+allowances remain independent: omitted `max_working_bytes` retains the native
+512 MiB modeled allowance. Byte admission is not a hard operating-system RSS
+limit. Explicit node, cell, output, audit and cooperative time limits still
+apply. Work units count implementation-specific charged operations, not CPU
+instructions, elapsed seconds or elements.
+
+```python
+mesh = model.mesh(.5, resource_policy="normal", max_working_bytes=1024**3)
+mesh = model.mesh(.5, resource_policy="normal", max_work=100_000_000,
+                  max_working_bytes=1024**3, max_seconds=90)
+```
+
+The second request retains a finite work ceiling. Neither policy nor a larger
+allowance is a certificate of achieved sizing, preferred quality or solver
+adequacy. Inspect the actual stage receipts and independent measurements.
+
+### Native admission under normal policy
+
+Normal admission separates a future capacity ceiling from storage needed now.
+The initial interior front constructs its auxiliary Delaunay seed once, then
+admits the cells actually returned. It does not reserve or charge for importing
+every cell the request might eventually permit. Live storage grows between
+candidate batches, with headroom for current cells and bounded cavity work.
+Growth and compaction account for old and new arrays while both coexist;
+failed admission leaves the live topology intact. The front and bulk-candidate
+heap share the remaining modeled allowance with this auxiliary mesh. Work
+receipts include completed constructor attempts, imports, retries and storage
+copies, including work returned by a cancelled stage.
+
+Stages that do not coexist receive separate allowances. In particular, initial
+point placement retains the actual boundary and its related data without
+reserving a future volume front or apex cache. Later volume and recovery
+stages retain their own input and workspace envelopes. Normal curve sampling
+adapts its numerical integration to the curve and requested spacing; its
+segment and face-rebuilding ceilings come from model counts, index ranges and
+remaining node, work and memory limits. Native shared-edge, trim, orientation,
+chord and volume checks still apply. Increasing capacity does not remove
+geometric refusal or bounded local recovery/stall checks.
+
+These are logical stage-admission estimates, not a measurement or hard bound
+on whole-process resident memory. Native kernel workspaces, allocator overhead
+and other process state can differ from the model. A larger allowance also
+cannot make an unsupported geometric construction succeed. Requests still
+need measured CAD validity, element quality and achieved sizing; an admitted
+mesh can miss a requested sizing target without becoming an invalid mesh.
+
+The C++ aggregate `NativeCadMeshOptions{}` retains historical bounded defaults.
+Use `normalNativeCadMeshOptions()` to opt into normal admission with its work
+allowances, then assign any explicit ceilings. Setting only
+`construction.resourcePolicy` on an existing options object does not erase
+work limits already stored in that object. Python and the CLI resolve omitted
+work from the selected policy. `auto` and `thorough` remain separate opt-ins.
 
 ## Saved recipes
 
-`create_recipe()` accepts the same five options. Save/load and every permitted
+`create_recipe()` accepts the same construction options and `resource_policy`.
+Save/load and every permitted
 retry preserve them. A finer retry changes the requested global size according
 to the saved policy; it does not silently increase construction caps or global
 resource budgets.
@@ -76,6 +140,10 @@ Older recipe-v1 files lack these fields. Each missing effort field resolves to
 the literal historical value `legacy`; each missing cap resolves to `None`.
 This normalization is independent of any future default for new requests.
 Source, kernel, engine, selection and other recipe guards remain active.
+An old recipe lacking `resource_policy` resolves to literal `bounded`, even if
+new requests later adopt another default. An omitted work value remains
+`None` in the recipe and is resolved by that saved policy. A recipe's workflow
+deadline remains separate from native resource policy.
 
 ## Command line
 
@@ -86,6 +154,11 @@ paacs-mesh part.step out.vtk --size 0.5 --construction-effort auto --max-surface
 The direct positional STEP command accepts these flags. `paacs-mesh run`
 replays the values from its saved recipe and accepts no ad hoc construction
 override flags.
+
+The direct command also accepts `--resource-policy normal|bounded`,
+`--max-work`, `--max-working-bytes`, `--max-nodes` and `--max-cells`. Saved
+`run` commands replay resource intent from the recipe; they do not accept
+resource override flags.
 
 ## Diagnostics
 
@@ -103,6 +176,13 @@ monotone error metric. `queue_exhausted` reports queue state; it does not certif
 achieved sizes, CAD fidelity, cell quality or simulation accuracy. A blocked
 candidate can indicate a geometric or construction limitation that a larger
 budget will not resolve.
+
+`maximum_unresolved_void_ratio` is a historical construction observation, not
+a final covering-radius or achieved-size certificate. Later front closure can
+change which regions remain unresolved. A finite value, zero or an exhausted
+queue must not be interpreted as proof that every requested size was met.
+The progressive storage receipts are documented in
+[diagnostic contracts](DIAGNOSTIC_SCHEMAS.md#construction-receipts-development).
 
 `diagnose()` emits `construction_budget_limited` when the native report records
 a limited stage, with its actual body and available face tags. This warning is

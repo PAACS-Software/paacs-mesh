@@ -128,6 +128,16 @@ See [construction effort and caps](CONSTRUCTION_BUDGETS.md) for per-face surface
 scope, native stage receipts, CLI flags and saved-recipe behaviour. These
 controls are not included in published RC3 wheels.
 
+Rebuilt development bindings also accept `resource_policy="bounded"` or
+`"normal"`. Bounded is the initial default while normal admission is qualified.
+An omitted `max_work` uses the policy allowance: 50 million logical units for
+bounded, or no practical logical ceiling for normal. An explicit positive work
+limit applies to either policy. Omitted modeled memory retains 512 MiB. Normal
+does not select experimental construction effort or certify achieved sizing.
+Saved recipes record policy, and old recipes missing it retain bounded
+semantics. The direct STEP CLI exposes `--resource-policy`, `--max-working-bytes`,
+`--max-nodes` and `--max-cells` alongside `--max-work` and `--max-seconds`.
+
 ## Package distribution
 
 The [publishing workflow](../.github/workflows/publish-python.yml) prepares the
@@ -324,8 +334,9 @@ mesh = model.mesh(
 ```
 
 Other limits are `max_work`, `max_output_bytes`, `max_working_bytes` and
-`max_audit_bytes`; `read_step` accepts `max_file_bytes`. Unspecified limits retain
-the native defaults. `max_working_bytes` bounds the primitive-route working
+`max_audit_bytes`; `read_step` accepts `max_file_bytes`. Omitted `max_work` is
+resolved by `resource_policy`; other unspecified limits retain native defaults.
+`max_working_bytes` bounds the primitive-route working
 budget. Byte limits cover their named native budgets, not process RSS.
 `max_seconds` requests cooperative cancellation during meshing; an OCCT
 operation can overrun the deadline. The deadline starts after the native

@@ -44,7 +44,8 @@ class ApiUsabilityTests(unittest.TestCase):
             volume_controls=None, min_size=None, growth=1.3, native_sizing=None,
             warning_quality=None, minimum_quality=None, advancing_interior_front=None,
             construction_effort="legacy", max_surface_points=None,
-            max_surface_chord_points=None, max_interior_candidates=None, max_interior_sites=None)
+            max_surface_chord_points=None, max_interior_candidates=None, max_interior_sites=None,
+            resource_policy=cad._DEFAULT_RESOURCE_POLICY)
         self.assertEqual(set(signature.parameters), {"self", "size", *expected})
         for name, default in expected.items():
             self.assertEqual(signature.parameters[name].default, default)

@@ -27,6 +27,7 @@ _BODY = ("solid_tag", "route", "reason", "surface_reason", "volume_reason", "cad
 def capabilities():
     """Describe implemented operations and restrictions; this is not a CAD guarantee."""
     from . import __version__, native_version
+    from .cad import _DEFAULT_RESOURCE_POLICY, _RESOURCE_POLICIES
 
     return {
         "schema": CAPABILITY_SCHEMA, "package_version": __version__, "engine_version": native_version,
@@ -50,6 +51,10 @@ def capabilities():
                      "spatial_sizing_requires": {"solids": 1, "assembly": "conforming", "cell_family": "Tet4"}},
         "recovery": {"default": "standard", "experimental": "advanced",
                      "recipe_retries": "explicit_bounded_diagnostic_selection"},
+        "resources": {"policies": list(_RESOURCE_POLICIES), "default": _DEFAULT_RESOURCE_POLICY,
+                      "explicit_limits_override_policy": True,
+                      "logical_work_is_cpu_instructions": False,
+                      "modeled_memory_is_OS_hard_limit": False},
         "assemblies": {"default": "preserve_parts", "interference": "reported_without_fusing",
                        "independent_parts_certify_global_nonoverlap": False},
         "diagnostics": {"schema": DIAGNOSTIC_SCHEMA, "native_report_summary": True,
@@ -356,6 +361,7 @@ def diagnose(report_or_mesh, *, max_issues=32):
                     "tetrahedra": native.get("tetrahedra"),
                     "native_hint": native.get("hint"),
                     "construction": native.get("construction"),
+                    "resources": native.get("resources"),
                     "quality": {key: quality.get(key) for key in _QUALITY}},
         "bodies": [body_summary(body) for body in bodies[:maximum]],
         "bodies_truncated": len(bodies) > maximum,

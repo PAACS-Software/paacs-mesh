@@ -98,9 +98,52 @@ The body's `initial_front` adds `budget_reason`, effective `candidate_limit`,
 `source_deferred_faces` and `source_phase_deferred`. Reservations record effort
 allocation, not guaranteed accepted bulk points. A nonfinite
 `maximum_unresolved_void_ratio` is emitted as `null`, indicating unavailable
-completion evidence rather than zero unresolved space. The full native body
+completion evidence rather than zero unresolved space. This historical
+construction observation is not a final covering-radius or achieved-sizing
+certificate: later front closure can change the unresolved regions. Neither a
+finite ratio nor queue exhaustion certifies that sizing targets were met.
+The full native body
 also exposes `native_surface_work`, `native_volume_work`,
 `native_surface_seconds` and `native_volume_seconds`.
+
+Progressive initial-front storage adds these receipts under `initial_front`:
+
+| Fields | Meaning |
+| --- | --- |
+| `auxiliary_imported_cells` | Cells actually installed from the initial numerical seed. This is not final output Tet4 count. |
+| `auxiliary_import_work` | Charged point/cell import operations; excludes the constructor's own work. |
+| `auxiliary_import_modeled_bytes` | Auxiliary bootstrap estimate while the candidate and staged imported complex coexist. |
+| `auxiliary_initial_capacity` | Admitted auxiliary cell capacity after successful bootstrap. |
+| `auxiliary_hard_capacity` | Current cell ceiling derived from the explicit limit and the auxiliary's current memory share. It can change as the front and heap use that shared allowance. |
+| `auxiliary_growth_attempts`, `auxiliary_growths` | Attempted and completed capacity-growth operations. An attempted operation can refuse without changing live cells. |
+| `auxiliary_growth_work` | Charged copies of occupied auxiliary arrays during growth, rather than a charge for empty future slots. |
+| `auxiliary_stored_cells`, `auxiliary_live_cells`, `auxiliary_stored_peak` | Current stored cells, current live cells and peak stored cells; stored arrays can include retired cells until compaction. |
+| `auxiliary_storage_capacity`, `auxiliary_working_bytes` | Current admitted cell capacity and modeled byte share of the auxiliary stage. Neither is the final mesh count or whole-process memory. |
+| `compactions`, `retired_cells_reclaimed`, `compaction_work` | Completed compactions, reclaimed retired cells and charged compaction work. |
+| `compaction_peak_modeled_bytes` | Auxiliary estimate admitting old and replacement storage together during compaction. |
+| `maximum_combined_modeled_bytes` | Largest recorded initial-placement admission estimate, including the enclosing boundary allowance and the front, bulk heap and auxiliary estimates. It is not a whole-job peak-memory measurement. |
+| `maximum_heap_capacity` | Peak modeled bulk-heap reservation in entry slots. During reallocation this includes old and new slots simultaneously; it is not maximum queue length. |
+| `resource_retries` | Source-face or bulk-candidate requeues for auxiliary compaction/capacity recovery. These are construction retries, not independent full meshing attempts. |
+| `auxiliary_resource_diagnostic` | Latest auxiliary resource stop or state diagnostic; inspect it with `budget_reason`, overall status and the other stage receipts. |
+
+Historical or inapplicable routes can omit these fields or leave their counters
+at zero. A zero does not establish that construction, sizing or validation
+completed. Byte fields use the native logical model; they do not measure
+operating-system resident memory or all native-kernel allocations. Capacity
+growth and compaction preserve geometric/certification checks. Completed work
+returned by an independent cancelled stage is included before its cancellation
+is propagated; incremental work callbacks check cancellation before another
+operation.
+
+Examples of auxiliary stop diagnostics are `bootstrap_fixed_memory`,
+`bootstrap_construction_budget`, `bootstrap_import_memory`,
+`bootstrap_actual_import_work`, `auxiliary_cell_limit` and
+`auxiliary_memory_limit`. Initial-front `budget_reason` can also report
+`combined_working_memory` or `auxiliary_resource_stalled`. These are native
+stage strings, not replacements for summary issue codes. A stop identifies an
+admission or progress limit; it does not prove that increasing it will resolve
+the geometry. Preserve unknown additive diagnostic strings when displaying
+reports.
 
 `construction_budget_limited` carries `surface_stages`, an available
 `initial_stage`, `sizing_completion_certified=False` and
@@ -111,6 +154,33 @@ Diagnostic summaries bound nested face-stage and identity lists by
 `max_issues`, with explicit totals and truncation flags. Consult the full native
 report for the complete receipts; an omitted identity is not evidence that its
 stage completed.
+
+## Native resource intent
+
+Development native mesh reports add `resources`, copied by `diagnose()` to
+`summary.resources` without re-certifying the mesh:
+
+| Field | Meaning |
+| --- | --- |
+| `policy` | Requested `normal` or `bounded` admission policy. |
+| `requested_max_work` | Explicit requested ceiling, or `null` when omitted. |
+| `effective_max_work` | Finite internal logical-work ceiling used by native admission. |
+| `logical_work_cap_disabled` | True only for normal policy with omitted work; a finite overflow guard remains. |
+| `max_working_bytes` | Effective modeled working allowance, not a hard process RSS cap. |
+| `scope` | Native description of accounting scope and restrictions. |
+
+Explicit positive work ceilings apply to both policies. Historical reports can
+omit this object; diagnostics then leave the summary field unavailable rather
+than inventing a policy or completion certificate. Capability discovery adds
+`resources.policies`, `default`, `explicit_limits_override_policy`,
+`logical_work_is_cpu_instructions` and `modeled_memory_is_OS_hard_limit`.
+
+The development Python/CLI default remains `bounded`; `normal` is explicit.
+Normal with omitted work retains the native 512 MiB modeled allowance unless
+the caller changes `max_working_bytes`. Explicit work, node, cell, output,
+validation, cancellation and cooperative time limits still apply. Normal
+admission does not select experimental `construction_effort="auto"` or
+`"thorough"`, relax validity gates or guarantee arbitrary CAD compatibility.
 
 ## Mesh exploration contracts
 
