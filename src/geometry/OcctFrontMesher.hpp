@@ -26,6 +26,7 @@ struct OcctFrontOutcome {
     std::uint64_t localDelaunaySupportNodes=0,localDelaunayRefinementNodes=0;
     unsigned localDelaunayQualityEdits=0;
     NativeCadInitialFrontReport initialFront;
+    NativeCadInitialTopologyQualityReport initialTopologyQuality;
     NativeCadSourceShellReport sourceShell;
     const char* interiorFrontDiagnostic="not_attempted";
     std::uint64_t interiorFrontNodes=0,interiorFrontCandidates=0;

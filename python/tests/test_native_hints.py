@@ -41,7 +41,7 @@ class NativeHintsTests(unittest.TestCase):
         self.assertEqual(policy["requested_advancing_interior_front"], report["requested_advancing_interior_front"])
         json.dumps(report, allow_nan=False)
 
-    def test_auto_route_differs_from_wrapper_policy(self):
+    def test_auto_route_uses_verified_whole_body_capability(self):
         report = self.uniform.report
         self.assert_native_routes(report)
         policy = report["effective_policy"]
@@ -49,9 +49,19 @@ class NativeHintsTests(unittest.TestCase):
         self.assertIsNone(policy["requested_advancing_interior_front"])
         self.assertEqual(policy["wrapper_sizing_mode"], "standard")
         self.assertFalse(policy["wrapper_native_sizing"])
-        self.assertEqual(policy["body_routes"][0]["route"], "native_spatial_sizing")
-        self.assertGreater(report["bodies"][0]["initial_front"]["nodes"], 0)
-        # A uniform request uses initial construction without adaptive sizing.
+        self.assertEqual(policy["body_routes"][0]["route"], "cylinder")
+        resolution = report["route_resolution"]
+        self.assertEqual(resolution["reason"], "verified_whole_body_primitive")
+        self.assertEqual(resolution["candidate"], "cylinder")
+        self.assertIs(resolution["preflight_attempted"], True)
+        self.assertIs(resolution["whole_body_verified"], True)
+        self.assertGreater(resolution["preflight_work"], 0)
+        self.assertEqual(report["bodies"][0]["route_resolution"], resolution)
+        self.assertEqual(report["bodies"][0]["initial_front"]["diagnostic"], "not_attempted")
+        self.assertEqual(report["bodies"][0]["initial_front"]["nodes"], 0)
+        self.assertTrue(report["audit"]["complete"] and report["audit"]["valid"])
+        self.assertTrue(report["quality"]["complete"] and report["quality"]["valid"])
+        # Verified uniform construction does not enter adaptive interior sizing.
         interior = report["bodies"][0]["interior_front"]
         self.assertEqual(interior["diagnostic"], "not_attempted")
         self.assertEqual(interior["nodes"], 0)
@@ -64,6 +74,10 @@ class NativeHintsTests(unittest.TestCase):
         self.assertTrue(report["quality"]["valid"])
         self.assertEqual(report["effective_policy"]["wrapper_sizing_mode"], "spatial")
         self.assertEqual(report["sizing"]["face_sizes"][0]["tag"], self.wall.tags[0])
+        self.assertEqual(report["effective_policy"]["body_routes"][0]["route"], "native_spatial_sizing")
+        self.assertEqual(report["route_resolution"]["reason"], "native_field_or_explicit_controls")
+        self.assertFalse(report["route_resolution"]["whole_body_verified"])
+        self.assertGreater(report["bodies"][0]["initial_front"]["nodes"], 0)
         interior = report["bodies"][0]["interior_front"]
         self.assertIn(interior["diagnostic"], {"budget_limited", "scaffold_refused", "targets_satisfied", "targets_unmet"})
         for key in ("nodes", "candidates", "work", "queries", "remaining_oversized",

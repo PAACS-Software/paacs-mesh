@@ -301,6 +301,23 @@ py::dict sourceShellReport(const geo::NativeCadSourceShellReport& source) {
     return r;
 }
 
+py::dict routeResolutionReport(const geo::NativeCadRouteResolutionReport& source) {
+    py::dict r;r["reason"]=source.reason;r["candidate"]=source.candidate;
+    r["preflight_attempted"]=source.preflightAttempted;r["whole_body_verified"]=source.wholeBodyVerified;
+    r["preflight_work"]=source.preflightWork;r["preflight_seconds"]=finiteValue(source.preflightSeconds);
+    r["fallback_chord_limit"]=source.fallbackChordLimit?finiteValue(*source.fallbackChordLimit):py::none();
+    py::list attempts;
+    for(std::size_t i=0;i<std::min<std::size_t>(source.count,source.attempts.size());++i){
+        const auto& a=source.attempts[i];py::dict row;
+        row["method"]=a.method;row["reason"]=geo::nativeCadMeshReasonName(a.reason);
+        row["published"]=a.published;row["work"]=a.work;row["seconds"]=finiteValue(a.seconds);
+        attempts.append(std::move(row));
+    }
+    r["attempts"]=std::move(attempts);
+    r["scope"]="method choice and charged attempts; not an element-size or solver certificate";
+    return r;
+}
+
 py::dict constraintRecoveryReport(const geo::NativeCadConstraintRecoveryReport& source) {
     py::dict r;
     r["diagnostic"]=source.diagnostic;
@@ -324,6 +341,28 @@ py::dict constraintRecoveryReport(const geo::NativeCadConstraintRecoveryReport& 
     return r;
 }
 
+py::dict initialTopologyQualityReport(const geo::NativeCadInitialTopologyQualityReport& source) {
+    py::dict r;
+    r["attempted"]=source.attempted;r["complete"]=source.completed;r["changed"]=source.changed;
+    r["cancelled"]=source.cancelled;r["budget_limited"]=source.budgetLimited;
+    r["summary_available"]=source.summaryAvailable;r["candidate_list_truncated"]=source.candidateListTruncated;
+    r["diagnostic"]=source.diagnostic;r["work"]=source.work;r["work_limit"]=source.workLimit;
+    r["seconds"]=finiteValue(source.seconds);r["peak_modeled_bytes"]=source.maximumModeledBytes;
+    r["search_below_mean_ratio"]=source.searchBelowMeanRatio;
+    r["candidates"]=source.candidates;r["proposals"]=source.proposals;r["certifications"]=source.certifications;
+    r["staged_edits"]=source.stagedEdits;r["edits"]=source.edits;
+    r["flips23"]=source.flips23;r["flips32"]=source.flips32;r["flips44"]=source.flips44;
+    r["live_before"]=source.liveBefore;r["live_after"]=source.liveAfter;
+    r["severe_before"]=source.severeBefore;r["severe_after"]=source.severeAfter;
+    r["protected_source_faces"]=source.protectedSourceFaces;r["protected_source_edges"]=source.protectedSourceEdges;
+    r["minimum_mean_ratio_before"]=source.summaryAvailable?finiteValue(source.minimumMeanRatioBefore):py::none();
+    r["minimum_mean_ratio_after"]=source.summaryAvailable?finiteValue(source.minimumMeanRatioAfter):py::none();
+    r["minimum_scaled_jacobian_before"]=source.summaryAvailable?finiteValue(source.minimumScaledJacobianBefore):py::none();
+    r["minimum_scaled_jacobian_after"]=source.summaryAvailable?finiteValue(source.minimumScaledJacobianAfter):py::none();
+    r["delaunay_certified"]=false;
+    r["scope"]="nonguard numerical cells including exterior; final Native audits remain required";
+    return r;
+}
 py::dict initialFallbackReport(const geo::NativeCadInitialFrontFallbackReport& fallback) {
     py::dict r;
     r["attempted"] = fallback.attempted;
@@ -404,6 +443,11 @@ struct MeshResult {
     std::string requestedAssembly;
     SizingRequest sizing;
     std::optional<double> requestedWarningQuality, requestedMinimumQuality;
+    std::optional<double> requestedChordError, requestedRelativeVolumeError;
+    double maximumRelativeVolumeError=.01;
+    std::optional<unsigned> requestedCurvaturePoints;
+    unsigned curvaturePoints=0;
+    std::optional<bool> requestedInitialTopologyQuality;
     std::optional<bool> requestedAdvancingInteriorFront;
     double warningQuality = 0, minimumQuality = 0;
     unsigned workers = 1, validationWorkers = 1;
@@ -456,6 +500,17 @@ struct MeshResult {
         resources["max_working_bytes"] = workingBytes;
         resources["scope"] = "logical native admission and modeled memory; not CPU instructions or a process RSS limit";
         r["resources"] = std::move(resources);
+        py::dict fidelity;
+        fidelity["requested_max_chord_error"]=py::cast(requestedChordError);
+        fidelity["requested_max_relative_volume_error"]=py::cast(requestedRelativeVolumeError);
+        fidelity["effective_max_relative_volume_error"]=maximumRelativeVolumeError;
+        fidelity["requested_curvature_points_per_turn"]=py::cast(requestedCurvaturePoints);
+        fidelity["effective_curvature_points_per_turn"]=curvaturePoints;
+        fidelity["chord_default"]=requestedChordError?"explicit":"route_specific";
+        fidelity["scope"]="native geometry acceptance limits; measured errors and achieved sizes are separate";
+        r["fidelity"]=std::move(fidelity);
+        r["route_resolution"]=routeResolutionReport(outcome.routeResolution);
+        r["requested_initial_topology_quality"]=py::cast(requestedInitialTopologyQuality);
         r["workers"] = workers;
         r["validation_workers"] = validationWorkers;
         // Early refusals may retain the native outcome's default policy. With
@@ -522,6 +577,32 @@ struct MeshResult {
             b["native_volume_work"] = body.nativeVolumeWork;
             b["native_surface_seconds"] = finiteValue(body.nativeSurfaceSeconds);
             b["native_volume_seconds"] = finiteValue(body.nativeVolumeSeconds);
+            b["native_partition_seconds"] = finiteValue(body.nativePartitionSeconds);
+            b["native_assembly_seconds"] = finiteValue(body.nativeAssemblySeconds);
+            b["partition_reason"]=body.partitionReason;
+            b["partition_policy"]=body.partitionPolicy;
+            b["partition_attempts"]=body.partitionAttempts;
+            b["partition_pieces"]=body.partitionPieces;
+            b["partition_interfaces"]=body.partitionInterfaces;
+            b["partition_work"]=body.partitionWork;
+            b["partition_volume_change"]=finiteValue(body.partitionVolumeChange);
+            b["partition_volume_admission"]=finiteValue(body.partitionVolumeAdmission);
+            b["sampled_partition_trim_witness"]=body.sampledPartitionTrimWitness;
+            b["partition_trim_samples"]=body.partitionTrimSamples;
+            b["maximum_partition_trim_drift"]=finiteValue(body.maximumPartitionTrimDrift);
+            b["maximum_partition_trim_tolerance_ratio"]=finiteValue(body.maximumPartitionTrimToleranceRatio);
+            b["surface_diagonal_repairs"]=body.surfaceDiagonalRepairs;
+            b["exact_surface_pairs"]=body.exactSurfacePairs;
+            b["kernel_trials"]=body.kernelTrials;
+            py::list partitionAttempts;
+            for(const auto& attempt:body.partitionAttemptReports){
+                py::dict row;row["policy"]=attempt.policy;row["diagnostic"]=attempt.diagnostic;
+                row["failed_piece_tag"]=attempt.failedPieceTag;row["pieces"]=attempt.pieces;
+                row["interfaces"]=attempt.interfaces;row["work"]=attempt.work;
+                row["seconds"]=finiteValue(attempt.seconds);row["surface_deflection"]=finiteValue(attempt.surfaceDeflection);
+                partitionAttempts.append(std::move(row));
+            }
+            b["partition_attempt_reports"]=std::move(partitionAttempts);
             b["cad_volume"] = finiteValue(body.cadVolume);
             b["mesh_volume"] = finiteValue(body.meshVolume);
             b["relative_volume_error"] = finiteValue(body.relativeVolumeError);
@@ -533,6 +614,14 @@ struct MeshResult {
             b["local_delaunay_refinement_nodes"] = body.localDelaunayRefinementNodes;
             b["surface_chord_error_limit"] = finiteValue(body.surfaceChordErrorLimit);
             b["source_shell"] = sourceShellReport(body.sourceShell);
+            b["initial_topology_quality"]=initialTopologyQualityReport(body.initialTopologyQuality);
+            b["route_resolution"]=routeResolutionReport(body.routeResolution);
+            py::dict bodyFidelity;
+            bodyFidelity["effective_max_chord_error"]=body.effectiveMaximumChordError?
+                finiteValue(*body.effectiveMaximumChordError):py::none();
+            bodyFidelity["chord_policy"]=body.chordErrorPolicy;
+            bodyFidelity["scope"]="selected construction limit; not a complete CAD distance certificate";
+            b["fidelity"]=std::move(bodyFidelity);
             b["constraint_recovery"] = constraintRecoveryReport(body.constraintRecovery);
             py::dict sizingApplication;
             sizingApplication["applied"]=py::cast(body.volumeSizingApplied);
@@ -591,6 +680,8 @@ struct MeshResult {
             placement["maximum_combined_modeled_bytes"] = initial.maximumCombinedModeledBytes;
             placement["maximum_heap_capacity"] = initial.maximumHeapCapacity;
             placement["resource_retries"] = initial.resourceRetries;
+            placement["geometry_refusal_cache_hits"] = initial.geometryRefusalCacheHits;
+            placement["cached_geometry_refusals"] = initial.cachedGeometryRefusals;
             placement["auxiliary_resource_diagnostic"] = initial.auxiliaryResourceDiagnostic;
             b["initial_front"] = std::move(placement);
             py::list surfaceSpacing;
@@ -739,11 +830,40 @@ struct CadModel {
         const py::object& minimumQuality, const py::object& advancingInteriorFront,
         const std::string& constructionEffort, const py::object& maxSurfacePoints,
         const py::object& maxSurfaceChordPoints, const py::object& maxInteriorCandidates,
-        const py::object& maxInteriorSites, const std::string& resourcePolicy) {
+        const py::object& maxInteriorSites, const std::string& resourcePolicy,
+        const py::object& maxChordError, const py::object& maxRelativeVolumeError,
+        const py::object& curvaturePointsPerTurn, const py::object& initialTopologyQuality) {
         if(resourcePolicy!="normal"&&resourcePolicy!="bounded")
             throw py::value_error("resource_policy must be 'normal' or 'bounded'");
         auto options=resourcePolicy=="normal"?geo::normalNativeCadMeshOptions():geo::NativeCadMeshOptions{};
         options.geometry.targetSize = positiveNumber(size, "size");
+        if(!initialTopologyQuality.is_none()){
+            if(!py::isinstance<py::bool_>(initialTopologyQuality))
+                throw py::type_error("initial_topology_quality must be bool or None");
+            options.initialTopologyQuality=initialTopologyQuality.cast<bool>();
+        }
+        std::optional<unsigned> requestedCurvaturePoints;
+        if(!curvaturePointsPerTurn.is_none()){
+            if(py::isinstance<py::bool_>(curvaturePointsPerTurn)||!PyIndex_Check(curvaturePointsPerTurn.ptr()))
+                throw py::type_error("curvature_points_per_turn must be an integer");
+            auto index=py::reinterpret_steal<py::object>(PyNumber_Index(curvaturePointsPerTurn.ptr()));
+            if(!index)throw py::error_already_set();
+            const auto value=PyLong_AsLong(index.ptr());
+            if(PyErr_Occurred())throw py::error_already_set();
+            if(value<0||value>64)throw py::value_error("curvature_points_per_turn must be between zero and 64");
+            requestedCurvaturePoints=static_cast<unsigned>(value);
+            options.curvaturePointsPerTurn=*requestedCurvaturePoints;
+        }
+        std::optional<double> requestedChordError, requestedRelativeVolumeError;
+        if(!maxChordError.is_none()){
+            requestedChordError=positiveNumber(maxChordError,"max_chord_error");
+            options.maximumChordError=*requestedChordError;
+        }
+        if(!maxRelativeVolumeError.is_none()){
+            requestedRelativeVolumeError=positiveNumber(maxRelativeVolumeError,"max_relative_volume_error");
+            if(*requestedRelativeVolumeError>=1)throw py::value_error("max_relative_volume_error must be less than one");
+            options.maximumRelativeVolumeError=*requestedRelativeVolumeError;
+        }
         if(constructionEffort=="legacy")options.construction.effort=geo::CadConstructionEffort::Legacy;
         else if(constructionEffort=="auto")options.construction.effort=geo::CadConstructionEffort::Automatic;
         else if(constructionEffort=="thorough")options.construction.effort=geo::CadConstructionEffort::Thorough;
@@ -841,6 +961,12 @@ struct CadModel {
         result->workingBytes=options.maximumPrimitiveWorkingBytes;
         result->requestedWarningQuality = requestedWarningQuality;
         result->requestedMinimumQuality = requestedMinimumQuality;
+        result->requestedChordError=requestedChordError;
+        result->requestedRelativeVolumeError=requestedRelativeVolumeError;
+        result->maximumRelativeVolumeError=options.maximumRelativeVolumeError;
+        result->requestedCurvaturePoints=requestedCurvaturePoints;
+        result->curvaturePoints=options.curvaturePointsPerTurn;
+        result->requestedInitialTopologyQuality=options.initialTopologyQuality;
         result->requestedAdvancingInteriorFront = requestedPlacement;
         result->warningQuality = options.geometry.warningElementQuality;
         result->minimumQuality = options.geometry.minimumElementQuality;
@@ -1143,6 +1269,8 @@ PYBIND11_MODULE(_native, m) {
              py::arg("construction_effort") = "legacy",
              py::arg("max_surface_points") = py::none(), py::arg("max_surface_chord_points") = py::none(),
              py::arg("max_interior_candidates") = py::none(), py::arg("max_interior_sites") = py::none(),
-             py::arg("resource_policy") = "normal");
+             py::arg("resource_policy") = "normal",
+             py::arg("max_chord_error") = py::none(), py::arg("max_relative_volume_error") = py::none(),
+             py::arg("curvature_points_per_turn") = py::none(), py::arg("initial_topology_quality") = py::none());
     m.def("read_step", &readStep, py::arg("path"), py::kw_only(), py::arg("max_file_bytes") = py::none(), py::arg("names") = true, py::arg("retain_source") = false);
 }

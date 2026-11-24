@@ -27,6 +27,8 @@ _DEFAULT_CONSTRUCTION_EFFORT = "legacy"
 _DEFAULT_RESOURCE_POLICY = "normal"
 _RESOURCE_POLICIES = ("normal", "bounded")
 _RESOURCE_FIELDS = ("resource_policy",)
+_FIDELITY_FIELDS = ("max_chord_error", "max_relative_volume_error")
+_CURVATURE_FIELDS = ("curvature_points_per_turn",)
 _CONSTRUCTION_LIMITS = ("max_surface_points", "max_surface_chord_points",
                         "max_interior_candidates", "max_interior_sites")
 _CONSTRUCTION_FIELDS = ("construction_effort", *_CONSTRUCTION_LIMITS)
@@ -35,6 +37,25 @@ _CONSTRUCTION_FIELDS = ("construction_effort", *_CONSTRUCTION_LIMITS)
 def _resource_policy_value(value):
     if not isinstance(value, str) or value not in _RESOURCE_POLICIES:
         raise ValueError("resource_policy must be normal or bounded")
+    return value
+
+
+def _fidelity_options(max_chord_error=None, max_relative_volume_error=None):
+    result = {}
+    for name, value in zip(_FIDELITY_FIELDS, (max_chord_error, max_relative_volume_error)):
+        if value is not None:
+            value = number(value, name, minimum=0)
+            if value == 0 or (name == "max_relative_volume_error" and value >= 1):
+                raise ValueError(f"{name} must be positive" + (" and less than one" if name == "max_relative_volume_error" else ""))
+        result[name] = value
+    return result
+
+
+def _curvature_value(value):
+    if value is not None:
+        value = integer(value, "curvature_points_per_turn", minimum=0)
+        if value > 64:
+            raise ValueError("curvature_points_per_turn must be between zero and 64")
     return value
 
 
@@ -298,7 +319,9 @@ class CadModel:
              advancing_interior_front=None, construction_effort=_DEFAULT_CONSTRUCTION_EFFORT,
              max_surface_points=None, max_surface_chord_points=None,
              max_interior_candidates=None, max_interior_sites=None,
-             resource_policy=_DEFAULT_RESOURCE_POLICY):
+             resource_policy=_DEFAULT_RESOURCE_POLICY,
+             max_chord_error=None, max_relative_volume_error=None, curvature_points_per_turn=None,
+             initial_topology_quality=None):
         """Generate an owned, audited Tet4 mesh; lengths and sizes are in mm.
 
         ``face_sizes`` contains native ``FaceSize`` controls. Alternatively,
@@ -324,6 +347,10 @@ class CadModel:
         """
         self._assert_identity()
         resource_policy = _resource_policy_value(resource_policy)
+        fidelity = _fidelity_options(max_chord_error, max_relative_volume_error)
+        curvature_points_per_turn = _curvature_value(curvature_points_per_turn)
+        if initial_topology_quality is not None:
+            boolean(initial_topology_quality, "initial_topology_quality")
         construction = _construction_options(construction_effort,
             max_surface_points=max_surface_points, max_surface_chord_points=max_surface_chord_points,
             max_interior_candidates=max_interior_candidates, max_interior_sites=max_interior_sites)
@@ -342,7 +369,10 @@ class CadModel:
             max_seconds=max_seconds, face_sizes=face_sizes, volume_controls=volume_controls,
             min_size=min_size, growth=growth, native_sizing=native_sizing,
             warning_quality=warning_quality, minimum_quality=minimum_quality,
-            advancing_interior_front=advancing_interior_front, resource_policy=resource_policy, **construction)
+            advancing_interior_front=advancing_interior_front, resource_policy=resource_policy,
+            curvature_points_per_turn=curvature_points_per_turn,
+            initial_topology_quality=initial_topology_quality,
+            **construction, **fidelity)
 
     def preview(self, selection=None, *, linear_deflection=.02, max_points=50000, max_triangles=100000):
         """Return owned, tagged display geometry for visual selection checks."""

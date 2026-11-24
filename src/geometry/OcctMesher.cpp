@@ -90,12 +90,18 @@ struct View final : Model {
     const GFace* face(int t) const override{return source.face(t);}
     const GSolid* solid(int t) const override{return source.solid(t);}
 };
+struct Work {
+    const NativeCadMeshOptions& o; std::uint64_t count=0;
+    void tick(std::uint64_t n=1) { need(n<=o.maximumValidationWork-count,NativeCadMeshReason::BudgetExceeded);count+=n;
+        if(o.geometry.cancellation&&o.geometry.cancellation->load(std::memory_order_relaxed)) throw Stop{NativeCadMeshReason::Cancelled}; }
+};
 struct Recognition {
     algo::PrimitiveShape shape;
     std::map<int,int> faces; // Primitive face identity -> imported face identity.
     bool analytic = false;
 };
-Recognition recognize(const OcctModel& m,const View& v,double relativeTolerance) {
+Recognition recognize(const OcctModel& m,const View& v,double relativeTolerance,Work* budget=nullptr) {
+    if(budget)budget->tick(v.fs.size()+v.es.size()+v.vs.size()+1);
     Recognition r;
     std::vector<const GFace*> curved, planes;
     for(auto f:v.fs) (f->kind()==SurfaceKind::Plane?planes:curved).push_back(f);
@@ -201,15 +207,77 @@ Recognition recognize(const OcctModel& m,const View& v,double relativeTolerance)
     arguments.Append(detail::OcctModelAccess::solid(m,v.body->tag()));
     tools.Append(expected);
     common.SetArguments(arguments); common.SetTools(tools);
+    if(budget)budget->tick();
     common.SetNonDestructive(true); common.Build();
+    if(budget)budget->tick();
     need(common.IsDone()&&std::abs(mass(common.Shape())-volume)<=volume*volumeTolerance,NativeCadMeshReason::RecognitionFailed);
     r.analytic=true; return r;
 }
-struct Work {
-    const NativeCadMeshOptions& o; std::uint64_t count=0;
-    void tick(std::uint64_t n=1) { need(n<=o.maximumValidationWork-count,NativeCadMeshReason::BudgetExceeded);count+=n;
-        if(o.geometry.cancellation&&o.geometry.cancellation->load(std::memory_order_relaxed)) throw Stop{NativeCadMeshReason::Cancelled}; }
-};
+bool structuredCapability(const OcctModel& model,const NativeCadMeshOptions& o,
+                          NativeCadRouteResolutionReport& receipt,Work& work) {
+    receipt.reason="native_field_or_explicit_controls";
+    if(o.construction.resourcePolicy!=CadResourcePolicy::Normal||
+       o.assemblyPolicy!=NativeCadAssemblyPolicy::ConformingDomain||o.useSpatialSizing||
+       !o.faceSizes.empty()||!o.sizeBoxes.empty()||o.geometry.spatialField||!o.geometry.bodyControls.empty()||
+       o.improveNativeSurfaceSpacing||o.useRegularSurfaceFront||o.curvaturePointsPerTurn||
+       o.improveNativeTetQuality||o.useLocalDelaunayRefinement||o.useLiveMaterialRecovery)
+        return false;
+    // Invalid requests retain the ordinary admission path and its diagnostics.
+    if(!(o.geometry.targetSize>0&&finite(o.geometry.targetSize)&&o.maximumChordError>=0&&finite(o.maximumChordError)&&
+         o.maximumRelativeVolumeError>0&&o.maximumRelativeVolumeError<1&&finite(o.maximumRelativeVolumeError)&&
+         o.geometry.relativeRecognitionTolerance>0&&o.geometry.relativeRecognitionTolerance<1e-3&&
+         o.maximumValidationWork>0&&o.geometry.maximumMeshingWork>0&&o.maximumPrimitiveWorkingBytes>0))return false;
+    const auto began=Clock::now();receipt.preflightAttempted=true;
+    const auto finish=[&]{receipt.preflightWork=work.count;receipt.preflightSeconds=elapsed(began);};
+    try {
+        work.tick();const auto solids=model.solids();
+        need(solids.size()==1,NativeCadMeshReason::UnsupportedBody);
+        View view(model,solids.front());
+        const auto entities=view.fs.size()+view.es.size()+view.vs.size();
+        need(entities<=o.geometry.maximumAnalysisWork&&entities<=o.maximumPrimitiveWorkingBytes/128,
+             NativeCadMeshReason::BudgetExceeded);
+        work.tick(entities);
+        const bool planar=std::all_of(view.fs.begin(),view.fs.end(),[](const auto* face){return face->kind()==SurfaceKind::Plane;});
+        if(!planar){
+            const auto recognized=recognize(model,view,o.geometry.relativeRecognitionTolerance,&work);
+            if(recognized.analytic){
+                receipt.candidate=algo::primitiveKindName(recognized.shape.kind);
+                receipt.wholeBodyVerified=true;receipt.reason="verified_whole_body_primitive";
+                receipt.fallbackChordLimit=o.maximumChordError>0?o.maximumChordError:.0025*recognized.shape.radius;
+                finish();return true;
+            }
+        }else{
+            auto geometry=o.geometry;
+            geometry.maximumAnalysisWork=std::min(geometry.maximumAnalysisWork,o.maximumValidationWork-work.count);
+            algo::GeometryBodyControl control;control.solidTag=solids.front()->tag();control.elements=algo::GeometryElements::Tet4;
+            geometry.bodyControls={control};
+            const auto analysis=algo::analyzeGeometryStrategies(view,geometry);
+            const bool exhausted=analysis.work>o.maximumValidationWork-work.count;
+            need(analysis.work<=UINT64_MAX-work.count,NativeCadMeshReason::InternalError);
+            work.count+=analysis.work;
+            if(exhausted)throw Stop{NativeCadMeshReason::BudgetExceeded};
+            work.tick(0);
+            if(analysis.reason==algo::GeometryReason::Cancelled)throw Stop{NativeCadMeshReason::Cancelled};
+            if(analysis.reason==algo::GeometryReason::AllocationFailed)throw Stop{NativeCadMeshReason::AllocationFailed};
+            if(analysis.reason==algo::GeometryReason::AnalysisBudget)throw Stop{NativeCadMeshReason::BudgetExceeded};
+            if(analysis.complete&&analysis.reason==algo::GeometryReason::None&&analysis.bodies.size()==1){
+                const auto strategy=analysis.bodies.front().strategy;
+                if(strategy==algo::GeometryStrategy::MappedHex8||strategy==algo::GeometryStrategy::LinearPrismSweep){
+                    receipt.candidate=algo::geometryStrategyName(strategy);
+                    receipt.wholeBodyVerified=true;receipt.reason="verified_whole_body_mapped_or_sweep";
+                    finish();return true;
+                }
+            }
+        }
+        receipt.reason="no_verified_structured_capability";finish();return false;
+    }catch(const Stop& stopped){
+        finish();
+        if(stopped.reason==NativeCadMeshReason::UnsupportedBody||stopped.reason==NativeCadMeshReason::RecognitionFailed){
+            receipt.reason="no_verified_structured_capability";return false;
+        }
+        throw;
+    }catch(...){finish();throw;}
+}
 struct BodyRange { int tag; Index begin, end; };
 struct ContactTriangle { std::array<Vec3,3> p; Vec3 lo,hi; };
 struct ContactBox { Vec3 lo,hi; std::size_t begin,end,left=0,right=0; };
@@ -734,7 +802,24 @@ bool nativePartitionFallback(const OcctModel& model,const View& view,const Nativ
                  std::string_view(result.diagnostic)=="interior-node-outside-original-solid");
         }
         report.recoverySteinerNodes+=recovered.steinerNodes;
-        work.tick(result.workUsed);report.partitionWork+=result.partitionWork;
+        report.partitionWork+=result.partitionWork;
+        report.nativeCandidateQueries+=result.nativeCandidateQueries;
+        report.surfaceDiagonalRepairs+=result.surfaceDiagonalRepairs;
+        report.nativeSurfaceWork+=result.surfaceWork;report.nativeVolumeWork+=result.starWork;
+        report.nativeSurfaceSeconds+=result.surfaceSeconds;report.nativeVolumeSeconds+=result.starSeconds;
+        report.nativePartitionSeconds+=result.partitionSeconds;report.nativeAssemblySeconds+=result.assemblySeconds;
+        report.partitionReason=result.diagnostic;
+        report.partitionPolicy=attempt.name;
+        report.partitionPieces=result.pieces;report.partitionInterfaces=result.interfaces;
+        report.partitionVolumeChange=result.partitionVolumeChange;
+        report.partitionVolumeAdmission=po.partition.maximumRelativeVolumeChange;
+        // The returned attempt has already spent its work and wall time. Keep
+        // its receipt before tick observes cancellation. If receipt allocation
+        // fails, completed work must still consume the same cumulative cap.
+        try{report.partitionAttemptReports.push_back({report.partitionPolicy,result.diagnostic,result.failedPieceTag,
+            result.pieces,result.interfaces,result.workUsed,result.totalSeconds,deflection});}
+        catch(...){work.tick(result.workUsed);throw;}
+        work.tick(result.workUsed);
         // The earlier failed native attempt already paid for and checked these
         // original-body cuts. Replay that complete arrangement once with the
         // appended PLC recovery, retaining the earlier work charge and leaving
@@ -750,18 +835,6 @@ bool nativePartitionFallback(const OcctModel& model,const View& view,const Nativ
             for(const auto& cut:result.adaptiveCutReports)retainedRecoveryPlanes.push_back(cut.plane);
             retainedRecoveryDeflection=deflection;
         }
-        report.nativeCandidateQueries+=result.nativeCandidateQueries;
-        report.surfaceDiagonalRepairs+=result.surfaceDiagonalRepairs;
-        report.nativeSurfaceWork+=result.surfaceWork;report.nativeVolumeWork+=result.starWork;
-        report.nativeSurfaceSeconds+=result.surfaceSeconds;report.nativeVolumeSeconds+=result.starSeconds;
-        report.nativePartitionSeconds+=result.partitionSeconds;report.nativeAssemblySeconds+=result.assemblySeconds;
-        report.partitionReason=result.diagnostic;
-        report.partitionPolicy=attempt.name;
-        report.partitionAttemptReports.push_back({report.partitionPolicy,result.diagnostic,result.failedPieceTag,
-            result.pieces,result.interfaces,result.workUsed,result.totalSeconds,deflection});
-        report.partitionPieces=result.pieces;report.partitionInterfaces=result.interfaces;
-        report.partitionVolumeChange=result.partitionVolumeChange;
-        report.partitionVolumeAdmission=po.partition.maximumRelativeVolumeChange;
         if(result.reason==OcctPartitionMeshReason::Cancelled)throw Stop{NativeCadMeshReason::Cancelled};
         if(result.reason==OcctPartitionMeshReason::AllocationFailed)throw Stop{NativeCadMeshReason::AllocationFailed};
         if(result.reason==OcctPartitionMeshReason::BudgetExceeded){
@@ -856,7 +929,7 @@ bool nativeLongitudinalFallback(const OcctModel& model,const View& view,const Na
         recovery.onlyFinalAdaptiveAttempt=false;recovery.maximumPieceWork=std::min<std::uint64_t>(3000000,request.maximumWork);
         OcctPartitionRecoveryReceipt recovered;
         const auto result=buildOcctPartitionVolume(model,view.body->tag(),request,recovery,body,&recovered);
-        work.tick(result.workUsed);report.partitionWork+=result.partitionWork;
+        report.partitionWork+=result.partitionWork;
         report.nativeSurfaceWork+=result.surfaceWork;report.nativeVolumeWork+=result.starWork;
         report.nativeSurfaceSeconds+=result.surfaceSeconds;report.nativeVolumeSeconds+=result.starSeconds;
         report.nativePartitionSeconds+=result.partitionSeconds;report.nativeAssemblySeconds+=result.assemblySeconds;
@@ -868,7 +941,12 @@ bool nativeLongitudinalFallback(const OcctModel& model,const View& view,const Na
         report.partitionTrimSamples=result.trimTolerance.samples;
         report.maximumPartitionTrimDrift=result.trimTolerance.maximumPhysicalDrift;
         report.maximumPartitionTrimToleranceRatio=result.trimTolerance.maximumToleranceRatio;
-        report.partitionAttemptReports.push_back({name,result.diagnostic,result.failedPieceTag,result.pieces,result.interfaces,result.workUsed,result.totalSeconds,request.boundary.linearDeflection});
+        // Preserve the cancelled attempt's partial stage receipts before
+        // observing its stop token, without losing work on allocation failure.
+        try{report.partitionAttemptReports.push_back({name,result.diagnostic,result.failedPieceTag,result.pieces,
+            result.interfaces,result.workUsed,result.totalSeconds,request.boundary.linearDeflection});}
+        catch(...){work.tick(result.workUsed);throw;}
+        work.tick(result.workUsed);
         if(result.reason==OcctPartitionMeshReason::Cancelled)throw Stop{NativeCadMeshReason::Cancelled};
         if(result.reason==OcctPartitionMeshReason::AllocationFailed)throw Stop{NativeCadMeshReason::AllocationFailed};
         if(result.reason==OcctPartitionMeshReason::InternalError)throw Stop{NativeCadMeshReason::InternalError};
@@ -951,18 +1029,27 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
         const auto automaticStarted=Clock::now();
         NativeCadMeshOutcome trial;
         NativeCadInitialFrontFallbackReport fallbackReport;
+        NativeCadRouteResolutionReport resolution;
+        Work selectionWork{o};
+        const auto attachResolution=[&](NativeCadMeshOutcome& result){
+            result.routeResolution=resolution;
+            for(auto& body:result.bodies)body.routeResolution=resolution;
+        };
         // No allocation may occur while returning a result after publication.
         static_assert(std::is_nothrow_move_constructible_v<NativeCadMeshOutcome>);
         const auto failedAutomatic=[&](NativeCadMeshReason reason){
             trial.published=false;trial.destinationUnchanged=true;trial.reason=reason;
             trial.initialFrontFallback=fallbackReport;
+            if(trial.validationWork<selectionWork.count)trial.validationWork=selectionWork.count;
+            trial.preparationSeconds=std::max(trial.preparationSeconds,resolution.preflightSeconds);
+            attachResolution(trial);
             for(auto& body:trial.bodies){body.reason=reason;body.initialFrontFallback=fallbackReport;}
             trial.totalSeconds=elapsed(automaticStarted);
             return std::move(trial);
         };
         try {
             const auto solidCount=model.solids().size();
-            const bool enabled=o.advancingInteriorFrontEnabled(solidCount);
+            bool enabled=o.advancingInteriorFrontEnabled(solidCount);
             if(enabled&&o.maximumValidationWork!=o.geometry.maximumMeshingWork){
                 // AUTO construction, source checks and final validation share
                 // both original ceilings, including an independent wrapper's
@@ -984,10 +1071,29 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
             const bool deferToSinglePart=enabled&&solidCount==1&&
                 o.assemblyPolicy==NativeCadAssemblyPolicy::IndependentParts;
             if(!deferToSinglePart){
+                bool structured=false;
+                if(enabled&&o.construction.resourcePolicy==CadResourcePolicy::Normal)
+                    structured=structuredCapability(model,o,resolution,selectionWork);
+                else resolution.reason=o.construction.resourcePolicy==CadResourcePolicy::Bounded?
+                    "historical_bounded_dispatch":"automatic_legacy_dispatch";
+                if(structured)enabled=false;
+                if(!structured)resolution.candidate=enabled?"native_front":"legacy_dispatch";
+                if(selectionWork.count)need(selectionWork.count<std::min(o.maximumValidationWork,o.geometry.maximumMeshingWork),
+                                           NativeCadMeshReason::BudgetExceeded);
                 auto resolved=o;resolved.useAdvancingInteriorFront=enabled;
+                resolved.maximumValidationWork-=selectionWork.count;
+                resolved.geometry.maximumMeshingWork-=selectionWork.count;
                 const auto trialStarted=Clock::now();
-                trial=meshNativeCad(model,resolved,destination);
+                mesh::Mesh firstCandidate;
+                trial=meshNativeCad(model,resolved,firstCandidate);
                 const auto trialSeconds=elapsed(trialStarted);
+                resolution.attempts[resolution.count++]={enabled?"native_front":"legacy_dispatch",
+                    trial.reason,trial.published,trial.validationWork,trialSeconds};
+                trial.destinationUnchanged=true;
+                need(trial.validationWork<=resolved.maximumValidationWork&&
+                     trial.validationWork<=resolved.geometry.maximumMeshingWork,NativeCadMeshReason::BudgetExceeded);
+                trial.validationWork+=selectionWork.count;
+                trial.preparationSeconds+=resolution.preflightSeconds;
                 const bool sourceRefusal=trial.reason==NativeCadMeshReason::GeometryError||
                     trial.reason==NativeCadMeshReason::UnsupportedBody||
                     trial.reason==NativeCadMeshReason::RecognitionFailed||
@@ -997,16 +1103,20 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
                         return body.initialFront.diagnostic&&
                             std::string_view(body.initialFront.diagnostic)=="not_attempted";
                     });
-                if(enabled&&!trial.published&&trial.destinationUnchanged&&sourceRefusal&&beforeInitialStage&&
+                if((structured||(enabled&&beforeInitialStage))&&!trial.published&&trial.destinationUnchanged&&sourceRefusal&&
                    trial.validationWork<o.maximumValidationWork&&trial.validationWork<o.geometry.maximumMeshingWork){
                     if(o.geometry.cancellation&&o.geometry.cancellation->load(std::memory_order_relaxed))
                         return failedAutomatic(NativeCadMeshReason::Cancelled);
-                    fallbackReport={true,trial.reason,trial.validationWork,trialSeconds,
-                        trial.bodies.front().nativeSurfaceReason?trial.bodies.front().nativeSurfaceReason:"not_attempted"};
-                    fallbackReport.volumeDiagnostic=trial.bodies.front().nativeVolumeReason?
-                        trial.bodies.front().nativeVolumeReason:"not_attempted";
-                    fallbackReport.sourceShell=trial.bodies.front().sourceShell;
-                    auto legacy=o;legacy.useAdvancingInteriorFront=false;
+                    if(!structured){
+                        fallbackReport={true,trial.reason,trial.validationWork,trialSeconds,
+                            trial.bodies.front().nativeSurfaceReason?trial.bodies.front().nativeSurfaceReason:"not_attempted"};
+                        fallbackReport.volumeDiagnostic=trial.bodies.front().nativeVolumeReason?
+                            trial.bodies.front().nativeVolumeReason:"not_attempted";
+                        fallbackReport.sourceShell=trial.bodies.front().sourceShell;
+                    }
+                    auto legacy=o;legacy.useAdvancingInteriorFront=structured;
+                    if(structured&&resolution.fallbackChordLimit)
+                        legacy.maximumChordError=*resolution.fallbackChordLimit;
                     // Work::tick enforces the validation admission while some
                     // legacy constructors separately enforce the meshing cap.
                     // Give execution their shared remaining allowance, rather
@@ -1019,7 +1129,11 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
                     // budgets, counters and cancellation are checked before the
                     // caller's destination can be changed.
                     mesh::Mesh candidate;
+                    const auto retryStarted=Clock::now();
                     auto retry=meshNativeCad(model,legacy,candidate);
+                    resolution.attempts[resolution.count++]={structured?"native_front":"legacy_dispatch",
+                        retry.reason,retry.published,retry.validationWork,elapsed(retryStarted)};
+                    if(structured)for(auto& body:retry.bodies)body.sourceShell.requestedChordError=o.maximumChordError;
                     retry.destinationUnchanged=true;
                     retry.initialFrontFallback=fallbackReport;
                     for(auto& body:retry.bodies)body.initialFrontFallback=fallbackReport;
@@ -1035,15 +1149,21 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
                     if(o.geometry.cancellation&&o.geometry.cancellation->load(std::memory_order_relaxed)){
                         retry.published=false;retry.reason=NativeCadMeshReason::Cancelled;
                     }
+                    attachResolution(retry);
                     if(retry.published){destination.swap(candidate);retry.destinationUnchanged=false;}
                     else for(auto& body:retry.bodies)body.reason=retry.reason;
                     retry.totalSeconds=elapsed(automaticStarted);
                     return retry;
                 }
+                if(o.geometry.cancellation&&o.geometry.cancellation->load(std::memory_order_relaxed))
+                    return failedAutomatic(NativeCadMeshReason::Cancelled);
+                attachResolution(trial);
+                if(trial.published){destination.swap(firstCandidate);trial.destinationUnchanged=false;}
                 trial.totalSeconds=elapsed(automaticStarted);
                 return trial;
             }
-        }catch(const Standard_OutOfMemory&){return failedAutomatic(NativeCadMeshReason::AllocationFailed);}
+        }catch(const Stop& stopped){return failedAutomatic(stopped.reason);}
+         catch(const Standard_OutOfMemory&){return failedAutomatic(NativeCadMeshReason::AllocationFailed);}
          catch(const std::bad_alloc&){return failedAutomatic(NativeCadMeshReason::AllocationFailed);}
          catch(...){return failedAutomatic(NativeCadMeshReason::InternalError);}
     }
@@ -1084,6 +1204,7 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
     if(o.assemblyPolicy==NativeCadAssemblyPolicy::IndependentParts){
         detail::OcctStageTrace attempt("independent_parts");
         auto result=detail::buildOcctIndependentParts(model,o,destination);
+        if(result.bodies.size()==1)result.routeResolution=result.bodies.front().routeResolution;
         attempt.finish(nativeCadMeshReasonName(result.reason));
         return result;
     }
@@ -1197,6 +1318,10 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
         result.validationWork=spent;result.totalSeconds=elapsed(began);return result;
     }
     NativeCadMeshOutcome out; const auto started=Clock::now();Work work{o};
+    if(o.useAdvancingInteriorFront.has_value()){
+        out.routeResolution.reason=*o.useAdvancingInteriorFront?"explicit_front_enabled":"explicit_legacy_dispatch";
+        out.routeResolution.candidate=*o.useAdvancingInteriorFront?"native_front":"legacy_dispatch";
+    }
     std::unique_ptr<detail::OcctQueryContext> queryContext;
     try {
         if(o.reuseNativeQueries){
@@ -1273,10 +1398,12 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
         preparationTimer.finish();preparing.finish();
         for(auto solid:solids) {
             work.tick(); out.bodies.emplace_back(); auto& report=out.bodies.back(); report.solidTag=solid->tag();report.cadVolume=model.volume(solid->tag());
+            report.routeResolution=out.routeResolution;
             PhaseTimer recognizing(out.preparationSeconds);View view(model,solid);
             need(view.fs.size()+view.es.size()+view.vs.size()<=o.geometry.maximumAnalysisWork,NativeCadMeshReason::BudgetExceeded);
             Recognition r;NativeCadMeshReason recognitionReason=NativeCadMeshReason::None;
-            if(!spatialSizing) try{r=recognize(model,view,o.geometry.relativeRecognitionTolerance);}catch(const Stop& stopped){
+            if(!spatialSizing) try{r=recognize(model,view,o.geometry.relativeRecognitionTolerance,
+                o.construction.resourcePolicy==CadResourcePolicy::Normal?&work:nullptr);}catch(const Stop& stopped){
                 if(!o.useNativeSurfaceFallback||(stopped.reason!=NativeCadMeshReason::UnsupportedBody&&stopped.reason!=NativeCadMeshReason::RecognitionFailed))throw;
                 recognitionReason=stopped.reason;
             }
@@ -1335,32 +1462,14 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
                         const auto recovered=detail::buildOcctFrontVolume(model,solid->tag(),o,
                             maximumWork,body,earlyConstraintWork,surfaceMode,liveMaterialTrial);
                         report.sourceShell=recovered.sourceShell;
-                        report.surfaceAttempts+=recovered.sourceShell.count;
-                        work.tick(recovered.workUsed);report.nativeSurfaceWork+=recovered.surfaceWork;
-                        report.nativeVolumeWork+=recovered.workUsed-recovered.surfaceWork;
-                        report.nativeSurfaceSeconds+=recovered.surfaceSeconds;report.nativeVolumeSeconds+=recovered.volumeSeconds;
-                        report.nativeCandidateQueries+=recovered.nativeQueries;
-                        report.nativeCandidateRayAdmissions+=recovered.nativeRayAdmissions;
-                        report.liveMaterialInitialRejects+=recovered.liveMaterialInitialRejects;
-                        report.liveMaterialRemainingRejects+=recovered.liveMaterialRemainingRejects;
-                        report.liveMaterialPatches+=recovered.liveMaterialPatches;
-                        report.localDelaunayUsedGlobalFallback|=recovered.localDelaunayUsedGlobalFallback;
-                        if(recovered.reason==NativeCadMeshReason::Cancelled||recovered.reason==NativeCadMeshReason::AllocationFailed||recovered.reason==NativeCadMeshReason::InternalError)throw Stop{recovered.reason};
-                        if(earlyConstraintWork&&!recovered.published)return false;
-                        if((spaceSurface||o.recoveryMode==NativeCadRecoveryMode::Advanced)&&recovered.surfaceDiagnostic){
-                            report.nativeSurfaceReason=recovered.surfaceDiagnostic;
-                            report.surfaceTriangles=recovered.surfaceTriangles;
-                            report.surfaceChordErrorLimit=recovered.chord;
-                            report.maximumBoundaryNodeError=recovered.maximumNodeError;
-                            report.maximumBoundarySampleError=recovered.maximumFacetError;
-                            report.rebuiltSurfaceCharts=recovered.rebuiltSurfaceCharts;
-                        }
-                        report.nativeVolumeReason=recovered.diagnostic;
-                        report.recoveryRemovedInteriorNodes+=recovered.removedInteriorNodes;report.recoveryRemovedIncidentCells+=recovered.removedIncidentCells;report.recoveryRemovedCentroidCells+=recovered.removedCentroidCells;report.recoveryRandomRetries+=recovered.randomRetries;report.recoveryRandomCandidateProposals+=recovered.randomCandidateProposals;
-                        report.recoveryMergedComponents+=recovered.mergedComponents;report.recoverySourceBlockedCandidates+=recovered.sourceBlockedCandidates;report.recoveryOtherComponentBlockedCandidates+=recovered.otherComponentBlockedCandidates;report.recoverySourceFacetNodes+=recovered.sourceFacetNodes;
-                        report.recoveryRegions=recovered.regionRecovery;
-                        report.constraintRecovery=recovered.constraintRecovery;
+                        report.initialTopologyQuality=recovered.initialTopologyQuality;
+                        // Preserve completed stage evidence before tick observes
+                        // cancellation. A stopped call must not erase the work
+                        // performed inside the private volume attempt.
                         report.initialFront=recovered.initialFront;
+                        report.constraintRecovery=recovered.constraintRecovery;
+                        report.recoveryRegions=recovered.regionRecovery;
+                        report.nativeVolumeReason=recovered.diagnostic;
                         report.surfaceSpacing=std::move(recovered.surfaceSpacing);
                         report.interiorFrontDiagnostic=recovered.interiorFrontDiagnostic;
                         report.interiorFrontNodes=recovered.interiorFrontNodes;
@@ -1372,6 +1481,29 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
                         report.interiorVoidActivations=recovered.interiorVoidActivations;
                         report.interiorFrontAdvances=recovered.interiorFrontAdvances;
                         report.interiorFrontSeconds=recovered.interiorFrontSeconds;
+                        report.surfaceAttempts+=recovered.sourceShell.count;
+                        report.nativeSurfaceWork+=recovered.surfaceWork;
+                        report.nativeVolumeWork+=recovered.workUsed-recovered.surfaceWork;
+                        report.nativeSurfaceSeconds+=recovered.surfaceSeconds;report.nativeVolumeSeconds+=recovered.volumeSeconds;
+                        report.nativeCandidateQueries+=recovered.nativeQueries;
+                        report.nativeCandidateRayAdmissions+=recovered.nativeRayAdmissions;
+                        report.liveMaterialInitialRejects+=recovered.liveMaterialInitialRejects;
+                        report.liveMaterialRemainingRejects+=recovered.liveMaterialRemainingRejects;
+                        report.liveMaterialPatches+=recovered.liveMaterialPatches;
+                        report.localDelaunayUsedGlobalFallback|=recovered.localDelaunayUsedGlobalFallback;
+                        work.tick(recovered.workUsed);
+                        if(recovered.reason==NativeCadMeshReason::Cancelled||recovered.reason==NativeCadMeshReason::AllocationFailed||recovered.reason==NativeCadMeshReason::InternalError)throw Stop{recovered.reason};
+                        if(earlyConstraintWork&&!recovered.published)return false;
+                        if((spaceSurface||o.recoveryMode==NativeCadRecoveryMode::Advanced)&&recovered.surfaceDiagnostic){
+                            report.nativeSurfaceReason=recovered.surfaceDiagnostic;
+                            report.surfaceTriangles=recovered.surfaceTriangles;
+                            report.surfaceChordErrorLimit=recovered.chord;
+                            report.maximumBoundaryNodeError=recovered.maximumNodeError;
+                            report.maximumBoundarySampleError=recovered.maximumFacetError;
+                            report.rebuiltSurfaceCharts=recovered.rebuiltSurfaceCharts;
+                        }
+                        report.recoveryRemovedInteriorNodes+=recovered.removedInteriorNodes;report.recoveryRemovedIncidentCells+=recovered.removedIncidentCells;report.recoveryRemovedCentroidCells+=recovered.removedCentroidCells;report.recoveryRandomRetries+=recovered.randomRetries;report.recoveryRandomCandidateProposals+=recovered.randomCandidateProposals;
+                        report.recoveryMergedComponents+=recovered.mergedComponents;report.recoverySourceBlockedCandidates+=recovered.sourceBlockedCandidates;report.recoveryOtherComponentBlockedCandidates+=recovered.otherComponentBlockedCandidates;report.recoverySourceFacetNodes+=recovered.sourceFacetNodes;
                         if(recovered.published){report.route=spatialSizing?"native_spatial_sizing":!spaceSurface?
                                 (recovered.liveMaterialPatches?"native_plc_live_material":"native_plc_cavity"):
                                 surfaceMode==OcctFrontSurface::Curvature?"native_curvature_surface":
@@ -1647,6 +1779,10 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
             bodyRanges.push_back({solid->tag(),bodyBegin,local.cellCount()});
             const double chord=nativeSurface?report.surfaceChordErrorLimit:
                 r.analytic?report.primitive.chordErrorBound:0;
+            report.effectiveMaximumChordError=nativeSurface?report.surfaceChordErrorLimit:
+                r.analytic?(o.maximumChordError>0?o.maximumChordError:.0025*r.shape.radius):0;
+            report.chordErrorPolicy=nativeSurface?"native_source_chord":
+                r.analytic?(o.maximumChordError>0?"explicit":"primitive_radius_default"):"planar_geometry";
             need(report.maximumBoundarySampleError<=std::max(chord*1.01,1e-7),NativeCadMeshReason::GeometryError);
             validating.finish();report.reason=NativeCadMeshReason::None;
         }

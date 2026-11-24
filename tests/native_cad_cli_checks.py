@@ -167,6 +167,19 @@ def main():
                     or resources.get("max_working_bytes") != 512 * 1024**2
                     or parsed.get("import_seconds") != 0 or parsed.get("solids") != 0):
                 raise RuntimeError(f"{name}: parser error changed recognized resource intent or imported CAD: {parsed}")
+        for alias in ("--max-volume-error", "--max-relative-volume-error"):
+            parsed = run("parse_fidelity_" + alias.lstrip("-"), "cylinder.step",
+                         ("--max-chord-error", ".0025", alias, ".005",
+                          "--curvature-points-per-turn", "32", "--unknown-resource-test-option"),
+                         reason="invalid-request")
+            fidelity = parsed.get("fidelity", {})
+            if (fidelity.get("requested_max_chord_error") != .0025
+                    or fidelity.get("requested_max_relative_volume_error") != .005
+                    or fidelity.get("effective_max_relative_volume_error") != .005
+                    or fidelity.get("requested_curvature_points_per_turn") != 32
+                    or fidelity.get("effective_curvature_points_per_turn") != 32
+                    or parsed.get("import_seconds") != 0 or parsed.get("solids") != 0):
+                raise RuntimeError(f"Fidelity alias lost intent or imported CAD on parser refusal: {parsed}")
         if args.resource_checks_only:
             print(json.dumps({"schema": "paacs-native-cad-cli-checks-v1", "passed": len(rows),
                               "cases": rows}, indent=2, allow_nan=False))
@@ -176,10 +189,19 @@ def main():
                        ("--no-advancing-interior-front",), success=True)
         if cylinder.get("curved_faces") != 1 or cylinder["bodies"][0].get("route") != "cylinder":
             raise RuntimeError(f"cylinder did not consume native curved CAD: {cylinder}")
-        plain = run("plain_default_cylinder_phases", "cylinder.step", success=True)
+        capable = run("plain_default_cylinder_capability", "cylinder.step", success=True)
+        capability = capable.get("route_resolution", {})
+        if (capable.get("audit_valid") is not True or capability.get("whole_body_verified") is not True
+                or capability.get("reason") != "verified_whole_body_primitive"
+                or capable["bodies"][0].get("route") != "cylinder"
+                or capability.get("preflight_work", 0) <= 0
+                or capability.get("preflight_work", 0) > capable.get("validation_work", 0)):
+            raise RuntimeError(f"automatic constant-field cylinder lost its verified capability: {capable}")
+        plain = run("explicit_initial_cylinder_phases", "cylinder.step",
+                    ("--advancing-interior-front",), success=True)
         plain_body = plain["bodies"][0]
         plain_front = plain_body.get("initial_front", {})
-        if (plain.get("advancing_interior_front_policy") != "auto"
+        if (plain.get("advancing_interior_front_policy") != "enabled"
                 or plain.get("advancing_interior_front") is not True
                 or plain.get("audit_valid") is not True
                 or plain_front.get("wall_nodes", 0) == 0 or plain_front.get("void_nodes", 0) == 0
@@ -433,17 +455,25 @@ def main():
                 or output.read_bytes() != native_bytes):
             raise RuntimeError("automatic policy changed the existing non-Tet4 route")
         default_box = run("default_uniform_box", "box.step", success=True)
-        if (default_box.get("advancing_interior_front") is not True
+        box_resolution = default_box.get("route_resolution", {})
+        if (default_box.get("advancing_interior_front") is not False
                 or default_box.get("advancing_interior_front_policy") != "auto"
                 or default_box.get("audit_valid") is not True
-                or default_box["bodies"][0].get("initial_front", {}).get("nodes", 0) == 0
+                or box_resolution.get("reason") != "verified_whole_body_mapped_or_sweep"
+                or box_resolution.get("candidate") != "mapped_hex8"
+                or box_resolution.get("whole_body_verified") is not True
+                or box_resolution.get("preflight_work", 0) <= 0
+                or default_box["bodies"][0].get("initial_front", {}).get("diagnostic") != "not_attempted"
                 or default_box["bodies"][0].get("solid_tag") != 1
-                or default_box["bodies"][0].get("native_centroid_source_guard") is not True):
-            raise RuntimeError("automatic defaults failed to mesh the established uniform box")
+                or default_box["bodies"][0].get("relative_volume_error", 1) > .01):
+            raise RuntimeError(f"automatic box lost verified whole-body selection or Native validity: {default_box}")
+        default_box_bytes = output.read_bytes()
         run("advancing_front_independent_parts_refused", "assembly.step",
             ("--advancing-interior-front", "--independent-parts"), reason="unsupported-control")
         standard = run("legacy_planar_box", "box.step", ("--no-advancing-interior-front",), success=True, size="3e-1")
         standard_bytes = output.read_bytes()
+        if standard_bytes != default_box_bytes:
+            raise RuntimeError("verified automatic box changed the established mapped construction")
         advanced = run("advanced_recognized_box", "box.step", ("--no-advancing-interior-front", "--recovery-mode", "advanced"), success=True)
         quality_disabled = run("advanced_box_with_regular_quality_disabled", "box.step",
                                ("--no-advancing-interior-front", "--recovery-mode", "advanced", "--no-improve-regular-quality"), success=True)

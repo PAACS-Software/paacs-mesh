@@ -206,6 +206,46 @@ class ConstructionDiagnosticTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     pm.diagnose(report)
 
+    def test_cancelled_source_volume_pass_is_interrupted_validation_not_a_volume_defect(self):
+        report = synthetic_report()
+        report.update(status="refused", reason="cancelled", mesh_published=False)
+        report["bodies"][0]["source_shell"] = {"available": True, "accepted": False,
+            "diagnostic": "volume_criterion_met", "maximum_relative_volume_error": .01,
+            "attempts": [{"attempt": 1, "surface_published": True, "volume_criterion_met": True,
+                          "source_model_verified_unchanged": True, "relative_volume_error": 3.861482873600608e-5}]}
+        result = pm.diagnose(report)
+        self.assertEqual(result["status"], "failed")
+        interruption = next(i for i in result["issues"] if i["code"] == "source_shell_validation_interrupted")
+        self.assertEqual(interruption["severity"], "info")
+        self.assertEqual(interruption["evidence"]["native_reason"], "cancelled")
+        self.assertNotIn("source_shell_not_accepted", [i["code"] for i in result["issues"]])
+
+    def test_partition_stage_evidence_is_preserved_and_output_bounded(self):
+        report = synthetic_report()
+        body = report["bodies"][0]
+        body.update(native_partition_seconds=.3, native_assembly_seconds=.05,
+                    partition_reason="none", partition_policy="native_planes",
+                    partition_attempts=5, partition_pieces=3, partition_interfaces=2,
+                    partition_work=120, partition_volume_change=1e-12,
+                    partition_attempt_reports=[{"policy": "native_planes", "diagnostic": "piece_refused",
+                        "failed_piece_tag": i, "pieces": 3, "interfaces": 2, "work": 20,
+                        "seconds": .1, "surface_deflection": .005} for i in range(1, 6)])
+        before = copy.deepcopy(report)
+        result = pm.diagnose(report, max_issues=2)
+        measured = result["bodies"][0]
+        self.assertEqual(measured["native_partition_seconds"], .3)
+        self.assertEqual(measured["native_assembly_seconds"], .05)
+        self.assertEqual(measured["partition_attempts"], 5)
+        self.assertEqual(measured["partition_attempt_reports_total"], 5)
+        self.assertEqual(len(measured["partition_attempt_reports"]), 2)
+        self.assertTrue(measured["partition_attempt_reports_truncated"])
+        self.assertEqual(measured["partition_attempt_reports"][0]["failed_piece_tag"], 1)
+        self.assertEqual(result["status"], "valid")
+        self.assertEqual(report, before)
+        body["partition_attempt_reports"] = [{"work": -1}]
+        with self.assertRaises(ValueError):
+            pm.diagnose(report)
+
 
 if __name__ == "__main__":
     unittest.main()

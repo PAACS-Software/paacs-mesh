@@ -34,6 +34,45 @@ void traceNativeStage(const paacs::geo::NativeCadStageEvent& event) noexcept {
         event.beginning ? "begin" : "end", event.entityTag, event.stage, event.diagnostic);
     std::fflush(stderr);
 }
+void writeRouteResolution(const paacs::geo::NativeCadRouteResolutionReport& r){
+    std::cout<<"{\"reason\":\""<<r.reason<<"\",\"candidate\":\""<<r.candidate<<"\""
+        <<",\"preflight_attempted\":"<<(r.preflightAttempted?"true":"false")
+        <<",\"whole_body_verified\":"<<(r.wholeBodyVerified?"true":"false")
+        <<",\"preflight_work\":"<<r.preflightWork<<",\"preflight_seconds\":"<<JsonFinite{r.preflightSeconds}
+        <<",\"fallback_chord_limit\":";
+    if(r.fallbackChordLimit)std::cout<<JsonFinite{*r.fallbackChordLimit};else std::cout<<"null";
+    std::cout<<",\"attempts\":[";
+    for(std::size_t i=0;i<std::min<std::size_t>(r.count,r.attempts.size());++i){
+        if(i)std::cout<<',';const auto& a=r.attempts[i];
+        std::cout<<"{\"method\":\""<<a.method<<"\",\"reason\":\""<<paacs::geo::nativeCadMeshReasonName(a.reason)
+            <<"\",\"published\":"<<(a.published?"true":"false")<<",\"work\":"<<a.work<<",\"seconds\":"<<JsonFinite{a.seconds}<<'}';
+    }
+    std::cout<<"],\"scope\":\"method choice and charged attempts; not an element-size or solver certificate\"}";
+}
+void writeInitialTopologyQuality(const paacs::geo::NativeCadInitialTopologyQualityReport& r){
+    std::cout<<"{\"attempted\":"<<(r.attempted?"true":"false")
+        <<",\"complete\":"<<(r.completed?"true":"false")<<",\"changed\":"<<(r.changed?"true":"false")
+        <<",\"cancelled\":"<<(r.cancelled?"true":"false")<<",\"budget_limited\":"<<(r.budgetLimited?"true":"false")
+        <<",\"summary_available\":"<<(r.summaryAvailable?"true":"false")
+        <<",\"candidate_list_truncated\":"<<(r.candidateListTruncated?"true":"false")
+        <<",\"diagnostic\":\""<<r.diagnostic<<"\",\"work\":"<<r.work<<",\"work_limit\":"<<r.workLimit
+        <<",\"seconds\":"<<JsonFinite{r.seconds}<<",\"peak_modeled_bytes\":"<<r.maximumModeledBytes
+        <<",\"search_below_mean_ratio\":"<<JsonFinite{r.searchBelowMeanRatio}
+        <<",\"candidates\":"<<r.candidates<<",\"proposals\":"<<r.proposals<<",\"certifications\":"<<r.certifications
+        <<",\"staged_edits\":"<<r.stagedEdits<<",\"edits\":"<<r.edits<<",\"flips23\":"<<r.flips23
+        <<",\"flips32\":"<<r.flips32<<",\"flips44\":"<<r.flips44
+        <<",\"live_before\":"<<r.liveBefore<<",\"live_after\":"<<r.liveAfter
+        <<",\"severe_before\":"<<r.severeBefore<<",\"severe_after\":"<<r.severeAfter
+        <<",\"protected_source_faces\":"<<r.protectedSourceFaces<<",\"protected_source_edges\":"<<r.protectedSourceEdges;
+    const auto measurement=[&](const char* name,double value){
+        std::cout<<",\""<<name<<"\":";if(r.summaryAvailable)std::cout<<JsonFinite{value};else std::cout<<"null";
+    };
+    measurement("minimum_mean_ratio_before",r.minimumMeanRatioBefore);
+    measurement("minimum_mean_ratio_after",r.minimumMeanRatioAfter);
+    measurement("minimum_scaled_jacobian_before",r.minimumScaledJacobianBefore);
+    measurement("minimum_scaled_jacobian_after",r.minimumScaledJacobianAfter);
+    std::cout<<",\"delaunay_certified\":false,\"scope\":\"nonguard numerical cells including exterior; final Native audits remain required\"}";
+}
 void writeSourceShell(const paacs::geo::NativeCadSourceShellReport& report){
     const auto count=std::min<std::size_t>(report.count,report.attempts.size());
     const auto positive=[](double value){if(value>0)std::cout<<JsonFinite{value};else std::cout<<"null";};
@@ -129,6 +168,8 @@ int runNativeCadCli(int argc,char** argv) {
     auto options=geo::normalNativeCadMeshOptions();geo::NativeCadMeshOutcome result;mesh::Mesh mesh;
     bool report=false,archivePublished=false;double sizeFactor=0,importSeconds=0,growth=1.3;
     std::optional<std::uint64_t> requestedWork;
+    std::optional<double> requestedChordError,requestedRelativeVolumeError;
+    std::optional<unsigned> requestedCurvaturePoints;
     const auto boundedValidationWork=geo::NativeCadMeshOptions{}.maximumValidationWork;
     const auto boundedMeshingWork=geo::NativeCadMeshOptions{}.geometry.maximumMeshingWork;
     const auto resolveWork=[&] {
@@ -143,6 +184,19 @@ int runNativeCadCli(int argc,char** argv) {
         if(!report)return;
         const auto& construction=options.construction;
         const auto cap=[](std::uint64_t value){return value?std::to_string(value):std::string("null");};
+        bool frontSelected=options.advancingInteriorFrontEnabled(std::size_t(cad.solids));
+        const char* frontSelectionBasis="request_eligibility";
+        const char* resolvedInitial="not_reported";
+        if(result.routeResolution.count){
+            frontSelectionBasis="route_resolution_attempts";
+            frontSelected=false;
+            for(std::size_t i=0;i<std::min<std::size_t>(result.routeResolution.count,result.routeResolution.attempts.size());++i)
+                frontSelected|=std::string_view(result.routeResolution.attempts[i].method)=="native_front";
+            resolvedInitial=result.routeResolution.attempts[
+                std::min<std::size_t>(result.routeResolution.count,result.routeResolution.attempts.size())-1].method;
+        }
+        if(std::string_view(result.routeResolution.reason)=="explicit_front_enabled")resolvedInitial="native_front";
+        if(std::string_view(result.routeResolution.reason)=="explicit_legacy_dispatch")resolvedInitial="legacy_dispatch";
         const bool interiorFrontAttempted=std::any_of(result.bodies.begin(),result.bodies.end(),[](const auto& body){
             return body.initialFront.diagnostic&&std::string_view(body.initialFront.diagnostic)!="not_attempted";
         });
@@ -172,7 +226,19 @@ int runNativeCadCli(int argc,char** argv) {
             <<",\"effective_max_work\":"<<std::min(options.maximumValidationWork,options.geometry.maximumMeshingWork)
             <<",\"logical_work_cap_disabled\":"<<(construction.resourcePolicy==geo::CadResourcePolicy::Normal&&!requestedWork?"true":"false")
             <<",\"max_working_bytes\":"<<options.maximumPrimitiveWorkingBytes<<"}"
-            <<",\"faces\":"<<cad.faces<<",\"curved_faces\":"<<cad.curvedFaces<<",\"edges\":"<<cad.edges
+            <<",\"fidelity\":{\"requested_max_chord_error\":";
+        if(requestedChordError)std::cout<<JsonFinite{*requestedChordError};else std::cout<<"null";
+        std::cout<<",\"requested_max_relative_volume_error\":";
+        if(requestedRelativeVolumeError)std::cout<<JsonFinite{*requestedRelativeVolumeError};else std::cout<<"null";
+        std::cout<<",\"effective_max_relative_volume_error\":"<<JsonFinite{options.maximumRelativeVolumeError}
+            <<",\"requested_curvature_points_per_turn\":";
+        if(requestedCurvaturePoints)std::cout<<*requestedCurvaturePoints;else std::cout<<"null";
+        std::cout<<",\"effective_curvature_points_per_turn\":"<<options.curvaturePointsPerTurn
+            <<",\"chord_default\":\""<<(requestedChordError?"explicit":"route_specific")<<"\""
+            <<",\"scope\":\"native geometry acceptance limits; measured errors and achieved sizes are separate\"}"
+            <<",\"route_resolution\":";
+        writeRouteResolution(result.routeResolution);
+        std::cout<<",\"faces\":"<<cad.faces<<",\"curved_faces\":"<<cad.curvedFaces<<",\"edges\":"<<cad.edges
             <<",\"vertices\":"<<cad.vertices<<",\"nodes\":"<<mesh.nodeCount()<<",\"cells\":"<<mesh.cellCount()
             <<",\"auxiliary_faces\":"<<cad.auxiliaryFaces<<",\"auxiliary_edges\":"<<cad.auxiliaryEdges
             <<",\"auxiliary_vertices\":"<<cad.auxiliaryVertices<<",\"auxiliary_geometry_retained\":"<<(cad.auxiliaryGeometryRetained?"true":"false")
@@ -210,7 +276,7 @@ int runNativeCadCli(int argc,char** argv) {
             <<",\"local_partition_recovery\":"<<(options.useLocalPartitionRecovery?"true":"false")
             <<",\"adaptive_tet_recovery\":"<<(options.useAdaptiveTetRecovery?"true":"false")
             <<",\"curvature_points_per_turn\":"<<options.curvaturePointsPerTurn
-            <<",\"native_spatial_sizing\":"<<((options.useSpatialSizing||!options.sizeBoxes.empty()||options.advancingInteriorFrontEnabled(std::size_t(cad.solids)))?"true":"false")
+            <<",\"native_spatial_sizing\":"<<((options.useSpatialSizing||!options.sizeBoxes.empty()||frontSelected)?"true":"false")
             <<",\"face_size_controls\":"<<options.faceSizes.size()<<",\"size_box_controls\":"<<options.sizeBoxes.size()
             <<",\"live_material_recovery\":"<<(options.useLiveMaterialRecovery?"true":"false")
             <<",\"trimmed_ray_witnesses\":"<<(options.useTrimmedRayWitnesses?"true":"false")
@@ -218,8 +284,14 @@ int runNativeCadCli(int argc,char** argv) {
             <<",\"improve_surface_spacing\":"<<(options.improveNativeSurfaceSpacing?"true":"false")
             <<",\"improve_tet_quality\":"<<(options.improveNativeTetQuality?"true":"false")
             <<",\"advancing_interior_front\":"<<(interiorFrontAttempted?"true":"false")
-            <<",\"advancing_interior_front_selected\":"<<(options.advancingInteriorFrontEnabled(std::size_t(cad.solids))?"true":"false")
+            <<",\"advancing_interior_front_selected\":"<<(frontSelected?"true":"false")
+            <<",\"advancing_interior_front_selection_basis\":\""<<frontSelectionBasis<<"\""
+            <<",\"resolved_initial_construction\":\""<<resolvedInitial<<"\""
+            <<",\"initial_construction_scope\":\"chosen constructor from actual resolution receipts; stage entry is reported separately\""
             <<",\"advancing_interior_front_policy\":\""<<(!options.useAdvancingInteriorFront.has_value()?"auto":*options.useAdvancingInteriorFront?"enabled":"disabled")<<"\""
+            <<",\"requested_initial_topology_quality\":";
+        if(options.initialTopologyQuality)std::cout<<(*options.initialTopologyQuality?"true":"false");else std::cout<<"null";
+        std::cout
             <<",\"regular_surface_front\":"<<(options.useRegularSurfaceFront?"true":"false")
             <<",\"improve_regular_quality\":"<<(options.regularMeshQualityEnabled()?"true":"false")
             <<",\"maximum_edge_recovery_steiner_candidates\":"<<options.maximumEdgeRecoverySteinerCandidates
@@ -252,6 +324,12 @@ int runNativeCadCli(int argc,char** argv) {
             std::cout<<",\"initial_front_fallback\":";
             writeInitialFrontFallback(b.initialFrontFallback);
             std::cout<<",\"source_shell\":";writeSourceShell(b.sourceShell);
+            std::cout<<",\"initial_topology_quality\":";writeInitialTopologyQuality(b.initialTopologyQuality);
+            std::cout<<",\"route_resolution\":";writeRouteResolution(b.routeResolution);
+            std::cout<<",\"fidelity\":{\"effective_max_chord_error\":";
+            if(b.effectiveMaximumChordError)std::cout<<JsonFinite{*b.effectiveMaximumChordError};else std::cout<<"null";
+            std::cout<<",\"chord_policy\":\""<<b.chordErrorPolicy<<"\""
+                <<",\"scope\":\"selected construction limit; not a complete CAD distance certificate\"}";
             std::cout<<",\"volume_sizing\":{\"applied\":";
             if(b.volumeSizingApplied)std::cout<<(*b.volumeSizingApplied?"true":"false");else std::cout<<"null";
             std::cout<<",\"diagnostic\":\""<<b.volumeSizingDiagnostic<<"\",\"requested_global_size\":"<<JsonFinite{options.geometry.targetSize}
@@ -338,6 +416,8 @@ int runNativeCadCli(int argc,char** argv) {
                 <<",\"maximum_combined_modeled_bytes\":"<<b.initialFront.maximumCombinedModeledBytes
                 <<",\"maximum_heap_capacity\":"<<b.initialFront.maximumHeapCapacity
                 <<",\"resource_retries\":"<<b.initialFront.resourceRetries
+                <<",\"geometry_refusal_cache_hits\":"<<b.initialFront.geometryRefusalCacheHits
+                <<",\"cached_geometry_refusals\":"<<b.initialFront.cachedGeometryRefusals
                 <<",\"auxiliary_resource_diagnostic\":\""<<b.initialFront.auxiliaryResourceDiagnostic<<"\""
                 <<",\"source_sweep_complete\":"<<(b.initialFront.sourceSweepComplete?"true":"false")
                 <<",\"void_queue_exhausted\":"<<(b.initialFront.voidQueueExhausted?"true":"false")
@@ -446,7 +526,7 @@ int runNativeCadCli(int argc,char** argv) {
     };
     for(int i=1;i<argc;++i)report|=std::string_view(argv[i])=="--report-json"||std::string_view(argv[i])=="--independent-parts";
     try {
-        if(argc<4)throw std::invalid_argument("usage: paacs-cad-mesh input.step size output.paacsmesh --native-cad [--face-size tag size] [--native-sizing] [--size-box x0 y0 z0 x1 y1 z1 size] [--min-size h] [--growth g] [--report-json] [--trace-native-stages] [--independent-parts] [--local-partition-recovery] [--adaptive-tet-recovery] [--live-material-recovery] [--curvature-points-per-turn 0..64] [--trimmed-ray-witnesses] [--local-delaunay-refinement] [--advancing-interior-front|--no-advancing-interior-front] [--improve-tet-quality] [--improve-surface-spacing] [--regular-surface-front] [--no-improve-regular-quality] [--recovery-mode standard|advanced] [--recovery-seed N] [--recovery-retries 0..4] [--recovery-steiner-candidates 0..64] [--resource-policy normal|bounded] [--max-work N] [--max-working-bytes N] [--construction-effort legacy|auto|thorough] [--max-surface-points N] [--max-surface-chord-points N] [--max-interior-candidates N] [--max-interior-sites N]");
+        if(argc<4)throw std::invalid_argument("usage: paacs-cad-mesh input.step size output.paacsmesh --native-cad [--face-size tag size] [--native-sizing] [--size-box x0 y0 z0 x1 y1 z1 size] [--min-size h] [--growth g] [--report-json] [--trace-native-stages] [--independent-parts] [--local-partition-recovery] [--adaptive-tet-recovery] [--live-material-recovery] [--curvature-points-per-turn 0..64] [--trimmed-ray-witnesses] [--local-delaunay-refinement] [--advancing-interior-front|--no-advancing-interior-front] [--initial-topology-quality|--no-initial-topology-quality] [--improve-tet-quality] [--improve-surface-spacing] [--regular-surface-front] [--no-improve-regular-quality] [--recovery-mode standard|advanced] [--recovery-seed N] [--recovery-retries 0..4] [--recovery-steiner-candidates 0..64] [--resource-policy normal|bounded] [--max-work N] [--max-working-bytes N] [--construction-effort legacy|auto|thorough] [--max-surface-points N] [--max-surface-chord-points N] [--max-interior-candidates N] [--max-interior-sites N]");
         options.geometry.targetSize=number<double>(argv[2]);
         for(int i=4;i<argc;++i) {
             const std::string_view a(argv[i]);
@@ -473,11 +553,14 @@ int runNativeCadCli(int argc,char** argv) {
             else if(a=="--live-material-recovery")options.useLiveMaterialRecovery=true;
             else if(a=="--trimmed-ray-witnesses")options.useTrimmedRayWitnesses=true;
             else if(a=="--local-delaunay-refinement")options.useLocalDelaunayRefinement=true;
-            else if(a=="--curvature-points-per-turn"&&i+1<argc)
-                options.curvaturePointsPerTurn=number<unsigned>(argv[++i]);
+            else if(a=="--curvature-points-per-turn"&&i+1<argc){
+                requestedCurvaturePoints=number<unsigned>(argv[++i]);options.curvaturePointsPerTurn=*requestedCurvaturePoints;
+            }
             else if(a=="--improve-tet-quality")options.improveNativeTetQuality=true;
             else if(a=="--advancing-interior-front")options.useAdvancingInteriorFront=true;
             else if(a=="--no-advancing-interior-front")options.useAdvancingInteriorFront=false;
+            else if(a=="--initial-topology-quality")options.initialTopologyQuality=true;
+            else if(a=="--no-initial-topology-quality")options.initialTopologyQuality=false;
             else if(a=="--construction-effort"&&i+1<argc){
                 const std::string_view effort(argv[++i]);
                 if(effort=="legacy")options.construction.effort=geo::CadConstructionEffort::Legacy;
@@ -531,8 +614,12 @@ int runNativeCadCli(int argc,char** argv) {
                 requestedWork=work;
                 resolveWork();
             }
-            else if(a=="--max-chord-error"&&i+1<argc)options.maximumChordError=number<double>(argv[++i]);
-            else if(a=="--max-volume-error"&&i+1<argc)options.maximumRelativeVolumeError=number<double>(argv[++i]);
+            else if(a=="--max-chord-error"&&i+1<argc){
+                requestedChordError=number<double>(argv[++i]);options.maximumChordError=*requestedChordError;
+            }
+            else if((a=="--max-volume-error"||a=="--max-relative-volume-error")&&i+1<argc){
+                requestedRelativeVolumeError=number<double>(argv[++i]);options.maximumRelativeVolumeError=*requestedRelativeVolumeError;
+            }
             else if(a=="--min-quality"&&i+1<argc)options.geometry.minimumElementQuality=number<double>(argv[++i]);
             else if(a=="--warning-quality"&&i+1<argc)options.geometry.warningElementQuality=number<double>(argv[++i]);
             else if(a=="--min-size"&&i+1<argc)options.minimumSize=number<double>(argv[++i]);

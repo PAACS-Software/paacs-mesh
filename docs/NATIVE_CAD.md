@@ -15,8 +15,10 @@ The preview JSON contains display triangles and original CAD face tags.
 The mesher uses the STEP geometry and topology directly. STEP coordinates,
 sizes and geometric error limits are in millimetres.
 
-Single-solid Tet4 requests use native wall and gap point placement by default
-when the request supports that route. Hex requests, assemblies and explicit
+Normal automatic Tet4 selection first considers verified whole-body primitives,
+affine blocks and linear sweeps for compatible constant-size requests. Local
+face/volume sizing and other eligible requests use native wall and gap point
+placement. Bounded selection retains its historical dispatch. Hex requests, assemblies and explicit
 strategy or body controls retain their existing routing. A single body meshed
 with `--independent-parts` uses the new placement inside its audited part wrapper;
 multiple parts retain their existing construction and interference reports.
@@ -62,6 +64,7 @@ The `plot` command uses exact intersections of the stored Tet4 cells.
 | `--local-partition-recovery`, `--adaptive-tet-recovery` | Enable optional bounded recovery routes. |
 | `--curvature-points-per-turn N` | Enable curvature-based surface sizing on eligible native routes. |
 | `--improve-tet-quality` | Try bounded quality improvement on native pieces and after spatial sizing, keeping the prescribed surface fixed. |
+| `--initial-topology-quality`, `--no-initial-topology-quality` | Explicitly enable or disable severe numerical-topology cleanup before recovery; unset follows Normal enabled / Bounded disabled. This does not force the front or certify Delaunay topology. |
 | `--advancing-interior-front` | Force wall and gap initial point construction for one supported native Tet4 solid. Unsupported combinations return a diagnostic. |
 | `--no-advancing-interior-front` | Disable the new default and use the previous construction and route selection. |
 | `--independent-parts` | Mesh supported bodies separately and report material interference. The result certifies each part individually. |
@@ -69,8 +72,8 @@ The `plot` command uses exact intersections of the stored Tet4 cells.
 | `--warning-quality`, `--min-quality` | Report a weak mesh or require a strict quality floor. |
 | `--trace-native-stages` | Record active stages and diagnostics on standard error. |
 
-The default logical work allowance is 50 million units for both construction
-and validation. `--max-work` sets both ceilings; an explicit limit is retained
+Normal disables the practical logical work cap; Bounded retains 50 million
+units for construction and validation. `--max-work` sets both ceilings; an explicit limit is retained
 across automatic fallback attempts. Work units measure bounded operations,
 not elapsed seconds.
 
@@ -96,13 +99,23 @@ attempts count toward work and time. Trace stages include `interior_sites`,
 `interior_seed_fallback` when needed, and `volume_quality`. Inspect the achieved
 size and quality distributions, since bounded runs can leave weak cells unresolved.
 
-Automatic initial placement selects the native size-field route for an eligible
-single Tet4 solid. `--advancing-interior-front` forces this selection;
+Automatic method selection records its capability proof and charged attempts in
+`route_resolution`. It never selects a structured method that ignores face,
+box or spatial controls. The original Native gates still certify the output;
+failed methods and any fallback share the caller's remaining budgets.
+`--advancing-interior-front` forces the native size-field route;
 `--no-advancing-interior-front` disables it. The last explicit flag wins.
 In C++, `NativeCadMeshOptions::useAdvancingInteriorFront` is `std::nullopt` for
 automatic selection, `true` to force it and `false` for the previous route.
 Automatic selection respects disabled native fallback, requested geometry
 strategies, body controls and other unsupported construction contracts.
+
+For method comparisons, set `--max-chord-error` and
+`--max-relative-volume-error` explicitly (`--max-volume-error` is retained as
+an alias). Automatic chord defaults differ by construction method; inspect the
+body `fidelity` receipt and measured CAD errors. A source retry may use a tighter
+chord but never a looser requested volume bound. A structured fallback to the
+general front retains the primitive chord limit rather than silently increasing it.
 If the automatic route refuses a surface before initial point construction has
 started, it can try the previous route within the remaining work allowance.
 The receipt records this in `initial_front_fallback`, including the first

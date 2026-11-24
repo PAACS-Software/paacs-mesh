@@ -172,6 +172,9 @@ struct NativeCadMeshOptions {
         return improveRegularMeshQuality.value_or(recoveryMode==NativeCadRecoveryMode::Advanced);
     }
     CadConstructionBudget construction;
+    // Finalize numerical slivers after point insertion without moving nodes.
+    // Unset enables the bounded stage for Normal admission only.
+    std::optional<bool> initialTopologyQuality;
 };
 
 // Existing aggregate options retain their bounded defaults. This preset opts
@@ -232,6 +235,21 @@ struct NativeCadInitialFrontReport {
     std::uint64_t auxiliaryGrowthAttempts=0,auxiliaryGrowths=0,auxiliaryGrowthWork=0;
     std::uint64_t maximumCombinedModeledBytes=0,maximumHeapCapacity=0,resourceRetries=0;
     const char* auxiliaryResourceDiagnostic="not_attempted";
+    std::uint64_t geometryRefusalCacheHits=0,cachedGeometryRefusals=0;
+};
+struct NativeCadInitialTopologyQualityReport {
+    bool attempted=false,completed=false,changed=false,cancelled=false,budgetLimited=false;
+    bool summaryAvailable=false,candidateListTruncated=false;
+    const char* diagnostic="not_attempted";
+    std::uint64_t work=0,maximumModeledBytes=0,candidates=0,proposals=0,certifications=0;
+    std::uint64_t stagedEdits=0,edits=0,flips23=0,flips32=0,flips44=0;
+    std::uint64_t liveBefore=0,liveAfter=0,severeBefore=0,severeAfter=0;
+    std::uint64_t protectedSourceFaces=0,protectedSourceEdges=0;
+    double minimumMeanRatioBefore=1,minimumMeanRatioAfter=1;
+    double minimumScaledJacobianBefore=1,minimumScaledJacobianAfter=1;
+    double seconds=0;
+    double searchBelowMeanRatio=1e-6;
+    std::uint64_t workLimit=0;
 };
 struct NativeCadSourceShellAttempt {
     double chordErrorLimit=0,seconds=0;
@@ -261,6 +279,23 @@ struct NativeCadInitialFrontFallbackReport {
     const char* surfaceDiagnostic="not_attempted";
     const char* volumeDiagnostic="not_attempted";
     NativeCadSourceShellReport sourceShell;
+};
+struct NativeCadRouteAttemptReport {
+    const char* method="not_attempted";
+    NativeCadMeshReason reason=NativeCadMeshReason::None;
+    bool published=false;
+    std::uint64_t work=0;
+    double seconds=0;
+};
+struct NativeCadRouteResolutionReport {
+    const char* reason="not_reported";
+    const char* candidate="none";
+    bool preflightAttempted=false,wholeBodyVerified=false;
+    std::uint64_t preflightWork=0;
+    double preflightSeconds=0;
+    std::optional<double> fallbackChordLimit;
+    std::array<NativeCadRouteAttemptReport,2> attempts{};
+    unsigned count=0;
 };
 struct NativeCadBodyMeshReport {
     int solidTag = -1;
@@ -322,6 +357,7 @@ struct NativeCadBodyMeshReport {
     std::uint64_t localDelaunaySupportNodes=0,localDelaunayRefinementNodes=0;
     unsigned localDelaunayQualityEdits=0;
     NativeCadInitialFrontReport initialFront;
+    NativeCadInitialTopologyQualityReport initialTopologyQuality;
     NativeCadInitialFrontFallbackReport initialFrontFallback;
     const char* interiorFrontDiagnostic="not_attempted";
     std::uint64_t interiorFrontNodes=0,interiorFrontCandidates=0;
@@ -334,6 +370,9 @@ struct NativeCadBodyMeshReport {
     NativeCadConstraintRecoveryReport constraintRecovery;
     std::vector<CadSurfaceSpacingReport> surfaceSpacing;
     bool planarAttempted=false;
+    std::optional<double> effectiveMaximumChordError;
+    const char* chordErrorPolicy="not_reported";
+    NativeCadRouteResolutionReport routeResolution;
 };
 struct NativeCadMeshOutcome {
     bool published = false, destinationUnchanged = true;
@@ -360,6 +399,7 @@ struct NativeCadMeshOutcome {
     std::uint64_t nativeContactPieces = 0, nativeContactPlanes = 0;
     std::uint64_t matchedNativeContactTriangles = 0;
     std::uint64_t nativeContactMaximumWorkingPayloadEstimate = 0;
+    NativeCadRouteResolutionReport routeResolution;
 };
 // Native BRep remains the geometric authority. Existing planar/analytic routes
 // run first. The optional surface fallback retains native trim/edge identities

@@ -29,7 +29,9 @@ from ._cad_common import (
 )
 from ._cad_intent import _group
 from .cad import (CadModel, FaceSelection, _CONSTRUCTION_FIELDS, _CONSTRUCTION_LIMITS, _DEFAULT_CONSTRUCTION_EFFORT,
-                  _DEFAULT_RESOURCE_POLICY, _RESOURCE_FIELDS, _construction_options, _resource_policy_value,
+                  _DEFAULT_RESOURCE_POLICY, _RESOURCE_FIELDS, _FIDELITY_FIELDS, _fidelity_options,
+                  _CURVATURE_FIELDS, _curvature_value,
+                  _construction_options, _resource_policy_value,
                   _selected_face_controls, read_step)
 
 
@@ -38,10 +40,10 @@ DEFAULT_SOURCE_BYTES = 64 * 1024 * 1024
 _BUDGETS = ("max_nodes", "max_cells", "max_work", "max_output_bytes",
             "max_working_bytes", "max_audit_bytes")
 _QUALITY_FIELDS = ("warning_quality", "minimum_quality")
-_PLACEMENT_FIELDS = ("advancing_interior_front",)
+_PLACEMENT_FIELDS = ("advancing_interior_front", "initial_topology_quality")
 _OPTION_FIELDS = {"size", "assembly", "workers", "validation_workers", "face_sizes",
                   "volume_controls", "min_size", "growth", "native_sizing", *_QUALITY_FIELDS,
-                  *_PLACEMENT_FIELDS, *_BUDGETS, *_CONSTRUCTION_FIELDS, *_RESOURCE_FIELDS}
+                  *_PLACEMENT_FIELDS, *_BUDGETS, *_CONSTRUCTION_FIELDS, *_RESOURCE_FIELDS, *_FIDELITY_FIELDS, *_CURVATURE_FIELDS}
 _FATAL_REASONS = {"invalid_request", "unsupported_body", "unresolved_body_interface",
                   "unsupported_control", "budget_exceeded", "cancelled", "allocation_failed",
                   "internal_error", "publication_checks_failed"}
@@ -230,7 +232,7 @@ def _options(values):
     # Older recipe-v1 files predate quality, placement, construction and resource fields.
     # Construction absence is a historical legacy request, independent of any
     # future defaults for newly created requests. Unknown fields still fail.
-    required = _OPTION_FIELDS.difference(_QUALITY_FIELDS, _PLACEMENT_FIELDS, _CONSTRUCTION_FIELDS, _RESOURCE_FIELDS)
+    required = _OPTION_FIELDS.difference(_QUALITY_FIELDS, _PLACEMENT_FIELDS, _CONSTRUCTION_FIELDS, _RESOURCE_FIELDS, _FIDELITY_FIELDS, _CURVATURE_FIELDS)
     if not isinstance(values, dict) or not required <= values.keys() or values.keys() - _OPTION_FIELDS:
         raise ValueError("Recipe meshing options have unsupported or missing fields")
     result = {"size": _positive(values["size"], "size"), "assembly": values["assembly"],
@@ -241,11 +243,16 @@ def _options(values):
     # Saved absence always means the historical policy, even if new requests
     # adopt another default. Do not rewrite requested None work into a number.
     result["resource_policy"] = _resource_policy_value(values.get("resource_policy", "bounded"))
+    result.update(_fidelity_options(**{key: values.get(key) for key in _FIDELITY_FIELDS}))
+    result["curvature_points_per_turn"] = _curvature_value(values.get("curvature_points_per_turn"))
     result.update(_construction_options(values.get("construction_effort", "legacy"),
         **{key: values.get(key) for key in _CONSTRUCTION_LIMITS}))
     result["advancing_interior_front"] = values.get("advancing_interior_front")
     if result["advancing_interior_front"] is not None:
         boolean(result["advancing_interior_front"], "advancing_interior_front")
+    result["initial_topology_quality"] = values.get("initial_topology_quality")
+    if result["initial_topology_quality"] is not None:
+        boolean(result["initial_topology_quality"], "initial_topology_quality")
     if result["assembly"] not in ("preserve_parts", "conforming"):
         raise ValueError("assembly must be preserve_parts or conforming")
     if result["workers"] > 1024 or result["validation_workers"] > 8:
@@ -313,9 +320,11 @@ def _policy(values):
 def create_recipe(model, size, *, face_sizes=(), selected_face_sizes=(), volume_controls=(),
                   min_size=None, growth=1.3, native_sizing=None, assembly="preserve_parts",
                   warning_quality=None, minimum_quality=None, advancing_interior_front=None,
+                  initial_topology_quality=None,
                   construction_effort=_DEFAULT_CONSTRUCTION_EFFORT, max_surface_points=None,
                   max_surface_chord_points=None, max_interior_candidates=None, max_interior_sites=None,
-                  resource_policy=_DEFAULT_RESOURCE_POLICY,
+                  resource_policy=_DEFAULT_RESOURCE_POLICY, max_chord_error=None,
+                  max_relative_volume_error=None, curvature_points_per_turn=None,
                   workers=1, validation_workers=1, max_nodes=None, max_cells=None,
                   max_work=None, max_output_bytes=None, max_working_bytes=None, max_audit_bytes=None,
                   allow_advanced=False, finer_factors=(), max_attempts=1, max_seconds=90,
@@ -349,7 +358,10 @@ def create_recipe(model, size, *, face_sizes=(), selected_face_sizes=(), volume_
             min_size=min_size, growth=growth, native_sizing=native_sizing,
             warning_quality=warning_quality, minimum_quality=minimum_quality,
             advancing_interior_front=advancing_interior_front,
+            initial_topology_quality=initial_topology_quality,
             construction_effort=construction_effort, resource_policy=resource_policy,
+            max_chord_error=max_chord_error, max_relative_volume_error=max_relative_volume_error,
+            curvature_points_per_turn=curvature_points_per_turn,
             max_surface_points=max_surface_points,
             max_surface_chord_points=max_surface_chord_points,
             max_interior_candidates=max_interior_candidates, max_interior_sites=max_interior_sites,
@@ -472,7 +484,7 @@ def _retry_allowed(reason, report, route):
 
 
 def _native_options(options, size, recovery, seconds):
-    result = {key: options[key] for key in ("assembly", "workers", "validation_workers", "min_size", "growth", "native_sizing", *_QUALITY_FIELDS, *_PLACEMENT_FIELDS, *_BUDGETS, *_CONSTRUCTION_FIELDS, *_RESOURCE_FIELDS)}
+    result = {key: options[key] for key in ("assembly", "workers", "validation_workers", "min_size", "growth", "native_sizing", *_QUALITY_FIELDS, *_PLACEMENT_FIELDS, *_BUDGETS, *_CONSTRUCTION_FIELDS, *_RESOURCE_FIELDS, *_FIDELITY_FIELDS, *_CURVATURE_FIELDS)}
     result.update(size=size, recovery=recovery, max_seconds=seconds,
                   face_sizes=[_native.FaceSize(control["tag"], control["size"], growth=control["growth"])
                               for control in options["face_sizes"]],

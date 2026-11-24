@@ -99,6 +99,23 @@ class ShapeReviewTests(unittest.TestCase):
         self.assertEqual(result["summary"]["quality"]["warning_threshold"], .25)
         self.assertEqual(result["shape_review"]["status"], "recommended")
 
+    def test_cancelled_zero_placeholders_do_not_describe_element_quality(self):
+        report = synthetic_report()
+        report.update(status="refused", reason="cancelled", mesh_published=False,
+                      nodes=0, cells=0, tetrahedra=0)
+        report["audit"].update(complete=False, valid=False, volume_cells=0)
+        report["quality"].update(complete=True, valid=False, metric="subtet_mean_ratio",
+            minimum=0, percentile_1=0, percentile_5=0, median=0, mean=0, total_volume=0,
+            warning_threshold=.25, minimum_required=.1)
+        result = pm.diagnose(report)
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["shape_review"]["status"], "unavailable")
+        self.assertEqual(result["shape_review"]["unavailable_reason"], "no_reported_volume_population")
+        self.assertFalse(any(issue["code"] in ("near_flat_shape_review", "low_shape_distribution_review")
+                             for issue in result["issues"]))
+        self.assertFalse(any(issue["code"] in ("preferred_quality_not_met", "strict_quality_not_met")
+                             for issue in result["issues"]))
+
 
 if __name__ == "__main__":
     unittest.main()

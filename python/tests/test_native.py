@@ -88,7 +88,7 @@ class NativeWheelTests(unittest.TestCase):
         self.assertEqual(report["validation_workers"], 1)
         self.assertEqual(report["mesh_scope"], "independent_parts")
         self.assertFalse(report["interbody_nonoverlap_certified"])
-        self.assertGreater(report["bodies"][0]["initial_front"]["nodes"], 0)
+        self.assert_verified_cylinder_method(report)
         self.assertEqual(self.mesh.face_tags, [1, 2, 3])
         self.assertEqual(self.mesh.body_tags, [1])
         json.dumps(report, allow_nan=False)
@@ -178,15 +178,28 @@ class NativeWheelTests(unittest.TestCase):
         with self.assertRaises((ValueError, TypeError)):
             pm.read_step("bad\0path.step")
 
+    def assert_verified_cylinder_method(self, report):
+        resolution = report["route_resolution"]
+        self.assertEqual(resolution["reason"], "verified_whole_body_primitive")
+        self.assertEqual(resolution["candidate"], "cylinder")
+        self.assertIs(resolution["preflight_attempted"], True)
+        self.assertIs(resolution["whole_body_verified"], True)
+        self.assertGreater(resolution["preflight_work"], 0)
+        self.assertEqual(len(resolution["attempts"]), 1)
+        self.assertEqual(resolution["attempts"][0]["method"], "legacy_dispatch")
+        self.assertIs(resolution["attempts"][0]["published"], True)
+        body = report["bodies"][0]
+        self.assertEqual(body["route"], "cylinder")
+        self.assertEqual(body["route_resolution"], resolution)
+        self.assertEqual(body["initial_front"]["diagnostic"], "not_attempted")
+        self.assertEqual(body["initial_front"]["nodes"], 0)
+        self.assertEqual(body["initial_front"]["work"], 0)
+
     def test_initial_placement_has_automatic_and_explicit_modes(self):
         self.assertEqual(self.mesh.report["requested_assembly"], "preserve_parts")
         self.assertIsNone(self.mesh.report["requested_advancing_interior_front"])
         # setUpClass uses mesh(.3) without a work-budget override.
-        default_initial = self.mesh.report["bodies"][0]["initial_front"]
-        self.assertIs(default_initial["source_sweep_complete"], True)
-        self.assertGreater(default_initial["wall_nodes"], 0)
-        self.assertGreater(default_initial["void_nodes"], 0)
-        self.assertEqual(default_initial["nodes"], default_initial["delaunay_commits"])
+        self.assert_verified_cylinder_method(self.mesh.report)
         self.assertIs(self.mesh.report["initial_front_fallback"]["attempted"], False)
         automatic = self.model.mesh(.3, assembly="conforming", max_work=100_000_000)
         enabled = self.model.mesh(.3, assembly="conforming", advancing_interior_front=True,
@@ -196,24 +209,34 @@ class NativeWheelTests(unittest.TestCase):
         self.assertIsNone(automatic.report["requested_advancing_interior_front"])
         self.assertIs(enabled.report["requested_advancing_interior_front"], True)
         self.assertIs(legacy.report["requested_advancing_interior_front"], False)
-        for result in (automatic, enabled):
-            initial = result.report["bodies"][0]["initial_front"]
-            self.assertGreater(initial["wall_nodes"], 0)
-            self.assertGreater(initial["void_nodes"], 0)
-            self.assertEqual(initial["nodes"], initial["delaunay_commits"])
-            self.assertGreaterEqual(initial["full_certifications"], initial["nodes"])
+        self.assert_verified_cylinder_method(automatic.report)
+        self.assertEqual(enabled.report["route_resolution"]["reason"], "explicit_front_enabled")
+        self.assertEqual(enabled.report["bodies"][0]["route"], "native_spatial_sizing")
+        initial = enabled.report["bodies"][0]["initial_front"]
+        self.assertIs(initial["source_sweep_complete"], True)
+        self.assertGreater(initial["wall_nodes"], 0)
+        self.assertGreater(initial["void_nodes"], 0)
+        self.assertEqual(initial["nodes"], initial["delaunay_commits"])
+        self.assertGreaterEqual(initial["full_certifications"], initial["nodes"])
+        self.assertEqual(legacy.report["route_resolution"]["reason"], "explicit_legacy_dispatch")
+        self.assertEqual(legacy.report["bodies"][0]["route"], "cylinder")
         self.assertEqual(legacy.report["bodies"][0]["initial_front"]["diagnostic"], "not_attempted")
         self.assertEqual(automatic.face_tags, legacy.face_tags)
         self.assertEqual(automatic.body_tags, legacy.body_tags)
         with tempfile.TemporaryDirectory() as directory:
-            paths = [Path(directory) / name for name in ("auto.paacsmesh", "on.paacsmesh")]
+            # AUTO's verified method must retain the explicit method's geometry.
+            paths = [Path(directory) / name for name in ("auto.paacsmesh", "off.paacsmesh")]
             automatic.write_archive(paths[0])
-            enabled.write_archive(paths[1])
+            legacy.write_archive(paths[1])
             self.assertEqual(paths[0].read_bytes(), paths[1].read_bytes())
         for result in (automatic, enabled, legacy):
             self.assertTrue(result.report["audit"]["complete"])
             self.assertTrue(result.report["audit"]["valid"])
+            self.assertTrue(result.report["quality"]["complete"])
             self.assertTrue(result.report["quality"]["valid"])
+            self.assertEqual(result.report["quality"]["inverted_cells"], 0)
+            self.assertEqual(result.face_tags, [1, 2, 3])
+            self.assertEqual(result.body_tags, [1])
 
     def test_automatic_source_refusal_has_a_reported_bounded_fallback(self):
         source = Path(__file__).resolve().parents[2] / "tests/fixtures/cad/sphere.step"
@@ -239,6 +262,52 @@ class NativeWheelTests(unittest.TestCase):
                        max_work=100_000_000, resource_policy="bounded")
         self.assertEqual(caught.exception.reason, "geometry_error")
         self.assertIs(caught.exception.report["initial_front_fallback"]["attempted"], False)
+
+    def test_explicit_fidelity_receipts_survive_saved_recipe_reopen(self):
+        source_before = self.fixture.read_bytes()
+        fidelity_options = dict(max_chord_error=.0025, max_relative_volume_error=.01,
+                                curvature_points_per_turn=0, initial_topology_quality=False)
+        options = dict(fidelity_options, assembly="conforming", workers=1, validation_workers=1,
+                       max_work=100_000_000, max_seconds=90)
+        direct = self.model.mesh(.5, **options)
+        recipe = pm.create_recipe(self.model, .5, **options)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            recipe_path = root / "fidelity-recipe.json"
+            pm.save_recipe(self.model, recipe, recipe_path)
+            reopened = pm.read_step(self.fixture)
+            loaded = pm.load_recipe(reopened, recipe_path)
+            for name, value in fidelity_options.items():
+                self.assertEqual(loaded["options"][name], value)
+            replayed = pm.run_recipe(reopened, loaded).mesh
+            direct.write_archive(root / "direct.paacsmesh")
+            replayed.write_archive(root / "replayed.paacsmesh")
+            self.assertEqual((root / "direct.paacsmesh").read_bytes(),
+                             (root / "replayed.paacsmesh").read_bytes())
+        for mesh in (direct, replayed):
+            report = mesh.report
+            self.assert_verified_cylinder_method(report)
+            fidelity = report["fidelity"]
+            self.assertEqual(fidelity["requested_max_chord_error"], .0025)
+            self.assertEqual(fidelity["requested_max_relative_volume_error"], .01)
+            self.assertEqual(fidelity["effective_max_relative_volume_error"], .01)
+            self.assertEqual(fidelity["requested_curvature_points_per_turn"], 0)
+            self.assertEqual(fidelity["effective_curvature_points_per_turn"], 0)
+            self.assertEqual(fidelity["chord_default"], "explicit")
+            self.assertIs(report["requested_initial_topology_quality"], False)
+            body = report["bodies"][0]
+            self.assertEqual(body["fidelity"]["effective_max_chord_error"], .0025)
+            self.assertEqual(body["fidelity"]["chord_policy"], "explicit")
+            self.assertFalse(body["initial_topology_quality"]["attempted"])
+            self.assertLessEqual(body["maximum_boundary_sample_error"], .0025 * 1.01 + 1e-12)
+            self.assertLessEqual(body["relative_volume_error"], .01)
+            self.assertTrue(report["mesh_published"])
+            for name in ("audit", "quality"):
+                self.assertTrue(report[name]["complete"] and report[name]["valid"])
+            self.assertEqual(report["quality"]["inverted_cells"], 0)
+            self.assertEqual(mesh.face_tags, [1, 2, 3])
+            self.assertEqual(mesh.body_tags, [1])
+        self.assertEqual(self.fixture.read_bytes(), source_before)
 
     def test_export_failure_and_source_protection(self):
         with tempfile.TemporaryDirectory() as directory:

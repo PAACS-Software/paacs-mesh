@@ -81,6 +81,22 @@ def _construction_cap(value):
     return result
 
 
+def _fidelity_number(value, name):
+    from .cad import _fidelity_options
+    try:
+        return _fidelity_options(**{name: float(value)})[name]
+    except (TypeError, ValueError) as error:
+        raise argparse.ArgumentTypeError(str(error)) from error
+
+
+def _curvature_points(value):
+    from .cad import _curvature_value
+    try:
+        return _curvature_value(int(value))
+    except (TypeError, ValueError) as error:
+        raise argparse.ArgumentTypeError(str(error)) from error
+
+
 def _resource_cap(value):
     try:
         result = int(value)
@@ -118,6 +134,14 @@ def _legacy(argv):
                         metavar=("X0", "Y0", "Z0", "X1", "Y1", "Z1", "SIZE"),
                         help="refine inside a box in mm; repeat for more regions")
     parser.add_argument("--min-size", type=float, help="minimum requested field size in mm")
+    parser.add_argument("--max-chord-error", type=lambda value: _fidelity_number(value, "max_chord_error"),
+                        help="positive CAD chord-error limit in mm; omitted uses the route default")
+    parser.add_argument("--max-relative-volume-error", type=lambda value: _fidelity_number(value, "max_relative_volume_error"),
+                        help="CAD relative-volume limit strictly between zero and one")
+    parser.add_argument("--curvature-points-per-turn", type=_curvature_points,
+                        help="integer 0..64; zero disables optional curvature sampling")
+    parser.add_argument("--initial-topology-quality", action=argparse.BooleanOptionalAction, default=None,
+                        help="severe initial-topology cleanup; default depends on resource policy, does not force the front")
     parser.add_argument("--growth", type=float, default=1.3,
                         help="size-field growth, at least 1 (default: 1.3)")
     parser.add_argument("--native-sizing", action=argparse.BooleanOptionalAction, default=None,
@@ -150,6 +174,10 @@ def _legacy(argv):
                               advancing_interior_front=args.advancing_interior_front,
                               max_seconds=args.max_seconds, warning_quality=args.warning_quality,
                               minimum_quality=args.minimum_quality,
+                              max_chord_error=args.max_chord_error,
+                              max_relative_volume_error=args.max_relative_volume_error,
+                              curvature_points_per_turn=args.curvature_points_per_turn,
+                              initial_topology_quality=args.initial_topology_quality,
                               construction_effort=args.construction_effort,
                               **{name: getattr(args, name) for name in _CONSTRUCTION_LIMITS})
             mesh.write(args.output)

@@ -22,7 +22,12 @@ _BODY = ("solid_tag", "route", "reason", "surface_reason", "volume_reason", "cad
          "maximum_boundary_sample_error", "surface_chord_error_limit",
          "boundary_embedding_certified", "centroid_outside_distance_limit", "native_centroids_checked",
          "initial_front", "surface_spacing", "source_shell", "initial_front_fallback", "volume_sizing",
-         "constraint_recovery")
+         "constraint_recovery", "fidelity", "route_resolution", "initial_topology_quality")
+_PARTITION = ("native_partition_seconds", "native_assembly_seconds", "partition_reason", "partition_policy",
+              "partition_attempts", "partition_pieces", "partition_interfaces", "partition_work",
+              "partition_volume_change", "partition_volume_admission", "sampled_partition_trim_witness",
+              "partition_trim_samples", "maximum_partition_trim_drift", "maximum_partition_trim_tolerance_ratio",
+              "surface_diagonal_repairs", "exact_surface_pairs", "kernel_trials", "partition_attempt_reports")
 _SHAPE_REVIEW = {"metric": "subtet_mean_ratio", "near_flat_minimum": .001,
                  "low_median": .1, "low_tail_median": .2, "low_tail_percentile_5": .05}
 
@@ -46,6 +51,11 @@ def capabilities():
                       "inspection_page_limit": 1000},
         "controls": {"global_size": True, "face_size": True, "box_size": True,
                      "minimum_size": True, "growth": True,
+                     "max_chord_error": {"default": None, "units": "mm", "explicit": "positive"},
+                     "max_relative_volume_error": {"default": None, "native_default": .01, "explicit": "0 < value < 1"},
+                     "curvature_points_per_turn": {"default": None, "native_default": 0, "integer_range": [0, 64]},
+                     "initial_topology_quality": {"default": None, "policy_defaults": {"normal": True, "bounded": False},
+                                                  "forces_initial_front": False, "changes_native_validity_gates": False},
                      "construction_efforts": ["legacy", "auto", "thorough"],
                      "construction_default": "legacy",
                      "construction_stage_caps": ["max_surface_points", "max_surface_chord_points",
@@ -143,6 +153,27 @@ def _source_shell(value):
     return source, attempts
 
 
+def _route_resolution(value):
+    receipt = _mapping(value, "route_resolution")
+    for name in ("reason", "candidate"):
+        if name in receipt and not isinstance(receipt[name], str):
+            raise ValueError(f"route_resolution.{name} must be a string")
+    for name in ("preflight_attempted", "whole_body_verified"):
+        if name in receipt and not isinstance(receipt[name], bool):
+            raise ValueError(f"route_resolution.{name} must be bool")
+    if "preflight_work" in receipt:
+        integer(receipt["preflight_work"], "route_resolution.preflight_work", minimum=0)
+    attempts = _records(receipt.get("attempts", []), "route_resolution.attempts")
+    if len(attempts) > 2:
+        raise ValueError("route_resolution has more than two reported construction attempts")
+    for attempt in attempts:
+        if "published" in attempt and not isinstance(attempt["published"], bool):
+            raise ValueError("route_resolution.attempts.published must be bool")
+        if "work" in attempt:
+            integer(attempt["work"], "route_resolution.attempts.work", minimum=0)
+    return receipt
+
+
 def _report_input(value):
     """Copy structured exceptions into the same envelope used by the CLI."""
     if isinstance(value, Exception):
@@ -233,6 +264,8 @@ def diagnose(report_or_mesh, *, max_issues=32):
     if workflow_source is not None and source is not None and workflow_source != source:
         raise ValueError("Workflow and final native attempt identify different CAD sources")
     bodies = _records(native.get("bodies", []), "bodies")
+    if native.get("route_resolution") is not None:
+        _route_resolution(native["route_resolution"])
     interferences = _records(native.get("interferences", []), "interferences")
     issues, total, severities = [], 0, set()
 
@@ -281,15 +314,17 @@ def diagnose(report_or_mesh, *, max_issues=32):
                                                   "audit_counts": {key: audit.get(key) for key in _AUDIT_ERRORS},
                                                   "inverted_cells": quality.get("inverted_cells")},
               actions=("review_native_failure",))
+    population = max((value for value in (audit.get("volume_cells"), native.get("tetrahedra"))
+                      if isinstance(value, int) and not isinstance(value, bool) and value > 0), default=0)
     minimum, threshold = quality.get("minimum"), quality.get("warning_threshold")
-    below = (isinstance(minimum, (int, float)) and not isinstance(minimum, bool) and
+    below = (population and isinstance(minimum, (int, float)) and not isinstance(minimum, bool) and
              _positive(threshold) and minimum < threshold)
-    if native.get("quality_warning") is True or below:
+    if population and (native.get("quality_warning") is True or below):
         issue("preferred_quality_not_met", "warning",
               {key: quality.get(key) for key in ("metric", "minimum", "percentile_1", "percentile_5", "median", "warning_threshold")},
               actions=("review_quality_distribution", "review_sizing_without_assuming_quality_improves"))
     required = quality.get("minimum_required")
-    if minimum is not None and _positive(required) and minimum < required:
+    if population and minimum is not None and _positive(required) and minimum < required:
         issue("strict_quality_not_met", "error", {"minimum": minimum, "minimum_required": required},
               actions=("review_explicit_quality_requirement",))
     # These conservative review heuristics do not change preferred/strict
@@ -297,7 +332,10 @@ def diagnose(report_or_mesh, *, max_issues=32):
     shape_review = {"status": "unavailable", "basis": "reported_native_summary",
                     "metric": quality.get("metric"), "solver_adequacy": "unassessed",
                     "native_validity_changed": False, "policy": dict(_SHAPE_REVIEW), "triggers": []}
-    if quality.get("complete") is True and quality.get("metric") == _SHAPE_REVIEW["metric"]:
+    shape_review["reported_volume_population"] = population or None
+    if not population:
+        shape_review["unavailable_reason"] = "no_reported_volume_population"
+    if population and quality.get("complete") is True and quality.get("metric") == _SHAPE_REVIEW["metric"]:
         median, p05 = quality.get("median"), quality.get("percentile_5")
         if minimum is not None or median is not None:
             shape_review["status"] = "no_automatic_trigger"
@@ -324,6 +362,17 @@ def diagnose(report_or_mesh, *, max_issues=32):
         if shape_review["triggers"]:
             shape_review["status"] = "recommended"
     for body in bodies:
+        if body.get("partition_attempt_reports") is not None:
+            partition_attempts = _records(body["partition_attempt_reports"], "partition_attempt_reports")
+            for attempt in partition_attempts:
+                for name in ("policy", "diagnostic"):
+                    if name in attempt and not isinstance(attempt[name], str):
+                        raise ValueError(f"partition_attempt_reports.{name} must be a string")
+                for name in ("work", "pieces", "interfaces"):
+                    if name in attempt:
+                        integer(attempt[name], "partition_attempt_reports." + name, minimum=0)
+                if "failed_piece_tag" in attempt:
+                    integer(attempt["failed_piece_tag"], "partition_attempt_reports.failed_piece_tag", minimum=-1)
         tag = body.get("solid_tag")
         if tag is not None:
             integer(tag, "solid_tag")
@@ -333,6 +382,8 @@ def diagnose(report_or_mesh, *, max_issues=32):
                   {key: body.get(key) for key in ("reason", "surface_reason", "volume_reason", "route")},
                   scope="body", tags=() if tag is None else (tag,),
                   actions=("inspect_body_and_native_stage", "review_explicit_recipe_retry_policy"))
+        if body.get("route_resolution") is not None:
+            _route_resolution(body["route_resolution"])
         source_shell = body.get("source_shell")
         if body.get("constraint_recovery") is not None:
             recovery = _mapping(body["constraint_recovery"], "constraint_recovery")
@@ -349,13 +400,18 @@ def diagnose(report_or_mesh, *, max_issues=32):
         if source_shell is not None:
             source_shell, source_attempts = _source_shell(source_shell)
             if source_shell.get("available") is True and source_shell.get("accepted") is False:
-                issue("source_shell_not_accepted", "warning", {
+                interrupted = (native.get("reason") in ("cancelled", "budget_exceeded", "allocation_failed")
+                               and source_attempts and source_attempts[-1].get("volume_criterion_met") is True)
+                issue("source_shell_validation_interrupted" if interrupted else "source_shell_not_accepted",
+                    "info" if interrupted else "warning", {
                     "diagnostic": source_shell.get("diagnostic"),
+                    "native_reason": native.get("reason"),
                     "maximum_relative_volume_error": source_shell.get("maximum_relative_volume_error"),
                     "attempts": source_attempts[:maximum], "attempts_total": len(source_attempts),
                     "attempts_truncated": len(source_attempts) > maximum,
                     "sizing_completion_certified": False}, scope="body", tags=() if tag is None else (tag,),
-                    actions=("inspect_source_geometry_attempts", "review_geometry_and_resource_limits"))
+                    actions=("inspect_interrupted_source_validation", "review_cancellation_or_resource_reason") if interrupted
+                    else ("inspect_source_geometry_attempts", "review_geometry_and_resource_limits"))
         volume_sizing = body.get("volume_sizing")
         if volume_sizing is not None:
             volume_sizing = _mapping(volume_sizing, "volume_sizing")
@@ -448,6 +504,12 @@ def diagnose(report_or_mesh, *, max_issues=32):
         status = "valid_with_warnings" if "warning" in severities else "valid"
     def body_summary(body):
         summary = {key: body.get(key) for key in _BODY}
+        summary.update({key: body[key] for key in _PARTITION if key in body})
+        if body.get("partition_attempt_reports") is not None:
+            attempts = _records(body["partition_attempt_reports"], "partition_attempt_reports")
+            summary["partition_attempt_reports"] = attempts[:maximum]
+            summary["partition_attempt_reports_total"] = len(attempts)
+            summary["partition_attempt_reports_truncated"] = len(attempts) > maximum
         def bounded_shell(shell):
             if not isinstance(shell, dict):
                 return shell
@@ -479,7 +541,8 @@ def diagnose(report_or_mesh, *, max_issues=32):
                     "tetrahedra": native.get("tetrahedra"),
                     "native_hint": native.get("hint"),
                     "construction": native.get("construction"),
-                    "resources": native.get("resources"),
+                    "resources": native.get("resources"), "fidelity": native.get("fidelity"),
+                    "route_resolution": native.get("route_resolution"),
                     "quality": {key: quality.get(key) for key in _QUALITY}},
         "bodies": [body_summary(body) for body in bodies[:maximum]],
         "bodies_truncated": len(bodies) > maximum,

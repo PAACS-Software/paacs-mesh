@@ -179,7 +179,7 @@ class NativeConstructionBudgetTests(unittest.TestCase):
         from test_native import fixture_path
         model = pm.read_step(fixture_path())
         options = dict(SETTINGS, assembly="conforming", workers=1, validation_workers=1,
-                       max_work=100_000_000, max_seconds=90)
+                       advancing_interior_front=True, max_work=100_000_000, max_seconds=90)
         direct = model.mesh(.5, **options)
         report = direct.report
         construction = report["construction"]
@@ -195,6 +195,8 @@ class NativeConstructionBudgetTests(unittest.TestCase):
         self.assertEqual(direct.body_tags, [1])
         self.assertEqual(direct.face_tags, [1, 2, 3])
         front = report["bodies"][0]["initial_front"]
+        self.assertEqual(report["route_resolution"]["reason"], "explicit_front_enabled")
+        self.assertGreater(front["work"], 0)
         self.assertLessEqual(front["candidates"], front["candidate_limit"])
         self.assertLessEqual(front["candidate_limit"], SETTINGS["max_interior_candidates"])
         self.assertLessEqual(front["nodes"], front["site_limit"])

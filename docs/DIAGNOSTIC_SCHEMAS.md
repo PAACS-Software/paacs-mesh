@@ -61,6 +61,7 @@ preferred-quality, resource and failure meanings.
 | `near_flat_shape_review` | A severe reported Native shape minimum warrants inspection, independently of configured quality thresholds. |
 | `low_shape_distribution_review` | The reported Native shape distribution warrants inspection. Intentional anisotropy and solver requirements need separate assessment. |
 | `source_shell_not_accepted` | Recorded source-shell geometry attempts did not complete acceptance. Their measured volume errors and limits remain available. |
+| `source_shell_validation_interrupted` | Source volume criterion passed, but cancellation or resource refusal interrupted acceptance; this does not establish a volume defect. |
 | `initial_construction_fallback` | The original automatic construction failed and a fallback was attempted. Surface and volume diagnostics are retained separately. |
 | `volume_sizing_not_applied` | The published construction explicitly reports that it did not apply a volume size field. Geometry validity is separate. |
 | `construction_budget_limited` | A native construction stage reports a bounded stop. This is a warning, not a sizing certificate or a replacement for native validity checks. |
@@ -345,3 +346,58 @@ native operation; nested times must not be added as independent costs.
 `planar` describes core strategy/construction evidence. It does not replace
 the separate original-CAD validity checks, certify achieved sizing or establish
 solver adequacy.
+
+### Method resolution and geometry fidelity (development)
+
+Native reports add `fidelity`: nullable `requested_max_chord_error` and
+`requested_max_relative_volume_error`, plus the effective relative-volume limit.
+Null preserves the existing Native default. Body `fidelity` records
+`effective_max_chord_error` and `chord_policy`; an unavailable limit is null.
+Primitive radius defaults, source-preparation chords and exact planar geometry
+remain distinguishable. These are acceptance limits, separate from observed CAD
+errors, requested element size and independently measured achieved lengths.
+
+`route_resolution` records `reason`, `candidate`, `preflight_attempted`,
+`whole_body_verified`, preflight work/time, an optional retained fallback chord,
+and at most two construction `attempts`. Each attempt records its method,
+Native reason, publication flag, work and elapsed seconds. Failed attempts remain
+present. Normal AUTO can select an existing whole-body primitive, affine or sweep
+capability before general initial-point construction when controls are compatible.
+Explicit initial-front choices and historical Bounded routing remain authoritative.
+
+Capability recognition does not certify the final mesh. Native geometry,
+orientation, connectivity, body and quality gates still apply after construction.
+If a verified primitive attempt fails and general construction is tried, its chord
+limit is retained. Top-level fidelity still records the original user request;
+the fallback's source attempts report their actual effective chord. Logical
+preflight and attempt work consumes the same overall allowance. Outer timings
+include all attempts; nested stages and wrappers must not be counted twice.
+
+Body `initial_topology_quality` reports the optional numerical-topology stage.
+`complete` means that stage finished its bounded operation, not that every poor
+cell disappeared or that the final volume mesh is complete. Read the remaining
+candidate counts, diagnostics and final measured quality. `peak_modeled_bytes`
+is helper-local and includes its retained input owner; it excludes the outer
+held mesh envelope and is not process RSS. `delaunay_certified=false` remains
+explicit. Native final geometry and validity gates still apply independently.
+
+Quality interpretation requires a reported nonempty volume population. Empty
+zero-filled summaries on a cancelled/unpublished operation do not trigger shape,
+preferred-quality or strict-quality measurements; shape review remains
+`unavailable` with reason `no_reported_volume_population`. The Native failure
+status and requested requirements remain intact.
+
+Python body reports also preserve the existing partition-stage evidence exposed
+by the native CLI: `native_partition_seconds`, `native_assembly_seconds`, policy,
+reason, attempts, piece/interface counts, logical work, volume-change admission,
+trim-witness measurements and `partition_attempt_reports`. Each attempt keeps
+its policy, diagnostic, failed internal piece tag, piece/interface counts, work,
+seconds and surface deflection. Internal piece tags do not become original CAD
+body identities merely by appearing here.
+
+`diagnose()` limits the attempt list to `max_issues` rows per body and records
+`partition_attempt_reports_total` and `partition_attempt_reports_truncated`.
+The original full report is unchanged. Partition/assembly times are nested
+construction evidence; they must not be added to outer generation/total times
+as independent elapsed intervals. Zero/default fields do not prove stage entry,
+and these receipts neither redo Native audits nor certify sizing completion.

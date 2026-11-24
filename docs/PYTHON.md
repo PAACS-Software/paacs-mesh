@@ -90,9 +90,12 @@ human/JSON diagnostic summaries, see [inspection and diagnostics](AGENT_WORKFLOW
 
 ### Initial interior placement
 
-Compatible single-solid Tet4 requests automatically construct wall sites before
-filling interior gaps. The default assembly policy still preserves parts. Multi-part
-assemblies and other specialized routes retain their existing constructors.
+In development, Normal AUTO first considers verified whole-body primitive,
+affine-block and linear-sweep capabilities for compatible constant-size requests.
+Other eligible single-solid Tet4 requests construct wall sites before filling
+interior gaps. Face and volume controls retain the size-field front. The default
+assembly policy still preserves parts; multi-part assembly dispatch is unchanged.
+Bounded admission retains historical automatic selection.
 
 `advancing_interior_front=None` selects this automatic policy. Set it to `False`
 to use the previous initial constructor, or `True` to explicitly request the new
@@ -107,6 +110,50 @@ mesh = model.mesh(.3, assembly="conforming", advancing_interior_front=True)
 placement. Combining it with `advancing_interior_front=True` is contradictory and
 raises `ValueError`. A saved recipe records the initial-placement choice; older
 recipes without this optional field retain automatic selection.
+
+The additive `route_resolution` receipt reports capability recognition, its
+charged work/time and at most two construction attempts. Recognition does not
+replace the final Native CAD, topology, orientation or quality gates. Failed
+attempts consume the same caller limits; nothing is published before cumulative
+budget and cancellation checks pass.
+
+### Geometry fidelity controls (development)
+
+```python
+mesh = model.mesh(.5, max_chord_error=.0025, max_relative_volume_error=.005)
+```
+
+`max_chord_error` is a positive absolute limit in millimeters.
+`max_relative_volume_error` is strictly between zero and one; `.005` means
+0.5 percent. Omitted values retain Native defaults: automatic route-dependent
+chord resolution and a one-percent volume limit. Automatic primitive and general
+routes can choose different chord defaults, so pass explicit common limits for
+a controlled method comparison. Requested size is a separate control.
+
+Recipes preserve both nullable requests and forward them unchanged through every
+retry. Older recipes missing these fields retain the original automatic/default
+meaning. The Python CLI accepts `--max-chord-error` and
+`--max-relative-volume-error`; `run` replays saved settings without overrides.
+`report["fidelity"]` keeps requested and effective volume limits, while body
+`fidelity` records the selected chord limit and its policy. Source retries may
+tighten the effective chord. These limits and observed CAD errors do not certify
+all achieved element sizes or solver accuracy.
+
+`curvature_points_per_turn=None` preserves Native zero (optional curvature
+sampling disabled). Explicit integers from zero through 64 are accepted, for
+example `curvature_points_per_turn=32`. A nonzero request retains a compatible
+general size-field route rather than being ignored by a structured method.
+The CLI flag is `--curvature-points-per-turn`; recipes retain it through retries.
+
+`initial_topology_quality=None` selects the Native policy default: enabled for
+Normal and disabled for Bounded. Explicit `True` or `False` overrides it. This
+controls severe initial numerical-topology cleanup; it does not force an initial
+front, relax validity or quality thresholds, or certify Delaunay topology.
+A structured method may report it as not applicable. The CLI supports
+`--initial-topology-quality` and `--no-initial-topology-quality`. Requested intent
+and the body's actual stage receipt remain separate.
+
+### Construction receipts
 
 The report's `requested_advancing_interior_front` records the caller's choice.
 Each body's `initial_front` reports actual wall/gap nodes, work, candidates and

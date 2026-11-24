@@ -64,9 +64,23 @@ void checkResourcePolicyPresets(const geo::OcctModel& model,const std::string& s
         check(accepted.validationWork>1&&accepted.validationWork<=request.maximumValidationWork&&
               accepted.validationWork<=request.geometry.maximumMeshingWork,
               "resource preset did not perform charged work within its effective allowance");
-        check(accepted.bodies.front().initialFront.work>0&&
-              std::string_view(accepted.bodies.front().initialFront.diagnostic)!="not_attempted",
-              "resource preset bypassed automatic initial-point construction");
+        if(normal){
+            check(accepted.routeResolution.wholeBodyVerified&&accepted.routeResolution.preflightWork>0&&
+                  std::string_view(accepted.routeResolution.reason)=="verified_whole_body_primitive"&&
+                  std::string_view(accepted.bodies.front().route)=="cylinder"&&
+                  accepted.bodies.front().initialFront.work==0,
+                  "normal constant-field request did not consume a verified whole-body capability");
+            auto forced=request;forced.useAdvancingInteriorFront=true;
+            mesh::Mesh frontDestination;
+            const auto front=geo::meshNativeCad(model,forced,frontDestination);
+            check(front.published&&front.audit.valid&&front.quality.valid&&
+                  front.bodies.front().initialFront.work>0&&
+                  std::string_view(front.routeResolution.reason)=="explicit_front_enabled"&&
+                  nativeSnapshot(model)==sourceSnapshot,
+                  "explicit initial-front mode lost audited construction or source identity");
+        }else check(accepted.bodies.front().initialFront.work>0&&
+                   std::string_view(accepted.bodies.front().initialFront.diagnostic)!="not_attempted",
+                   "bounded resource preset changed historical automatic construction");
         std::uint64_t tetrahedra=0;
         for(Index cell=0;cell<destination.cellCount();++cell) {
             if(destination.cell(cell).type!=mesh::CellType::Tet4)continue;
@@ -90,6 +104,24 @@ void checkResourcePolicyPresets(const geo::OcctModel& model,const std::string& s
                   "resource preset bypassed explicit work or changed retained mesh/source on refusal");
         }
     }
+    auto boundedQuality=geo::NativeCadMeshOptions{};
+    boundedQuality.geometry.targetSize=.7;boundedQuality.useAdvancingInteriorFront=true;
+    boundedQuality.initialTopologyQuality=true;
+    mesh::Mesh qualityDestination;qualityDestination.addNode({-11,-11,-11},{3,99});
+    const auto qualitySentinel=mesh::meshHash(qualityDestination);
+    const auto qualityResult=geo::meshNativeCad(model,boundedQuality,qualityDestination);
+    check(!qualityResult.bodies.empty(),"explicit bounded topology-quality request lost its body receipt");
+    const auto& topology=qualityResult.bodies.front().initialTopologyQuality;
+    const bool explicitNoCarrier=std::string_view(topology.diagnostic)=="no_carrier"||
+        std::string_view(topology.diagnostic)=="not_available"||std::string_view(topology.diagnostic)=="not_applicable";
+    check(topology.attempted||(!qualityResult.published&&qualityResult.reason==geo::NativeCadMeshReason::BudgetExceeded&&explicitNoCarrier),
+          "bounded explicit topology-quality override was silently ignored");
+    if(qualityResult.published)check(qualityResult.audit.valid&&qualityResult.quality.valid&&
+        qualityResult.bodies.front().solidTag==solidTag&&mesh::meshHash(qualityDestination)!=qualitySentinel,
+        "bounded topology-quality mode lost Native validity or body ownership");
+    else check(qualityResult.reason==geo::NativeCadMeshReason::BudgetExceeded&&qualityResult.destinationUnchanged&&
+        mesh::meshHash(qualityDestination)==qualitySentinel,"bounded topology-quality refusal changed its destination");
+    check(nativeSnapshot(model)==sourceSnapshot,"bounded topology-quality mode changed the original BRep");
 }
 }
 int main(int argc,char** argv) {

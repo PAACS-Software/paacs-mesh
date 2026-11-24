@@ -27,6 +27,7 @@
 #include "OcctInteriorSites.hpp"
 #include "OcctInteriorFront.hpp"
 #include "OcctInitialPointFront.hpp"
+#include "OcctInitialTopologyQuality.hpp"
 #include "paacs/algo/BoundaryConformingMesher.hpp"
 #include "paacs/bnd/TetPlcCavityRecovery.hpp"
 #include "../bnd/TetPlcRetainedRecovery.hpp"
@@ -459,6 +460,8 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                     report.maximumHeapCapacity=built.maximumHeapCapacity;
                     report.resourceRetries=built.resourceRetries;
                     report.auxiliaryResourceDiagnostic=built.auxiliaryResourceDiagnostic;
+                    report.geometryRefusalCacheHits=built.geometryRefusalCacheHits;
+                    report.cachedGeometryRefusals=built.cachedGeometryRefusals;
             };
             try {if(siteCap&&siteBudget&&preparationBytes<=options.maximumPrimitiveWorkingBytes-placementRetained){
                 if(advancingInteriorFront){
@@ -466,6 +469,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                     limits.work=siteBudget-siteWork;limits.queries=queryLimit;limits.sites=std::size_t(siteCap);
                     limits.balanceSourceAndBulk=fairConstruction;
                     limits.progressiveResources=progressiveResources;
+                    limits.cacheGeometryRefusals=progressiveResources;
                     limits.cancellation=o.cancellation;
                     limits.workingBytes=std::min<std::uint64_t>(128ULL*1024*1024,
                         options.maximumPrimitiveWorkingBytes-placementRetained);
@@ -492,7 +496,8 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                             ++siteQueries;++out.nativeQueries;
                             classifier.Perform(gp_Pnt(p.x,p.y,p.z),tol);
                             return classifier.State()==TopAbs_IN;
-                        },siteAccount,&built,progressiveResources?&initialTopology:nullptr);
+                        },siteAccount,&built,
+                        (progressiveResources||options.initialTopologyQuality.value_or(false))?&initialTopology:nullptr);
                     recordInitialPlacement();
                     need(!built.cancelled,NativeCadMeshReason::Cancelled,"cancelled");
                 }else{
@@ -529,6 +534,38 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 out.initialFront.seconds=std::chrono::duration<double>(Clock::now()-placementStarted).count();
             }
             placement.finish(sites.nodeCount()>ns?"seeded":"unchanged");
+            if(initialTopology.available&&options.initialTopologyQuality.value_or(progressiveResources)){
+                OcctStageTrace finalizing("initial_topology_quality",tag);
+                const auto qualityStarted=Clock::now();
+                OcctInitialTopologyQualityLimits limits;
+                limits.maximumWork=progressiveResources?remaining()/8:
+                    std::min<std::uint64_t>(1'000'000,remaining()/8);
+                const auto held=placementRetained+std::uint64_t(sites.nodeCount())*128+
+                    std::uint64_t(sites.cellCount())*128;
+                limits.maximumWorkingBytes=held<options.maximumPrimitiveWorkingBytes?
+                    options.maximumPrimitiveWorkingBytes-held:0;
+                limits.cancellation=o.cancellation;
+                const auto finished=finalizeOcctInitialTopologyQuality(initialTopology,limits);
+                out.initialTopologyQuality={finished.attempted,finished.completed,finished.changed,
+                    finished.cancelled,finished.budgetLimited,finished.summaryAvailable,finished.candidateListTruncated,
+                    finished.diagnostic,finished.work,finished.maximumModeledBytes,finished.candidates,
+                    finished.proposals,finished.certifications,finished.stagedEdits,finished.edits,
+                    finished.flips23,finished.flips32,finished.flips44,finished.liveBefore,finished.liveAfter,
+                    finished.severeBefore,finished.severeAfter,finished.protectedSourceFaces,finished.protectedSourceEdges,
+                    finished.minimumMeanRatioBefore,finished.minimumMeanRatioAfter,
+                    finished.minimumScaledJacobianBefore,finished.minimumScaledJacobianAfter,
+                    std::chrono::duration<double>(Clock::now()-qualityStarted).count()};
+                out.initialTopologyQuality.searchBelowMeanRatio=limits.searchBelowMeanRatio;
+                out.initialTopologyQuality.workLimit=limits.maximumWork;
+                finalizing.finish(finished.diagnostic);
+                accountCompleted(finished.work);
+                need(!finished.cancelled,NativeCadMeshReason::Cancelled,"cancelled");
+                need(std::string_view(finished.diagnostic)!="allocation_failed",NativeCadMeshReason::AllocationFailed,"allocation-failed");
+                need(std::string_view(finished.diagnostic)!="invalid_topology",NativeCadMeshReason::InternalError,"native-initial-topology-invalid");
+                bnd::detail::observeTetConstruction({"initial_topology_finalized",tag,&initialTopology.complex,
+                    nullptr,{},std::size_t(ns),8,0,initialTopology.complex.cells.size(),{},true,
+                    initialTopology.originalCoordinateRetryUsed});
+            }
             if(sites.nodeCount()>ns){
                 const auto siteBytes=std::uint64_t(sites.nodeCount())*nodeBytes+
                     std::uint64_t(nf)*(sizeof(mesh::Cell)+3*sizeof(Index));
