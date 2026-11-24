@@ -44,6 +44,7 @@
 #include <set>
 #include <sstream>
 #include <streambuf>
+#include <string_view>
 
 namespace paacs::geo {
 namespace {
@@ -555,7 +556,7 @@ mesh::Mesh extract(const OcctModel& model, int bodyTag, BRepBuilderAPI_Copy* cop
                 for(const auto& face:faces)if(face.rebuild){
                     std::vector<detail::OcctChartTriangle> unused;
                     const auto complete=detail::rebuildOcctWireChart(model,face.tag,edges,face.interior,
-                        position,tick,remaining,unused,&crossed,false,noRefine);
+                        position,tick,remaining,unused,&crossed,false,noRefine,false,4096,&aliasReceipt.witness);
                     context.require(complete,OcctBoundaryReason::NonconformingEdge);
                 }
             }
@@ -586,6 +587,7 @@ mesh::Mesh extract(const OcctModel& model, int bodyTag, BRepBuilderAPI_Copy* cop
                     if(spaceSurface)spacing={aliasOptions.curvaturePointsPerTurn?aliasOptions.curvaturePointsPerTurn:16,
                                              context.options.maximumChordError*.8};
                     detail::OcctCurveSamplingReport sampling;
+                    spacing.report=&sampling;
                     if(normalResources){
                         admitRepair(0);
                         constexpr std::uint64_t nodeBytes=sizeof(Vec3)+sizeof(mesh::Classification)+sizeof(OcctBoundaryNodeKey);
@@ -599,12 +601,22 @@ mesh::Mesh extract(const OcctModel& model, int bodyTag, BRepBuilderAPI_Copy* cop
                             std::uint64_t((std::numeric_limits<int>::max)())-points.size(),
                             (context.options.maximumOutputBytes-outputUsed)/nodeBytes+1,remaining()});
                         spacing.maximumIntegrationIntervals=std::min<std::uint64_t>(curveBytes/4096,remaining());
-                        spacing.maximumWorkingBytes=curveBytes;spacing.report=&sampling;
+                        spacing.maximumWorkingBytes=curveBytes;
                     }
                     const auto schedule=detail::sampleOcctCurveMetric(model,tag,aliasOptions.curveMetricSizeCap,
                         uses,incident,tick,spacing,aliasOptions.sizeField);
-                    if(normalResources&&sampling.budgetLimited)
+                    if(normalResources&&sampling.budgetLimited){
+                        aliasReceipt.witness={"shared_edge_sampling",sampling.diagnostic,tag,-1,std::nullopt,false};
                         context.require(false,OcctBoundaryReason::BudgetExceeded);
+                    }
+                    if(schedule.size()<2){
+                        const auto samplingReason=std::string_view(sampling.diagnostic);
+                        const bool geometric=samplingReason=="curve_parameter_resolution"||
+                            samplingReason=="curve_metric_resolution";
+                        aliasReceipt.witness={"shared_edge_sampling",
+                            samplingReason=="not_attempted"?"curve_metric_schedule_incomplete":sampling.diagnostic,
+                            tag,-1,std::nullopt,geometric};
+                    }
                     context.require(schedule.size()>=2,OcctBoundaryReason::NonconformingEdge);
                     admitRepair(schedule.size()+4096);
                     for(std::size_t j=1;j+1<chain.ids.size();++j){context.tick();retiredWireNodes.insert(chain.ids[j]);}
@@ -793,7 +805,10 @@ mesh::Mesh extract(const OcctModel& model, int bodyTag, BRepBuilderAPI_Copy* cop
                 };
                 const auto complete=detail::rebuildOcctWireChart(model,face->tag,edges,face->interior,
                     position,tick,remaining,replacements,nullptr,spaceSurface||aliasReceipt.rephasedEdges!=0,refine,
-                    spaceSurface&&aliasOptions.curvaturePointsPerTurn,chartNodeLimit);
+                    // Parameter correspondence can need bounded recovery at
+                    // any spacing. Curvature sampling is an independent size
+                    // request, not permission to fit an interior pcurve point.
+                    spaceSurface,chartNodeLimit,&aliasReceipt.witness);
                 context.require(complete,OcctBoundaryReason::NonconformingEdge);
                 chartTrace.next("surface_facet_witnesses");
                 // Only new interior chart vertices used the fast trim

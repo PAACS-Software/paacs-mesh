@@ -4,12 +4,14 @@
 // SPDX-License-Identifier: MPL-2.0
 
 #include "paacs/geometry/OcctBoundary.hpp"
+#include "nonlinear_parameter_prism.hpp"
 #include "paacs/algo/Delaunay2D.hpp"
 #include "paacs/mesh/MeshAudit.hpp"
 #include "../src/geometry/OcctBoundaryInternal.hpp"
 #include "../src/geometry/OcctCurveMetric.hpp"
 #include "../src/geometry/OcctModelInternal.hpp"
 #include "../src/geometry/OcctStarMesher.hpp"
+#include "../src/geometry/OcctWireChart.hpp"
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepAlgoAPI_Splitter.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
@@ -17,6 +19,7 @@
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepBuilderAPI_MakeSolid.hxx>
 #include <BRepBuilderAPI_Sewing.hxx>
+#include <BRepCheck_Analyzer.hxx>
 #include <BRepLib.hxx>
 #include <Geom_BezierSurface.hxx>
 #include <NCollection_Array2.hxx>
@@ -39,11 +42,16 @@
 #include <NCollection_List.hxx>
 #include <gp_Pln.hxx>
 #include <gp_Trsf.hxx>
+#include <Precision.hxx>
 #include <algorithm>
+#include <array>
+#include <atomic>
 #include <bit>
+#include <cmath>
 #include <filesystem>
 #include <iostream>
 #include <map>
+#include <numeric>
 #include <sstream>
 #include <set>
 
@@ -62,6 +70,118 @@ bool same(Vec3 a,Vec3 b) {
     return std::bit_cast<std::uint64_t>(a.x)==std::bit_cast<std::uint64_t>(b.x)&&
            std::bit_cast<std::uint64_t>(a.y)==std::bit_cast<std::uint64_t>(b.y)&&
            std::bit_cast<std::uint64_t>(a.z)==std::bit_cast<std::uint64_t>(b.z);
+}
+int boundedParameterCorrespondence(const geo::OcctModel& model) {
+    using geo::detail::OcctModelAccess;
+    const auto before=snapshot(model);
+    int checks=0,interiorUses=0;
+    for(const auto* face:model.faces())for(const auto& wire:model.boundaryUses(face->tag()))
+        for(const auto& use:wire.edges){
+            const auto edge=OcctModelAccess::edge(model,use.edgeTag);
+            check(BRep_Tool::SameRange(edge)&&BRep_Tool::SameParameter(edge),
+                  "owned correspondence controls retain true Native range/parameter flags");
+            if(use.degenerated)continue;
+            double first,last;model.edge(use.edgeTag)->parameterBounds(first,last);
+            const auto allowed=use.tolerance+model.tolerance(2,face->tag())+
+                std::max(model.tolerance(0,use.startVertexTag),model.tolerance(0,use.endVertexTag))+
+                Precision::Confusion();
+            for(double fraction:std::array{.25,.5,.75}){
+                const auto at=std::lerp(first,last,fraction);
+                Vec2 direct,fitted;
+                // This is an admitted positive control, not a fabricated
+                // primary-correspondence refusal from invalid geometry.
+                check(model.parameterOnUse(use.useId,at,direct),
+                      "valid control direct correspondence must remain available");
+                check(OcctModelAccess::fitParameterOnUse(model,use.useId,
+                    std::lerp(first,last,fraction-.125),at,std::lerp(first,last,fraction+.125),fitted),
+                    "bounded fit failed on a valid interior edge use");
+                const auto error=(face->pointAt(fitted)-model.edge(use.edgeTag)->pointAt(at)).norm();
+                check(std::isfinite(error)&&error<=allowed,
+                      "bounded fit lacks measured agreement with the original physical edge");
+                checks+=3;
+            }
+            ++interiorUses;
+            const auto middle=std::midpoint(first,last);
+            const auto quarter=std::lerp(first,last,.25),threeQuarter=std::lerp(first,last,.75);
+            for(const auto bracket:std::array{
+                    std::array{first,first,middle},std::array{middle,last,last},
+                    std::array{middle,middle,threeQuarter},std::array{quarter,middle,middle},
+                    std::array{threeQuarter,middle,quarter},
+                    std::array{first-(last-first),middle,last},
+                    std::array{first,middle,last+(last-first)}}){
+                Vec2 unchanged{37.,-91.};
+                check(!OcctModelAccess::fitParameterOnUse(model,use.useId,
+                    bracket[0],bracket[1],bracket[2],unchanged)&&unchanged.u==37.&&unchanged.v==-91.,
+                    "endpoint or invalid neighbor bracket changed the fitted output");
+                ++checks;
+            }
+        }
+    check(interiorUses>0,"owned correspondence control exercised no interior edge uses");
+    Vec2 unchanged{37.,-91.};
+    check(!OcctModelAccess::fitParameterOnUse(model,0,0.,.5,1.,unchanged)&&
+          unchanged.u==37.&&unchanged.v==-91.,"unknown use changed the fitted output");
+    check(snapshot(model)==before,"bounded parameter fitting changed the original Native BRep");
+    return checks+3;
+}
+int chartConstructionWitnesses(const geo::OcctModel& model) {
+    using namespace geo::detail;
+    struct Chain {std::vector<int> ids;std::vector<double> parameters;};
+    const auto faces=model.faces();check(!faces.empty(),"chart witness fixture has no face");
+    const auto faceTag=faces.front()->tag();
+    const auto wires=model.boundaryUses(faceTag);
+    check(!wires.empty()&&!wires.front().edges.empty(),"chart witness fixture has no wire use");
+    const auto& firstUse=wires.front().edges.front();
+    std::map<int,Chain> chains;
+    std::map<int,int> vertexIds;
+    std::vector<Vec3> points;
+    const auto vertex=[&](int tag){
+        if(auto found=vertexIds.find(tag);found!=vertexIds.end())return found->second;
+        const auto id=int(points.size());points.push_back(model.vertex(tag)->position());
+        vertexIds.emplace(tag,id);return id;
+    };
+    for(const auto* edge:model.edges()){
+        double first,last;edge->parameterBounds(first,last);
+        chains.emplace(edge->tag(),Chain{{vertex(edge->startVertexTag()),vertex(edge->endVertexTag())},{first,last}});
+    }
+    std::uint64_t work=0;
+    const auto tick=[&](std::uint64_t count){work+=count;};
+    const auto remaining=[](){return std::uint64_t(1'000'000);};
+    const auto refine=[](auto&,auto&,auto&,const auto&){return true;};
+    const auto position=[&](int id){return points.at(std::size_t(id));};
+    std::vector<OcctChartTriangle> ignored;
+    OcctBoundaryConstructionWitness witness{"stale","stale",999,998,std::uint64_t(997),true};
+    auto malformed=chains;
+    malformed.at(firstUse.edgeTag).ids.resize(1);
+    check(!rebuildOcctWireChart(model,faceTag,malformed,{},position,tick,remaining,ignored,nullptr,
+        false,refine,false,4096,&witness),"missing curve samples were accepted");
+    check(std::string_view(witness.stage)=="wire_chart"&&
+          std::string_view(witness.detail)=="curve_samples_missing"&&
+          witness.edgeTag==firstUse.edgeTag&&witness.faceTag==faceTag&&
+          witness.useId==firstUse.useId&&!witness.geometricRefusal,
+          "missing curve samples lost their exact non-geometric entity/use witness");
+    check(!rebuildOcctWireChart(model,faceTag,chains,{},position,tick,remaining,ignored,nullptr,
+        false,refine,false,0,&witness)&&std::string_view(witness.detail)=="chart_node_limit"&&
+        !witness.geometricRefusal&&witness.edgeTag==firstUse.edgeTag&&witness.useId==firstUse.useId,
+        "chart node admission was mislabeled as a geometric fallback opportunity");
+    const auto shifted=[&](int id){return position(id)+Vec3{.01,0,0};};
+    check(!rebuildOcctWireChart(model,faceTag,chains,{},shifted,tick,remaining,ignored,nullptr,
+        false,refine,false,4096,&witness)&&std::string_view(witness.detail)=="pcurve_position_mismatch"&&
+        witness.geometricRefusal&&witness.edgeTag==firstUse.edgeTag&&witness.useId==firstUse.useId,
+        "pcurve correspondence refusal lost its exact geometric witness");
+    std::vector<OcctChartTriangle> plain,observed;
+    check(rebuildOcctWireChart(model,faceTag,chains,{},position,tick,remaining,plain,nullptr,false,refine)&&
+          rebuildOcctWireChart(model,faceTag,chains,{},position,tick,remaining,observed,nullptr,
+            false,refine,false,4096,&witness)&&plain.size()==observed.size(),
+          "optional chart witness changed successful construction");
+    for(std::size_t i=0;i<plain.size();++i){
+        check(plain[i].nodes==observed[i].nodes,"optional chart witness changed node identities");
+        for(unsigned j=0;j<3;++j)check(plain[i].uv[j].u==observed[i].uv[j].u&&
+            plain[i].uv[j].v==observed[i].uv[j].v,"optional chart witness changed parameters");
+    }
+    check(std::string_view(witness.stage)=="not_reported"&&std::string_view(witness.detail)=="not_reported"&&
+          witness.edgeTag==-1&&witness.faceTag==-1&&!witness.useId&&!witness.geometricRefusal,
+          "successful chart retained a stale refusal witness");
+    return 4;
 }
 int constrainedChartRegions() {
     // Each strip consists of two triangles between the outer and inner wire.
@@ -267,6 +387,25 @@ int main(int argc,char**argv) {
             {"tube",BRepAlgoAPI_Cut(cylinder,BRepPrimAPI_MakeCylinder(.55,2.).Shape()).Shape()}};
         geo::OcctBoundaryOptions options;options.linearDeflection=.01;options.maximumChordError=.021;
         int checks=0;
+        {
+            const auto shape=test::nonlinearParameterPrism();
+            check(BRepCheck_Analyzer(shape).IsValid(),"owned nonlinear-parameter prism is Native-valid");
+            auto owned=load(shape,folder/"nonlinear-parameter-prism.brep");
+            bool nonlinear=false;
+            for(const auto* edge:owned.model->edges()){
+                double first,last;edge->parameterBounds(first,last);
+                nonlinear|=(edge->pointAt(std::midpoint(first,last))-
+                    (edge->pointAt(first)+edge->pointAt(last))*.5).norm()>.05;
+            }
+            check(nonlinear,"owned control lost its nonuniform physical parameterization");
+            checks+=boundedParameterCorrespondence(*owned.model)+2;
+        }
+        {
+            auto owned=load(BRepPrimAPI_MakeBox(1.,2.,3.).Shape(),folder/"chart-witness-box.brep");
+            const auto before=snapshot(*owned.model);
+            checks+=chartConstructionWitnesses(*owned.model);
+            check(snapshot(*owned.model)==before,"chart witness checks changed the source BRep");
+        }
         for(const auto& [name,shape]:fixtures) {
             auto imported=load(shape,folder/(std::string(name)+".brep")); const auto before=snapshot(*imported.model);
             mesh::Mesh boundary;boundary.addNode({-7,-8,-9},{3,999});
@@ -317,6 +456,7 @@ int main(int argc,char**argv) {
                 checks+=4;
             }
             if(std::string_view(name)=="cylinder"){
+                checks+=boundedParameterCorrespondence(*imported.model);
                 std::vector<int> faces;for(const auto* f:imported.model->faces())faces.push_back(f->tag());
                 geo::OcctBoundaryOutcome prepared;auto session=geo::detail::OcctBoundarySession::prepare(*imported.model,options,prepared);
                 check(session!=nullptr,"alias session preparation");geo::detail::OcctBoundaryAliasOptions alias;alias.faceTags=faces;geo::detail::OcctBoundaryAliasReceipt receipt;

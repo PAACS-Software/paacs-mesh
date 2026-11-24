@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 #pragma once
+#include "OcctBoundaryInternal.hpp"
 #include "OcctCurveMetric.hpp"
 #include "OcctModelInternal.hpp"
 #include "paacs/algo/Delaunay2DScalable.hpp"
@@ -33,7 +34,13 @@ bool rebuildOcctWireChart(const OcctModel& model, int faceTag, const Chains& cha
     std::span<const std::pair<int,Vec2>> interior, Position position, Tick tick,
     Remaining remaining, std::vector<OcctChartTriangle>& output,
     std::set<int>* crossingEdges, bool physicalMetric, Refine refine, bool fitPcurves=false,
-    std::size_t maximumChartNodes=4096) {
+    std::size_t maximumChartNodes=4096,OcctBoundaryConstructionWitness* witness=nullptr) {
+    if(witness)*witness={};
+    const auto refuse=[&](const char* detail,bool geometric=false,int edge=-1,
+                         std::optional<std::uint64_t> use=std::nullopt){
+        if(witness)*witness={"wire_chart",detail,edge,faceTag,use,geometric};
+        return false;
+    };
     struct Segment { Index a, b; bool degenerate; double tolerance; int tag; };
     const auto* face=model.face(faceTag);
     std::vector<int> ids;
@@ -48,7 +55,8 @@ bool rebuildOcctWireChart(const OcctModel& model, int faceTag, const Chains& cha
         for(const auto& use:wire.edges){
             tick(1);
             const auto& chain=chains.at(use.edgeTag);
-            if(chain.ids.size()<2||use.sense==0)return false;
+            if(chain.ids.size()<2)return refuse("curve_samples_missing",false,use.edgeTag,use.useId);
+            if(use.sense==0)return refuse("edge_use_orientation",false,use.edgeTag,use.useId);
             const auto* edge=model.edge(use.edgeTag);
             double first,last;
             edge->parameterBounds(first,last);
@@ -63,20 +71,23 @@ bool rebuildOcctWireChart(const OcctModel& model, int faceTag, const Chains& cha
                 const auto next=use.sense>0?i+1:i-1;
                 const auto t=i==0?first:(i+1==chain.ids.size()?last:chain.parameters[i]);
                 Vec2 parameter;
-                if(ids.size()>=maximumChartNodes)return false;
+                if(ids.size()>=maximumChartNodes)return refuse("chart_node_limit",false,use.edgeTag,use.useId);
                 if(!model.parameterOnUse(use.useId,t,parameter)){
-                    if(!fitPcurves||use.seam||use.degenerated||i==0||i+1==chain.ids.size())return false;
+                    if(!fitPcurves||use.seam||use.degenerated||i==0||i+1==chain.ids.size())
+                        return refuse("pcurve_unavailable",true,use.edgeTag,use.useId);
                     // The fit evaluates 96 ternary-search samples, one residual
                     // and one final UV. Charge it before touching the CAD.
                     tick(98);
                     if(!OcctModelAccess::fitParameterOnUse(model,use.useId,chain.parameters[i-1],
-                                                           t,chain.parameters[i+1],parameter))return false;
+                                                           t,chain.parameters[i+1],parameter))
+                        return refuse("pcurve_fit_failed",true,use.edgeTag,use.useId);
                 }
                 double allowed=tolerance;
                 if(i==0)allowed+=startTolerance;
                 else if(i+1==chain.ids.size())allowed+=endTolerance;
                 const double error=(face->pointAt(parameter)-position(chain.ids[i])).norm();
-                if(!std::isfinite(error)||error>allowed*1.01+1e-9)return false;
+                if(!std::isfinite(error))return refuse("pcurve_nonfinite_position",false,use.edgeTag,use.useId);
+                if(error>allowed*1.01+1e-9)return refuse("pcurve_position_mismatch",true,use.edgeTag,use.useId);
                 const Index corner=static_cast<Index>(ids.size());
                 ids.push_back(chain.ids[i]);
                 uv.push_back(parameter);
@@ -85,15 +96,15 @@ bool rebuildOcctWireChart(const OcctModel& model, int faceTag, const Chains& cha
                 segments.push_back({corner,-1,use.degenerated,allowed,use.edgeTag});
             }
         }
-        if(corners.size()<3)return false;
+        if(corners.size()<3)return refuse("wire_too_short");
         for(std::size_t i=0;i<corners.size();++i){
             const auto next=corners[(i+1)%corners.size()];
-            if(ids[next]!=ends[i])return false;
+            if(ids[next]!=ends[i])return refuse("wire_disconnected");
             segments[firstSegment+i].b=next;
         }
         wires.push_back(std::move(corners));
     }
-    if(wires.empty())return false;
+    if(wires.empty())return refuse("wires_missing");
 
     // Collapse a tiny UV detour only along a native degenerate edge whose
     // physical samples all stay within the tolerance of the same CAD vertex.
@@ -132,7 +143,7 @@ bool rebuildOcctWireChart(const OcctModel& model, int faceTag, const Chains& cha
         for(auto& id:wire)id=remap[id];
         wire.erase(std::unique(wire.begin(),wire.end()),wire.end());
         if(wire.size()>1&&wire.front()==wire.back())wire.pop_back();
-        if(wire.size()<3)return false;
+        if(wire.size()<3)return refuse("collapsed_wire");
     }
     std::vector<algo::PlanarSegment> constraints;
     std::vector<int> constraintTags;
@@ -142,7 +153,7 @@ bool rebuildOcctWireChart(const OcctModel& model, int faceTag, const Chains& cha
             constraints.push_back({a,b});
             if(crossingEdges)constraintTags.push_back(s.degenerate?-1:s.tag);
         }
-        else if(!s.degenerate)return false;
+        else if(!s.degenerate)return refuse("nondegenerate_edge_collapsed",false,s.tag);
     }
     if(crossingEdges){
         const auto proper=[](Vec2 a,Vec2 b,Vec2 c,Vec2 d){
@@ -182,19 +193,31 @@ bool rebuildOcctWireChart(const OcctModel& model, int faceTag, const Chains& cha
     };
     for(const auto& [id,parameter]:interior){
         if(!inDomain(parameter))continue;
-        if(ids.size()>=maximumChartNodes)return false;
+        if(ids.size()>=maximumChartNodes)return refuse("chart_node_limit");
         ids.push_back(id);
         uv.push_back(parameter);
     }
     tick(std::uint64_t(uv.size())*uv.size());
     std::vector<Vec2> metricCoordinates;
-    if(physicalMetric&&!metricOcctChart(model,faceTag,uv,tick,metricCoordinates))return false;
+    if(physicalMetric&&!metricOcctChart(model,faceTag,uv,tick,metricCoordinates))
+        return refuse("chart_metric_singular",true);
     const auto& coordinates=physicalMetric?metricCoordinates:uv;
     auto triangles=algo::delaunay2DScalable(coordinates);
     const auto recovery=algo::recoverPlanarConstraints(coordinates,constraints,triangles,
         std::min<std::uint64_t>(5'000'000,remaining()));
     tick(recovery.work);
-    if(!recovery.completed)return false;
+    if(!recovery.completed){
+        switch(recovery.reason){
+        case algo::PlanarRecoveryReason::CrossingConstraints:return refuse("planar_crossing_constraints",true);
+        case algo::PlanarRecoveryReason::UnsplitSegment:return refuse("planar_unsplit_segment",true);
+        case algo::PlanarRecoveryReason::NotRecoverable:return refuse("planar_constraints_not_recoverable",true);
+        case algo::PlanarRecoveryReason::WorkBudget:return refuse("planar_recovery_work_budget");
+        case algo::PlanarRecoveryReason::AllocationFailed:return refuse("planar_recovery_allocation_failed");
+        case algo::PlanarRecoveryReason::InvalidInput:return refuse("planar_recovery_invalid_input");
+        case algo::PlanarRecoveryReason::InvalidTriangulation:return refuse("planar_recovery_invalid_triangulation");
+        default:return refuse("planar_recovery_internal_error");
+        }
+    }
     if(physicalMetric){
         std::set<std::array<Index,2>> barriers;
         std::set<std::array<int,2>> protectedEdges;
@@ -205,14 +228,14 @@ bool rebuildOcctWireChart(const OcctModel& model, int faceTag, const Chains& cha
             protectedEdges.insert({int(lo),int(hi)});
         }
         const auto parity=labelOcctChartRegions(triangles,barriers,tick);
-        if(!parity)return false;
+        if(!parity)return refuse("region_parity_refused");
         std::size_t retained=0;
         for(std::size_t i=0;i<triangles.size();++i){
             tick(1);
             if((*parity)[i])triangles[retained++]=triangles[i];
         }
         triangles.resize(retained);
-        if(!refine(uv,ids,triangles,protectedEdges))return false;
+        if(!refine(uv,ids,triangles,protectedEdges))return refuse("chart_refinement_refused");
     }
     std::map<std::array<Index,2>,unsigned> incidence;
     for(auto triangle:triangles){
@@ -220,23 +243,24 @@ bool rebuildOcctWireChart(const OcctModel& model, int faceTag, const Chains& cha
         const auto v=triangle.v;
         const auto a=uv[v[0]],b=uv[v[1]],c=uv[v[2]];
         if(!physicalMetric&&!inDomain({(a.u+b.u+c.u)/3.,(a.v+b.v+c.v)/3.}))continue;
-        if(predicates::orient2d(a,b,c)!=predicates::Sign::Positive)return false;
+        if(predicates::orient2d(a,b,c)!=predicates::Sign::Positive)return refuse("triangle_orientation");
         for(unsigned i=0;i<3;++i){
             const auto [lo,hi]=std::minmax(v[i],v[(i+1)%3]);
             ++incidence[{lo,hi}];
         }
         bool collapsed=false;
         for(unsigned i=0;i<3;++i)if(ids[v[i]]==ids[v[(i+1)%3]]){
-            if(!poleIds.contains(ids[v[i]]))return false;
+            if(!poleIds.contains(ids[v[i]]))return refuse("unexpected_physical_collapse");
             collapsed=true;
         }
         if(!collapsed)output.push_back({{ids[v[0]],ids[v[1]],ids[v[2]]},{a,b,c}});
     }
     for(const auto& segment:constraints){
         const auto [lo,hi]=std::minmax(segment.first,segment.second);
-        if(incidence[{lo,hi}]!=1)return false;
+        if(incidence[{lo,hi}]!=1)return refuse("boundary_constraint_incidence",true);
     }
-    return !output.empty();
+    if(output.empty())return refuse("chart_empty");
+    return true;
 }
 
 } // namespace paacs::geo::detail
