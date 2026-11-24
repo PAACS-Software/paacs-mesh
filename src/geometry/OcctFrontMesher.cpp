@@ -34,6 +34,7 @@
 #include "../bnd/TetConstraintRecovery.hpp"
 #include <Standard_OutOfMemory.hxx>
 #include <Standard_Failure.hxx>
+#include <Precision.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
 #include <bit>
@@ -105,61 +106,101 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
         if(customConstruction){bo.maximumNodes=o.maximumNodes;bo.maximumTriangles=o.maximumCells/2;}
         mesh::Mesh boundary;
         OcctBoundaryOutcome surface;
-        if(spaceSurface){
-            if(!customConstruction){
-                bo.maximumNodes=std::min<std::uint64_t>(bo.maximumNodes,curvatureSurface||spatialSizing?6'000:1'200);
-                bo.maximumTriangles=std::min<std::uint64_t>(bo.maximumTriangles,curvatureSurface||spatialSizing?10'000:1'800);
+        if(spaceSurface&&!customConstruction){
+            bo.maximumNodes=std::min<std::uint64_t>(bo.maximumNodes,curvatureSurface||spatialSizing?6'000:1'200);
+            bo.maximumTriangles=std::min<std::uint64_t>(bo.maximumTriangles,curvatureSurface||spatialSizing?10'000:1'800);
+        }
+        out.sourceShell.requestedGlobalSize=o.targetSize;
+        out.sourceShell.requestedChordError=options.maximumChordError;
+        out.sourceShell.maximumRelativeVolumeError=options.maximumRelativeVolumeError;
+        // Local chord witnesses alone do not establish the global source-volume
+        // bound. Normal can tighten geometry resolution before volume placement;
+        // the requested size field and historical Bounded dispatch stay intact.
+        const unsigned sourceAttempts=progressiveResources?unsigned(out.sourceShell.attempts.size()):1;
+        try {
+        for(unsigned attempt=0;attempt<sourceAttempts;++attempt){
+            bo.maximumWork=remaining();
+            bo.maximumChordError=out.chord;bo.linearDeflection=out.chord*.4;
+            auto& receipt=out.sourceShell.attempts[out.sourceShell.count++];
+            receipt.chordErrorLimit=out.chord;
+            const auto sourceStarted=Clock::now();
+            if(spaceSurface){
+                OcctBoundaryAliasReceipt spacing;
+                surface=buildSpacedOcctBoundary(model,tag,bo,o.targetSize,options.maximumPrimitiveWorkingBytes/4,
+                    boundary,spacing,regularSurface,improveQuality,
+                    curvatureSurface||spatialSizing?options.curvaturePointsPerTurn:0,sizeField?&*sizeField:nullptr);
+                out.rebuiltSurfaceCharts+=spacing.rebuiltCharts;
+                out.surfaceSpacing=std::move(spacing.surfaceSpacing);
+            }else if(options.recoveryMode==NativeCadRecoveryMode::Advanced){
+                OcctBoundaryOutcome preparation;
+                auto session=OcctBoundarySession::prepare(model,bo,preparation);
+                if(session){
+                    OcctBoundaryAliasOptions repair;
+                    repair.maximumFlips=0;repair.maximumRebuiltCharts=32;
+                    repair.maximumWorkingBytes=options.maximumPrimitiveWorkingBytes/4;
+                    OcctBoundaryAliasReceipt repairs;
+                    surface=session->boundary(tag,boundary,repair,repairs);
+                    const auto retryRoom=bo.maximumWork-session->work();
+                    if(options.useAdaptiveTetRecovery&&model.solids().size()==1&&
+                        retryRoom>0&&retryRoom>=surface.work&&
+                        (surface.reason==OcctBoundaryReason::NonconformingEdge||
+                         surface.reason==OcctBoundaryReason::OpenBoundary)){
+                        const auto firstWork=surface.work;
+                        repair.curveMetricSizeCap=o.targetSize;
+                        surface=session->boundary(tag,boundary,repair,repairs,retryRoom);
+                        surface.work+=firstWork;
+                    }
+                    surface.work+=preparation.work;
+                    out.rebuiltSurfaceCharts+=repairs.rebuiltCharts;
+                    out.surfaceSpacing=std::move(repairs.surfaceSpacing);
+                }else surface=std::move(preparation);
+            }else surface=buildOcctBoundary(model,tag,bo,boundary);
+            receipt.seconds=std::chrono::duration<double>(Clock::now()-sourceStarted).count();
+            receipt.work=surface.work;receipt.nodes=surface.nodes;receipt.triangles=surface.triangles;
+            receipt.published=surface.published;receipt.sourceModelUnmodified=surface.sourceModelUnmodified;
+            receipt.surfaceDiagnostic=occtBoundaryReasonName(surface.reason);
+            receipt.signedVolume=surface.signedSurfaceVolume;receipt.cadVolume=surface.cadVolume;
+            receipt.relativeVolumeError=surface.relativeVolumeError;
+            receipt.volumeCriterionMet=surface.published&&surface.relativeVolumeError<=options.maximumRelativeVolumeError;
+            for(const auto& face:out.surfaceSpacing){
+                receipt.constructionBudgetLimited|=face.budgetLimited;
+                receipt.constructionStalled|=!face.queueExhausted&&!face.budgetLimited;
             }
-            OcctBoundaryAliasReceipt spacing;
-            surface=buildSpacedOcctBoundary(model,tag,bo,o.targetSize,options.maximumPrimitiveWorkingBytes/4,
-                boundary,spacing,regularSurface,improveQuality,
-                curvatureSurface||spatialSizing?options.curvaturePointsPerTurn:0,sizeField?&*sizeField:nullptr);
-            out.rebuiltSurfaceCharts=spacing.rebuiltCharts;
-            out.surfaceSpacing=std::move(spacing.surfaceSpacing);
-        }else if(options.recoveryMode==NativeCadRecoveryMode::Advanced){
-            OcctBoundaryOutcome preparation;
-            auto session=OcctBoundarySession::prepare(model,bo,preparation);
-            if(session){
-                OcctBoundaryAliasOptions repair;
-                repair.maximumFlips=0;
-                repair.maximumRebuiltCharts=32;
-                repair.maximumWorkingBytes=options.maximumPrimitiveWorkingBytes/4;
-                OcctBoundaryAliasReceipt repairs;
-                surface=session->boundary(tag,boundary,repair,repairs);
-                const auto retryRoom=bo.maximumWork-session->work();
-                if(options.useAdaptiveTetRecovery&&model.solids().size()==1&&
-                    retryRoom>0&&retryRoom>=surface.work&&
-                    (surface.reason==OcctBoundaryReason::NonconformingEdge||
-                     surface.reason==OcctBoundaryReason::OpenBoundary)){
-                    const auto firstWork=surface.work;
-                    repair.curveMetricSizeCap=o.targetSize;
-                    surface=session->boundary(tag,boundary,repair,repairs,retryRoom);
-                    surface.work+=firstWork;
-                }
-                surface.work+=preparation.work;
-                out.rebuiltSurfaceCharts=repairs.rebuiltCharts;
-                out.surfaceSpacing=std::move(repairs.surfaceSpacing);
-            }else surface=std::move(preparation);
-        }else surface=buildOcctBoundary(model,tag,bo,boundary);
-        out.surfaceWork=surface.work;
-        out.surfaceTriangles=surface.triangles;
-        out.maximumNodeError=surface.maximumNodeProjectionError;
-        out.maximumFacetError=surface.maximumFacetSampleError;
-        out.surfaceDiagnostic=occtBoundaryReasonName(surface.reason);
-        out.surfaceSeconds=std::chrono::duration<double>(Clock::now()-began).count();
-        accountCompleted(surface.work);
-        need(surface.reason!=OcctBoundaryReason::Cancelled,NativeCadMeshReason::Cancelled,"cancelled");need(surface.reason!=OcctBoundaryReason::AllocationFailed,NativeCadMeshReason::AllocationFailed,"allocation-failed");
-        need(!spaceSurface||surface.reason!=OcctBoundaryReason::SourceChanged,NativeCadMeshReason::InternalError,"spaced-surface-source-changed");
-        need(!spaceSurface||surface.published||surface.reason==OcctBoundaryReason::BudgetExceeded,
-             NativeCadMeshReason::GeometryError,out.surfaceDiagnostic);
-        need(surface.reason!=OcctBoundaryReason::BudgetExceeded,NativeCadMeshReason::BudgetExceeded,"native-plc-surface-budget");need(surface.published,NativeCadMeshReason::GeometryError,"native-plc-surface-refused");
-        need(surface.relativeVolumeError<=options.maximumRelativeVolumeError,NativeCadMeshReason::GeometryError,"native-plc-source-volume-error");
+            out.surfaceWork+=surface.work;out.surfaceTriangles=surface.triangles;
+            out.maximumNodeError=surface.maximumNodeProjectionError;
+            out.maximumFacetError=surface.maximumFacetSampleError;
+            out.surfaceDiagnostic=receipt.surfaceDiagnostic;
+            out.sourceShell.diagnostic=surface.published?"native-plc-source-volume-error":receipt.surfaceDiagnostic;
+            out.surfaceSeconds=std::chrono::duration<double>(Clock::now()-began).count();
+            accountCompleted(surface.work);
+            need(surface.reason!=OcctBoundaryReason::Cancelled,NativeCadMeshReason::Cancelled,"cancelled");
+            need(surface.reason!=OcctBoundaryReason::AllocationFailed,NativeCadMeshReason::AllocationFailed,"allocation-failed");
+            need(!spaceSurface||surface.reason!=OcctBoundaryReason::SourceChanged,NativeCadMeshReason::InternalError,"spaced-surface-source-changed");
+            need(!spaceSurface||surface.published||surface.reason==OcctBoundaryReason::BudgetExceeded,
+                 NativeCadMeshReason::GeometryError,out.surfaceDiagnostic);
+            need(surface.reason!=OcctBoundaryReason::BudgetExceeded,NativeCadMeshReason::BudgetExceeded,"native-plc-surface-budget");
+            need(surface.published,NativeCadMeshReason::GeometryError,"native-plc-surface-refused");
+            if(receipt.volumeCriterionMet){out.sourceShell.diagnostic="volume_criterion_met";break;}
+            need(!progressiveResources||!receipt.constructionBudgetLimited,NativeCadMeshReason::BudgetExceeded,
+                 "native-plc-source-construction-budget");
+            need(attempt+1<sourceAttempts,NativeCadMeshReason::GeometryError,"native-plc-source-volume-error");
+            const auto tighter=out.chord*.5;
+            need(tighter>0&&std::isfinite(tighter)&&(spaceSurface||tighter*.4>=Precision::Confusion()),
+                 NativeCadMeshReason::GeometryError,"native-plc-source-resolution-limit");
+            // Failed private shells are not retained alongside the next build.
+            mesh::Mesh empty;boundary.swap(empty);surface=OcctBoundaryOutcome{};
+            std::vector<CadSurfaceSpacingReport>().swap(out.surfaceSpacing);
+            out.chord=tighter;
+        }
+        }catch(const Stop& failure){out.sourceShell.diagnostic=failure.diagnostic;throw;}
         OcctStarOptions certificateOptions;certificateOptions.maximumWork=remaining();certificateOptions.maximumWorkingBytes=options.maximumPrimitiveWorkingBytes;certificateOptions.cancellation=o.cancellation;certificateOptions.maximumBoundaryNodes=bo.maximumNodes;certificateOptions.maximumBoundaryTriangles=bo.maximumTriangles;certificateOptions.maximumNodes=o.maximumNodes;certificateOptions.maximumCells=o.maximumCells;certificateOptions.maximumOutputBytes=o.maximumOutputBytes;
         OcctStageTrace shellCheck("exact_shell_certificate",tag);
         auto certificate=certifyOcctBoundarySurface(boundary,certificateOptions);
         shellCheck.finish(certificate.diagnostic);
         accountCompleted(certificate.workUsed);
+        out.sourceShell.diagnostic=certificate.certified?"accepted":certificate.diagnostic;
         need(certificate.reason!=OcctStarReason::WorkBudget&&certificate.reason!=OcctStarReason::OutputBudget,NativeCadMeshReason::BudgetExceeded,"native-plc-source-certificate-budget");need(certificate.reason!=OcctStarReason::Cancelled,NativeCadMeshReason::Cancelled,"cancelled");need(certificate.reason!=OcctStarReason::AllocationFailed,NativeCadMeshReason::AllocationFailed,"allocation-failed");need(certificate.certified,NativeCadMeshReason::GeometryError,"native-plc-source-not-embedded");
+        out.sourceShell.accepted=true;
         stage="seeds";trace.next(stage);out.surfaceSeconds=std::chrono::duration<double>(Clock::now()-began).count();
         const auto ns=boundary.nodeCount(),nf=boundary.cellCount();
         auto frontCells=std::min<std::uint64_t>(o.maximumCells-nf,

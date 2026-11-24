@@ -6,6 +6,7 @@
 
 """Verify native CAD request boundaries and existing-archive preservation."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -47,10 +48,14 @@ def main():
 
         def run(name, fixture, options=(), success=False, reason=None, size=".3"):
             previous = output.read_bytes()
-            command = [str(executable), str(args.fixtures / fixture), size, str(output),
+            source = args.fixtures / fixture
+            source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
+            command = [str(executable), str(source), size, str(output),
                        "--native-cad", "--report-json", *options]
             child = subprocess.run(command, capture_output=True, text=True, timeout=60)
             receipt = report_from(child.stdout)
+            if hashlib.sha256(source.read_bytes()).hexdigest() != source_hash:
+                raise RuntimeError(f"{name}: modified the imported source file")
             if (child.returncode == 0) != success:
                 raise RuntimeError(f"{name}: code={child.returncode}, report={receipt}, stderr={child.stderr}")
             if success:
@@ -188,7 +193,11 @@ def main():
                 or plain_body.get("centroids_within_chord_tolerance") != 0
                 or plain_body.get("interior_front", {}).get("diagnostic") != "not_attempted"):
             raise RuntimeError(f"plain defaults did not complete the source sweep and populate the interior voids: {plain}")
-        default_sphere = run("default_native_surface_sphere", "sphere.step", success=True)
+        # Historical Bounded requests retain their original single source-build
+        # refusal and byte-identical analytic fallback. Normal may retry the
+        # source chord under the same volume tolerance before placing points.
+        default_sphere = run("bounded_automatic_surface_sphere", "sphere.step",
+                             ("--resource-policy", "bounded"), success=True)
         default_sphere_body = default_sphere["bodies"][0]
         if (default_sphere.get("audit_valid") is not True or default_sphere.get("solids") != 1
                 or default_sphere.get("advancing_interior_front_policy") != "auto"
@@ -204,21 +213,38 @@ def main():
             raise RuntimeError(f"automatic defaults regressed the established sphere's strict native publication: {default_sphere}")
         fallback = default_sphere.get("initial_front_fallback", {})
         body_fallback = default_sphere_body.get("initial_front_fallback", {})
+        rejected_source = fallback.get("source_shell", {})
+        rejected_attempts = rejected_source.get("attempts", [])
         if (fallback.get("attempted") is not True or fallback.get("reason") != "geometry_error"
                 or fallback.get("work", 0) <= 0 or fallback.get("seconds", -1) < 0
                 or fallback.get("surface_diagnostic") in {None, "not_attempted"}
+                or rejected_source.get("available") is not True or rejected_source.get("accepted") is not False
+                or len(rejected_attempts) != 1
+                or default_sphere_body.get("volume_sizing", {}).get("applied") is not False
+                or default_sphere_body.get("volume_sizing", {}).get("sizing_completion_certified") is not False
                 or default_sphere.get("validation_work", 0) <= fallback.get("work", 0)
                 or default_sphere.get("total_seconds", 0) < fallback.get("seconds", 0)
                 or body_fallback != fallback
                 or default_sphere_body.get("initial_front", {}).get("diagnostic") != "not_attempted"):
             raise RuntimeError(f"automatic sphere fallback hid its failed pre-point surface work: {default_sphere}")
+        rejected = rejected_attempts[0]
+        if rejected.get("surface_published") is True:
+            if (rejected.get("volume_criterion_met") is not False
+                    or rejected.get("source_model_verified_unchanged") is not True
+                    or fallback.get("volume_diagnostic") != "native-plc-source-volume-error"):
+                raise RuntimeError(f"published sphere source lost its volume-refusal certificate: {fallback}")
+        elif (rejected.get("surface_published") is not False
+                or rejected.get("volume_criterion_met") is not None
+                or rejected.get("surface_diagnostic") != "geometry_error"
+                or fallback.get("volume_diagnostic") != rejected.get("surface_diagnostic")):
+            raise RuntimeError(f"unpublished sphere source invented a volume check or lost its original refusal: {fallback}")
         default_sphere_bytes = output.read_bytes()
         forced_sphere = run("forced_initial_sphere_surface_refusal", "sphere.step",
-                            ("--advancing-interior-front",), reason="geometry-error")
+                            ("--resource-policy", "bounded", "--advancing-interior-front"), reason="geometry-error")
         if forced_sphere.get("initial_front_fallback", {}).get("attempted") is not False:
             raise RuntimeError("explicit initial-front ON silently fell back after source refusal")
         sphere_reference = run("automatic_sphere_matches_legacy_off", "sphere.step",
-                               ("--no-advancing-interior-front",), success=True)
+                               ("--resource-policy", "bounded", "--no-advancing-interior-front"), success=True)
         if output.read_bytes() != default_sphere_bytes:
             raise RuntimeError("automatic pre-point fallback changed the established sphere archive")
         reference_body = sphere_reference["bodies"][0]
@@ -231,6 +257,59 @@ def main():
                     "boundary_node_error", "boundary_sample_error", "surface_chord_error_limit"):
             if key not in default_sphere_body or default_sphere_body[key] != reference_body.get(key):
                 raise RuntimeError(f"automatic sphere fallback changed the established certificate field {key}")
+        sphere_sizes = []
+        for size in (".5", ".25"):
+            current = run(f"normal_sphere_source_retry_{size}", "sphere.step",
+                          ("--max-working-bytes", str(1024**3)), success=True, size=size)
+            body = current["bodies"][0]
+            shell = body.get("source_shell", {})
+            attempts = shell.get("attempts", [])
+            front = body.get("initial_front", {})
+            sizing = body.get("volume_sizing", {})
+            # This single-solid route publishes Tri3 boundary + Tet4 volume.
+            # Raw CLI reports total cells; the Python wrapper adds tetrahedra.
+            tetrahedra = current.get("cells", 0) - body.get("surface_triangles", 0)
+            if (current.get("resources", {}).get("policy") != "normal"
+                    or current.get("initial_front_fallback", {}).get("attempted") is not False
+                    or current.get("advancing_interior_front") is not True
+                    or current.get("audit_valid") is not True
+                    or current.get("solids") != 1 or current.get("auxiliary_faces") != 0
+                    or tetrahedra <= 0
+                    or body.get("route") != "native_spatial_sizing"
+                    or body.get("boundary_embedding_certified") is not True
+                    or body.get("native_volume_reason") != "none"
+                    or body.get("native_centroids_checked", 0) != tetrahedra
+                    or body.get("centroid_outside_distance_limit") != 0
+                    or body.get("maximum_outside_centroid_distance") != 0
+                    or body.get("relative_volume_error", 1) > .01
+                    or shell.get("accepted") is not True or shell.get("diagnostic") != "accepted"
+                    or shell.get("requested_global_size") != float(size)
+                    or shell.get("requested_chord_error") is not None
+                    or shell.get("maximum_relative_volume_error") != .01
+                    or not 2 <= len(attempts) <= 3
+                    or attempts[0].get("volume_criterion_met") is not False
+                    or attempts[0].get("relative_volume_error", 0) <= .01
+                    or attempts[-1].get("volume_criterion_met") is not True
+                    or attempts[-1].get("relative_volume_error", 1) > .01
+                    or front.get("work", 0) <= 0 or front.get("nodes", 0) <= 0
+                    or sizing.get("applied") is not True
+                    or sizing.get("requested_global_size") != float(size)
+                    or sizing.get("sizing_completion_certified") is not False):
+                raise RuntimeError(f"Normal source retry lost geometry, work or sizing evidence: {current}")
+            if (any(attempt.get("work", 0) <= 0 or attempt.get("seconds", -1) < 0
+                    or attempt.get("source_model_verified_unchanged") is not True for attempt in attempts)
+                    or any(after["chord_error_limit"] >= before["chord_error_limit"]
+                           for before, after in zip(attempts, attempts[1:]))
+                    or sum(attempt["work"] for attempt in attempts) > body.get("native_surface_work", 0)
+                    or body.get("native_surface_work", 0) > current.get("validation_work", 0)):
+                raise RuntimeError(f"Source retries were not progressively tighter and fully charged: {current}")
+            sphere_sizes.append((tetrahedra, front["nodes"], output.read_bytes()))
+        # This fixed owned sphere used to publish the same fan at both sizes.
+        # Count and initial-site responses demonstrate use of the volume field;
+        # they do not certify every achieved edge length or solver accuracy.
+        if (sphere_sizes[1][0] <= sphere_sizes[0][0] or sphere_sizes[1][1] <= sphere_sizes[0][1]
+                or sphere_sizes[1][2] == sphere_sizes[0][2]):
+            raise RuntimeError("Normal sphere construction still ignores the requested global size")
         sized = run("curved_face_and_box", "cylinder.step",
                     ("--no-advancing-interior-front", "--face-size", "1", ".38", "--size-box", "-.3", "-.3", ".7", ".3", ".3", "1.3", ".31",
                      "--min-size", ".34", "--growth", "1.55", "--max-work", "100000000"),
@@ -416,7 +495,7 @@ def main():
         if sphere["bodies"][0].get("route") != "native_surface_star" or sphere["bodies"][0].get("native_volume_reason") != "none":
             raise RuntimeError(f"sphere fallback certificate missing: {sphere}")
         refusals = [
-            ("disabled_sphere_fallback", "sphere.step", ("--no-native-fallback",), "unsupported-body"),
+            ("disabled_sphere_fallback", "sphere.step", ("--resource-policy", "bounded", "--no-native-fallback"), "unsupported-body"),
             ("malformed_brep", "malformed.brep", ("--brep",), "parse-failed"),
             ("unknown_face", "cylinder.step", ("--face-size", "999999", ".1"), "invalid-request"),
             ("unknown_spatial_face", "cylinder.step",

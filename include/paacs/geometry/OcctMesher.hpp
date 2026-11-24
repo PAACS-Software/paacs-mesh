@@ -8,6 +8,7 @@
 #include "paacs/geometry/CadConstructionBudget.hpp"
 #include "paacs/algo/GeometryMesher.hpp"
 #include "paacs/algo/PrimitiveMesher.hpp"
+#include <array>
 #include <cstddef>
 #include <optional>
 #include <string>
@@ -191,6 +192,9 @@ struct NativeCadConstraintRecoveryReport {
     std::uint64_t edgeWalks=0,facetWalks=0,walkFallbacks=0;
     std::uint64_t steinerAttempts=0,steinerWork=0,steinerNodes=0,retainedSteinerNodes=0;
     std::uint64_t piercingPatches=0;
+    bool initialTopologyUsed=false;
+    const char* initialTopologyDiagnostic="not_available";
+    std::uint64_t initialTopologyCells=0,initialTopologyImportWork=0,initialTopologyPeakModeledBytes=0;
 };
 struct NativeCadRegionRecoveryReport {
     std::uint64_t attempts=0,states=0,backtracks=0,candidates=0,pairCacheHits=0,patches=0,boundHits=0;
@@ -229,6 +233,23 @@ struct NativeCadInitialFrontReport {
     std::uint64_t maximumCombinedModeledBytes=0,maximumHeapCapacity=0,resourceRetries=0;
     const char* auxiliaryResourceDiagnostic="not_attempted";
 };
+struct NativeCadSourceShellAttempt {
+    double chordErrorLimit=0,seconds=0;
+    double signedVolume=0,cadVolume=0,relativeVolumeError=0;
+    std::uint64_t work=0,nodes=0,triangles=0;
+    bool published=false,sourceModelUnmodified=false,volumeCriterionMet=false;
+    bool constructionBudgetLimited=false,constructionStalled=false;
+    const char* surfaceDiagnostic="not_attempted";
+};
+struct NativeCadSourceShellReport {
+    // Source geometry retries are bounded independently of volume recovery.
+    // Queue exhaustion is not a requested element-size certificate.
+    std::array<NativeCadSourceShellAttempt,3> attempts{};
+    unsigned count=0;
+    double requestedGlobalSize=0,requestedChordError=0,maximumRelativeVolumeError=0;
+    bool accepted=false;
+    const char* diagnostic="not_attempted";
+};
 // AUTO may retry the legacy route only after a bounded source-stage refusal,
 // before any initial point construction. This records the discarded trial;
 // it is separate from the initial-front report for the published route.
@@ -238,6 +259,8 @@ struct NativeCadInitialFrontFallbackReport {
     std::uint64_t work=0;
     double seconds=0;
     const char* surfaceDiagnostic="not_attempted";
+    const char* volumeDiagnostic="not_attempted";
+    NativeCadSourceShellReport sourceShell;
 };
 struct NativeCadBodyMeshReport {
     int solidTag = -1;
@@ -253,6 +276,11 @@ struct NativeCadBodyMeshReport {
     const char* nativeSurfaceReason = "not_attempted";
     const char* nativeVolumeReason = "not_attempted";
     double surfaceDeflection = 0, surfaceChordErrorLimit = 0;
+    NativeCadSourceShellReport sourceShell;
+    // An absent value means this route has not supplied construction evidence.
+    // True records use of a volume size field, not verification of every cell.
+    std::optional<bool> volumeSizingApplied;
+    const char* volumeSizingDiagnostic="not_reported";
     std::uint64_t surfaceTriangles = 0, surfaceAttempts = 0, rebuiltSurfaceCharts = 0;
     std::uint64_t nativeSurfaceWork = 0, nativeVolumeWork = 0;
     double nativeSurfaceSeconds = 0, nativeVolumeSeconds = 0;
@@ -305,6 +333,7 @@ struct NativeCadBodyMeshReport {
     NativeCadRegionRecoveryReport recoveryRegions;
     NativeCadConstraintRecoveryReport constraintRecovery;
     std::vector<CadSurfaceSpacingReport> surfaceSpacing;
+    bool planarAttempted=false;
 };
 struct NativeCadMeshOutcome {
     bool published = false, destinationUnchanged = true;

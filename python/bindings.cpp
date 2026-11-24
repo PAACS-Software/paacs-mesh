@@ -274,6 +274,56 @@ py::dict importReport(const geo::NativeCadImportOutcome& cad, const fs::path& so
     return r;
 }
 
+py::dict sourceShellReport(const geo::NativeCadSourceShellReport& source) {
+    py::dict r;py::list attempts;
+    const auto count=std::min<std::size_t>(source.count,source.attempts.size());
+    r["available"]=count>0;r["accepted"]=count?py::cast(source.accepted):py::none();
+    r["diagnostic"]=source.diagnostic;
+    r["requested_global_size"]=source.requestedGlobalSize>0?finiteValue(source.requestedGlobalSize):py::none();
+    r["requested_chord_error"]=source.requestedChordError>0?finiteValue(source.requestedChordError):py::none();
+    r["maximum_relative_volume_error"]=source.maximumRelativeVolumeError>0?finiteValue(source.maximumRelativeVolumeError):py::none();
+    for(std::size_t i=0;i<count;++i){
+        const auto& a=source.attempts[i];py::dict row;
+        row["attempt"]=i+1;row["chord_error_limit"]=finiteValue(a.chordErrorLimit);
+        row["work"]=a.work;row["seconds"]=finiteValue(a.seconds);row["nodes"]=a.nodes;row["triangles"]=a.triangles;
+        row["surface_published"]=a.published;row["surface_diagnostic"]=a.surfaceDiagnostic;
+        row["source_model_verified_unchanged"]=a.sourceModelUnmodified;
+        row["volume_criterion_met"]=a.published?py::cast(a.volumeCriterionMet):py::none();
+        row["signed_volume_mm3"]=a.published?finiteValue(a.signedVolume):py::none();
+        row["cad_volume_mm3"]=a.published?finiteValue(a.cadVolume):py::none();
+        row["relative_volume_error"]=a.published?finiteValue(a.relativeVolumeError):py::none();
+        row["construction_budget_limited"]=a.constructionBudgetLimited;
+        row["construction_stalled"]=a.constructionStalled;
+        attempts.append(std::move(row));
+    }
+    r["attempts"]=std::move(attempts);
+    r["scope"]="latest_source_strategy; geometry acceptance is not a sizing certificate";
+    return r;
+}
+
+py::dict constraintRecoveryReport(const geo::NativeCadConstraintRecoveryReport& source) {
+    py::dict r;
+    r["diagnostic"]=source.diagnostic;
+    r["candidate_cells"]=source.candidateCells;
+    r["missing_edges_before"]=source.missingEdgesBefore;
+    r["missing_edges_after"]=source.missingEdgesAfter;
+    r["missing_faces_before"]=source.missingFacesBefore;
+    r["missing_faces_after"]=source.missingFacesAfter;
+    r["patches"]=source.patches;r["seed_cells"]=source.seedCells;
+    r["work"]=source.work;r["seconds"]=finiteValue(source.seconds);
+    r["edge_walks"]=source.edgeWalks;r["facet_walks"]=source.facetWalks;
+    r["walk_fallbacks"]=source.walkFallbacks;
+    r["steiner_attempts"]=source.steinerAttempts;r["steiner_work"]=source.steinerWork;
+    r["steiner_nodes"]=source.steinerNodes;r["retained_steiner_nodes"]=source.retainedSteinerNodes;
+    r["piercing_edge_patches"]=source.piercingPatches;
+    r["initial_topology_used"]=source.initialTopologyUsed;
+    r["initial_topology_diagnostic"]=source.initialTopologyDiagnostic;
+    r["initial_topology_cells"]=source.initialTopologyCells;
+    r["initial_topology_import_work"]=source.initialTopologyImportWork;
+    r["initial_topology_peak_modeled_bytes"]=source.initialTopologyPeakModeledBytes;
+    return r;
+}
+
 py::dict initialFallbackReport(const geo::NativeCadInitialFrontFallbackReport& fallback) {
     py::dict r;
     r["attempted"] = fallback.attempted;
@@ -281,6 +331,65 @@ py::dict initialFallbackReport(const geo::NativeCadInitialFrontFallbackReport& f
     r["work"] = fallback.work;
     r["seconds"] = finiteValue(fallback.seconds);
     r["surface_diagnostic"] = fallback.surfaceDiagnostic;
+    r["volume_diagnostic"] = fallback.volumeDiagnostic;
+    r["source_shell"] = sourceShellReport(fallback.sourceShell);
+    return r;
+}
+
+py::dict planarBodyReport(const algo::GeometryBodyReport& body) {
+    py::dict r, options, estimates, engine, output, conversion, boundary, surface;
+    r["solid_tag"]=body.solidTag;
+    r["strategy"]=algo::geometryStrategyName(body.strategy);
+    r["reason"]=algo::geometryReasonName(body.reason);
+    options["elements"]=body.elements==algo::GeometryElements::Tet4?"tet4":"native";
+    options["target_size"]=finiteValue(body.targetSize);
+    options["source_face_tag"]=body.sourceFaceTag;options["target_face_tag"]=body.targetFaceTag;
+    options["layers"]=body.layers;options["end_to_start_layer_width_ratio"]=finiteValue(body.endToStartLayerWidthRatio);
+    options["used_spatial_field"]=body.usedSpatialField;options["used_size_profile"]=body.usedSizeProfile;
+    options["spatial_minimum_bound"]=finiteValue(body.spatialMinimumBound);
+    r["resolved_options"]=options;
+    estimates["nodes"]=body.estimatedNodes;estimates["total_cells"]=body.estimatedCells;
+    estimates["output_bytes"]=body.estimatedOutputBytes;estimates["exact"]=body.exactCountEstimate;
+    r["estimates"]=estimates;
+    engine["status_code"]=body.engineStatus;engine["reason_code"]=body.engineReason;
+    engine["phase_code"]=body.enginePhase;r["engine"]=engine;
+    output["nodes"]=body.outputNodes;output["total_cells"]=body.outputCells;output["bytes"]=body.outputBytes;
+    r["output"]=output;r["generation_seconds"]=finiteValue(body.generationSeconds);
+    const auto& c=body.conversion;
+    conversion["published"]=c.published;conversion["reason"]=algo::convexToTetReasonName(c.reason);
+    conversion["tetrahedra"]=c.tetrahedra;conversion["boundary_triangles"]=c.boundaryTriangles;
+    conversion["output_bytes"]=c.outputBytes;conversion["working_bytes"]=c.workingBytes;
+    conversion["minimum_quality"]=finiteValue(c.minimumQuality);conversion["low_quality_cells"]=c.lowQualityCells;
+    r["conversion"]=conversion;
+    boundary["available"]=body.hasBoundaryDiagnostic;boundary["status_code"]=body.boundaryStatus;
+    boundary["reason_code"]=body.boundaryReason;boundary["phase_code"]=body.boundaryPhase;
+    r["boundary"]=boundary;
+    surface["available"]=body.hasSurfaceDiagnostic;surface["status_code"]=body.surfaceStatus;
+    surface["reason_code"]=body.surfaceReason;surface["failure_face_id"]=body.surfaceFailureFacePersistentId;
+    surface["processed_faces"]=body.surfaceProcessedFaces;surface["unattempted_faces"]=body.surfaceUnattemptedFaces;
+    r["surface"]=surface;
+    return r;
+}
+
+py::dict planarReport(const geo::NativeCadBodyMeshReport& body) {
+    py::dict r;
+    r["attempted"]=body.planarAttempted;
+    r["scope"]="retained geometry-core receipt; default substage codes do not prove stage entry; separate from Native CAD certification";
+    if(!body.planarAttempted){r["published"]=false;r["reason"]=py::none();return r;}
+    const auto& p=body.planar;
+    r["published"]=p.published;r["reason"]=algo::geometryReasonName(p.reason);
+    py::dict analysis,times;
+    analysis["complete"]=p.analysis.complete;analysis["reason"]=algo::geometryReasonName(p.analysis.reason);
+    analysis["work"]=p.analysis.work;r["analysis"]=analysis;
+    times["analysis"]=finiteValue(p.analysisSeconds);times["generation"]=finiteValue(p.generationSeconds);
+    times["audit"]=finiteValue(p.auditSeconds);times["quality"]=finiteValue(p.qualitySeconds);
+    r["seconds"]=times;
+    constexpr std::size_t maximumBodyRows=16;
+    r["bodies_total"]=p.analysis.bodies.size();r["bodies_truncated"]=p.analysis.bodies.size()>maximumBodyRows;
+    py::list bodies;
+    for(std::size_t i=0;i<std::min(p.analysis.bodies.size(),maximumBodyRows);++i)
+        bodies.append(planarBodyReport(p.analysis.bodies[i]));
+    r["bodies"]=bodies;
     return r;
 }
 
@@ -403,6 +512,7 @@ struct MeshResult {
         py::list bodies, interferences, bodyRoutes;
         for (const auto& body : outcome.bodies) {
             py::dict b;
+            b["planar"]=planarReport(body);
             b["solid_tag"] = body.solidTag;
             b["route"] = body.route;
             b["reason"] = geo::nativeCadMeshReasonName(body.reason);
@@ -422,6 +532,15 @@ struct MeshResult {
             b["native_centroids_checked"] = body.nativeCentroidsChecked;
             b["local_delaunay_refinement_nodes"] = body.localDelaunayRefinementNodes;
             b["surface_chord_error_limit"] = finiteValue(body.surfaceChordErrorLimit);
+            b["source_shell"] = sourceShellReport(body.sourceShell);
+            b["constraint_recovery"] = constraintRecoveryReport(body.constraintRecovery);
+            py::dict sizingApplication;
+            sizingApplication["applied"]=py::cast(body.volumeSizingApplied);
+            sizingApplication["diagnostic"]=body.volumeSizingDiagnostic;
+            sizingApplication["requested_global_size"]=finiteValue(requestedSize);
+            sizingApplication["sizing_completion_certified"]=false;
+            sizingApplication["basis"]="reported_native_construction";
+            b["volume_sizing"]=std::move(sizingApplication);
             const auto& initial = body.initialFront;
             py::dict placement;
             placement["diagnostic"] = initial.diagnostic;

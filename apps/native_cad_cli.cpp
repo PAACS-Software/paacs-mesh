@@ -34,11 +34,93 @@ void traceNativeStage(const paacs::geo::NativeCadStageEvent& event) noexcept {
         event.beginning ? "begin" : "end", event.entityTag, event.stage, event.diagnostic);
     std::fflush(stderr);
 }
+void writeSourceShell(const paacs::geo::NativeCadSourceShellReport& report){
+    const auto count=std::min<std::size_t>(report.count,report.attempts.size());
+    const auto positive=[](double value){if(value>0)std::cout<<JsonFinite{value};else std::cout<<"null";};
+    std::cout<<"{\"available\":"<<(count?"true":"false")<<",\"accepted\":";
+    if(count)std::cout<<(report.accepted?"true":"false");else std::cout<<"null";
+    std::cout<<",\"diagnostic\":\""<<report.diagnostic<<"\",\"requested_global_size\":";
+    positive(report.requestedGlobalSize);std::cout<<",\"requested_chord_error\":";positive(report.requestedChordError);
+    std::cout<<",\"maximum_relative_volume_error\":";positive(report.maximumRelativeVolumeError);
+    std::cout<<",\"attempts\":[";
+    for(std::size_t i=0;i<count;++i){
+        if(i)std::cout<<',';const auto& a=report.attempts[i];
+        std::cout<<"{\"attempt\":"<<i+1<<",\"chord_error_limit\":"<<JsonFinite{a.chordErrorLimit}
+            <<",\"work\":"<<a.work<<",\"seconds\":"<<JsonFinite{a.seconds}
+            <<",\"nodes\":"<<a.nodes<<",\"triangles\":"<<a.triangles
+            <<",\"surface_published\":"<<(a.published?"true":"false")
+            <<",\"surface_diagnostic\":\""<<a.surfaceDiagnostic<<"\""
+            <<",\"source_model_verified_unchanged\":"<<(a.sourceModelUnmodified?"true":"false")
+            <<",\"volume_criterion_met\":";
+        if(a.published)std::cout<<(a.volumeCriterionMet?"true":"false");else std::cout<<"null";
+        std::cout<<",\"signed_volume_mm3\":";
+        if(a.published)std::cout<<JsonFinite{a.signedVolume};else std::cout<<"null";
+        std::cout<<",\"cad_volume_mm3\":";
+        if(a.published)std::cout<<JsonFinite{a.cadVolume};else std::cout<<"null";
+        std::cout<<",\"relative_volume_error\":";
+        if(a.published)std::cout<<JsonFinite{a.relativeVolumeError};else std::cout<<"null";
+        std::cout<<",\"construction_budget_limited\":"<<(a.constructionBudgetLimited?"true":"false")
+            <<",\"construction_stalled\":"<<(a.constructionStalled?"true":"false")<<'}';
+    }
+    std::cout<<"],\"scope\":\"latest_source_strategy; geometry acceptance is not a sizing certificate\"}";
+}
 void writeInitialFrontFallback(const paacs::geo::NativeCadInitialFrontFallbackReport& report){
     std::cout<<"{\"attempted\":"<<(report.attempted?"true":"false")
         <<",\"reason\":\""<<paacs::geo::nativeCadMeshReasonName(report.reason)<<"\""
         <<",\"work\":"<<report.work<<",\"seconds\":"<<report.seconds
-        <<",\"surface_diagnostic\":\""<<report.surfaceDiagnostic<<"\"}";
+        <<",\"surface_diagnostic\":\""<<report.surfaceDiagnostic<<"\""
+        <<",\"volume_diagnostic\":\""<<report.volumeDiagnostic<<"\",\"source_shell\":";
+    writeSourceShell(report.sourceShell);std::cout<<'}';
+}
+void writePlanarBody(const paacs::algo::GeometryBodyReport& b){
+    std::cout<<"{\"solid_tag\":"<<b.solidTag
+        <<",\"strategy\":\""<<paacs::algo::geometryStrategyName(b.strategy)<<"\""
+        <<",\"reason\":\""<<paacs::algo::geometryReasonName(b.reason)<<"\""
+        <<",\"resolved_options\":{\"elements\":\""<<(b.elements==paacs::algo::GeometryElements::Tet4?"tet4":"native")
+        <<"\",\"target_size\":"<<JsonFinite{b.targetSize}
+        <<",\"source_face_tag\":"<<b.sourceFaceTag<<",\"target_face_tag\":"<<b.targetFaceTag
+        <<",\"layers\":"<<b.layers<<",\"end_to_start_layer_width_ratio\":"<<JsonFinite{b.endToStartLayerWidthRatio}
+        <<",\"used_spatial_field\":"<<(b.usedSpatialField?"true":"false")
+        <<",\"used_size_profile\":"<<(b.usedSizeProfile?"true":"false")
+        <<",\"spatial_minimum_bound\":"<<JsonFinite{b.spatialMinimumBound}<<'}'
+        <<",\"estimates\":{\"nodes\":"<<b.estimatedNodes<<",\"total_cells\":"<<b.estimatedCells
+        <<",\"output_bytes\":"<<b.estimatedOutputBytes<<",\"exact\":"<<(b.exactCountEstimate?"true":"false")<<'}'
+        <<",\"engine\":{\"status_code\":"<<b.engineStatus<<",\"reason_code\":"<<b.engineReason
+        <<",\"phase_code\":"<<b.enginePhase<<'}'
+        <<",\"output\":{\"nodes\":"<<b.outputNodes<<",\"total_cells\":"<<b.outputCells<<",\"bytes\":"<<b.outputBytes<<'}'
+        <<",\"generation_seconds\":"<<JsonFinite{b.generationSeconds};
+    const auto& c=b.conversion;
+    std::cout<<",\"conversion\":{\"published\":"<<(c.published?"true":"false")
+        <<",\"reason\":\""<<paacs::algo::convexToTetReasonName(c.reason)<<"\""
+        <<",\"tetrahedra\":"<<c.tetrahedra<<",\"boundary_triangles\":"<<c.boundaryTriangles
+        <<",\"output_bytes\":"<<c.outputBytes<<",\"working_bytes\":"<<c.workingBytes
+        <<",\"minimum_quality\":"<<JsonFinite{c.minimumQuality}<<",\"low_quality_cells\":"<<c.lowQualityCells<<'}'
+        <<",\"boundary\":{\"available\":"<<(b.hasBoundaryDiagnostic?"true":"false")
+        <<",\"status_code\":"<<b.boundaryStatus<<",\"reason_code\":"<<b.boundaryReason
+        <<",\"phase_code\":"<<b.boundaryPhase<<'}'
+        <<",\"surface\":{\"available\":"<<(b.hasSurfaceDiagnostic?"true":"false")
+        <<",\"status_code\":"<<b.surfaceStatus<<",\"reason_code\":"<<b.surfaceReason
+        <<",\"failure_face_id\":"<<b.surfaceFailureFacePersistentId
+        <<",\"processed_faces\":"<<b.surfaceProcessedFaces<<",\"unattempted_faces\":"<<b.surfaceUnattemptedFaces<<"}}";
+}
+void writePlanar(const paacs::geo::NativeCadBodyMeshReport& body){
+    std::cout<<"{\"attempted\":"<<(body.planarAttempted?"true":"false")
+        <<",\"scope\":\"retained geometry-core receipt; default substage codes do not prove stage entry; separate from Native CAD certification\"";
+    if(!body.planarAttempted){std::cout<<",\"published\":false,\"reason\":null}";return;}
+    const auto& p=body.planar;
+    std::cout<<",\"published\":"<<(p.published?"true":"false")
+        <<",\"reason\":\""<<paacs::algo::geometryReasonName(p.reason)<<"\""
+        <<",\"analysis\":{\"complete\":"<<(p.analysis.complete?"true":"false")
+        <<",\"reason\":\""<<paacs::algo::geometryReasonName(p.analysis.reason)<<"\",\"work\":"<<p.analysis.work<<'}'
+        <<",\"seconds\":{\"analysis\":"<<JsonFinite{p.analysisSeconds}
+        <<",\"generation\":"<<JsonFinite{p.generationSeconds}<<",\"audit\":"<<JsonFinite{p.auditSeconds}
+        <<",\"quality\":"<<JsonFinite{p.qualitySeconds}<<'}';
+    constexpr std::size_t maximumBodyRows=16;
+    const auto count=std::min(p.analysis.bodies.size(),maximumBodyRows);
+    std::cout<<",\"bodies_total\":"<<p.analysis.bodies.size()<<",\"bodies_truncated\":"<<(p.analysis.bodies.size()>count?"true":"false")
+        <<",\"bodies\":[";
+    for(std::size_t i=0;i<count;++i){if(i)std::cout<<',';writePlanarBody(p.analysis.bodies[i]);}
+    std::cout<<"]}";
 }
 }
 int runNativeCadCli(int argc,char** argv) {
@@ -166,8 +248,14 @@ int runNativeCadCli(int argc,char** argv) {
                 <<",\"relative_volume_error\":"<<b.relativeVolumeError<<",\"boundary_node_error\":"<<b.maximumBoundaryNodeError
                 <<",\"boundary_sample_error\":"<<b.maximumBoundarySampleError<<",\"primitive_reason\":\""<<algo::primitiveReasonName(b.primitive.reason)
                 <<"\",\"planar_reason\":\""<<algo::geometryReasonName(b.planar.reason)<<"\"";
+            std::cout<<",\"planar\":";writePlanar(b);
             std::cout<<",\"initial_front_fallback\":";
             writeInitialFrontFallback(b.initialFrontFallback);
+            std::cout<<",\"source_shell\":";writeSourceShell(b.sourceShell);
+            std::cout<<",\"volume_sizing\":{\"applied\":";
+            if(b.volumeSizingApplied)std::cout<<(*b.volumeSizingApplied?"true":"false");else std::cout<<"null";
+            std::cout<<",\"diagnostic\":\""<<b.volumeSizingDiagnostic<<"\",\"requested_global_size\":"<<JsonFinite{options.geometry.targetSize}
+                <<",\"sizing_completion_certified\":false,\"basis\":\"reported_native_construction\"}";
             std::cout<<",\"native_surface_reason\":\""<<b.nativeSurfaceReason<<"\""
                 <<",\"native_volume_reason\":\""<<b.nativeVolumeReason<<"\""
                 <<",\"surface_deflection\":"<<b.surfaceDeflection
@@ -319,7 +407,12 @@ int runNativeCadCli(int argc,char** argv) {
                 <<",\"steiner_attempts\":"<<constraints.steinerAttempts
                 <<",\"steiner_work\":"<<constraints.steinerWork<<",\"steiner_nodes\":"<<constraints.steinerNodes
                 <<",\"retained_steiner_nodes\":"<<constraints.retainedSteinerNodes
-                <<",\"piercing_edge_patches\":"<<constraints.piercingPatches<<'}';
+                <<",\"piercing_edge_patches\":"<<constraints.piercingPatches
+                <<",\"initial_topology_used\":"<<(constraints.initialTopologyUsed?"true":"false")
+                <<",\"initial_topology_diagnostic\":\""<<constraints.initialTopologyDiagnostic<<"\""
+                <<",\"initial_topology_cells\":"<<constraints.initialTopologyCells
+                <<",\"initial_topology_import_work\":"<<constraints.initialTopologyImportWork
+                <<",\"initial_topology_peak_modeled_bytes\":"<<constraints.initialTopologyPeakModeledBytes<<'}';
             std::cout<<",\"box_contact_vertices_evaluated\":"<<b.boxContactVerticesEvaluated
                 <<",\"box_contact_work\":"<<b.boxContactWork
                 <<",\"box_contact_maximum_endpoint_correction\":"<<b.boxContactMaximumEndpointCorrection;

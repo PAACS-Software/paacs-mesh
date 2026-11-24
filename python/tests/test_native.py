@@ -218,7 +218,9 @@ class NativeWheelTests(unittest.TestCase):
     def test_automatic_source_refusal_has_a_reported_bounded_fallback(self):
         source = Path(__file__).resolve().parents[2] / "tests/fixtures/cad/sphere.step"
         model = pm.read_step(source)
-        mesh = model.mesh(.35, max_work=100_000_000)
+        # Preserve the historical one-source-attempt fallback contract.
+        # Normal admission can now retry this source before constructing points.
+        mesh = model.mesh(.35, max_work=100_000_000, resource_policy="bounded")
         report = mesh.report
         self.assertTrue(report["audit"]["complete"] and report["audit"]["valid"])
         self.assertTrue(report["quality"]["valid"])
@@ -233,7 +235,8 @@ class NativeWheelTests(unittest.TestCase):
             self.assertGreaterEqual(report["seconds"]["meshing_total"], fallback["seconds"])
         self.assertEqual(report["bodies"][0]["initial_front"]["diagnostic"], "not_attempted")
         with self.assertRaises(pm.MeshingError) as caught:
-            model.mesh(.35, assembly="conforming", advancing_interior_front=True, max_work=100_000_000)
+            model.mesh(.35, assembly="conforming", advancing_interior_front=True,
+                       max_work=100_000_000, resource_policy="bounded")
         self.assertEqual(caught.exception.reason, "geometry_error")
         self.assertIs(caught.exception.report["initial_front_fallback"]["attempted"], False)
 
