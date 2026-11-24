@@ -1,0 +1,595 @@
+{
+  "schema": "paacs-source-fallback-public-summary-v5",
+  "scope": {
+    "development_build_only": true,
+    "platform": "Windows x86-64; Python 3.12",
+    "installed_wheel_qualification": false,
+    "full_original51_rerun": false,
+    "original51_score_updated": false,
+    "experimental_defaults_promoted": false,
+    "source_sampling_and_correspondence_fixes_apply_by_default": true,
+    "release_publication": false,
+    "experimental_flags": [
+      "native_source_fallback",
+      "boundary_first"
+    ],
+    "meshing_workers": 1,
+    "validation_workers": 1,
+    "native_seconds_per_pilot": 120,
+    "hard_seconds_per_pilot": 150,
+    "size_factor_of_body_bounds_diagonal": 0.15,
+    "max_nodes": 500000,
+    "max_cells": 3000000,
+    "max_modeled_working_bytes": 1073741824,
+    "note": "One local validated STEP mesh outside 90 seconds does not update the 51-file score."
+  },
+  "v5_native_sha256": "0bd7533a609dd40c497d646f5a0581598a15630d0e700f8574233b1074570294",
+  "v5_cases": [
+    {
+      "case_id": "CAD03",
+      "source_sha256": "532f0f0687407346f43f9a28e7934c9927df0d269dd4d097864be1e060368734",
+      "status": "succeeded",
+      "reason": null,
+      "mesher_call_seconds": 117.4430912998505,
+      "process_seconds": 122.4669612001162,
+      "validated_mesh_within_90_seconds": false,
+      "requested_size_mm": 6.1569532718187245,
+      "published_nodes": 3029,
+      "published_tet4": 8931,
+      "native_fallback_attempted": false,
+      "source_attempts": [
+        {
+          "provider": "regular_chart",
+          "seconds": 46.0328876,
+          "nodes": 3026,
+          "triangles": 6048,
+          "published": true,
+          "diagnostic": "none",
+          "witness_stage": "not_reported",
+          "witness_detail": "not_reported",
+          "witness_face_tag": null
+        }
+      ],
+      "source_seconds": 46.4062833,
+      "volume_seconds": 63.03166710000001,
+      "volume_reason": "none",
+      "constraint_recovery": {
+        "diagnostic": "complete_seed",
+        "missing_edges_before": 5,
+        "missing_edges_after": 0,
+        "missing_faces_before": 10,
+        "missing_faces_after": 0,
+        "seed_cells": 8922,
+        "seconds": 0.4480327
+      },
+      "material_classification": {
+        "complete": true,
+        "attempted_points": 8922,
+        "native_queries": 3,
+        "ray_admissions": 8919,
+        "seconds": 59.3540481,
+        "native_query_seconds": 0.1959169,
+        "ray_witness_seconds": 59.06114769999976,
+        "classifier_setup_seconds": 0.013251800000000001
+      },
+      "identities_unchanged": true,
+      "quality_population": {
+        "mean_ratio": {
+          "count": 8931,
+          "minimum": 0.0016599989836168052,
+          "p01": 0.028725314732725087,
+          "p05": 0.18481075677947942,
+          "median": 0.4405928379303146,
+          "mean": 0.4919265712057536
+        },
+        "minimum_dihedral_deg": {
+          "count": 8931,
+          "minimum": 0.010020203391501314,
+          "p01": 0.5154873223640628,
+          "p05": 7.672829223621075,
+          "median": 38.984633940959235,
+          "mean": 35.063443666556495
+        },
+        "scaled_jacobian": {
+          "count": 8931,
+          "minimum": 9.29811608455349e-05,
+          "p01": 0.0033977105680046862,
+          "p05": 0.04143720241331915,
+          "median": 0.1712225175578081,
+          "mean": 0.25717980830962195
+        }
+      },
+      "native_audit_valid": true,
+      "native_quality_orientation_gate_valid": true,
+      "independent_inverted": 0,
+      "independent_degenerate": 0,
+      "independent_positive_tet4": 8931,
+      "relative_volume_error": 0.003516371091391091,
+      "relative_volume_error_limit": 0.01,
+      "maximum_boundary_sample_error_mm": 0.08752801993925187,
+      "boundary_chord_limit_mm": 0.10261588786364541,
+      "native_centroids_checked": 8931,
+      "quality_note": "Valid volume with low-quality cells; not a simulation-adequacy certificate."
+    },
+    {
+      "case_id": "CAD13",
+      "source_sha256": "0af8f4f012b3355dd0f2232b9f04df45cdd2ee13c5d36368176b0a50e5c5a5e6",
+      "status": "native_refused",
+      "reason": "geometry_error",
+      "mesher_call_seconds": 24.50168009987101,
+      "process_seconds": 26.907474499894306,
+      "validated_mesh_within_90_seconds": false,
+      "requested_size_mm": 8.91300320627245,
+      "published_nodes": 0,
+      "published_tet4": 0,
+      "native_fallback_attempted": true,
+      "source_attempts": [
+        {
+          "provider": "regular_chart",
+          "seconds": 1.5343176,
+          "nodes": 2448,
+          "triangles": 0,
+          "published": false,
+          "diagnostic": "nonconforming_edge",
+          "witness_stage": "wire_chart",
+          "witness_detail": "planar_crossing_constraints",
+          "witness_face_tag": 4
+        },
+        {
+          "provider": "native_tessellation",
+          "seconds": 22.9661401,
+          "nodes": 4916,
+          "triangles": 9825,
+          "published": false,
+          "diagnostic": "nonmanifold",
+          "witness_stage": "not_reported",
+          "witness_detail": "not_reported",
+          "witness_face_tag": null
+        }
+      ],
+      "source_seconds": 24.5004984,
+      "volume_seconds": 5.0099999999275724e-05,
+      "volume_reason": "nonmanifold",
+      "constraint_recovery": {
+        "diagnostic": "not_attempted",
+        "missing_edges_before": 0,
+        "missing_edges_after": 0,
+        "missing_faces_before": 0,
+        "missing_faces_after": 0,
+        "seed_cells": 0,
+        "seconds": 0.0
+      },
+      "material_classification": {
+        "complete": false,
+        "attempted_points": 0,
+        "native_queries": 0,
+        "ray_admissions": 0,
+        "seconds": 0.0,
+        "native_query_seconds": 0.0,
+        "ray_witness_seconds": 0.0,
+        "classifier_setup_seconds": 0.0
+      },
+      "identities_unchanged": true,
+      "quality_population": null
+    },
+    {
+      "case_id": "CAD27",
+      "source_sha256": "f5aa1abefabb3b42c7ccee50992e159429f0c711cc7072d9ff36a7a833a4cf60",
+      "status": "native_refused",
+      "reason": "geometry_error",
+      "mesher_call_seconds": 83.9579940000549,
+      "process_seconds": 85.99983829981647,
+      "validated_mesh_within_90_seconds": false,
+      "requested_size_mm": 8.396194419503558,
+      "published_nodes": 0,
+      "published_tet4": 0,
+      "native_fallback_attempted": false,
+      "source_attempts": [
+        {
+          "provider": "regular_chart",
+          "seconds": 16.1322955,
+          "nodes": 4063,
+          "triangles": 8138,
+          "published": true,
+          "diagnostic": "none",
+          "witness_stage": "not_reported",
+          "witness_detail": "not_reported",
+          "witness_face_tag": null
+        }
+      ],
+      "source_seconds": 16.8245795,
+      "volume_seconds": 67.1312941,
+      "volume_reason": "native-plc-cavity-material-refusal",
+      "constraint_recovery": {
+        "diagnostic": "partial_seed",
+        "missing_edges_before": 191,
+        "missing_edges_after": 11,
+        "missing_faces_before": 280,
+        "missing_faces_after": 19,
+        "seed_cells": 11985,
+        "seconds": 2.2752902
+      },
+      "material_classification": {
+        "complete": true,
+        "attempted_points": 11985,
+        "native_queries": 97,
+        "ray_admissions": 11888,
+        "seconds": 8.4682371,
+        "native_query_seconds": 0.36235949999999983,
+        "ray_witness_seconds": 8.004283999999988,
+        "classifier_setup_seconds": 0.0236042
+      },
+      "identities_unchanged": true,
+      "quality_population": null
+    }
+  ],
+  "curve_checks": {
+    "total": 500,
+    "v4_passes": 481,
+    "v5_passes": 500,
+    "earlier_artificial_cut_probe": {
+      "case_id": "CAD03",
+      "v3_passes": 43,
+      "v4_passes": 47,
+      "resolved_edge_tags": [2, 15, 17, 34],
+      "scope": "Staged source diagnostics, not a paired full-corpus baseline."
+    },
+    "cases": [
+      {
+        "case_id": "CAD03",
+        "total": 47,
+        "v4_passes": 47,
+        "v5_passes": 47,
+        "new_refusals": 0,
+        "v4_work": 153016,
+        "v5_work": 165244,
+        "work_change_percent": 7.991321169028076
+      },
+      {
+        "case_id": "CAD13",
+        "total": 230,
+        "v4_passes": 215,
+        "v5_passes": 230,
+        "new_refusals": 0,
+        "v4_work": 469159,
+        "v5_work": 474544,
+        "work_change_percent": 1.1477985075422081
+      },
+      {
+        "case_id": "CAD27",
+        "total": 223,
+        "v4_passes": 219,
+        "v5_passes": 223,
+        "new_refusals": 0,
+        "v4_work": 368076,
+        "v5_work": 375681,
+        "work_change_percent": 2.0661493821928056
+      }
+    ]
+  },
+  "prototypes": [
+    {
+      "prototype": "v1_rejected",
+      "case_id": "CAD13",
+      "gained_curves": 15,
+      "regressed_curves": 8,
+      "remaining_refusals": 8,
+      "bounded_policy_unchanged": true
+    },
+    {
+      "prototype": "v1_rejected",
+      "case_id": "CAD27",
+      "gained_curves": 4,
+      "regressed_curves": 4,
+      "remaining_refusals": 4,
+      "bounded_policy_unchanged": true
+    },
+    {
+      "prototype": "v2_qualified",
+      "case_id": "CAD13",
+      "gained_curves": 15,
+      "regressed_curves": 0,
+      "remaining_refusals": 0,
+      "bounded_policy_unchanged": true
+    },
+    {
+      "prototype": "v2_qualified",
+      "case_id": "CAD27",
+      "gained_curves": 4,
+      "regressed_curves": 0,
+      "remaining_refusals": 0,
+      "bounded_policy_unchanged": true
+    }
+  ],
+  "pcurve_diagnostic": {
+    "case_id": "CAD03",
+    "face_tag": 4,
+    "edge_tag": 9,
+    "use_id": 11,
+    "planned_samples": 9,
+    "initially_refused_samples": 1,
+    "initial_residual_mm": 3.14078802214555e-05,
+    "unchanged_source_tolerance_mm": 1.1802768153013279e-05,
+    "existing_bounded_fit_residual_mm": 2.2697198095784606e-09,
+    "source_unchanged": true,
+    "geometry_edited": false,
+    "tolerance_widened": false
+  },
+  "v4_classification_profile": {
+    "case_id": "CAD03",
+    "attempted_points": 6764,
+    "batch_complete": true,
+    "batch_seconds": 63.4411981,
+    "native_queries": 458,
+    "native_query_seconds": 12.7020947,
+    "ray_witness_attempts": 6764,
+    "ray_admissions": 6306,
+    "ray_seconds": 50.6377038,
+    "setup_seconds": 0.0132288,
+    "caveat": "Native queries are an ambiguity-selected subset; their mean cost cannot predict all-point cost."
+  },
+  "regression_checks": {
+    "qualification_planner_with_numpy": {
+      "run": 13,
+      "passed": 13,
+      "skipped": 0
+    },
+    "python": {
+      "run": 267,
+      "passed": 266,
+      "skipped": 1,
+      "failed": 0,
+      "errors": 0,
+      "expected_skip": "POSIX named-pipe fixture",
+      "isolated_bootstrap_children": 82,
+      "log_sha256": "2f76b25d0eeb13795af6bc2d2b74d48609dabbb7c83983c340d11e1d27ff5582"
+    },
+    "native_cli": {
+      "passed": 104,
+      "log_sha256": "de17102a870a653961bd0d8c83e237fa90e5e9acf66bf7d6e65f8a68b7c7da4a"
+    },
+    "cpp_group_count": 7,
+    "cpp_groups": [
+      {
+        "group": "native_meshing",
+        "passed": true,
+        "reported_check_count": 94,
+        "log_sha256": "2aa7e86fdf668c752584ef1db727ef28a19d729a75247b507fd16080b4d20561"
+      },
+      {
+        "group": "boundary",
+        "passed": true,
+        "reported_check_count": 621,
+        "log_sha256": "a3728babcb718d9aacc1c401d187355841dfa09ad1815de5bf4e1790d55346e4"
+      },
+      {
+        "group": "source_fallback",
+        "passed": true,
+        "reported_check_count": 42,
+        "log_sha256": "2ea44643de8b762d355d225edf18693beb52436092126f80b1674fd1d0207257"
+      },
+      {
+        "group": "native_validation",
+        "passed": true,
+        "reported_check_count": null,
+        "log_sha256": "738c10d49e83ff3cbfe20a7d1f4bd2cf9c783aca19fafb6c9dae5a8c792af95c"
+      },
+      {
+        "group": "interior_front",
+        "passed": true,
+        "reported_check_count": null,
+        "log_sha256": "2f41c9beea07bd5735b1efa05898e6d47fb78a6c394f502abc245e4c7e87cc60"
+      },
+      {
+        "group": "curve_resources",
+        "passed": true,
+        "reported_check_count": null,
+        "log_sha256": "8a05d2dae17889126d06fc5dfd55f6a61ed7d690ac70f848b9adc64cf252f399"
+      },
+      {
+        "group": "source_fallback_policy",
+        "passed": true,
+        "reported_check_count": null,
+        "log_sha256": "2ecab1d355a36b6c7629f130539a461190dfb5c299e641c87b45532ef58d0959"
+      }
+    ],
+    "count_note": "C++ checks and Python test cases are different units; no invented combined total."
+  },
+  "owned_matching_v5_control": {
+    "in_memory_cad_only": true,
+    "step_round_trip_qualified": false,
+    "nodes": 94,
+    "tet4": 495,
+    "archive_reopened_identical_and_audited": true,
+    "included_in_original51": false
+  },
+  "excluded_evidence": {
+    "three_ulp_v3": {
+      "excluded_from_validity_and_coverage": true,
+      "exit_code": 3221225477,
+      "reason": "Mismatched interface/library probe; output before abnormal exit is not accepted evidence.",
+      "process_cost_retained": true
+    },
+    "prototype_v1": "Rejected prototype: 8 new curve refusals on CAD13 and 4 on CAD27; superseded by qualified v2."
+  },
+  "corpus_attempt_history_v1_through_v5": [
+    {
+      "version": "v1",
+      "case_id": "CAD03",
+      "mode": "source_fallback",
+      "native_sha256": "ee2427afcff308f1dec5b6a3a7dd7d819da8cc6ec806248bddc1a9fe7ed0af97",
+      "status": "native_refused",
+      "reason": "cancelled",
+      "mesher_call_seconds": 120.04077209997922,
+      "process_seconds": 123.06122180004604,
+      "validated_mesh": false,
+      "route_attempts": [
+        {
+          "method": "native_front",
+          "reason": "cancelled",
+          "published": false,
+          "seconds": 120.0399578
+        }
+      ]
+    },
+    {
+      "version": "v2",
+      "case_id": "CAD03",
+      "mode": "boundary_first",
+      "native_sha256": "962194a92de1325c440ba3e33abd02cfe0a7b857430aad63f61f6232851bb562",
+      "status": "native_refused",
+      "reason": "cancelled",
+      "mesher_call_seconds": 120.04572529997677,
+      "process_seconds": 123.01720960019156,
+      "validated_mesh": false,
+      "route_attempts": [
+        {
+          "method": "native_front",
+          "reason": "cancelled",
+          "published": false,
+          "seconds": 120.044858
+        }
+      ]
+    },
+    {
+      "version": "v3",
+      "case_id": "CAD03",
+      "mode": "boundary_first",
+      "native_sha256": "56f1c264d8bf669086fe7c459a1dda5f0f19444be007560d54fa52295fec2382",
+      "status": "native_refused",
+      "reason": "cancelled",
+      "mesher_call_seconds": 120.02181629999541,
+      "process_seconds": 123.06711840000935,
+      "validated_mesh": false,
+      "route_attempts": [
+        {
+          "method": "native_front",
+          "reason": "cancelled",
+          "published": false,
+          "seconds": 120.0210301
+        }
+      ]
+    },
+    {
+      "version": "v4",
+      "case_id": "CAD03",
+      "mode": "boundary_first",
+      "native_sha256": "b8356014e71c1b3182080e33756d3123011a78f9e2ba1129cd808fcddaf167ed",
+      "status": "native_refused",
+      "reason": "cancelled",
+      "mesher_call_seconds": 120.30148249980994,
+      "process_seconds": 123.30285690003075,
+      "validated_mesh": false,
+      "route_attempts": [
+        {
+          "method": "native_front",
+          "reason": "cancelled",
+          "published": false,
+          "seconds": 120.3009024
+        }
+      ]
+    },
+    {
+      "version": "v4",
+      "case_id": "CAD03",
+      "mode": "default",
+      "native_sha256": "b8356014e71c1b3182080e33756d3123011a78f9e2ba1129cd808fcddaf167ed",
+      "status": "native_refused",
+      "reason": "cancelled",
+      "mesher_call_seconds": 121.33466869988479,
+      "process_seconds": 124.32988639990799,
+      "validated_mesh": false,
+      "route_attempts": [
+        {
+          "method": "native_front",
+          "reason": "geometry_error",
+          "published": false,
+          "seconds": 0.5344327
+        },
+        {
+          "method": "legacy_dispatch",
+          "reason": "cancelled",
+          "published": false,
+          "seconds": 120.7996197
+        }
+      ]
+    },
+    {
+      "version": "v5",
+      "case_id": "CAD03",
+      "mode": "boundary_first",
+      "native_sha256": "0bd7533a609dd40c497d646f5a0581598a15630d0e700f8574233b1074570294",
+      "status": "succeeded",
+      "reason": null,
+      "mesher_call_seconds": 117.4430912998505,
+      "process_seconds": 122.4669612001162,
+      "validated_mesh": true,
+      "route_attempts": [
+        {
+          "method": "native_front",
+          "reason": "none",
+          "published": true,
+          "seconds": 117.442481
+        }
+      ]
+    },
+    {
+      "version": "v5",
+      "case_id": "CAD13",
+      "mode": "boundary_first",
+      "native_sha256": "0bd7533a609dd40c497d646f5a0581598a15630d0e700f8574233b1074570294",
+      "status": "native_refused",
+      "reason": "geometry_error",
+      "mesher_call_seconds": 24.50168009987101,
+      "process_seconds": 26.907474499894306,
+      "validated_mesh": false,
+      "route_attempts": [
+        {
+          "method": "native_front",
+          "reason": "geometry_error",
+          "published": false,
+          "seconds": 24.5007382
+        }
+      ]
+    },
+    {
+      "version": "v5",
+      "case_id": "CAD27",
+      "mode": "boundary_first",
+      "native_sha256": "0bd7533a609dd40c497d646f5a0581598a15630d0e700f8574233b1074570294",
+      "status": "native_refused",
+      "reason": "geometry_error",
+      "mesher_call_seconds": 83.9579940000549,
+      "process_seconds": 85.99983829981647,
+      "validated_mesh": false,
+      "route_attempts": [
+        {
+          "method": "native_front",
+          "reason": "geometry_error",
+          "published": false,
+          "seconds": 83.9561608
+        }
+      ]
+    }
+  ],
+  "cost_accounting": {
+    "corpus_attempt_count": 8,
+    "validated_mesh_count": 1,
+    "refused_attempt_count": 7,
+    "mesher_call_seconds_sum": 827.6472302994225,
+    "process_seconds_sum": 852.1525671000127,
+    "internal_route_attempt_count": 9,
+    "external_automatic_retries": 0,
+    "separate_curve_pcurve_probe_process_count": 8,
+    "separate_curve_pcurve_probe_process_seconds_sum": 9.988871699664742,
+    "separate_owned_math_process_count": 14,
+    "separate_owned_math_process_seconds_sum": 10.047462100628763,
+    "scope": "All 8 corpus volume trials retained, including failed versions; rejected and mismatched diagnostic costs retained separately. Build and test time excluded. Historical 600-second baselines were not rerun."
+  },
+  "remaining_gaps": [
+    "CAD03: valid volume outside 90 seconds; low-quality tetrahedra remain and ray witnesses dominate measured material classification.",
+    "CAD13: crossing chart constraints and nonmanifold fallback source.",
+    "CAD27: cavity material refusal after partial boundary recovery.",
+    "No full 51-file rescore, installed-wheel qualification or simulation adequacy claim."
+  ]
+}

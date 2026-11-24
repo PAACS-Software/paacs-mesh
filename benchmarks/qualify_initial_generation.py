@@ -110,9 +110,18 @@ def select_cases(manifest, selected=None):
 
 def mesh_options(args, manifest):
     limits = {key: manifest["limits"][key] for key in LIMIT_KEYS}
-    return {**limits, "max_seconds": args.native_seconds, "workers": 1, "validation_workers": 1,
+    options = {**limits, "max_seconds": args.native_seconds, "workers": 1, "validation_workers": 1,
             "resource_policy": "normal", "construction_effort": "legacy", "recovery": "standard",
             "growth": manifest["growth"], **{key: getattr(args, key) for key in OPTION_KEYS}}
+    # Keep the established default call unchanged. A frozen older package may
+    # not expose these experimental options; their defaults are still disabled.
+    for name in ("native_source_fallback", "boundary_first"):
+        enabled = getattr(args, name, False)
+        if enabled is not None and type(enabled) is not bool:
+            raise ValueError(f"{name} must be bool or omitted")
+        if enabled:
+            options[name] = True
+    return options
 
 
 def build_plan(args):
@@ -147,6 +156,8 @@ def build_plan(args):
             "input_manifest_sha256": SHARED.sha256(args.case_manifest), "development_identity": identity,
             "harness_sha256": SHARED.sha256(Path(__file__)), "cases": rows,
             "options": mesh_options(args, manifest), "hard_process_seconds": args.hard_seconds,
+            "requested_native_source_fallback": getattr(args, "native_source_fallback", False),
+            "requested_boundary_first": getattr(args, "boundary_first", False),
             "inspection_limits": {"max_cells": manifest["limits"]["max_cells"],
                                   "max_nodes": manifest["limits"]["max_nodes"],
                                   "max_bytes": 1024**3, "max_work": 100_000_000, "max_seconds": 60.},
@@ -165,6 +176,19 @@ def case_options(plan, spec):
     return {**plan["options"], **overrides}
 
 
+def check_boolean_intent(report, options, name):
+    expected = options.get(name, False)
+    key = "requested_" + name
+    available = key in report
+    if (expected or available) and report.get(key) is not expected:
+        raise ValueError(f"Native {name.replace('_', '-')} intent differs from the pinned request")
+    return available
+
+
+def check_source_fallback_intent(report, options):
+    return check_boolean_intent(report, options, "native_source_fallback")
+
+
 def check_resources(report, options):
     resource = report.get("resources", {})
     if (resource.get("policy") != "normal" or resource.get("requested_max_work") != options["max_work"]
@@ -175,6 +199,8 @@ def check_resources(report, options):
         raise ValueError("Native explicit work ceiling differs from the pinned request")
     if type(resource.get("effective_max_work")) is not int or resource["effective_max_work"] <= 0:
         raise ValueError("Native effective work counter must be a positive integer")
+    check_source_fallback_intent(report, options)
+    check_boolean_intent(report, options, "boundary_first")
 
 
 def node_receipt(mesh, report):
@@ -309,6 +335,13 @@ def worker(args):
             SHARED.retain_native_report(output, record, error.report, "refusal-report.json")
             record.update(status="native_refused", native_status="refused")
             try:
+                record["source_fallback_intent_verified"] = check_source_fallback_intent(error.report, options)
+                record["boundary_first_intent_verified"] = check_boolean_intent(error.report, options, "boundary_first")
+            except ValueError as receipt_error:
+                # Keep the original refusal, elapsed cost and full report even
+                # when the selected build did not receive the intended option.
+                record.update(status="native_receipt_mismatch", native_receipt_error=str(receipt_error))
+            try:
                 record["diagnose"] = pm.diagnose(error.report)
             except Exception as diagnostic_error:
                 record["diagnose_error"] = str(diagnostic_error)
@@ -380,6 +413,8 @@ def main():
     parser.add_argument("--curvature-points-per-turn", type=curvature)
     parser.add_argument("--initial-topology-quality", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--advancing-interior-front", action=argparse.BooleanOptionalAction, default=None)
+    parser.add_argument("--native-source-fallback", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--boundary-first", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--include-thin-forced-pair", action="store_true")
     parser.add_argument("--plan-only", action="store_true")
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)

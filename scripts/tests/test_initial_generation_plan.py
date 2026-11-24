@@ -41,6 +41,7 @@ def settings(path, **changes):
     result = dict(case_manifest=path, cases=["thin-plate-010"], repetitions=1, native_seconds=600., hard_seconds=720.,
                   size_factor=None, max_chord_error=None, max_relative_volume_error=None,
                   curvature_points_per_turn=None, initial_topology_quality=None, advancing_interior_front=None,
+                  native_source_fallback=False, boundary_first=False,
                   include_thin_forced_pair=False, development_native=ROOT / "unused.pyd", occt_sdk=ROOT)
     result.update(changes)
     return argparse.Namespace(**result)
@@ -103,10 +104,52 @@ class InitialGenerationPlanTests(unittest.TestCase):
         self.assertTrue(all(options[key] is None for key in TRIALS.OPTION_KEYS))
         self.assertNotIn("minimum_quality", options)
         self.assertNotIn("warning_quality", options)
+        self.assertNotIn("native_source_fallback", options)
+        self.assertNotIn("boundary_first", options)
         args.curvature_points_per_turn = 32
         args.max_chord_error = .01
         self.assertEqual(TRIALS.mesh_options(args, data)["curvature_points_per_turn"], 32)
         self.assertEqual(TRIALS.mesh_options(args, data)["max_chord_error"], .01)
+
+    def test_experimental_source_fallback_is_explicit_and_verified_from_native_intent(self):
+        args = settings(Path("not-read"))
+        for omitted in (False, None):
+            args.native_source_fallback = omitted
+            self.assertNotIn("native_source_fallback", TRIALS.mesh_options(args, manifest()))
+        args.native_source_fallback = True
+        options = TRIALS.mesh_options(args, manifest())
+        self.assertIs(options["native_source_fallback"], True)
+        for invalid in (0, 1, "native", []):
+            args.native_source_fallback = invalid
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                TRIALS.mesh_options(args, manifest())
+        report = {"resources": {"policy": "normal", "requested_max_work": None,
+                  "max_working_bytes": options["max_working_bytes"], "logical_work_cap_disabled": True,
+                  "effective_max_work": 2**62-1}, "requested_native_source_fallback": True}
+        TRIALS.check_resources(report, options)
+        self.assertTrue(TRIALS.check_source_fallback_intent(report, options))
+        self.assertFalse(TRIALS.check_source_fallback_intent({}, {}))
+        self.assertTrue(TRIALS.check_source_fallback_intent({"requested_native_source_fallback": False}, {}))
+        for missing in (False, None):
+            report["requested_native_source_fallback"] = missing
+            with self.subTest(actual=missing), self.assertRaisesRegex(ValueError, "source-fallback intent"):
+                TRIALS.check_resources(report, options)
+
+    def test_boundary_first_has_independent_intent_and_does_not_force_a_source_provider(self):
+        args = settings(Path("not-read"), boundary_first=True)
+        options = TRIALS.mesh_options(args, manifest())
+        self.assertIs(options["boundary_first"], True)
+        self.assertNotIn("native_source_fallback", options)
+        self.assertTrue(TRIALS.check_boolean_intent({"requested_boundary_first": True}, options, "boundary_first"))
+        for actual in (False, None, 1):
+            with self.subTest(actual=actual), self.assertRaisesRegex(ValueError, "boundary-first intent"):
+                TRIALS.check_boolean_intent({"requested_boundary_first": actual}, options, "boundary_first")
+        for omitted in (False, None):
+            args.boundary_first = omitted
+            self.assertNotIn("boundary_first", TRIALS.mesh_options(args, manifest()))
+        args.boundary_first = "auto"
+        with self.assertRaises(ValueError):
+            TRIALS.mesh_options(args, manifest())
 
     def test_forced_pair_is_derived_without_mutating_the_pinned_manifest(self):
         with tempfile.TemporaryDirectory() as directory:
