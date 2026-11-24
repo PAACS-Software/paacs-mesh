@@ -62,6 +62,7 @@ preferred-quality, resource and failure meanings.
 | `low_shape_distribution_review` | The reported Native shape distribution warrants inspection. Intentional anisotropy and solver requirements need separate assessment. |
 | `source_shell_not_accepted` | Recorded source-shell geometry attempts did not complete acceptance. Their measured volume errors and limits remain available. |
 | `source_shell_validation_interrupted` | Source volume criterion passed, but cancellation or resource refusal interrupted acceptance; this does not establish a volume defect. |
+| `source_fallback_spacing_unverified` | A native fallback source was privately published without a global source-sizing certificate. Inspect achieved sizes; Native validity and failure status are unchanged. |
 | `initial_construction_fallback` | The original automatic construction failed and a fallback was attempted. Surface and volume diagnostics are retained separately. |
 | `volume_sizing_not_applied` | The published construction explicitly reports that it did not apply a volume size field. Geometry validity is separate. |
 | `construction_budget_limited` | A native construction stage reports a bounded stop. This is a warning, not a sizing certificate or a replacement for native validity checks. |
@@ -401,3 +402,92 @@ The original full report is unchanged. Partition/assembly times are nested
 construction evidence; they must not be added to outer generation/total times
 as independent elapsed intervals. Zero/default fields do not prove stage entry,
 and these receipts neither redo Native audits nor certify sizing completion.
+
+### Native source-provider fallback (development)
+
+`requested_native_source_fallback` is the strict Boolean request (default false),
+also retained in `effective_policy`. Each source shell reports
+`native_fallback_requested`, `native_fallback_attempted` and
+`native_fallback_diagnostic`. Request and actual entry remain separate.
+The experimental fallback is considered only after a remaining named geometric
+chart/wire refusal; ordinary supported curve sampling is attempted first.
+
+Source attempts add `provider`, `global_sizing_applied`,
+`curvature_points_per_turn`, `angular_deflection` (radians, or null when
+unavailable), and `witness`. A witness contains `stage`, `detail`, nullable
+`edge_tag`, `face_tag` and `use_id`, plus `geometric_refusal`. Tags identify the
+guarded source; an unavailable tag is null, and `use_id` may be zero. These are
+construction witnesses, not repair instructions or quality-causation claims.
+
+The same bounded attempt list counts chart and native-provider work together:
+Normal admits at most three source attempts, Bounded explicit opt-in admits two,
+and the default Bounded policy retains one. Existing failure, volume and source
+immutability fields keep their meaning. All attempts consume cumulative work;
+cancellation, budget, allocation, source-change and internal failures cannot
+become a successful source switch.
+
+Native provider angle/curvature and global volume sizing do not establish a
+source edge-size certificate. `source_fallback_spacing_unverified` is info only
+when the experimental fallback shell was accepted with
+`global_sizing_applied=false`; it
+remains available on a subsequently refused volume attempt. The summary never
+uses it to recertify a mesh or hide a Native error. `max_issues` bounds retained
+source-attempt lists and diagnostic evidence without changing the full report.
+
+`requested_boundary_first` is another strict Boolean request, default false,
+retained in `effective_policy` and diagnostic summaries. It is independent of
+the source-provider switch. In a participating live spatial Tet4 route, true
+explicitly selects boundary recovery before interior insertion, including when
+the caller also explicitly enabled the initial front. The initial report then
+uses `diagnostic="deferred_until_boundary_recovery"`; subsequent work is in
+`interior_front`. Unavailable or deferred initial work must not be interpreted
+as successful interior construction. Interior-front `nodes` and `candidates`
+record attempted or privately staged work, including work retained in an
+interrupted report. They do not count published nodes or certify a partial
+mesh. `interior_front.work` includes charged CAD callbacks; `queries` is the
+change in the body's CAD admission counter, excluding cache hits. These differ
+from helper-local topology work and callback invocation counts. Preflight and
+interrupted callback time remain included in this stage's elapsed time.
+Both switches retain all Native validity checks, and neither certifies
+requested sizing or solver adequacy.
+
+### Material classification progress (development)
+
+Body `material_classification` keeps cumulative returned-batch evidence:
+`attempts`, `requested_points`, `attempted_points`, `native_queries`,
+`strict_reuses`, `ray_admissions`, `work` and `seconds`. `diagnostic`, `complete`
+and `source_model_verified_unchanged` describe the last batch. The scope is
+`cumulative material classification attempts; last batch status; not final publication`.
+Interrupted calls retain attempted work before cancellation propagates;
+their partial admission masks are not published. Repeated batches may request
+the same point, so these are not distinct node or cell counts.
+
+`attempted_points` partitions into ordinary native queries, strict cached
+reuses and positive original-CAD ray admissions. It must not exceed cumulative
+requested points. An ordinary query is counted when it starts; interruption
+may therefore leave an attempted point without a classification decision.
+Classification completion does not mean every point was
+inside: completed masks can contain outside decisions that drive cavity repair.
+Neither classification completion nor a source guard certifies a final mesh.
+
+Strict serial boundary-first batches additionally report `profiled_batches`,
+`ray_witness_attempts`, `classifier_setup_seconds`, `native_query_seconds` and
+`ray_witness_seconds`. These accumulate only profiled returned batches;
+completion/source guards still describe the last batch, not the cumulative
+profile. `profiled_batches=0` means the phase cost was not measured, not that it
+was zero. Supplied phase times are finite and nonnegative; their sum is at most
+material elapsed `seconds` within floating-point tolerance. Unprofiled calls
+can still contribute to the broader material counts and elapsed time.
+
+The explicit boundary-first mode can use positive ray witnesses against the
+actual original trimmed CAD in strict serial classification. Ambiguous and
+unadmitted points use the ordinary native classifier. This does not relax CAD
+tolerances, allow a distance band, or replace final validity checks. Actual
+`ray_admissions` record its use; a requested switch alone is not evidence of it.
+
+Python also preserves the existing body `native_candidate_queries` and
+`native_candidate_ray_admissions` counters exposed by the native CLI. Material
+times/counters are nested within volume work and can overlap these broader
+counters. Do not add them to generation, total time or other nested counts as
+independent costs. Diagnostic summaries validate counter types and coherence,
+retain the supplied progress, and do not rerun geometry classification.

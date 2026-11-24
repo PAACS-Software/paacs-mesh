@@ -321,7 +321,7 @@ class CadModel:
              max_interior_candidates=None, max_interior_sites=None,
              resource_policy=_DEFAULT_RESOURCE_POLICY,
              max_chord_error=None, max_relative_volume_error=None, curvature_points_per_turn=None,
-             initial_topology_quality=None):
+             initial_topology_quality=None, native_source_fallback=False, boundary_first=False):
         """Generate an owned, audited Tet4 mesh; lengths and sizes are in mm.
 
         ``face_sizes`` contains native ``FaceSize`` controls. Alternatively,
@@ -344,6 +344,12 @@ class CadModel:
         retains the established defaults. Optional positive integer caps override
         individual allowances within the existing global budgets; they do not
         select a recovery mode or weaken geometry and validity checks.
+        ``native_source_fallback`` opts into a bounded source-provider fallback
+        after a supported chart/wire refusal. It does not force a constructor,
+        bypass explicit local controls, or certify achieved surface sizing.
+        ``boundary_first`` explicitly changes the compatible live constructor's
+        order: recover its boundary before interior insertion. It does not force
+        that constructor or enable a source-provider fallback.
         """
         self._assert_identity()
         resource_policy = _resource_policy_value(resource_policy)
@@ -351,6 +357,8 @@ class CadModel:
         curvature_points_per_turn = _curvature_value(curvature_points_per_turn)
         if initial_topology_quality is not None:
             boolean(initial_topology_quality, "initial_topology_quality")
+        boolean(native_source_fallback, "native_source_fallback")
+        boolean(boundary_first, "boundary_first")
         construction = _construction_options(construction_effort,
             max_surface_points=max_surface_points, max_surface_chord_points=max_surface_chord_points,
             max_interior_candidates=max_interior_candidates, max_interior_sites=max_interior_sites)
@@ -372,6 +380,8 @@ class CadModel:
             advancing_interior_front=advancing_interior_front, resource_policy=resource_policy,
             curvature_points_per_turn=curvature_points_per_turn,
             initial_topology_quality=initial_topology_quality,
+            native_source_fallback=native_source_fallback,
+            boundary_first=boundary_first,
             **construction, **fidelity)
 
     def preview(self, selection=None, *, linear_deflection=.02, max_points=50000, max_triangles=100000):

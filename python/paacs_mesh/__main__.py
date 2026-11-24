@@ -142,6 +142,10 @@ def _legacy(argv):
                         help="integer 0..64; zero disables optional curvature sampling")
     parser.add_argument("--initial-topology-quality", action=argparse.BooleanOptionalAction, default=None,
                         help="severe initial-topology cleanup; default depends on resource policy, does not force the front")
+    parser.add_argument("--native-source-fallback", action=argparse.BooleanOptionalAction, default=False,
+                        help="experimental bounded native source after supported chart/wire refusal; preserves Native validity checks")
+    parser.add_argument("--boundary-first", action=argparse.BooleanOptionalAction, default=False,
+                        help="experimental live Tet4 order: recover boundary before interior insertion; does not force a constructor")
     parser.add_argument("--growth", type=float, default=1.3,
                         help="size-field growth, at least 1 (default: 1.3)")
     parser.add_argument("--native-sizing", action=argparse.BooleanOptionalAction, default=None,
@@ -178,6 +182,8 @@ def _legacy(argv):
                               max_relative_volume_error=args.max_relative_volume_error,
                               curvature_points_per_turn=args.curvature_points_per_turn,
                               initial_topology_quality=args.initial_topology_quality,
+                              native_source_fallback=args.native_source_fallback,
+                              boundary_first=args.boundary_first,
                               construction_effort=args.construction_effort,
                               **{name: getattr(args, name) for name in _CONSTRUCTION_LIMITS})
             mesh.write(args.output)

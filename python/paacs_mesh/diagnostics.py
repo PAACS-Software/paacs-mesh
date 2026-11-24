@@ -8,7 +8,7 @@
 import hashlib
 import json
 
-from ._cad_common import integer, json_copy
+from ._cad_common import integer, json_copy, number
 
 
 DIAGNOSTIC_SCHEMA = "paacs-mesh-diagnostics-v1"
@@ -22,7 +22,8 @@ _BODY = ("solid_tag", "route", "reason", "surface_reason", "volume_reason", "cad
          "maximum_boundary_sample_error", "surface_chord_error_limit",
          "boundary_embedding_certified", "centroid_outside_distance_limit", "native_centroids_checked",
          "initial_front", "surface_spacing", "source_shell", "initial_front_fallback", "volume_sizing",
-         "constraint_recovery", "fidelity", "route_resolution", "initial_topology_quality")
+         "constraint_recovery", "fidelity", "route_resolution", "initial_topology_quality",
+         "material_classification", "native_candidate_queries", "native_candidate_ray_admissions")
 _PARTITION = ("native_partition_seconds", "native_assembly_seconds", "partition_reason", "partition_policy",
               "partition_attempts", "partition_pieces", "partition_interfaces", "partition_work",
               "partition_volume_change", "partition_volume_admission", "sampled_partition_trim_witness",
@@ -56,6 +57,17 @@ def capabilities():
                      "curvature_points_per_turn": {"default": None, "native_default": 0, "integer_range": [0, 64]},
                      "initial_topology_quality": {"default": None, "policy_defaults": {"normal": True, "bounded": False},
                                                   "forces_initial_front": False, "changes_native_validity_gates": False},
+                     "native_source_fallback": {"default": False, "experimental": True,
+                         "forces_initial_front": False, "changes_native_validity_gates": False,
+                         "trigger": "remaining_named_geometric_chart_or_wire_refusal",
+                         "explicit_surface_controls_bypassed": False,
+                         "native_source_spacing_certified": False,
+                         "source_attempt_limits": {"normal": 3, "bounded_enabled": 2, "bounded_default": 1}},
+                     "boundary_first": {"default": False, "experimental": True,
+                         "applies_to": "live_spatial_Tet4_constructor", "forces_initial_front": False,
+                         "overrides_enabled_front_order": True, "enables_source_fallback": False,
+                         "material_admission": "positive_original_trimmed_CAD_ray_else_classifier_in_serial_strict_mode",
+                         "changes_native_validity_gates": False},
                      "construction_efforts": ["legacy", "auto", "thorough"],
                      "construction_default": "legacy",
                      "construction_stage_caps": ["max_surface_points", "max_surface_chord_points",
@@ -77,6 +89,8 @@ def capabilities():
                         "automatic_shape_review": dict(_SHAPE_REVIEW),
                         "shape_review_changes_native_acceptance": False,
                         "source_shell_attempt_limit": 3,
+                        "material_classification_progress": True,
+                        "material_progress_certifies_final_mesh": False,
                         "face_achieved_size": False, "solver_error_estimation": False,
                         "maximum_issues": 256, "report_budget_bytes": 8 * 1024 * 1024},
         "mesh_inspection": {"api": "inspect_mesh", "cell_id_scheme": "zero_based_native_archive_cell_index_v1",
@@ -137,19 +151,39 @@ def _source_shell(value):
         raise ValueError("source_shell.available must be bool")
     if source.get("accepted") is not None and not isinstance(source["accepted"], bool):
         raise ValueError("source_shell.accepted must be bool or null")
+    for name in ("native_fallback_requested", "native_fallback_attempted"):
+        if name in source and not isinstance(source[name], bool):
+            raise ValueError(f"source_shell.{name} must be bool")
+    if "native_fallback_diagnostic" in source and not isinstance(source["native_fallback_diagnostic"], str):
+        raise ValueError("source_shell.native_fallback_diagnostic must be a string")
     attempts = _records(source.get("attempts", []), "source_shell.attempts")
     if len(attempts) > 3:
         raise ValueError("source_shell has more than three reported attempts")
     for attempt in attempts:
         for name in ("surface_published", "source_model_verified_unchanged",
-                     "construction_budget_limited", "construction_stalled"):
+                     "construction_budget_limited", "construction_stalled", "global_sizing_applied"):
             if name in attempt and not isinstance(attempt[name], bool):
                 raise ValueError(f"source_shell.attempts.{name} must be bool")
         if attempt.get("volume_criterion_met") is not None and not isinstance(attempt["volume_criterion_met"], bool):
             raise ValueError("source_shell.attempts.volume_criterion_met must be bool or null")
-        for name in ("attempt", "work", "nodes", "triangles"):
+        for name in ("attempt", "work", "nodes", "triangles", "curvature_points_per_turn"):
             if name in attempt:
                 integer(attempt[name], "source_shell.attempts." + name, minimum=0)
+        if "provider" in attempt and not isinstance(attempt["provider"], str):
+            raise ValueError("source_shell.attempts.provider must be a string")
+        angle = attempt.get("angular_deflection")
+        if angle is not None and not _positive(angle):
+            raise ValueError("source_shell.attempts.angular_deflection must be positive or null")
+        if "witness" in attempt:
+            witness = _mapping(attempt["witness"], "source_shell.attempts.witness")
+            for name in ("stage", "detail"):
+                if name in witness and not isinstance(witness[name], str):
+                    raise ValueError(f"source_shell.attempts.witness.{name} must be a string")
+            for name in ("edge_tag", "face_tag", "use_id"):
+                if witness.get(name) is not None:
+                    integer(witness[name], "source_shell.attempts.witness." + name, minimum=0)
+            if "geometric_refusal" in witness and not isinstance(witness["geometric_refusal"], bool):
+                raise ValueError("source_shell.attempts.witness.geometric_refusal must be bool")
     return source, attempts
 
 
@@ -171,6 +205,45 @@ def _route_resolution(value):
             raise ValueError("route_resolution.attempts.published must be bool")
         if "work" in attempt:
             integer(attempt["work"], "route_resolution.attempts.work", minimum=0)
+    return receipt
+
+
+def _material_classification(value):
+    receipt = _mapping(value, "material_classification")
+    if "diagnostic" in receipt and not isinstance(receipt["diagnostic"], str):
+        raise ValueError("material_classification.diagnostic must be a string")
+    for name in ("complete", "source_model_verified_unchanged"):
+        if name in receipt and not isinstance(receipt[name], bool):
+            raise ValueError(f"material_classification.{name} must be bool")
+    counts = ("attempts", "requested_points", "attempted_points", "native_queries",
+              "strict_reuses", "ray_admissions", "work", "profiled_batches", "ray_witness_attempts")
+    for name in counts:
+        if name in receipt:
+            integer(receipt[name], "material_classification." + name, minimum=0)
+    if ("requested_points" in receipt and "attempted_points" in receipt
+            and receipt["attempted_points"] > receipt["requested_points"]):
+        raise ValueError("material_classification attempted points exceed requested points")
+    partitions = ("native_queries", "strict_reuses", "ray_admissions")
+    if all(name in receipt for name in (*partitions, "attempted_points")):
+        if sum(receipt[name] for name in partitions) != receipt["attempted_points"]:
+            raise ValueError("material_classification point counters disagree")
+    if ("profiled_batches" in receipt and "attempts" in receipt
+            and receipt["profiled_batches"] > receipt["attempts"]):
+        raise ValueError("material_classification profiled batches exceed attempts")
+    phases = ("classifier_setup_seconds", "native_query_seconds", "ray_witness_seconds")
+    for name in ("seconds", *phases):
+        value = receipt.get(name)
+        if value is None and name in phases and name in receipt:
+            raise ValueError(f"material_classification.{name} must be a finite nonnegative number")
+        if value is not None:
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError(f"material_classification.{name} must be a finite nonnegative number or null")
+            number(value, "material_classification." + name, minimum=0)
+    if receipt.get("seconds") is not None and all(receipt.get(name) is not None for name in phases):
+        measured = sum(receipt[name] for name in phases)
+        total = receipt["seconds"]
+        if measured > total + max(1e-9, abs(total)*1e-9):
+            raise ValueError("material_classification profiled phases exceed elapsed seconds")
     return receipt
 
 
@@ -219,6 +292,9 @@ def _native_report(report):
 
 
 def _validate_measurements(native, audit, quality):
+    for name in ("requested_native_source_fallback", "requested_boundary_first"):
+        if name in native and not isinstance(native[name], bool):
+            raise ValueError(f"{name} must be bool")
     if native.get("hint") is not None and not isinstance(native["hint"], str):
         raise ValueError("hint must be a string or null")
     if quality.get("metric") is not None and not isinstance(quality["metric"], str):
@@ -362,6 +438,11 @@ def diagnose(report_or_mesh, *, max_issues=32):
         if shape_review["triggers"]:
             shape_review["status"] = "recommended"
     for body in bodies:
+        for name in ("native_candidate_queries", "native_candidate_ray_admissions"):
+            if name in body:
+                integer(body[name], name, minimum=0)
+        if body.get("material_classification") is not None:
+            _material_classification(body["material_classification"])
         if body.get("partition_attempt_reports") is not None:
             partition_attempts = _records(body["partition_attempt_reports"], "partition_attempt_reports")
             for attempt in partition_attempts:
@@ -399,6 +480,17 @@ def diagnose(report_or_mesh, *, max_issues=32):
                     integer(recovery[name], "constraint_recovery." + name, minimum=0)
         if source_shell is not None:
             source_shell, source_attempts = _source_shell(source_shell)
+            native_sources = [row for row in source_attempts if row.get("surface_published") is True
+                              and row.get("global_sizing_applied") is False]
+            if (source_shell.get("native_fallback_attempted") is True
+                    and source_shell.get("accepted") is True and native_sources):
+                issue("source_fallback_spacing_unverified", "info", {
+                    "diagnostic": source_shell.get("native_fallback_diagnostic"),
+                    "attempts": native_sources[:maximum], "attempts_total": len(native_sources),
+                    "attempts_truncated": len(native_sources) > maximum,
+                    "sizing_completion_certified": False,
+                    "native_validity_gates_changed": False}, scope="body", tags=() if tag is None else (tag,),
+                    actions=("inspect_actual_route_and_achieved_sizes", "review_source_provider_and_controls"))
             if source_shell.get("available") is True and source_shell.get("accepted") is False:
                 interrupted = (native.get("reason") in ("cancelled", "budget_exceeded", "allocation_failed")
                                and source_attempts and source_attempts[-1].get("volume_criterion_met") is True)
@@ -543,6 +635,8 @@ def diagnose(report_or_mesh, *, max_issues=32):
                     "construction": native.get("construction"),
                     "resources": native.get("resources"), "fidelity": native.get("fidelity"),
                     "route_resolution": native.get("route_resolution"),
+                    "requested_native_source_fallback": native.get("requested_native_source_fallback"),
+                    "requested_boundary_first": native.get("requested_boundary_first"),
                     "quality": {key: quality.get(key) for key in _QUALITY}},
         "bodies": [body_summary(body) for body in bodies[:maximum]],
         "bodies_truncated": len(bodies) > maximum,

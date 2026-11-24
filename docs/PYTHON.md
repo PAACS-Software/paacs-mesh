@@ -153,6 +153,78 @@ A structured method may report it as not applicable. The CLI supports
 `--initial-topology-quality` and `--no-initial-topology-quality`. Requested intent
 and the body's actual stage receipt remain separate.
 
+`native_source_fallback=False` is an independent experimental switch. Setting it
+to `True` allows a bounded native tessellation provider only after a remaining
+named geometric chart/wire refusal, while retaining the live Tet4 constructor and all
+CAD, source, orientation, connectivity and resource checks. It does not force
+initial-front placement when that is explicitly disabled, or replace a verified
+primitive/mapped AUTO choice.
+If the live request's source providers refuse, this opt-in does not silently
+replace it with legacy star/partition dispatch. The refusal and provider
+diagnostics remain available; enabling it is not a promise of broader coverage.
+
+```python
+mesh = model.mesh(0.5, native_source_fallback=True)
+print(mesh.report["requested_native_source_fallback"])
+print(mesh.report["bodies"][0]["source_shell"])
+```
+
+The fallback cannot bypass explicit local face/box/spatial/body controls,
+size-ratio requirements or per-face construction caps. Its native source
+tessellation does not certify requested surface sizing. The global volume field
+is retained; inspect actual source providers and achieved sizes separately.
+Curvature requests configure a native angular deflection bounded by
+`min(0.4, 2*pi/curvature_points_per_turn)` radians when nonzero. This is a kernel
+construction request, not a point-count guarantee; independent chord/volume
+acceptance remains required.
+
+Recipes save the Boolean unchanged across retries. Older recipes missing it
+remain disabled. The CLI accepts `--native-source-fallback` and
+`--no-native-source-fallback`. Source attempts report provider, configured
+curvature/angle, whether global source sizing was applied, and a structured
+curve/chart witness when available. `source_fallback_spacing_unverified` is an
+informational diagnostic; it does not change Native acceptance or establish
+solver adequacy.
+
+`boundary_first=False` is a separate experimental construction-order switch.
+With `True`, a compatible live spatial Tet4 route recovers the certified source
+boundary before inserting interior points into the completed material mesh.
+The volume size field, explicit resource limits and final Native checks remain
+active. If initial-front construction is explicitly enabled as well, this is an
+explicit order override; it does not run the pre-recovery point scorer.
+
+```python
+mesh = model.mesh(0.5, advancing_interior_front=True,
+                  native_source_fallback=True, boundary_first=True)
+```
+
+The flags are independent: `boundary_first` does not enable a source fallback
+or force a live constructor when it is disabled or a verified structured method
+is chosen. Default `False` preserves the established order; missing fields in
+older recipes also mean `False`, and every retry retains the saved value.
+The CLI supports `--boundary-first` and `--no-boundary-first`.
+`requested_boundary_first` records intent. A participating body's `initial_front`
+reports `deferred_until_boundary_recovery`; actual subsequent insertion is in
+`interior_front`. A deferred stage is not evidence that filling or insertion
+completed, and a pre-insertion topology-quality request may remain unattempted.
+Body `material_classification` reports cumulative batch requests, attempted
+points, ordinary queries, strict reuses, positive original-CAD ray admissions,
+logical work and seconds; completion/source-guard fields describe the last
+batch. An ordinary query is counted when it starts, so an interrupted attempt
+need not have a classification decision. `profiled_batches` and
+`ray_witness_attempts` identify measured strict serial boundary-first work;
+`classifier_setup_seconds`, `native_query_seconds` and `ray_witness_seconds`
+split that measured cost. Zero profiled batches means unmeasured, not zero cost.
+Boundary-first can use positive witnesses on the actual trimmed CAD in
+strict serial mode, falling back to ordinary classification for ambiguous or
+unadmitted points. This changes no geometric tolerance or final validity gate.
+Progress and nested times remain available on cancellation; they do not certify
+that filling, interior insertion or final publication completed.
+In boundary-first insertion, explicit `max_interior_candidates` and
+`max_interior_sites` remain upper caps. The current post-recovery builder also
+has its existing 1,024-site algorithm ceiling; a larger requested cap does not
+promise that many insertions. Inspect remaining targets and achieved sizes.
+
 ### Construction receipts
 
 The report's `requested_advancing_interior_front` records the caller's choice.

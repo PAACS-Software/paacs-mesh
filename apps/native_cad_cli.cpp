@@ -73,11 +73,27 @@ void writeInitialTopologyQuality(const paacs::geo::NativeCadInitialTopologyQuali
     measurement("minimum_scaled_jacobian_after",r.minimumScaledJacobianAfter);
     std::cout<<",\"delaunay_certified\":false,\"scope\":\"nonguard numerical cells including exterior; final Native audits remain required\"}";
 }
+void writeMaterialClassification(const paacs::geo::NativeCadMaterialClassificationReport& r){
+    std::cout<<"{\"diagnostic\":\""<<r.diagnostic<<"\",\"complete\":"<<(r.completed?"true":"false")
+        <<",\"source_model_verified_unchanged\":"<<(r.sourceModelUnmodified?"true":"false")
+        <<",\"attempts\":"<<r.attempts<<",\"requested_points\":"<<r.requestedPoints
+        <<",\"attempted_points\":"<<r.attemptedPoints<<",\"native_queries\":"<<r.nativeQueries
+        <<",\"strict_reuses\":"<<r.strictReuses<<",\"ray_admissions\":"<<r.rayAdmissions
+        <<",\"work\":"<<r.work<<",\"seconds\":"<<JsonFinite{r.seconds}
+        <<",\"profiled_batches\":"<<r.profiledBatches<<",\"ray_witness_attempts\":"<<r.rayWitnessAttempts
+        <<",\"classifier_setup_seconds\":"<<JsonFinite{r.classifierSetupSeconds}
+        <<",\"native_query_seconds\":"<<JsonFinite{r.nativeQuerySeconds}
+        <<",\"ray_witness_seconds\":"<<JsonFinite{r.rayWitnessSeconds}
+        <<",\"scope\":\"cumulative material classification attempts; last batch status; not final publication\"}";
+}
 void writeSourceShell(const paacs::geo::NativeCadSourceShellReport& report){
     const auto count=std::min<std::size_t>(report.count,report.attempts.size());
     const auto positive=[](double value){if(value>0)std::cout<<JsonFinite{value};else std::cout<<"null";};
     std::cout<<"{\"available\":"<<(count?"true":"false")<<",\"accepted\":";
     if(count)std::cout<<(report.accepted?"true":"false");else std::cout<<"null";
+    std::cout<<",\"native_fallback_requested\":"<<(report.nativeFallbackRequested?"true":"false")
+        <<",\"native_fallback_attempted\":"<<(report.nativeFallbackAttempted?"true":"false")
+        <<",\"native_fallback_diagnostic\":\""<<report.nativeFallbackDiagnostic<<"\"";
     std::cout<<",\"diagnostic\":\""<<report.diagnostic<<"\",\"requested_global_size\":";
     positive(report.requestedGlobalSize);std::cout<<",\"requested_chord_error\":";positive(report.requestedChordError);
     std::cout<<",\"maximum_relative_volume_error\":";positive(report.maximumRelativeVolumeError);
@@ -99,7 +115,15 @@ void writeSourceShell(const paacs::geo::NativeCadSourceShellReport& report){
         std::cout<<",\"relative_volume_error\":";
         if(a.published)std::cout<<JsonFinite{a.relativeVolumeError};else std::cout<<"null";
         std::cout<<",\"construction_budget_limited\":"<<(a.constructionBudgetLimited?"true":"false")
-            <<",\"construction_stalled\":"<<(a.constructionStalled?"true":"false")<<'}';
+            <<",\"construction_stalled\":"<<(a.constructionStalled?"true":"false")
+            <<",\"provider\":\""<<a.provider<<"\",\"global_sizing_applied\":"<<(a.globalSizingApplied?"true":"false")
+            <<",\"curvature_points_per_turn\":"<<a.curvaturePointsPerTurn<<",\"angular_deflection\":";
+        positive(a.angularDeflection);
+        std::cout<<",\"witness\":{\"stage\":\""<<a.witness.stage<<"\",\"detail\":\""<<a.witness.detail<<"\",\"edge_tag\":";
+        if(a.witness.edgeTag>=0)std::cout<<a.witness.edgeTag;else std::cout<<"null";
+        std::cout<<",\"face_tag\":";if(a.witness.faceTag>=0)std::cout<<a.witness.faceTag;else std::cout<<"null";
+        std::cout<<",\"use_id\":";if(a.witness.useId)std::cout<<*a.witness.useId;else std::cout<<"null";
+        std::cout<<",\"geometric_refusal\":"<<(a.witness.geometricRefusal?"true":"false")<<"}}";
     }
     std::cout<<"],\"scope\":\"latest_source_strategy; geometry acceptance is not a sizing certificate\"}";
 }
@@ -292,6 +316,8 @@ int runNativeCadCli(int argc,char** argv) {
             <<",\"requested_initial_topology_quality\":";
         if(options.initialTopologyQuality)std::cout<<(*options.initialTopologyQuality?"true":"false");else std::cout<<"null";
         std::cout
+            <<",\"requested_native_source_fallback\":"<<(options.allowNativeSourceFallback?"true":"false")
+            <<",\"requested_boundary_first\":"<<(options.recoverBoundaryBeforeInteriorSites?"true":"false")
             <<",\"regular_surface_front\":"<<(options.useRegularSurfaceFront?"true":"false")
             <<",\"improve_regular_quality\":"<<(options.regularMeshQualityEnabled()?"true":"false")
             <<",\"maximum_edge_recovery_steiner_candidates\":"<<options.maximumEdgeRecoverySteinerCandidates
@@ -325,6 +351,7 @@ int runNativeCadCli(int argc,char** argv) {
             writeInitialFrontFallback(b.initialFrontFallback);
             std::cout<<",\"source_shell\":";writeSourceShell(b.sourceShell);
             std::cout<<",\"initial_topology_quality\":";writeInitialTopologyQuality(b.initialTopologyQuality);
+            std::cout<<",\"material_classification\":";writeMaterialClassification(b.materialClassification);
             std::cout<<",\"route_resolution\":";writeRouteResolution(b.routeResolution);
             std::cout<<",\"fidelity\":{\"effective_max_chord_error\":";
             if(b.effectiveMaximumChordError)std::cout<<JsonFinite{*b.effectiveMaximumChordError};else std::cout<<"null";
@@ -526,7 +553,7 @@ int runNativeCadCli(int argc,char** argv) {
     };
     for(int i=1;i<argc;++i)report|=std::string_view(argv[i])=="--report-json"||std::string_view(argv[i])=="--independent-parts";
     try {
-        if(argc<4)throw std::invalid_argument("usage: paacs-cad-mesh input.step size output.paacsmesh --native-cad [--face-size tag size] [--native-sizing] [--size-box x0 y0 z0 x1 y1 z1 size] [--min-size h] [--growth g] [--report-json] [--trace-native-stages] [--independent-parts] [--local-partition-recovery] [--adaptive-tet-recovery] [--live-material-recovery] [--curvature-points-per-turn 0..64] [--trimmed-ray-witnesses] [--local-delaunay-refinement] [--advancing-interior-front|--no-advancing-interior-front] [--initial-topology-quality|--no-initial-topology-quality] [--improve-tet-quality] [--improve-surface-spacing] [--regular-surface-front] [--no-improve-regular-quality] [--recovery-mode standard|advanced] [--recovery-seed N] [--recovery-retries 0..4] [--recovery-steiner-candidates 0..64] [--resource-policy normal|bounded] [--max-work N] [--max-working-bytes N] [--construction-effort legacy|auto|thorough] [--max-surface-points N] [--max-surface-chord-points N] [--max-interior-candidates N] [--max-interior-sites N]");
+        if(argc<4)throw std::invalid_argument("usage: paacs-cad-mesh input.step size output.paacsmesh --native-cad [--face-size tag size] [--native-sizing] [--size-box x0 y0 z0 x1 y1 z1 size] [--min-size h] [--growth g] [--report-json] [--trace-native-stages] [--independent-parts] [--local-partition-recovery] [--adaptive-tet-recovery] [--live-material-recovery] [--curvature-points-per-turn 0..64] [--trimmed-ray-witnesses] [--local-delaunay-refinement] [--advancing-interior-front|--no-advancing-interior-front] [--initial-topology-quality|--no-initial-topology-quality] [--native-source-fallback|--no-native-source-fallback] [--boundary-first|--no-boundary-first] [--improve-tet-quality] [--improve-surface-spacing] [--regular-surface-front] [--no-improve-regular-quality] [--recovery-mode standard|advanced] [--recovery-seed N] [--recovery-retries 0..4] [--recovery-steiner-candidates 0..64] [--resource-policy normal|bounded] [--max-work N] [--max-working-bytes N] [--construction-effort legacy|auto|thorough] [--max-surface-points N] [--max-surface-chord-points N] [--max-interior-candidates N] [--max-interior-sites N]");
         options.geometry.targetSize=number<double>(argv[2]);
         for(int i=4;i<argc;++i) {
             const std::string_view a(argv[i]);
@@ -561,6 +588,10 @@ int runNativeCadCli(int argc,char** argv) {
             else if(a=="--no-advancing-interior-front")options.useAdvancingInteriorFront=false;
             else if(a=="--initial-topology-quality")options.initialTopologyQuality=true;
             else if(a=="--no-initial-topology-quality")options.initialTopologyQuality=false;
+            else if(a=="--native-source-fallback")options.allowNativeSourceFallback=true;
+            else if(a=="--no-native-source-fallback")options.allowNativeSourceFallback=false;
+            else if(a=="--boundary-first")options.recoverBoundaryBeforeInteriorSites=true;
+            else if(a=="--no-boundary-first")options.recoverBoundaryBeforeInteriorSites=false;
             else if(a=="--construction-effort"&&i+1<argc){
                 const std::string_view effort(argv[++i]);
                 if(effort=="legacy")options.construction.effort=geo::CadConstructionEffort::Legacy;

@@ -274,11 +274,29 @@ py::dict importReport(const geo::NativeCadImportOutcome& cad, const fs::path& so
     return r;
 }
 
+py::dict materialClassificationReport(const geo::NativeCadMaterialClassificationReport& source) {
+    py::dict r;r["diagnostic"]=source.diagnostic;r["complete"]=source.completed;
+    r["source_model_verified_unchanged"]=source.sourceModelUnmodified;
+    r["attempts"]=source.attempts;r["requested_points"]=source.requestedPoints;
+    r["attempted_points"]=source.attemptedPoints;r["native_queries"]=source.nativeQueries;
+    r["strict_reuses"]=source.strictReuses;r["ray_admissions"]=source.rayAdmissions;
+    r["work"]=source.work;r["seconds"]=finiteValue(source.seconds);
+    r["profiled_batches"]=source.profiledBatches;r["ray_witness_attempts"]=source.rayWitnessAttempts;
+    r["classifier_setup_seconds"]=finiteValue(source.classifierSetupSeconds);
+    r["native_query_seconds"]=finiteValue(source.nativeQuerySeconds);
+    r["ray_witness_seconds"]=finiteValue(source.rayWitnessSeconds);
+    r["scope"]="cumulative material classification attempts; last batch status; not final publication";
+    return r;
+}
+
 py::dict sourceShellReport(const geo::NativeCadSourceShellReport& source) {
     py::dict r;py::list attempts;
     const auto count=std::min<std::size_t>(source.count,source.attempts.size());
     r["available"]=count>0;r["accepted"]=count?py::cast(source.accepted):py::none();
     r["diagnostic"]=source.diagnostic;
+    r["native_fallback_requested"]=source.nativeFallbackRequested;
+    r["native_fallback_attempted"]=source.nativeFallbackAttempted;
+    r["native_fallback_diagnostic"]=source.nativeFallbackDiagnostic;
     r["requested_global_size"]=source.requestedGlobalSize>0?finiteValue(source.requestedGlobalSize):py::none();
     r["requested_chord_error"]=source.requestedChordError>0?finiteValue(source.requestedChordError):py::none();
     r["maximum_relative_volume_error"]=source.maximumRelativeVolumeError>0?finiteValue(source.maximumRelativeVolumeError):py::none();
@@ -294,6 +312,17 @@ py::dict sourceShellReport(const geo::NativeCadSourceShellReport& source) {
         row["relative_volume_error"]=a.published?finiteValue(a.relativeVolumeError):py::none();
         row["construction_budget_limited"]=a.constructionBudgetLimited;
         row["construction_stalled"]=a.constructionStalled;
+        row["provider"]=a.provider;
+        row["global_sizing_applied"]=a.globalSizingApplied;
+        row["curvature_points_per_turn"]=a.curvaturePointsPerTurn;
+        row["angular_deflection"]=a.angularDeflection>0?finiteValue(a.angularDeflection):py::none();
+        py::dict witness;
+        witness["stage"]=a.witness.stage;witness["detail"]=a.witness.detail;
+        witness["edge_tag"]=a.witness.edgeTag>=0?py::cast(a.witness.edgeTag):py::none();
+        witness["face_tag"]=a.witness.faceTag>=0?py::cast(a.witness.faceTag):py::none();
+        witness["use_id"]=py::cast(a.witness.useId);
+        witness["geometric_refusal"]=a.witness.geometricRefusal;
+        row["witness"]=std::move(witness);
         attempts.append(std::move(row));
     }
     r["attempts"]=std::move(attempts);
@@ -448,6 +477,8 @@ struct MeshResult {
     std::optional<unsigned> requestedCurvaturePoints;
     unsigned curvaturePoints=0;
     std::optional<bool> requestedInitialTopologyQuality;
+    bool requestedNativeSourceFallback=false;
+    bool requestedBoundaryFirst=false;
     std::optional<bool> requestedAdvancingInteriorFront;
     double warningQuality = 0, minimumQuality = 0;
     unsigned workers = 1, validationWorkers = 1;
@@ -511,6 +542,8 @@ struct MeshResult {
         r["fidelity"]=std::move(fidelity);
         r["route_resolution"]=routeResolutionReport(outcome.routeResolution);
         r["requested_initial_topology_quality"]=py::cast(requestedInitialTopologyQuality);
+        r["requested_native_source_fallback"]=requestedNativeSourceFallback;
+        r["requested_boundary_first"]=requestedBoundaryFirst;
         r["workers"] = workers;
         r["validation_workers"] = validationWorkers;
         // Early refusals may retain the native outcome's default policy. With
@@ -611,6 +644,8 @@ struct MeshResult {
             b["boundary_embedding_certified"] = body.boundaryEmbeddingCertified;
             b["centroid_outside_distance_limit"] = finiteValue(body.centroidOutsideDistanceLimit);
             b["native_centroids_checked"] = body.nativeCentroidsChecked;
+            b["native_candidate_queries"] = body.nativeCandidateQueries;
+            b["native_candidate_ray_admissions"] = body.nativeCandidateRayAdmissions;
             b["local_delaunay_refinement_nodes"] = body.localDelaunayRefinementNodes;
             b["surface_chord_error_limit"] = finiteValue(body.surfaceChordErrorLimit);
             b["source_shell"] = sourceShellReport(body.sourceShell);
@@ -623,6 +658,7 @@ struct MeshResult {
             bodyFidelity["scope"]="selected construction limit; not a complete CAD distance certificate";
             b["fidelity"]=std::move(bodyFidelity);
             b["constraint_recovery"] = constraintRecoveryReport(body.constraintRecovery);
+            b["material_classification"] = materialClassificationReport(body.materialClassification);
             py::dict sizingApplication;
             sizingApplication["applied"]=py::cast(body.volumeSizingApplied);
             sizingApplication["diagnostic"]=body.volumeSizingDiagnostic;
@@ -743,6 +779,8 @@ struct MeshResult {
         py::dict policy;
         policy["requested_native_sizing"] = py::cast(sizing.requestedNative);
         policy["requested_advancing_interior_front"] = py::cast(requestedAdvancingInteriorFront);
+        policy["requested_native_source_fallback"] = requestedNativeSourceFallback;
+        policy["requested_boundary_first"] = requestedBoundaryFirst;
         policy["wrapper_native_sizing"] = sizing.native;
         policy["wrapper_sizing_mode"] = sizing.native ? "spatial" : "standard";
         policy["body_routes"] = std::move(bodyRoutes);
@@ -832,11 +870,18 @@ struct CadModel {
         const py::object& maxSurfaceChordPoints, const py::object& maxInteriorCandidates,
         const py::object& maxInteriorSites, const std::string& resourcePolicy,
         const py::object& maxChordError, const py::object& maxRelativeVolumeError,
-        const py::object& curvaturePointsPerTurn, const py::object& initialTopologyQuality) {
+        const py::object& curvaturePointsPerTurn, const py::object& initialTopologyQuality,
+        const py::object& nativeSourceFallback, const py::object& boundaryFirst) {
         if(resourcePolicy!="normal"&&resourcePolicy!="bounded")
             throw py::value_error("resource_policy must be 'normal' or 'bounded'");
         auto options=resourcePolicy=="normal"?geo::normalNativeCadMeshOptions():geo::NativeCadMeshOptions{};
         options.geometry.targetSize = positiveNumber(size, "size");
+        if(!py::isinstance<py::bool_>(nativeSourceFallback))
+            throw py::type_error("native_source_fallback must be bool");
+        options.allowNativeSourceFallback=nativeSourceFallback.cast<bool>();
+        if(!py::isinstance<py::bool_>(boundaryFirst))
+            throw py::type_error("boundary_first must be bool");
+        options.recoverBoundaryBeforeInteriorSites=boundaryFirst.cast<bool>();
         if(!initialTopologyQuality.is_none()){
             if(!py::isinstance<py::bool_>(initialTopologyQuality))
                 throw py::type_error("initial_topology_quality must be bool or None");
@@ -967,6 +1012,8 @@ struct CadModel {
         result->requestedCurvaturePoints=requestedCurvaturePoints;
         result->curvaturePoints=options.curvaturePointsPerTurn;
         result->requestedInitialTopologyQuality=options.initialTopologyQuality;
+        result->requestedNativeSourceFallback=options.allowNativeSourceFallback;
+        result->requestedBoundaryFirst=options.recoverBoundaryBeforeInteriorSites;
         result->requestedAdvancingInteriorFront = requestedPlacement;
         result->warningQuality = options.geometry.warningElementQuality;
         result->minimumQuality = options.geometry.minimumElementQuality;
@@ -1271,6 +1318,7 @@ PYBIND11_MODULE(_native, m) {
              py::arg("max_interior_candidates") = py::none(), py::arg("max_interior_sites") = py::none(),
              py::arg("resource_policy") = "normal",
              py::arg("max_chord_error") = py::none(), py::arg("max_relative_volume_error") = py::none(),
-             py::arg("curvature_points_per_turn") = py::none(), py::arg("initial_topology_quality") = py::none());
+             py::arg("curvature_points_per_turn") = py::none(), py::arg("initial_topology_quality") = py::none(),
+             py::arg("native_source_fallback") = py::bool_(false), py::arg("boundary_first") = py::bool_(false));
     m.def("read_step", &readStep, py::arg("path"), py::kw_only(), py::arg("max_file_bytes") = py::none(), py::arg("names") = true, py::arg("retain_source") = false);
 }

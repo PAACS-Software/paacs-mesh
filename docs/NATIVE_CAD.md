@@ -27,6 +27,40 @@ primitive, planar or swept routes.
 Check `archive_published`, `audit_valid` and each body's `route` in the JSON
 receipt. A refusal leaves an existing output archive intact.
 
+`--native-source-fallback` opts into an experimental provider switch after a
+remaining named geometric chart/wire refusal. The existing live Tet4 construction and
+all Native checks remain active; `--no-native-source-fallback` retains the default
+disabled policy. It does not force the initial front or replace verified
+primitive/mapped routing. Explicit local surface controls and construction caps
+are not bypassed. Inspect each source attempt's provider, witness and configured
+angle in `source_shell`; native tessellation is not an achieved-size certificate.
+An opted-in live request that refuses its source stays refused rather than
+silently switching to legacy star/partition construction.
+The three-attempt source bound includes provider and chord retries together
+(Bounded explicit opt-in uses at most two; default Bounded retains one).
+
+`--boundary-first` separately opts into recovering the source boundary before
+interior insertion in a compatible live spatial Tet4 route. It explicitly
+overrides the order of an enabled initial front; default `--no-boundary-first`
+keeps the existing order. It does not enable the source fallback, force the front
+on, or change verified primitive/mapped choices. Inspect
+`requested_boundary_first`, `initial_front` and `interior_front` for the request
+and actual stages rather than inferring success from the flag.
+`material_classification` reports returned-batch attempts even when a later
+stage is interrupted. A Native query is counted when started; an interrupted
+attempt need not yield a decision. `profiled_batches` and `ray_witness_attempts`
+identify measured strict serial boundary-first work. The setup, Native-query
+and ray-witness seconds are nested within material/volume time; zero profiled
+batches means unmeasured, not zero classification cost.
+Positive original trimmed-CAD ray witnesses are available
+for strict serial boundary-first classification; ambiguous points still use the
+ordinary native classifier. Inspect actual admission/query counters, and retain
+all final checks. These nested phase times are part of volume/total time.
+See [source preparation qualification](SOURCE_PREPARATION.md) for the corrected
+sampling/correspondence rules and the current limits of the experimental routes.
+Explicit interior site/candidate caps remain upper bounds for boundary-first
+insertion; its current post-recovery builder also retains a 1,024-site ceiling.
+
 ## Native size controls
 
 A single Tet4 solid can use selected CAD faces and volume boxes together.
