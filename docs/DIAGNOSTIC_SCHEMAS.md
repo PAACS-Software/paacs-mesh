@@ -34,7 +34,7 @@ can still measure boundary-edge populations, with their scope stated explicitly.
 ## Report-only diagnostics
 
 `paacs-mesh-diagnostics-v1` contains `status`, `source_sha256`, `units`,
-`validation`, `summary`, `bodies`, `timings`, `issues`, `issue_count`,
+`validation`, `shape_review`, `summary`, `bodies`, `timings`, `issues`, `issue_count`,
 `issues_truncated` and `unavailable`. Status is `valid`, `valid_with_warnings`,
 `failed` or `incomplete`. `summary.native_hint` copies an available native hint.
 `unavailable` describes this report-only operation, even when a separate opt-in
@@ -44,6 +44,9 @@ Each issue has `id`, `code`, `severity`, `scope`, `body_tags`, `cad_face_tags`,
 `cell_ids`, `evidence` and `candidate_actions`. Its ID derives from source hash,
 code, scope and body tags; it is not a cell ID or proof of correspondence between
 different geometries. Actions are suggestions, not automatic operations.
+Severity `info` includes review advisories which do not change native validity
+or the diagnostic validity status. `warning` and `error` retain their existing
+preferred-quality, resource and failure meanings.
 
 | Code | Meaning |
 | --- | --- |
@@ -55,6 +58,11 @@ different geometries. Actions are suggestions, not automatic operations.
 | `native_validity_failed` | Reported audit/quality validity or invalid-cell counts fail. |
 | `preferred_quality_not_met` | Preferred shape quality was missed; warning policy applies. |
 | `strict_quality_not_met` | An explicit strict quality threshold was missed. |
+| `near_flat_shape_review` | A severe reported Native shape minimum warrants inspection, independently of configured quality thresholds. |
+| `low_shape_distribution_review` | The reported Native shape distribution warrants inspection. Intentional anisotropy and solver requirements need separate assessment. |
+| `source_shell_not_accepted` | Recorded source-shell geometry attempts did not complete acceptance. Their measured volume errors and limits remain available. |
+| `initial_construction_fallback` | The original automatic construction failed and a fallback was attempted. Surface and volume diagnostics are retained separately. |
+| `volume_sizing_not_applied` | The published construction explicitly reports that it did not apply a volume size field. Geometry validity is separate. |
 | `construction_budget_limited` | A native construction stage reports a bounded stop. This is a warning, not a sizing certificate or a replacement for native validity checks. |
 | `body_meshing_failed` | A body reports a meshing failure. |
 | `assembly_interference` | Preserved parts have material overlap. |
@@ -66,6 +74,69 @@ different geometries. Actions are suggestions, not automatic operations.
 Native `reason`, `surface_reason`, `volume_reason` and selection reasons are
 separate fields, not aliases for these summary issue codes. Inspect their
 recorded evidence rather than matching human message text.
+
+### Automatic shape review
+
+`shape_review` interprets complete Native `subtet_mean_ratio` summaries (ideal
+shape = 1). It recommends review when the minimum is at most `0.001`, or when
+the median is at most `0.1`, or when both the median is at most `0.2` and the
+fifth percentile is at most `0.05`. The exact policy is available through
+`capabilities()["diagnostics"]["automatic_shape_review"]`.
+
+These are automatic review heuristics, separate from `warning_quality` and
+`minimum_quality`. Their issues have severity `info`; disabled preferred
+warnings remain disabled, configured strict thresholds retain their meaning,
+and native validity is unchanged. A thin or intentionally anisotropic mesh can
+require review without being invalid. Suggestions inspect cell shapes, regions
+and solver/element requirements; they do not automatically prescribe refinement.
+
+The review status is `recommended`, `no_automatic_trigger` or `unavailable`.
+Missing, incomplete or unknown metric conventions do not receive invented
+measurements. Neither the absence of a trigger nor a Native pass is shape or
+simulation approval. `solver_adequacy` remains `unassessed`, and report-only
+advisories identify no individual cells.
+
+### Source-shell and volume-sizing receipts
+
+Native body reports add `source_shell` for the latest source strategy. Its
+`available` flag distinguishes recorded attempts from missing evidence;
+`accepted` concerns source geometry, not completed element sizing. An attempt
+records its chord limit, work/time, node/triangle counts, source immutability
+check, surface diagnostic, signed/CAD volume, relative volume error and whether
+the unchanged volume criterion was met. Measurements requiring a published
+surface are `null` for failed builds. At most three attempts are recorded.
+
+During sized-front preparation, Normal admission can rebuild a published shell
+which misses the requested relative volume bound at a tighter effective chord,
+up to three builds.
+Every attempt consumes the shared resource/cancellation budget. The global
+size, minimum size, compiled field and requested volume tolerance stay fixed.
+Explicit construction limits remain active; failure to admit required fidelity
+is a refusal. Bounded sized-front preparation retains its historical single
+build; existing fallback retry policies are unchanged.
+
+`initial_front_fallback` retains `volume_diagnostic` and the original failed
+`source_shell`, in addition to `surface_diagnostic`, work and time. A successful
+surface stage can therefore coexist with a source-volume refusal without its
+original reason disappearing behind `surface_diagnostic="none"`.
+
+`volume_sizing.applied` is `true`, `false` or `null` for reported construction
+use, explicitly absent use, or unavailable evidence. A kernel fan without a
+volume size field reports `false`. `sizing_completion_certified` remains false:
+applying a field, accepting source geometry or exhausting a queue does not
+verify every final element size. Use independent mesh inspection for achieved
+size distributions. Diagnostic summaries bound source-attempt lists by
+`max_issues`, with totals and truncation flags.
+
+`constraint_recovery` also records `initial_topology_used`,
+`initial_topology_diagnostic`, `initial_topology_cells`,
+`initial_topology_import_work` and `initial_topology_peak_modeled_bytes`.
+These identify whether recovery consumed the retained initial tetrahedral
+topology and report import work and modeled peak storage. They are construction
+evidence, not new geometry, sizing or solver certificates. A false `used` value
+does not distinguish an absent carrier from refused import; read the diagnostic.
+Historical reports may omit the object or these additive fields. Diagnostic
+summaries preserve available fields without inventing a successful import.
 
 ### Construction receipts (development)
 
@@ -252,3 +323,25 @@ arguments return 2. No inspection command retries meshing or relaxes validity.
 Budgets bound admitted data, traversal and output; deadlines are cooperative.
 They do not impose an operating-system RSS or CPU-time limit. A single native
 CAD solve and its internal workspace cannot be interrupted by these counters.
+
+## Planar-core receipts
+
+Development Python and native CLI body reports add `planar`. Its `attempted`
+flag is set immediately before the geometry-core call; skipped calls have a
+null reason. An attempted call retains its outcome, analysis status/work,
+stage seconds and up to 16 body rows. Rows include the resolved strategy and
+options, count estimates, engine status/reason/phase codes, conversion outcome,
+and available boundary/surface diagnostics. Estimates include surface cells;
+they do not establish that the proposed strategy generated an output.
+
+Engine codes use the selected strategy's enum definitions. Default zero
+codes or timers do not prove that a substage was skipped. In particular,
+analysis time is currently retained only after analysis returns, so a
+cancellation during analysis can leave its timer at zero. Generation failures
+retain their recorded body time. Use outer Native `seconds.generation` for
+the complete generation-attempt cost and `seconds.meshing_total` for the full
+native operation; nested times must not be added as independent costs.
+
+`planar` describes core strategy/construction evidence. It does not replace
+the separate original-CAD validity checks, certify achieved sizing or establish
+solver adequacy.

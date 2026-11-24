@@ -100,6 +100,112 @@ class ConstructionDiagnosticTests(unittest.TestCase):
         self.assertTrue(body["surface_spacing_truncated"])
         self.assertEqual(len(report["bodies"][0]["surface_spacing"]), 100)
 
+    def test_original_source_volume_failure_and_unsized_fallback_stay_distinct(self):
+        report = synthetic_report()
+        attempts = [{"attempt": i + 1, "chord_error_limit": .01 / 2**i,
+                     "surface_published": True, "surface_diagnostic": "none",
+                     "relative_volume_error": error, "source_model_verified_unchanged": True,
+                     "volume_criterion_met": False, "work": 100 + i,
+                     "construction_budget_limited": False, "construction_stalled": True}
+                    for i, error in enumerate((.03, .02, .011))]
+        body = report["bodies"][0]
+        body["initial_front_fallback"] = {"attempted": True, "reason": "geometry_error",
+            "surface_diagnostic": "none", "volume_diagnostic": "native-plc-source-volume-error",
+            "work": 303, "seconds": .25, "source_shell": {"available": True, "accepted": False,
+            "diagnostic": "native-plc-source-volume-error", "maximum_relative_volume_error": .01,
+            "attempts": attempts}}
+        body["source_shell"] = {"available": True, "accepted": True, "diagnostic": "accepted",
+            "attempts": [{"attempt": 1, "surface_published": True, "surface_diagnostic": "none",
+                          "source_model_verified_unchanged": True, "volume_criterion_met": True,
+                          "relative_volume_error": .005}]}
+        body["volume_sizing"] = {"applied": False, "diagnostic": "kernel_fan_has_no_volume_size_field",
+            "requested_global_size": .5, "sizing_completion_certified": False,
+            "basis": "reported_native_construction"}
+        before = copy.deepcopy(report)
+        result = pm.diagnose(report, max_issues=1)
+        self.assertEqual(result["status"], "valid_with_warnings")
+        self.assertTrue(result["validation"]["native_audit_valid"])
+        self.assertEqual(result["issue_count"], 2)
+        self.assertTrue(result["issues_truncated"])
+        self.assertEqual(result["issues"][0]["code"], "volume_sizing_not_applied")
+        self.assertFalse(result["issues"][0]["evidence"]["sizing_completion_certified"])
+        original = result["bodies"][0]["initial_front_fallback"]
+        self.assertEqual(original["volume_diagnostic"], "native-plc-source-volume-error")
+        self.assertEqual(original["surface_diagnostic"], "none")
+        self.assertEqual(original["source_shell"]["attempts_total"], 3)
+        self.assertEqual(len(original["source_shell"]["attempts"]), 1)
+        self.assertTrue(original["source_shell"]["attempts_truncated"])
+        self.assertEqual(report, before)
+
+    def test_source_geometry_receipt_is_not_a_sizing_or_solver_certificate(self):
+        report = synthetic_report()
+        body = report["bodies"][0]
+        body["source_shell"] = {"available": True, "accepted": True, "diagnostic": "accepted",
+            "attempts": [{"attempt": 1, "surface_published": True, "surface_diagnostic": "none",
+                          "source_model_verified_unchanged": True, "volume_criterion_met": True,
+                          "relative_volume_error": .005}]}
+        body["volume_sizing"] = {"applied": True, "diagnostic": "sized_interior_construction",
+                                 "sizing_completion_certified": False}
+        result = pm.diagnose(report)
+        self.assertEqual(result["status"], "valid")
+        self.assertEqual(result["issues"], [])
+        self.assertFalse(result["bodies"][0]["volume_sizing"]["sizing_completion_certified"])
+        self.assertEqual(result["shape_review"]["solver_adequacy"], "unassessed")
+
+    def test_malformed_source_and_sizing_receipts_are_rejected(self):
+        for changed in ({"source_shell": {"available": "yes"}},
+                        {"source_shell": {"accepted": 1}},
+                        {"source_shell": {"attempts": [{}, {}, {}, {}]}},
+                        {"source_shell": {"attempts": [{"surface_published": "true"}]}},
+                        {"volume_sizing": {"applied": "true"}},
+                        {"initial_front_fallback": {"source_shell": {"attempts": [{}, {}, {}, {}]}}},
+                        {"initial_front_fallback": {"volume_diagnostic": 1}}):
+            with self.subTest(changed=changed):
+                report = synthetic_report()
+                report["bodies"][0].update(changed)
+                with self.assertRaises(ValueError):
+                    pm.diagnose(report)
+
+    def test_retained_initial_topology_is_copied_without_recertifying_geometry(self):
+        report = synthetic_report()
+        receipt = {"diagnostic": "complete", "work": 40,
+                   "initial_topology_used": True, "initial_topology_diagnostic": "imported",
+                   "initial_topology_cells": 12, "initial_topology_import_work": 24,
+                   "initial_topology_peak_modeled_bytes": 4096}
+        report["bodies"][0]["constraint_recovery"] = receipt
+        before = copy.deepcopy(report)
+        result = pm.diagnose(report)
+        self.assertEqual(result["bodies"][0]["constraint_recovery"], receipt)
+        self.assertEqual(result["status"], "valid")
+        self.assertEqual(result["issues"], [])
+        self.assertEqual(result["shape_review"]["solver_adequacy"], "unassessed")
+        self.assertEqual(report, before)
+        report["audit"]["valid"] = False
+        report["status"], report["reason"], report["mesh_published"] = "refused", "geometry_error", False
+        failed = pm.diagnose(report)
+        self.assertEqual(failed["status"], "failed")
+        self.assertTrue(failed["bodies"][0]["constraint_recovery"]["initial_topology_used"])
+
+    def test_missing_or_refused_initial_topology_has_no_invented_success(self):
+        report = synthetic_report()
+        result = pm.diagnose(report)
+        self.assertIsNone(result["bodies"][0]["constraint_recovery"])
+        receipt = {"initial_topology_used": False, "initial_topology_diagnostic": "import_refused",
+                   "initial_topology_cells": 12, "initial_topology_import_work": 24,
+                   "initial_topology_peak_modeled_bytes": 4096}
+        report["bodies"][0]["constraint_recovery"] = receipt
+        self.assertEqual(pm.diagnose(report)["bodies"][0]["constraint_recovery"], receipt)
+
+    def test_malformed_initial_topology_receipts_are_rejected(self):
+        for receipt in ([1], {"initial_topology_used": "true"},
+                        {"initial_topology_diagnostic": None}, {"initial_topology_cells": -1},
+                        {"initial_topology_import_work": True}, {"initial_topology_peak_modeled_bytes": 1.5}):
+            with self.subTest(receipt=receipt):
+                report = synthetic_report()
+                report["bodies"][0]["constraint_recovery"] = receipt
+                with self.assertRaises(ValueError):
+                    pm.diagnose(report)
+
 
 if __name__ == "__main__":
     unittest.main()

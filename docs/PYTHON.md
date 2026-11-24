@@ -354,6 +354,34 @@ distinct from validity failures. The native default warning threshold is zero
 (disabled); `quality["warning_enabled"]` and `quality["warning_threshold"]` make
 that policy explicit. A false `quality_warning` alone is not a quality guarantee.
 
+`pm.diagnose(mesh)` also supplies automatic shape-review advisories from the
+reported Native subtet mean-ratio summary, even with preferred warnings disabled.
+It recommends review for a minimum at most `0.001`, a median at most `0.1`, or
+the combination of median at most `0.2` and fifth percentile at most `0.05`.
+These informational advisories preserve native validity and configured quality
+thresholds. Thin or intentionally anisotropic cells need solver-specific
+assessment; the advisory does not blindly recommend refinement.
+
+```python
+diagnostics = pm.diagnose(mesh)
+print(diagnostics["shape_review"])  # solver_adequacy remains "unassessed"
+print(pm.format_diagnostics(diagnostics))
+```
+
+Neither `shape_review["status"] == "no_automatic_trigger"` nor a Native pass
+certifies simulation adequacy. Missing or unknown Native metric conventions
+produce an unavailable review. Use `inspect_mesh` for measured per-element
+queries and spatial inspection.
+
+Rebuilt reports expose each body's `source_shell` attempts and `volume_sizing`.
+Normal admission can tighten source chords when a valid source shell misses
+the unchanged CAD volume tolerance, while retaining requested size/min-size
+controls and all resource checks. Bounded recipes retain the historical one-build
+sized-front preparation; existing fallback retry policies stay unchanged.
+Original automatic-fallback surface and volume reasons are preserved
+separately. A geometry-only kernel fan reports volume sizing not applied;
+source acceptance and queue exhaustion are not sizing-completion certificates.
+
 ```python
 mesh = model.mesh(0.3, warning_quality=.25)  # publish valid meshes with warnings
 print(mesh.report["quality"])

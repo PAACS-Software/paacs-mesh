@@ -21,7 +21,10 @@ _BODY = ("solid_tag", "route", "reason", "surface_reason", "volume_reason", "cad
          "mesh_volume", "relative_volume_error", "maximum_boundary_node_error",
          "maximum_boundary_sample_error", "surface_chord_error_limit",
          "boundary_embedding_certified", "centroid_outside_distance_limit", "native_centroids_checked",
-         "initial_front", "surface_spacing")
+         "initial_front", "surface_spacing", "source_shell", "initial_front_fallback", "volume_sizing",
+         "constraint_recovery")
+_SHAPE_REVIEW = {"metric": "subtet_mean_ratio", "near_flat_minimum": .001,
+                 "low_median": .1, "low_tail_median": .2, "low_tail_percentile_5": .05}
 
 
 def capabilities():
@@ -61,6 +64,9 @@ def capabilities():
                         "body_cad_error": True, "local_cell_quality": True,
                         "local_cell_quality_requires": "opt_in_inspect_mesh",
                         "diagnose_includes_per_cell_quality": False,
+                        "automatic_shape_review": dict(_SHAPE_REVIEW),
+                        "shape_review_changes_native_acceptance": False,
+                        "source_shell_attempt_limit": 3,
                         "face_achieved_size": False, "solver_error_estimation": False,
                         "maximum_issues": 256, "report_budget_bytes": 8 * 1024 * 1024},
         "mesh_inspection": {"api": "inspect_mesh", "cell_id_scheme": "zero_based_native_archive_cell_index_v1",
@@ -115,6 +121,28 @@ def _positive(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0
 
 
+def _source_shell(value):
+    source = _mapping(value, "source_shell")
+    if "available" in source and not isinstance(source["available"], bool):
+        raise ValueError("source_shell.available must be bool")
+    if source.get("accepted") is not None and not isinstance(source["accepted"], bool):
+        raise ValueError("source_shell.accepted must be bool or null")
+    attempts = _records(source.get("attempts", []), "source_shell.attempts")
+    if len(attempts) > 3:
+        raise ValueError("source_shell has more than three reported attempts")
+    for attempt in attempts:
+        for name in ("surface_published", "source_model_verified_unchanged",
+                     "construction_budget_limited", "construction_stalled"):
+            if name in attempt and not isinstance(attempt[name], bool):
+                raise ValueError(f"source_shell.attempts.{name} must be bool")
+        if attempt.get("volume_criterion_met") is not None and not isinstance(attempt["volume_criterion_met"], bool):
+            raise ValueError("source_shell.attempts.volume_criterion_met must be bool or null")
+        for name in ("attempt", "work", "nodes", "triangles"):
+            if name in attempt:
+                integer(attempt[name], "source_shell.attempts." + name, minimum=0)
+    return source, attempts
+
+
 def _report_input(value):
     """Copy structured exceptions into the same envelope used by the CLI."""
     if isinstance(value, Exception):
@@ -162,6 +190,8 @@ def _native_report(report):
 def _validate_measurements(native, audit, quality):
     if native.get("hint") is not None and not isinstance(native["hint"], str):
         raise ValueError("hint must be a string or null")
+    if quality.get("metric") is not None and not isinstance(quality["metric"], str):
+        raise ValueError("quality.metric must be a string or null")
     for record, fields in ((audit, ("complete", "valid")), (quality, ("complete", "valid"))):
         for key in fields:
             if key in record and not isinstance(record[key], bool):
@@ -262,6 +292,37 @@ def diagnose(report_or_mesh, *, max_issues=32):
     if minimum is not None and _positive(required) and minimum < required:
         issue("strict_quality_not_met", "error", {"minimum": minimum, "minimum_required": required},
               actions=("review_explicit_quality_requirement",))
+    # These conservative review heuristics do not change preferred/strict
+    # thresholds or certify solver adequacy, including intentional anisotropy.
+    shape_review = {"status": "unavailable", "basis": "reported_native_summary",
+                    "metric": quality.get("metric"), "solver_adequacy": "unassessed",
+                    "native_validity_changed": False, "policy": dict(_SHAPE_REVIEW), "triggers": []}
+    if quality.get("complete") is True and quality.get("metric") == _SHAPE_REVIEW["metric"]:
+        median, p05 = quality.get("median"), quality.get("percentile_5")
+        if minimum is not None or median is not None:
+            shape_review["status"] = "no_automatic_trigger"
+        evidence = {key: quality.get(key) for key in
+                    ("metric", "minimum", "percentile_1", "percentile_5", "median", "mean",
+                     "warning_threshold", "minimum_required")}
+        evidence.update(basis="reported_native_summary", solver_adequacy="unassessed",
+                        intentional_anisotropy_possible=True, native_validity_changed=False,
+                        local_cells_identified=False)
+        if minimum is not None and minimum <= _SHAPE_REVIEW["near_flat_minimum"]:
+            shape_review["triggers"].append("near_flat_minimum")
+            issue("near_flat_shape_review", "info", {**evidence,
+                  "review_minimum_threshold": _SHAPE_REVIEW["near_flat_minimum"]},
+                  actions=("inspect_low_quality_cells_and_geometry", "assess_solver_and_element_formulation"))
+        if median is not None and (median <= _SHAPE_REVIEW["low_median"] or
+                p05 is not None and median <= _SHAPE_REVIEW["low_tail_median"] and
+                p05 <= _SHAPE_REVIEW["low_tail_percentile_5"]):
+            shape_review["triggers"].append("low_shape_distribution")
+            issue("low_shape_distribution_review", "info", {**evidence,
+                  "review_median_threshold": _SHAPE_REVIEW["low_median"],
+                  "review_tail_median_threshold": _SHAPE_REVIEW["low_tail_median"],
+                  "review_percentile_5_threshold": _SHAPE_REVIEW["low_tail_percentile_5"]},
+                  actions=("inspect_shape_distribution_and_regions", "assess_intended_anisotropy_and_solver_needs"))
+        if shape_review["triggers"]:
+            shape_review["status"] = "recommended"
     for body in bodies:
         tag = body.get("solid_tag")
         if tag is not None:
@@ -272,6 +333,50 @@ def diagnose(report_or_mesh, *, max_issues=32):
                   {key: body.get(key) for key in ("reason", "surface_reason", "volume_reason", "route")},
                   scope="body", tags=() if tag is None else (tag,),
                   actions=("inspect_body_and_native_stage", "review_explicit_recipe_retry_policy"))
+        source_shell = body.get("source_shell")
+        if body.get("constraint_recovery") is not None:
+            recovery = _mapping(body["constraint_recovery"], "constraint_recovery")
+            if ("initial_topology_used" in recovery
+                    and not isinstance(recovery["initial_topology_used"], bool)):
+                raise ValueError("constraint_recovery.initial_topology_used must be bool")
+            if ("initial_topology_diagnostic" in recovery
+                    and not isinstance(recovery["initial_topology_diagnostic"], str)):
+                raise ValueError("constraint_recovery.initial_topology_diagnostic must be a string")
+            for name in ("initial_topology_cells", "initial_topology_import_work",
+                         "initial_topology_peak_modeled_bytes"):
+                if name in recovery:
+                    integer(recovery[name], "constraint_recovery." + name, minimum=0)
+        if source_shell is not None:
+            source_shell, source_attempts = _source_shell(source_shell)
+            if source_shell.get("available") is True and source_shell.get("accepted") is False:
+                issue("source_shell_not_accepted", "warning", {
+                    "diagnostic": source_shell.get("diagnostic"),
+                    "maximum_relative_volume_error": source_shell.get("maximum_relative_volume_error"),
+                    "attempts": source_attempts[:maximum], "attempts_total": len(source_attempts),
+                    "attempts_truncated": len(source_attempts) > maximum,
+                    "sizing_completion_certified": False}, scope="body", tags=() if tag is None else (tag,),
+                    actions=("inspect_source_geometry_attempts", "review_geometry_and_resource_limits"))
+        volume_sizing = body.get("volume_sizing")
+        if volume_sizing is not None:
+            volume_sizing = _mapping(volume_sizing, "volume_sizing")
+            if volume_sizing.get("applied") is not None and not isinstance(volume_sizing["applied"], bool):
+                raise ValueError("volume_sizing.applied must be bool or null")
+            if volume_sizing.get("applied") is False:
+                issue("volume_sizing_not_applied", "warning", dict(volume_sizing), scope="body",
+                      tags=() if tag is None else (tag,),
+                      actions=("inspect_actual_route_and_achieved_sizes", "review_sized_volume_construction"))
+        fallback = body.get("initial_front_fallback")
+        if fallback is not None:
+            fallback = _mapping(fallback, "initial_front_fallback")
+            if fallback.get("volume_diagnostic") is not None and not isinstance(fallback["volume_diagnostic"], str):
+                raise ValueError("initial_front_fallback.volume_diagnostic must be a string or null")
+            if fallback.get("source_shell") is not None:
+                _source_shell(fallback["source_shell"])
+            if fallback.get("attempted") is True:
+                issue("initial_construction_fallback", "info", {
+                    key: fallback.get(key) for key in ("reason", "surface_diagnostic", "volume_diagnostic", "work", "seconds")},
+                    scope="body", tags=() if tag is None else (tag,),
+                    actions=("inspect_original_construction_failure", "review_source_shell_attempts"))
         surface = _records(body.get("surface_spacing", []), "surface_spacing")
         for row in surface:
             for name in ("budget_limited", "queue_exhausted"):
@@ -343,6 +448,18 @@ def diagnose(report_or_mesh, *, max_issues=32):
         status = "valid_with_warnings" if "warning" in severities else "valid"
     def body_summary(body):
         summary = {key: body.get(key) for key in _BODY}
+        def bounded_shell(shell):
+            if not isinstance(shell, dict):
+                return shell
+            rows = _records(shell.get("attempts", []), "source_shell.attempts")
+            return {**shell, "attempts": rows[:maximum], "attempts_total": len(rows),
+                    "attempts_truncated": len(rows) > maximum}
+        if body.get("source_shell") is not None:
+            summary["source_shell"] = bounded_shell(body["source_shell"])
+        if isinstance(body.get("initial_front_fallback"), dict):
+            summary["initial_front_fallback"] = dict(body["initial_front_fallback"])
+            if "source_shell" in summary["initial_front_fallback"]:
+                summary["initial_front_fallback"]["source_shell"] = bounded_shell(summary["initial_front_fallback"]["source_shell"])
         if "surface_spacing" in body:
             rows = body["surface_spacing"]
             summary.update(surface_spacing=rows[:maximum], surface_spacing_total=len(rows),
@@ -351,6 +468,7 @@ def diagnose(report_or_mesh, *, max_issues=32):
 
     result = {
         "schema": DIAGNOSTIC_SCHEMA, "status": status, "source_sha256": source, "units": "mm",
+        "shape_review": shape_review,
         "validation": {"basis": "reported_native_checks", "native_audit_complete": audit.get("complete") is True,
                        "native_audit_valid": audit.get("valid") is True,
                        "native_quality_complete": quality.get("complete") is True,
@@ -387,6 +505,8 @@ def format_diagnostics(report):
     lines = [f"{label} status: {report['status']}",
              f"Cells: {summary['cells']}; nodes: {summary['nodes']}; units: mm",
              f"Validation: reported native checks; scope: {report['validation']['mesh_scope']}"]
+    if "shape_review" in report:
+        lines.append("Shape review: " + report["shape_review"]["status"] + "; solver adequacy unassessed")
     if summary.get("native_hint"):
         lines.append("Native hint: " + summary["native_hint"])
     for item in report["issues"]:
