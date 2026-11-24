@@ -1459,6 +1459,7 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
                                                 OcctFrontSurface surfaceMode=OcctFrontSurface::Standard,
                                                 bool liveMaterialTrial=false){
                         const bool spaceSurface=surfaceMode!=OcctFrontSurface::Standard;
+                        const auto priorVolumeReason=report.nativeVolumeReason;
                         const auto recovered=detail::buildOcctFrontVolume(model,solid->tag(),o,
                             maximumWork,body,earlyConstraintWork,surfaceMode,liveMaterialTrial);
                         report.sourceShell=recovered.sourceShell;
@@ -1493,7 +1494,13 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
                         report.localDelaunayUsedGlobalFallback|=recovered.localDelaunayUsedGlobalFallback;
                         work.tick(recovered.workUsed);
                         if(recovered.reason==NativeCadMeshReason::Cancelled||recovered.reason==NativeCadMeshReason::AllocationFailed||recovered.reason==NativeCadMeshReason::InternalError)throw Stop{recovered.reason};
-                        if(earlyConstraintWork&&!recovered.published)return false;
+                        if(earlyConstraintWork&&!recovered.published){
+                            // A continuing bounded probe must not replace the
+                            // star refusal used to choose the next recovery
+                            // family. Stops above retain the actual probe receipt.
+                            report.nativeVolumeReason=priorVolumeReason;
+                            return false;
+                        }
                         if((spaceSurface||o.recoveryMode==NativeCadRecoveryMode::Advanced)&&recovered.surfaceDiagnostic){
                             report.nativeSurfaceReason=recovered.surfaceDiagnostic;
                             report.surfaceTriangles=recovered.surfaceTriangles;
