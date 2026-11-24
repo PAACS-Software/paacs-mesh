@@ -1,8 +1,9 @@
 # Resource policy implementation and qualification
 
 Status: native implementation, default-policy qualification, paired corpus
-checks and visual evidence are complete. Final installed-wheel qualification
-is in progress. No release is scheduled by this plan.
+checks, visual evidence and clean installed Windows-wheel qualification are
+complete. Cross-platform checks are tracked on the pull request. No release is
+scheduled by this plan.
 
 The immediate defect is capacity-dependent admission: a larger permitted
 auxiliary complex can require a larger bootstrap reservation even before those

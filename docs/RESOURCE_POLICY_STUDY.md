@@ -24,8 +24,9 @@ fingerprints and independent-screen scope. Downloaded CAD and mesh coordinates
 are excluded. After the frozen P7 measurements, commit `157d9ac` changes new-call
 argument defaults and tests. Among the frozen compiled production sources,
 only the Python binding and CLI wrapper differ; the native meshing algorithm
-sources remain identical. Measured profiles explicitly select their policy.
-Final installed-wheel checks qualify the wrappers separately from these frozen
+sources remain identical. Measured P7 profiles explicitly select their policy;
+the historical parent uses its frozen Bounded behavior without a resource-policy
+option. Installed-wheel checks qualify the wrappers separately from these frozen
 performance observations.
 
 The [implementation and qualification plan](RESOURCE_POLICY_PLAN.md) defines
@@ -358,12 +359,15 @@ Global size remains 0.5 mm and growth is 1.3; no volume sizing region is added.
 Normal removes the decreasing-count pattern on this owned fixture and keeps
 its median mean ratios approximately 0.835–0.861. It does not eliminate severe
 outliers: the 0.1 mm result retains an almost-flat tetrahedron despite only
-three cells below 0.1. These table values come from the native per-element
-inspector. The independent Python binary64 reference gives a 5.41 × 10⁻¹¹
+three cells below 0.1. These table values come from the PAACS Python per-element
+inspector, using filtered floating-point arithmetic and exact-dyadic fallback
+for uncertain orientation or extreme ranges. The separate simple binary64
+Python reference gives a 5.41 × 10⁻¹¹
 minimum for the same 0.1 mm archive, rather than the inspector's 5.12 × 10⁻¹¹;
 both expose the severe tail. Separate measurement receipts and conventions
 are retained, without interpreting cancellation differences as a different
-quality definition. The 0.3 mm request also has a slightly worse minimum and
+quality definition. Saved Native aggregate summaries are separate C++ mesher
+reports. The 0.3 mm request also has a slightly worse minimum and
 takes more than twice the native time for nearly the same element count. This
 is not a uniform quality or speed improvement.
 
@@ -523,7 +527,25 @@ for the unavailable original geometry.
 | Default wall-size series, 0.3 through 0.08 mm | Complete: 30 successful attempts and ten matched three-run groups; near-flat outliers and modeled-memory stops remain. |
 | Box, sphere, through-hole and oblique scaling cases | Complete: 36 known-fixture attempts, three matched repetitions per policy/request; sphere sizing and timing overheads remain documented limitations. |
 | Fixed-camera cutaways with verified archive cell IDs | Complete: four owned-cylinder panels with whole-element cuts, full-mesh x-ray highlights and hash-paired provenance. |
-| Clean installed-wheel and platform qualification | Pending. |
+| Clean installed Windows x64 / Python 3.12 wheel | Complete: 215 passed, eight expected skips; nine array tests each on NumPy 1.26.4 and 2.5.5; all six native/Python archive and resource-parity cases pass. |
+| Cross-platform CI | Tracked by [PR 16 checks](https://github.com/PAACS-Software/paacs-mesh/pull/16/checks); distinct from this local measurement campaign. |
+
+The local wheel uses clean source commit
+`ae7638be6a64aa17f992b96395563ca00d8fb7f8` and has SHA-256
+`5b23e0321be90f4bbcf259d4ee8a6467e4fdf2c3e8d282de188d357e3e8d708e`.
+Installation tests clear SDK, loader and CAD environment paths and first run
+without NumPy. The eight base-environment skips cover seven optional NumPy
+tests and one POSIX-only named-pipe fixture; the optional array tests are then
+run explicitly on both NumPy versions. Full native CLI checks pass 99 cases,
+and the Release-active C++ native compatibility test passes in 22.05 seconds.
+Automatic construction under both presets and explicit work refusals remain
+covered separately from the historical analytic-route checks.
+
+Qualification attempt receipts also retain a runtime-path harness timeout and
+the stale analytic-route test assumption corrected during this work. These
+costs are separate from the serial meshing experiments. Neither correction
+relaxes native validity gates. The local wheel is an unreleased development
+artifact; it has not been uploaded to a package index.
 
 The [plan](RESOURCE_POLICY_PLAN.md#reproducible-experiment-plan) supplies the
 repeatable grid and inherited-policy commands. The
@@ -531,6 +553,7 @@ repeatable grid and inherited-policy commands. The
 [corpus runner](../scripts/run_cad_corpus.py) and
 [archive screen](../benchmarks/audit_resource_corpus.py) retain different scopes
 of evidence. Sanitized results and provenance are linked above. The new-call
-default decision has the limited scope stated
-above. Verified cutaways are complete; final installed-wheel/platform checks
-remain pending. This work does not change release tags or publish a package.
+default decision has the limited scope stated above. Verified cutaways and local
+installed-wheel checks are complete; current cross-platform status is available
+through the linked PR checks. This work does not change release tags or publish
+a package.
