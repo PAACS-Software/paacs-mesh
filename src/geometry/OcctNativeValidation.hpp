@@ -29,6 +29,9 @@ struct OcctNativeValidationOptions {
     // Only OUT points can use this measured band; UNKNOWN always refuses.
     double maximumOutsideDistance = 0;
     bool useTrimmedRayWitnesses = false;
+    // Private opt-in wall timings. Supported only for the strict serial path;
+    // clock reads do not occur when disabled or on the parallel path.
+    bool profileClassification = false;
 };
 struct OcctNativeValidationOutcome {
     bool completed = false, sourceModelUnmodified = false;
@@ -37,6 +40,9 @@ struct OcctNativeValidationOutcome {
     std::uint64_t points = 0, nativeQueries = 0, originalReferenceQueries = 0;
     std::uint64_t strictAdmissionReuses = 0;
     std::uint64_t trimmedRayAdmissions = 0;
+    bool classificationProfileAvailable = false;
+    std::uint64_t rayWitnessAttempts = 0;
+    double classifierSetupSeconds = 0, nativeQuerySeconds = 0, rayWitnessSeconds = 0;
     std::uint64_t copiedGeometryValuePairs = 0, workUsed = 0;
     std::uint64_t maximumWorkingPayloadEstimate = 0, sourceSnapshotBytes = 0;
     std::uint64_t firstFailedPoint = (std::numeric_limits<std::uint64_t>::max)();
