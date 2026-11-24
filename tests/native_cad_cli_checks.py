@@ -112,6 +112,40 @@ def main():
                 raise RuntimeError("Normal bypassed an explicit tiny work ceiling")
         run("invalid_resource_policy", "cylinder.step", ("--resource-policy", "unexpected"), reason="invalid-request")
         run("missing_resource_policy", "cylinder.step", ("--resource-policy",), reason="invalid-request")
+        # End every otherwise valid prefix with an unknown flag so these checks
+        # exercise parsing and receipts without importing CAD or constructing a mesh.
+        parser_cases = (
+            ("parse_default", ("--unknown-resource-test-option",), "bounded", None),
+            ("parse_normal", ("--resource-policy", "normal", "--unknown-resource-test-option"), "normal", None),
+            ("parse_normal_then_bounded", ("--resource-policy", "normal", "--resource-policy", "bounded", "--unknown-resource-test-option"), "bounded", None),
+            ("parse_bounded_then_normal", ("--resource-policy", "bounded", "--resource-policy", "normal", "--unknown-resource-test-option"), "normal", None),
+            ("parse_work_before_bounded", ("--max-work", "123456", "--resource-policy", "bounded", "--unknown-resource-test-option"), "bounded", 123456),
+            ("parse_work_after_bounded", ("--resource-policy", "bounded", "--max-work", "123456", "--unknown-resource-test-option"), "bounded", 123456),
+            ("parse_work_before_normal", ("--max-work", "123456", "--resource-policy", "normal", "--unknown-resource-test-option"), "normal", 123456),
+            ("parse_work_after_normal", ("--resource-policy", "normal", "--max-work", "123456", "--unknown-resource-test-option"), "normal", 123456),
+            ("parse_work_survives_policy_switch", ("--resource-policy", "normal", "--max-work", "123456", "--resource-policy", "bounded", "--unknown-resource-test-option"), "bounded", 123456),
+            ("parse_last_valid_work", ("--max-work", "123456", "--resource-policy", "normal", "--max-work", "654321", "--unknown-resource-test-option"), "normal", 654321),
+            ("parse_invalid_policy_preserves_normal", ("--resource-policy", "normal", "--resource-policy", "unexpected"), "normal", None),
+            ("parse_missing_policy_preserves_normal", ("--resource-policy", "normal", "--resource-policy"), "normal", None),
+            ("parse_zero_work_preserves_default", ("--max-work", "0"), "bounded", None),
+            ("parse_zero_work_preserves_normal", ("--resource-policy", "normal", "--max-work", "0"), "normal", None),
+            ("parse_zero_work_preserves_explicit", ("--max-work", "123456", "--resource-policy", "normal", "--max-work", "0"), "normal", 123456),
+            ("parse_invalid_work_preserves_explicit", ("--max-work", "123456", "--resource-policy", "normal", "--max-work", "invalid"), "normal", 123456),
+            ("parse_negative_work_preserves_explicit", ("--max-work", "123456", "--resource-policy", "normal", "--max-work", "-1"), "normal", 123456),
+            ("parse_missing_work_preserves_explicit", ("--max-work", "123456", "--resource-policy", "normal", "--max-work"), "normal", 123456),
+        )
+        for name, options, policy, requested in parser_cases:
+            parsed = run(name, "cylinder.step", options, reason="invalid-request")
+            resources = parsed.get("resources", {})
+            expected_work = requested if requested is not None else (
+                (2**64 - 1) // 4 if policy == "normal" else 50_000_000)
+            if (resources.get("policy") != policy
+                    or resources.get("requested_max_work") != requested
+                    or resources.get("effective_max_work") != expected_work
+                    or resources.get("logical_work_cap_disabled") is not (policy == "normal" and requested is None)
+                    or resources.get("max_working_bytes") != 512 * 1024**2
+                    or parsed.get("import_seconds") != 0 or parsed.get("solids") != 0):
+                raise RuntimeError(f"{name}: parser error changed recognized resource intent or imported CAD: {parsed}")
         if args.resource_checks_only:
             print(json.dumps({"schema": "paacs-native-cad-cli-checks-v1", "passed": len(rows),
                               "cases": rows}, indent=2, allow_nan=False))

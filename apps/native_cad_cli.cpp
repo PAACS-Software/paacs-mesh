@@ -47,8 +47,17 @@ int runNativeCadCli(int argc,char** argv) {
     geo::NativeCadMeshOptions options;geo::NativeCadMeshOutcome result;mesh::Mesh mesh;
     bool report=false,archivePublished=false;double sizeFactor=0,importSeconds=0,growth=1.3;
     std::optional<std::uint64_t> requestedWork;
+    const auto boundedValidationWork=geo::NativeCadMeshOptions{}.maximumValidationWork;
+    const auto boundedMeshingWork=geo::NativeCadMeshOptions{}.geometry.maximumMeshingWork;
+    const auto resolveWork=[&] {
+        const bool normal=options.construction.resourcePolicy==geo::CadResourcePolicy::Normal;
+        options.maximumValidationWork=requestedWork.value_or(normal?geo::cadNormalWorkAllowance:boundedValidationWork);
+        options.geometry.maximumMeshingWork=requestedWork.value_or(normal?geo::cadNormalWorkAllowance:boundedMeshingWork);
+    };
+    resolveWork();
     const auto started=std::chrono::steady_clock::now();
     const auto receipt=[&](const char* status,const char* reason) {
+        resolveWork();
         if(!report)return;
         const auto& construction=options.construction;
         const auto cap=[](std::uint64_t value){return value?std::to_string(value):std::string("null");};
@@ -421,8 +430,14 @@ int runNativeCadCli(int argc,char** argv) {
                 if(policy=="normal")options.construction.resourcePolicy=geo::CadResourcePolicy::Normal;
                 else if(policy=="bounded")options.construction.resourcePolicy=geo::CadResourcePolicy::Bounded;
                 else throw std::invalid_argument("resource policy must be normal or bounded");
+                resolveWork();
             }
-            else if(a=="--max-work"&&i+1<argc) { requestedWork=number<std::uint64_t>(argv[++i]);options.maximumValidationWork=*requestedWork;options.geometry.maximumMeshingWork=*requestedWork; }
+            else if(a=="--max-work"&&i+1<argc) {
+                const auto work=number<std::uint64_t>(argv[++i]);
+                if(!work)throw std::invalid_argument("maximum work must be positive");
+                requestedWork=work;
+                resolveWork();
+            }
             else if(a=="--max-chord-error"&&i+1<argc)options.maximumChordError=number<double>(argv[++i]);
             else if(a=="--max-volume-error"&&i+1<argc)options.maximumRelativeVolumeError=number<double>(argv[++i]);
             else if(a=="--min-quality"&&i+1<argc)options.geometry.minimumElementQuality=number<double>(argv[++i]);
@@ -445,10 +460,7 @@ int runNativeCadCli(int argc,char** argv) {
                 else if(e=="native"||e=="hex")options.elements=algo::PrimitiveElements::HexDominant;else throw std::invalid_argument("native CAD supports tet4 or native linear cells");}
             else throw std::invalid_argument("unknown or incomplete native CAD option");
         }
-        if(options.construction.resourcePolicy==geo::CadResourcePolicy::Normal&&!requestedWork){
-            options.maximumValidationWork=geo::cadNormalWorkAllowance;
-            options.geometry.maximumMeshingWork=geo::cadNormalWorkAllowance;
-        }
+        resolveWork();
         if(!std::isfinite(sizeFactor)||sizeFactor<0)throw std::invalid_argument("invalid size factor");
         std::error_code aliasError;
         const bool existingAlias=std::filesystem::equivalent(argv[1],argv[3],aliasError);
