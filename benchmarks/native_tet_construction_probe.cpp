@@ -56,7 +56,9 @@ struct Probe {
         output<<std::setprecision(17);
     }
     void dump(const bnd::detail::TetConstructionObservation& view) {
-        if(!view.completeSnapshot||!view.complex||std::string_view(view.stage)!="initial_scoring_final")return;
+        if(!view.completeSnapshot||!view.complex)return;
+        const auto stage=std::string_view(view.stage);
+        if(stage!="initial_scoring_final"&&stage!="initial_topology_finalized")return;
         const auto& complex=*view.complex;
         if(complex.vertices.size()>100000||complex.cells.size()>500000) { truncated=true;return; }
         mesh::Mesh snapshot;
@@ -66,7 +68,9 @@ struct Probe {
             const std::array<Index,4> ids{Index(cell.vertices[0]),Index(cell.vertices[1]),Index(cell.vertices[2]),Index(cell.vertices[3])};
             snapshot.addCell(mesh::CellType::Tet4,ids,{3,view.bodyTag});
         }
-        if(!sdk::writeMeshArchiveFile(snapshot,directory/"initial_unconstrained_with_guards.paacsmesh").completed)failed=true;
+        const auto name=stage=="initial_scoring_final"?
+            "initial_unconstrained_with_guards.paacsmesh":"finalized_unconstrained_with_guards.paacsmesh";
+        if(!sdk::writeMeshArchiveFile(snapshot,directory/name).completed)failed=true;
     }
     void observe(const bnd::detail::TetConstructionObservation& view) {
         ++events;if(visits>=2'000'000||records>=8192){truncated=true;return;}
@@ -150,7 +154,7 @@ int main(int argc,char** argv) {
         }
         std::cout<<"]}\n";return result.complete?0:1;
     }
-    if(argc<7||argc>8){std::cerr<<"usage: probe source.step global-size wall-size output-directory reference.paacsmesh target-ids-comma-separated [seconds]\n";return 2;}
+    if(argc<7||argc>9){std::cerr<<"usage: probe source.step global-size wall-size-or-none output-directory reference.paacsmesh target-ids-comma-separated [seconds [working-MiB]]\n";return 2;}
     try {
         const std::filesystem::path directory=argv[4];
         if(std::filesystem::exists(directory)||!std::filesystem::create_directories(directory))throw std::runtime_error("output directory must be new");
@@ -172,13 +176,18 @@ int main(int argc,char** argv) {
         auto options=geo::normalNativeCadMeshOptions();options.geometry.targetSize=std::stod(argv[2]);
         options.geometry.threads=1;options.maximumNativeValidationThreads=1;
         options.geometry.maximumNodes=500000;options.geometry.maximumCells=3000000;
-        options.geometry.maximumOutputBytes=256ULL*1024*1024;options.geometry.maximumAuditTemporaryBytes=512ULL*1024*1024;
-        options.maximumPrimitiveWorkingBytes=512ULL*1024*1024;
-        int wall=-1;for(const auto* face:cad.model->faces())if(face->kind()==geo::SurfaceKind::Cylinder){if(wall!=-1)throw std::runtime_error("wall selection ambiguous");wall=face->tag();}
-        if(wall<0)throw std::runtime_error("no cylindrical wall");
-        options.faceSizes={{wall,std::stod(argv[3]),1.3}};options.useSpatialSizing=true;
+        const auto workingMiB=argc==9?std::stoull(argv[8]):512ULL;
+        if(workingMiB<128||workingMiB>8192)throw std::runtime_error("working-MiB outside probe limit");
+        options.geometry.maximumOutputBytes=256ULL*1024*1024;
+        options.geometry.maximumAuditTemporaryBytes=workingMiB*1024*1024;
+        options.maximumPrimitiveWorkingBytes=workingMiB*1024*1024;
+        if(std::string_view(argv[3])!="none"){
+            int wall=-1;for(const auto* face:cad.model->faces())if(face->kind()==geo::SurfaceKind::Cylinder){if(wall!=-1)throw std::runtime_error("wall selection ambiguous");wall=face->tag();}
+            if(wall<0)throw std::runtime_error("no cylindrical wall");
+            options.faceSizes={{wall,std::stod(argv[3]),1.3}};options.useSpatialSizing=true;
+        }
         if(probe.targets.empty())throw std::runtime_error("at least one reference target is required");
-        const auto seconds=argc==8?std::stod(argv[7]):300.;if(!(seconds>0&&seconds<=3600))throw std::runtime_error("seconds outside probe limit");
+        const auto seconds=argc>=8?std::stod(argv[7]):300.;if(!(seconds>0&&seconds<=3600))throw std::runtime_error("seconds outside probe limit");
         std::atomic_bool cancellation=false;options.geometry.cancellation=&cancellation;
         std::jthread deadline([&](std::stop_token stop){
             const auto until=std::chrono::steady_clock::now()+std::chrono::duration<double>(seconds);
