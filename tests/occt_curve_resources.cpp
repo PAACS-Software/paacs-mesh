@@ -4,6 +4,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 #include "OcctCurveMetric.hpp"
+#include "normal_span_knot_prism.hpp"
+#include "curve_span_fixtures.hpp"
 #include "OcctBoundaryInternal.hpp"
 #include "OcctStarMesher.hpp"
 #include <BRepBuilderAPI_MakeEdge.hxx>
@@ -21,21 +23,84 @@
 #include <Geom_Line.hxx>
 #include <TopoDS_Compound.hxx>
 #include <TopoDS_Vertex.hxx>
+#include <TopoDS.hxx>
+#include <TopLoc_Location.hxx>
 #include <gp_Circ.hxx>
+#include <gp_Ax1.hxx>
 #include <algorithm>
 #include <array>
 #include <bit>
 #include <cmath>
 #include <cstdint>
 #include <iostream>
+#include <limits>
 #include <numbers>
+#include <numeric>
 #include <sstream>
 #include <stdexcept>
+#include <string_view>
 
 using namespace paacs;
 using namespace paacs::geo::detail;
 namespace {
 void require(bool value,const char* why){if(!value)throw std::runtime_error(why);}
+void exerciseStencilSeedCollision(){
+    const auto edge=BRepBuilderAPI_MakeEdge(test::normalSpanKnotCurve()).Edge();
+    BRepAdaptor_Curve curve(edge);
+    const auto knot=std::nextafter(.5,std::numeric_limits<double>::infinity());
+    require(curve.FirstParameter()==0.&&curve.LastParameter()==1.,"owned edge retains ordinary parameter range");
+    require(curve.NbIntervals(GeomAbs_C2)==2,"owned spline retains mandatory C2 split");
+    NCollection_Array1<double> intervals(1,3);curve.Intervals(intervals,GeomAbs_C2);
+    require(intervals(1)==0.&&intervals(2)==knot&&intervals(3)==1.,"native continuity intervals retain adjacent knot");
+    for(double parameter:std::array{0.,.125,.25,.5,knot,.75,.875,1.}){
+        gp_Pnt point;gp_Vec derivative;curve.D1(parameter,point,derivative);
+        require(std::abs(point.X()-parameter)<1e-14&&point.Y()==0.&&point.Z()==0.&&
+              std::abs(derivative.X()-1.)<1e-13&&derivative.Y()==0.&&derivative.Z()==0.,
+              "Greville poles reproduce physical straight edge and ordinary derivative");
+    }
+    const auto middle=std::midpoint(.5,knot);
+    require(!(std::midpoint(.5,middle)>.5&&middle< std::midpoint(middle,knot)&&std::midpoint(middle,knot)<knot),
+          "adjacent parameters cannot form five distinct stencil points");
+    geo::detail::OcctCurveSamplingReport report;
+    geo::detail::OcctCurveSpacing spacing;
+    spacing.resourcePolicy=geo::CadResourcePolicy::Normal;spacing.maximumSegments=10000;
+    spacing.maximumIntegrationIntervals=10000;spacing.maximumWorkingBytes=16ULL*1024*1024;
+    spacing.maximumChordError=.005;spacing.report=&report;
+    std::uint64_t work=0;
+    const auto result=geo::detail::curve_metric_detail::progressive(curve,0.,1.,false,spacing,
+        [&](double parameter){
+            gp_Pnt point;gp_Vec derivative;curve.D1(parameter,point,derivative);
+            return geo::detail::curve_metric_detail::Sample{parameter,derivative.Magnitude(),.3,
+                {point.X(),point.Y(),point.Z()}};
+        },[&](std::uint64_t n){work+=n;});
+    require(report.completed&&!report.budgetLimited&&std::string_view(report.diagnostic)=="completed"&&result.size()==5,
+          "artificial cut next to native knot no longer creates an unrepresentable interval");
+    for(std::size_t i=0;i<result.size();++i)require(std::abs(result[i]-double(i)/4.)<1e-12,
+          "corrected line schedule retains uniform physical spacing");
+    require(!report.numericalInterval&&work>0&&report.evaluations>0&&work<10000,
+          "corrected seed selection is bounded and reports no false numerical refusal");
+
+    const auto mandatoryEdge=BRepBuilderAPI_MakeEdge(test::adjacentMandatoryKnotCurve()).Edge();
+    BRepAdaptor_Curve mandatory(mandatoryEdge);
+    require(mandatory.NbIntervals(GeomAbs_C2)==3,"two native continuity knots remain mandatory");
+    NCollection_Array1<double> mandatoryIntervals(1,4);mandatory.Intervals(mandatoryIntervals,GeomAbs_C2);
+    const auto upper=mandatoryIntervals(3);
+    require(mandatoryIntervals(2)==.5&&upper>.5&&!geo::detail::curve_metric_detail::stencil(.5,upper).resolved(),
+          "owned mandatory interval is not stencil-representable");
+    work=0;
+    const auto refused=geo::detail::curve_metric_detail::progressive(mandatory,0.,1.,false,spacing,
+        [&](double parameter){
+            gp_Pnt point;gp_Vec derivative;mandatory.D1(parameter,point,derivative);
+            return geo::detail::curve_metric_detail::Sample{parameter,derivative.Magnitude(),.3,
+                {point.X(),point.Y(),point.Z()}};
+        },[&](std::uint64_t n){work+=n;});
+    require(refused.empty()&&!report.completed&&!report.budgetLimited&&
+          std::string_view(report.diagnostic)=="curve_parameter_resolution","mandatory unresolved interval still refuses honestly");
+    require(report.numericalInterval&&(*report.numericalInterval)[0]==.5&&(*report.numericalInterval)[1]==upper,
+          "mandatory knot interval is retained without epsilon merging");
+    require(work>0&&work<10000,"mandatory numerical refusal retains bounded measured work");
+}
+
 struct WorkStop {};
 struct CancelStop {};
 struct Work {
@@ -81,6 +146,89 @@ void ordered(const std::vector<double>& schedule,double first,double last){
     require(schedule.size()>=2&&schedule.front()==first&&schedule.back()==last,"native curve endpoints changed");
     for(std::size_t i=1;i<schedule.size();++i)
         require(std::isfinite(schedule[i])&&schedule[i]>schedule[i-1],"curve parameters are not strictly ordered");
+}
+std::string shapeSnapshot(const TopoDS_Shape& shape){
+    std::ostringstream text;BRepTools::Write(shape,text);return text.str();
+}
+std::vector<double> sampleOwnedSpan(BRepAdaptor_Curve& curve,bool varyingSecond,
+    OcctCurveSamplingReport& report,Work& work,OcctCurveSpacing spacing={}){
+    if(!spacing.report)spacing=normal(report);
+    return curve_metric_detail::progressive(curve,0.,1.,false,spacing,
+        [&](double at,const curve_metric_detail::NativeSpan& span){
+            gp_Pnt point,secondPoint;gp_Vec derivative,secondFirst,second;
+            span.D1(at,point,derivative);span.D2(at,secondPoint,secondFirst,second);
+            const bool left=at<.5||(at==.5&&span.last==.5);
+            const auto q=at-.5;
+            const double x=varyingSecond?(left?.25*at+.5*at*at:.25+q+q*q):
+                (left?.5*at:.25+1.5*q);
+            const double first=varyingSecond?(left?.25+at:1+2*q):(left?.5:1.5);
+            const double dd=varyingSecond?(left?1.:2.):0.;
+            gp_Pnt expected(x,0,0);gp_Vec expectedFirst(first,0,0),expectedSecond(dd,0,0);
+            expected.Transform(curve.Trsf());expectedFirst.Transform(curve.Trsf());expectedSecond.Transform(curve.Trsf());
+            require(point.Distance(expected)<1e-13&&secondPoint.Distance(expected)<1e-13&&
+                (derivative-expectedFirst).Magnitude()<1e-13&&(secondFirst-expectedFirst).Magnitude()<1e-13&&
+                (second-expectedSecond).Magnitude()<1e-13,"span derivatives or placement disagree with analytic piecewise polynomial");
+            return curve_metric_detail::Sample{at,derivative.Magnitude(),.25,{point.X(),point.Y(),point.Z()}};
+        },[&](std::uint64_t n){work(n);});
+}
+void exerciseOneSidedSpans(){
+    const auto spline=test::oneSidedSpeedCurve();
+    const auto edge=BRepBuilderAPI_MakeEdge(spline).Edge();const auto before=shapeSnapshot(edge);
+    BRepAdaptor_Curve curve(edge);OcctCurveSamplingReport report;Work work;
+    const auto schedule=sampleOwnedSpan(curve,false,report,work);
+    ordered(schedule,0,1);
+    require(report.completed&&report.nativeSpans==2&&report.localD1==2&&report.localD2==2&&
+        report.adapterD1>0&&report.adapterD2>0&&schedule.size()==5&&std::abs(report.metricLength-4.)<1e-12,
+        "side-owned speed metric differs from exact unit arclength or overrides ordinary endpoints");
+    for(std::size_t i=0;i<schedule.size();++i)
+        require(std::abs(curve.Value(schedule[i]).X()-double(i)/4.)<1e-12,
+            "one-sided speed mapping does not give equal physical spacing");
+    require(work.used<10000&&report.maximumModeledWorkingBytes<=normal(report).maximumWorkingBytes,
+        "one-sided construction escaped admitted work or memory");
+    gp_Trsf placement;placement.SetRotation(gp_Ax1(gp_Pnt(0,0,0),gp_Dir(0,0,1)),.61);
+    placement.SetTranslationPart(gp_Vec(2,-3,4));
+    const auto moved=TopoDS::Edge(edge.Moved(TopLoc_Location(placement)));const auto movedBefore=shapeSnapshot(moved);
+    BRepAdaptor_Curve located(moved);OcctCurveSamplingReport locatedReport;Work locatedWork;
+    const auto placed=sampleOwnedSpan(located,false,locatedReport,locatedWork);
+    require(locatedReport.completed&&placed==schedule&&locatedReport.metricLength==report.metricLength,
+        "native placement changed one-sided metric or parameter schedule");
+    const auto varyingEdge=BRepBuilderAPI_MakeEdge(test::oneSidedSpeedCurve(true)).Edge();
+    BRepAdaptor_Curve varying(varyingEdge);OcctCurveSamplingReport varyingReport;Work varyingWork;
+    const auto secondSchedule=sampleOwnedSpan(varying,true,varyingReport,varyingWork);
+    require(varyingReport.completed&&varyingReport.localD2==2&&std::abs(varyingReport.metricLength-4.)<1e-12,
+        "one-sided nonzero second derivatives changed exact physical length");
+    ordered(secondSchedule,0,1);
+    for(unsigned mode=0;mode<3;++mode){
+        OcctCurveSamplingReport limitedReport;auto spacing=normal(limitedReport);Work limited;
+        if(mode==0)limited.maximum=30;
+        if(mode==1)limited.cancelAt=30;
+        if(mode==2)spacing.maximumWorkingBytes=4096;
+        bool workStopped=false,cancelled=false;
+        try{
+            const auto refused=sampleOwnedSpan(curve,false,limitedReport,limited,spacing);
+            require(mode==2&&refused.empty()&&limitedReport.budgetLimited,
+                "span resource admission unexpectedly returned a completed schedule");
+        }catch(const WorkStop&){workStopped=true;}catch(const CancelStop&){cancelled=true;}
+        require(!limitedReport.completed&&(mode!=0||(workStopped&&limited.used<=limited.maximum))&&
+            (mode!=1||cancelled)&&limitedReport.maximumModeledWorkingBytes<=spacing.maximumWorkingBytes,
+            "span work/cancellation/memory refusal was hidden or exceeded admission");
+    }
+    require(before==shapeSnapshot(edge)&&movedBefore==shapeSnapshot(moved),
+        "one-sided sampling changed original or placed source geometry");
+    std::cout<<"one-sided speed: segments="<<schedule.size()-1<<" metric="<<report.metricLength
+        <<" work="<<work.used<<" internal_sides="<<report.localD1<<'\n';
+}
+void exerciseOrdinarySpanReference(){
+    const auto edge=BRepBuilderAPI_MakeEdge(test::smoothSpanCurve()).Edge();const auto before=shapeSnapshot(edge);
+    BRepAdaptor_Curve native(edge),owned(edge);OcctCurveSamplingReport reference,candidate;
+    auto referenceSpacing=normal(reference),candidateSpacing=normal(candidate);
+    const auto scalar=curve_metric_detail::progressive(native,0.,1.,false,referenceSpacing,
+        [&](double at){gp_Pnt p;gp_Vec d;native.D1(at,p,d);return curve_metric_detail::Sample{at,d.Magnitude(),.25,{p.X(),p.Y(),p.Z()}};},[](std::uint64_t){});
+    const auto result=curve_metric_detail::progressive(owned,0.,1.,false,candidateSpacing,
+        [&](double at,const curve_metric_detail::NativeSpan& span){gp_Pnt p;gp_Vec d;span.D1(at,p,d);return curve_metric_detail::Sample{at,d.Magnitude(),.25,{p.X(),p.Y(),p.Z()}};},[](std::uint64_t){});
+    require(reference.completed&&candidate.completed&&result==scalar&&candidate.metricLength==reference.metricLength&&
+        candidate.nativeSpans==1&&candidate.localD1==0&&before==shapeSnapshot(edge),
+        "ordinary smooth native reference changed or received an unnecessary local derivative override");
 }
 void exerciseCircleAndBoundedIdentity(){
     auto imported=OcctModelAccess::fromShape(BRepPrimAPI_MakeCylinder(1.,2.).Shape());
@@ -249,6 +397,7 @@ void exerciseInteriorCurvatureJump(){
     const auto schedule=sample(model,edge,.4,relation,work,spacing);ordered(schedule,0,1);
     require(report.completed&&!report.budgetLimited&&report.integrationIntervals<2048,
         "interior curvature jump still exhausts parameter precision or integration resources");
+    require(report.localD2>=2,"model-aware curvature evaluation did not use both internal knot sides");
     constexpr std::size_t intervals=20000;
     std::vector<double> arclength(intervals+1),sizes(intervals+1),metric(intervals+1);
     const auto speed=[](double t){const auto q=std::max(0.,t-.5);return std::sqrt(1+16*q*q);};
@@ -338,6 +487,7 @@ void exerciseManyFaces(){
 }
 }
 int main(){try{
+    exerciseStencilSeedCollision();exerciseOneSidedSpans();exerciseOrdinarySpanReference();
     exerciseCircleAndBoundedIdentity();exerciseVaryingCurve();exerciseUnequalEndpointFeatures();
     exerciseInteriorCurvatureJump();exerciseResourceRefusal();exerciseManyFaces();
     std::cout<<"Normal CAD curve and face resource guards passed\n";return 0;

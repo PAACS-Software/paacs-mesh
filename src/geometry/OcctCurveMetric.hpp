@@ -9,17 +9,22 @@
 #include "OcctSpatialSizing.hpp"
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_Surface.hxx>
+#include <Geom_BSplineCurve.hxx>
 #include <NCollection_Array1.hxx>
+#include <Standard_OutOfMemory.hxx>
+#include <Standard_Failure.hxx>
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <map>
 #include <limits>
 #include <numbers>
+#include <new>
 #include <numeric>
 #include <optional>
 #include <set>
 #include <span>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -37,6 +42,7 @@ struct OcctCurveSamplingReport {
     std::optional<std::array<double,5>> lastRejectedSpeeds,lastRejectedSizes,lastRejectedRawSizes;
     // Metric, length and physical-mapping error estimates and their tolerances.
     std::optional<std::array<double,6>> lastRejectedErrors;
+    std::uint64_t nativeSpans=0,localD1=0,localD2=0,adapterD1=0,adapterD2=0;
 };
 struct OcctCurveSpacing {
     unsigned pointsPerTurn = 32;
@@ -50,6 +56,46 @@ struct OcctCurveSpacing {
 namespace curve_metric_detail {
 struct Sample {double at,speed,size;Vec3 point;};
 struct SamplingStop {};
+// One private native adapter per mandatory C2 span. Only exact internal span
+// endpoints need knot-local derivatives; ordinary interior evaluation and the
+// original edge endpoints retain their native adapter. Placement is preserved.
+struct NativeSpan {
+    double first=0.,last=0.;
+    occ::handle<Geom_BSplineCurve> spline;
+    occ::handle<Adaptor3d_Curve> adapter;
+    gp_Trsf placement;
+    int firstKnot=0,lastKnot=0;
+    bool internalFirst=false,internalLast=false;
+    OcctCurveSamplingReport* report=nullptr;
+    void D1(double at,gp_Pnt& point,gp_Vec& derivative)const {
+        const bool atFirst=at==first&&internalFirst,atLast=at==last&&internalLast;
+        if(spline.IsNull()||(!atFirst&&!atLast)){if(report)++report->adapterD1;adapter->D1(at,point,derivative);return;}
+        if(report)++report->localD1;
+        const auto from=atFirst?firstKnot:std::max(firstKnot,lastKnot-1);
+        const auto to=atFirst?std::min(lastKnot,firstKnot+1):lastKnot;
+        spline->LocalD1(at,from,to,point,derivative);
+        point.Transform(placement);derivative.Transform(placement);
+    }
+    void D2(double at,gp_Pnt& point,gp_Vec& derivative,gp_Vec& second)const {
+        const bool atFirst=at==first&&internalFirst,atLast=at==last&&internalLast;
+        if(spline.IsNull()||(!atFirst&&!atLast)){if(report)++report->adapterD2;adapter->D2(at,point,derivative,second);return;}
+        if(report)++report->localD2;
+        const auto from=atFirst?firstKnot:std::max(firstKnot,lastKnot-1);
+        const auto to=atFirst?std::min(lastKnot,firstKnot+1):lastKnot;
+        spline->LocalD2(at,from,to,point,derivative,second);
+        point.Transform(placement);derivative.Transform(placement);second.Transform(placement);
+    }
+};
+struct Stencil {
+    double first,quarter,middle,threeQuarter,last;
+    [[nodiscard]] bool resolved()const noexcept {
+        return first<quarter&&quarter<middle&&middle<threeQuarter&&threeQuarter<last;
+    }
+};
+inline Stencil stencil(double first,double last) noexcept {
+    const auto middle=std::midpoint(first,last);
+    return {first,std::midpoint(first,middle),middle,std::midpoint(middle,last),last};
+}
 
 // A numerical metric estimate, not a CAD-error certificate. Native face/curve
 // identity, trim, chord and final mesh audits remain the consumer's obligation.
@@ -59,29 +105,32 @@ struct SamplingStop {};
 template<class Evaluate,class Tick>
 std::vector<double> progressive(BRepAdaptor_Curve& curve,double first,double last,
     bool closed,const OcctCurveSpacing& spacing,Evaluate evaluate,Tick tick) {
-    OcctCurveSamplingReport local;
-    auto& report=spacing.report?*spacing.report:local;report={};report.diagnostic="sampling";
+    OcctCurveSamplingReport localReport;
+    auto& report=spacing.report?*spacing.report:localReport;report={};report.diagnostic="sampling";
     const auto fail=[&](const char* why,bool budget){
         report.diagnostic=why;report.budgetLimited=budget;throw SamplingStop{};
     };
     const auto segments=std::min<std::uint64_t>(spacing.maximumSegments,
         std::uint64_t((std::numeric_limits<unsigned>::max)())-1);
     const auto intervals=std::min<std::uint64_t>(spacing.maximumIntegrationIntervals,
-        (std::uint64_t((std::numeric_limits<std::size_t>::max)())-1)/4);
+        (std::uint64_t((std::numeric_limits<std::size_t>::max)())-1)/5);
     try{
         if(!segments||!intervals||spacing.maximumWorkingBytes<4096)fail("curve_resource_limit",true);
         if(!std::isfinite(first)||!std::isfinite(last)||!(last>first)||!std::isfinite(last-first))
             fail("curve_parameter_range",false);
         const auto span=last-first;
-        std::map<double,Sample> cache;
-        std::vector<double> breaks;
+        std::map<std::pair<double,std::size_t>,Sample> cache;
+        std::vector<double> breaks,nativeBreaks;
+        std::vector<NativeSpan> spans;
+        std::uint64_t spanSlots=0;
         static_assert(sizeof(Sample)<=64,"adaptive curve sample payload model");
-        struct Interval{double first,last;};
+        struct Interval{double first,last;std::size_t span;};
         std::vector<Interval> pending;
         const auto admit=[&](std::uint64_t samples,std::uint64_t stackSlots,
                              std::uint64_t breakSlots,std::uint64_t finalSamples,std::uint64_t outputSlots){
             std::uint64_t bytes=4096;
             for(const auto [count,unit]:std::array{
+                std::pair{spanSlots,std::uint64_t(512)},
                 std::pair{samples,std::uint64_t(256)},std::pair{stackSlots,std::uint64_t(64)},
                 std::pair{breakSlots,std::uint64_t(32)},std::pair{finalSamples,std::uint64_t(192)},
                 std::pair{outputSlots,std::uint64_t(32)}}){
@@ -94,41 +143,98 @@ std::vector<double> progressive(BRepAdaptor_Curve& curve,double first,double las
         if(nativeIntervals<1)fail("curve_continuity_intervals",false);
         if(std::uint64_t(nativeIntervals)>intervals||nativeIntervals==(std::numeric_limits<int>::max)())
             fail("curve_integration_limit",true);
+        spanSlots=std::uint64_t(nativeIntervals);
         admit(0,0,2*(std::uint64_t(nativeIntervals)+17),0,0);
         {
             NCollection_Array1<double> native(1,nativeIntervals+1);curve.Intervals(native,GeomAbs_C2);
             breaks.reserve(std::size_t(nativeIntervals)+18);
             breaks.push_back(first);breaks.push_back(last);
             for(int i=1;i<=nativeIntervals+1;++i)if(native(i)>first&&native(i)<last)breaks.push_back(native(i));
-            const auto initial=std::min<std::uint64_t>(16,intervals);
-            for(std::uint64_t i=1;i<initial;++i)breaks.push_back(std::lerp(first,last,double(i)/initial));
         }
         std::sort(breaks.begin(),breaks.end());breaks.erase(std::unique(breaks.begin(),breaks.end()),breaks.end());
+        nativeBreaks=breaks;
+        spans.reserve(nativeBreaks.size()-1);
+        const auto rawSpline=curve.Is3DCurve()&&curve.GetType()==GeomAbs_BSplineCurve?
+            curve.Curve().BSpline():occ::handle<Geom_BSplineCurve>{};
+        for(std::size_t i=1;i<nativeBreaks.size();++i){
+            tick(1);NativeSpan local;local.first=nativeBreaks[i-1];local.last=nativeBreaks[i];
+            local.internalFirst=local.first>first;local.internalLast=local.last<last;local.report=&report;
+            local.placement=curve.Trsf();
+            const auto owned=curve.ShallowCopy();
+            local.adapter=owned->Trim(local.first,local.last,0.);
+            if(local.adapter.IsNull())fail("curve_local_span",false);
+            if(!rawSpline.IsNull()&&!rawSpline->HasEvalRepresentation()&&local.first>=rawSpline->Knot(1)&&
+               local.last<=rawSpline->Knot(rawSpline->NbKnots())){
+                const auto count=rawSpline->NbKnots();
+                if(count==(std::numeric_limits<int>::max)())fail("curve_native_knot_limit",true);
+                int lo=1,hi=count+1;
+                while(lo<hi){tick(1);const auto middle=lo+(hi-lo)/2;
+                    if(rawSpline->Knot(middle)<=local.first)lo=middle+1;else hi=middle;}
+                local.firstKnot=std::max(1,lo-1);
+                lo=1;hi=count+1;
+                while(lo<hi){tick(1);const auto middle=lo+(hi-lo)/2;
+                    if(rawSpline->Knot(middle)<local.last)lo=middle+1;else hi=middle;}
+                local.lastKnot=std::min(count,lo);
+                if(local.firstKnot>=local.lastKnot)fail("curve_local_span",false);
+                local.spline=rawSpline;
+            }
+            spans.push_back(std::move(local));
+        }
+        report.nativeSpans=spans.size();
+        // Native continuity breaks and endpoints are mandatory. Artificial
+        // integration seeds must not create an unrepresentable interval next
+        // to one of them. Preserve every native break, and admit each sorted
+        // seed only when both children support the exact integration stencil.
+        const auto initial=std::min<std::uint64_t>(16,intervals);
+        for(std::uint64_t i=1;i<initial;++i){
+            const auto cut=std::lerp(first,last,double(i)/initial);
+            const auto at=std::lower_bound(breaks.begin(),breaks.end(),cut,
+                [&](double value,double wanted){tick(1);return value<wanted;});
+            if(at==breaks.begin()||at==breaks.end()||*at==cut)continue;
+            tick(1);
+            if(!stencil(*(at-1),cut).resolved()||!stencil(cut,*at).resolved())continue;
+            // Charge the bounded search above and every shifted entry before
+            // inserting. Initial reserve and its memory admission include all
+            // possible seeds; no new allocation policy is introduced here.
+            tick(std::uint64_t(breaks.end()-at)+1);
+            breaks.insert(at,cut);
+        }
         if(breaks.size()-1>intervals)fail("curve_integration_limit",true);
         admit(0,2*breaks.size(),breaks.capacity(),0,0);
         pending.reserve(breaks.size());
-        for(std::size_t i=breaks.size()-1;i>0;--i)pending.push_back({breaks[i-1],breaks[i]});
-        const auto sample=[&](double at)->const Sample&{
-            if(auto found=cache.find(at);found!=cache.end())return found->second;
-            if(cache.size()>=4*intervals+1)fail("curve_integration_limit",true);
+        for(std::size_t i=breaks.size()-1;i>0;--i){
+            const auto owner=std::upper_bound(nativeBreaks.begin(),nativeBreaks.end(),breaks[i-1],
+                [&](double wanted,double value){tick(1);return wanted<value;});
+            const auto id=std::size_t(owner-nativeBreaks.begin()-1);
+            if(id>=spans.size()||breaks[i]>spans[id].last)fail("curve_local_span",false);
+            pending.push_back({breaks[i-1],breaks[i],id});
+        }
+        const auto sample=[&](double at,std::size_t spanId)->const Sample&{
+            const auto key=std::pair{at,spanId};
+            if(auto found=cache.find(key);found!=cache.end())return found->second;
+            if(cache.size()>=4*intervals+spans.size())fail("curve_integration_limit",true);
             admit(cache.size()+1,2*pending.capacity(),breaks.capacity(),0,0);
-            tick(1);auto value=evaluate(at);++report.evaluations;
+            tick(1);const auto value=[&]{
+                if constexpr(std::is_invocable_v<Evaluate,double,const NativeSpan&>)return evaluate(at,spans[spanId]);
+                else return evaluate(at);
+            }();++report.evaluations;
             if(!(std::isfinite(value.speed)&&value.speed>=0&&std::isfinite(value.size)&&value.size>0&&
                  std::isfinite(value.point.x)&&std::isfinite(value.point.y)&&std::isfinite(value.point.z)))
                 fail("curve_nonfinite_sample",false);
-            return cache.emplace(at,value).first->second;
+            return cache.emplace(key,value).first->second;
         };
         const auto density=[](const Sample& p){return static_cast<long double>(p.speed)/p.size;};
         const double slope=std::sqrt(1.8)-1;
         long double estimatedError=0;
         while(!pending.empty()){
             tick(1);const auto interval=pending.back();pending.pop_back();
-            const auto a=interval.first,b=interval.last,m=std::midpoint(a,b);
-            const auto q1=std::midpoint(a,m),q3=std::midpoint(m,b);
-            if(!(a<q1&&q1<m&&m<q3&&q3<b)){
+            const auto points=stencil(interval.first,interval.last);
+            const auto [a,q1,m,q3,b]=points;
+            if(!points.resolved()){
                 report.numericalInterval=std::array{a,b};fail("curve_parameter_resolution",false);
             }
-            std::array<Sample,5> stencil{sample(a),sample(q1),sample(m),sample(q3),sample(b)};
+            std::array<Sample,5> stencil{sample(a,interval.span),sample(q1,interval.span),
+                sample(m,interval.span),sample(q3,interval.span),sample(b,interval.span)};
             const std::array rawSizes{stencil[0].size,stencil[1].size,stencil[2].size,stencil[3].size,stencil[4].size};
             // Prepare the growth-limited metric before estimating its error.
             // Pointwise curvature/feature changes must not force endless
@@ -167,7 +273,7 @@ std::vector<double> progressive(BRepAdaptor_Curve& curve,double first,double las
                 double(lengthError),double(1e-5L*std::abs(fineLength)+1e-12L*h*((b-a)/span)),mappingError,physicalTolerance};
             if(report.integrationIntervals+pending.size()+2>intervals)fail("curve_integration_limit",true);
             admit(cache.size(),std::max<std::uint64_t>(2*pending.capacity(),2*(pending.size()+2)),breaks.capacity(),0,0);
-            pending.push_back({m,b});pending.push_back({a,m});
+            pending.push_back({m,b,interval.span});pending.push_back({a,m,interval.span});
         }
         admit(cache.size(),2*pending.capacity(),breaks.capacity(),cache.size(),0);
         std::vector<Sample> samples;samples.reserve(cache.size());
@@ -224,13 +330,21 @@ std::vector<double> sampleOcctCurveMetric(const OcctModel& model, int tag, doubl
     const OcctCurveUses& uses, const OcctVertexEdges& incident, Tick tick,
     OcctCurveSpacing spacing = {},const OcctSpatialSizing* sizeField = nullptr) {
     constexpr std::size_t intervals = 256;
-    const auto localCurvature = [&](int edge, double t) {
+    const auto localCurvature = [&](int edge, double t,const curve_metric_detail::NativeSpan* local=nullptr) {
         tick(1);
         double curvature = 0;
         const auto include = [&](double value) {
             if (std::isfinite(value)) curvature = std::max(curvature, value);
         };
-        include(model.edge(edge)->curvatureAt(t));
+        if(local){
+            gp_Pnt point;gp_Vec derivative,second;
+            try{
+                local->D2(t,point,derivative,second);
+                const auto magnitude=derivative.Magnitude();
+                if(magnitude>0.)include(derivative.Crossed(second).Magnitude()/(magnitude*magnitude*magnitude));
+            }catch(const Standard_OutOfMemory&){throw std::bad_alloc{};}
+             catch(const Standard_Failure&){/* Match Edge::curvatureAt's unavailable-curvature convention. */}
+        }else include(model.edge(edge)->curvatureAt(t));
         for (const auto& [face, use] : uses.at(edge)) {
             tick(2);
             Vec2 uv;
@@ -289,10 +403,10 @@ std::vector<double> sampleOcctCurveMetric(const OcctModel& model, int tag, doubl
         // growth-slope envelope is conservative; final arclength smoothing
         // and all native geometric audits still apply.
         const double slope=std::sqrt(1.8)-1;
-        const auto evaluate=[&](double at){
-            gp_Pnt point;gp_Vec derivative;curve.D1(at,point,derivative);
+        const auto evaluate=[&](double at,const curve_metric_detail::NativeSpan& local){
+            gp_Pnt point;gp_Vec derivative;local.D1(at,point,derivative);
             const Vec3 position{point.X(),point.Y(),point.Z()};
-            const auto h=std::min({requestedSize(localCurvature(tag,at),position),
+            const auto h=std::min({requestedSize(localCurvature(tag,at,&local),position),
                 startSize+slope*(position-startPoint).norm(),endSize+slope*(position-endPoint).norm()});
             return curve_metric_detail::Sample{at,derivative.Magnitude(),h,position};
         };
