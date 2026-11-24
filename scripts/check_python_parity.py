@@ -44,6 +44,7 @@ def main():
     common = ["--native-cad", "--report-json", "--recovery-mode", "standard",
               "--threads", "1", "--native-validation-threads", "1"]
     cases = [
+        # These cases omit policy on both interfaces to qualify new-call defaults.
         ("cylinder", "cylinder.step", .3, {}, ["--independent-parts"]),
         ("assembly", "assembly.step", .3, {}, ["--independent-parts"]),
         ("combined-sizing", "cylinder.step", .7, {
@@ -108,6 +109,14 @@ def main():
             resource_keys = ("policy", "requested_max_work", "effective_max_work",
                              "logical_work_cap_disabled", "max_working_bytes")
             expected_resources = {key: report["resources"][key] for key in resource_keys}
+            if name in {"cylinder", "assembly"} and (
+                    expected_resources["policy"] != "normal"
+                    or expected_resources["requested_max_work"] is not None
+                    or expected_resources["logical_work_cap_disabled"] is not True
+                    or expected_resources["effective_max_work"] < 2**60
+                    or expected_resources["max_working_bytes"] != 512 * 1024**2
+                    or report["construction"]["effort"] != "legacy"):
+                raise RuntimeError(f"New-call defaults did not retain Normal/Legacy resource intent for {name}")
             native_resources = native_reports[0].get("resources")
             if not isinstance(native_resources, dict) or not set(resource_keys) <= native_resources.keys():
                 raise RuntimeError(f"Native CLI resource receipt is incomplete for {name}")

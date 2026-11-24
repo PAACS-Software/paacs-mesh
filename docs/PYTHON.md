@@ -128,14 +128,17 @@ See [construction effort and caps](CONSTRUCTION_BUDGETS.md) for per-face surface
 scope, native stage receipts, CLI flags and saved-recipe behaviour. These
 controls are not included in published RC3 wheels.
 
-Rebuilt development bindings also accept `resource_policy="bounded"` or
-`"normal"`. Bounded is the initial default while normal admission is qualified.
+Rebuilt development bindings use `resource_policy="normal"` for new Python
+and direct STEP CLI requests. Use `resource_policy="bounded"` to retain
+historical resource admission. Construction effort remains `"legacy"`.
 An omitted `max_work` uses the policy allowance: 50 million logical units for
 bounded, or no practical logical ceiling for normal. An explicit positive work
 limit applies to either policy. Omitted modeled memory retains 512 MiB. Normal
 does not select experimental construction effort or certify achieved sizing.
-Saved recipes record policy, and old recipes missing it retain bounded
-semantics. The direct STEP CLI exposes `--resource-policy`, `--max-working-bytes`,
+New recipes record the selected policy, defaulting to Normal. Old recipes
+missing the field retain literal Bounded semantics, and the C++ aggregate `NativeCadMeshOptions{}`
+also retains Bounded defaults. C++ callers can use `normalNativeCadMeshOptions()`
+explicitly. The direct STEP CLI exposes `--resource-policy`, `--max-working-bytes`,
 `--max-nodes` and `--max-cells` alongside `--max-work` and `--max-seconds`.
 
 ## Package distribution

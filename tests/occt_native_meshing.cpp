@@ -19,6 +19,8 @@
 #include <STEPControl_Writer.hxx>
 #include <TopoDS_Compound.hxx>
 #include <gp_Trsf.hxx>
+#include <algorithm>
+#include <array>
 #include <fstream>
 #include <iostream>
 #include <chrono>
@@ -34,6 +36,55 @@ std::string nativeSnapshot(const geo::OcctModel& model) {
     BRepTools::Write(geo::detail::OcctModelAccess::shape(model),stream);
     check(stream.good(),"native snapshot serialization");
     return stream.str();
+}
+void checkResourcePolicyPresets(const geo::OcctModel& model,const std::string& sourceSnapshot) {
+    check(model.solids().size()==1,"resource preset fixture must contain one original body");
+    const auto solidTag=model.solids().front()->tag();
+    const std::array presets{geo::NativeCadMeshOptions{},geo::normalNativeCadMeshOptions()};
+    for(std::size_t i=0;i<presets.size();++i) {
+        auto request=presets[i];request.geometry.targetSize=.7;
+        const bool normal=i==1;
+        const auto expectedPolicy=normal?geo::CadResourcePolicy::Normal:geo::CadResourcePolicy::Bounded;
+        const auto expectedWork=normal?geo::cadNormalWorkAllowance:std::uint64_t{50'000'000};
+        check(request.construction.resourcePolicy==expectedPolicy&&
+              request.maximumValidationWork==expectedWork&&request.geometry.maximumMeshingWork==expectedWork,
+              "aggregate/factory resource policy or inherited work allowance changed");
+        check(request.construction.effort==geo::CadConstructionEffort::Legacy&&
+              request.maximumPrimitiveWorkingBytes==512ULL*1024*1024,
+              "resource preset changed construction effort or inherited working memory");
+        mesh::Mesh destination;destination.addNode({-10,-10,-10},{3,99});
+        const auto sentinel=mesh::meshHash(destination);
+        const auto accepted=geo::meshNativeCad(model,request,destination);
+        check(accepted.published&&!accepted.destinationUnchanged&&accepted.audit.valid&&accepted.quality.valid&&
+              accepted.bodies.size()==1&&accepted.bodies.front().solidTag==solidTag&&
+              mesh::meshHash(destination)!=sentinel,
+              "resource preset failed native publication or changed original body identity");
+        check(accepted.validationWork>1&&accepted.validationWork<=request.maximumValidationWork&&
+              accepted.validationWork<=request.geometry.maximumMeshingWork,
+              "resource preset did not perform charged work within its effective allowance");
+        std::uint64_t tetrahedra=0;
+        for(Index cell=0;cell<destination.cellCount();++cell) {
+            if(destination.cell(cell).type!=mesh::CellType::Tet4)continue;
+            ++tetrahedra;
+            check(destination.cell(cell).onEntity==mesh::Classification{3,solidTag},
+                  "resource preset lost original tetrahedron body ownership");
+        }
+        check(tetrahedra>0&&nativeSnapshot(model)==sourceSnapshot,
+              "resource preset produced no tetrahedra or changed the original native BRep");
+        const auto retained=mesh::meshHash(destination);
+        // Exercise each public work field separately; the other field keeps
+        // the preset's allowance, so either ignored override is observable.
+        for(unsigned field=0;field<2;++field) {
+            auto limited=request;
+            if(field==0)limited.geometry.maximumMeshingWork=1;
+            else limited.maximumValidationWork=1;
+            const auto refused=geo::meshNativeCad(model,limited,destination);
+            check(!refused.published&&refused.destinationUnchanged&&
+                  refused.reason==geo::NativeCadMeshReason::BudgetExceeded&&refused.validationWork<=1&&
+                  mesh::meshHash(destination)==retained&&nativeSnapshot(model)==sourceSnapshot,
+                  "resource preset bypassed explicit work or changed retained mesh/source on refusal");
+        }
+    }
 }
 }
 int main(int argc,char** argv) {
@@ -74,6 +125,9 @@ int main(int argc,char** argv) {
             auto cad=geo::importOcctCad(path);check(cad.imported(),"native CAD import");
             const auto importedSnapshot=nativeSnapshot(*cad.model);
             check(nativeSnapshot(*cad.model)==importedSnapshot,"native snapshot serialization stable");
+            if(std::string_view(fixture.name)=="cylinder") {
+                checkResourcePolicyPresets(*cad.model,importedSnapshot);++checks;
+            }
             geo::NativeCadMeshOptions options;options.geometry.targetSize=.3;
             if(!fixture.supported)options.useNativeSurfaceFallback=false;
             mesh::Mesh mesh;mesh.addNode({-10,-10,-10},{3,99});

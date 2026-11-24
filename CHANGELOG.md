@@ -6,6 +6,9 @@
   practical logical-work ceiling when `max_work` is omitted. Explicit work,
   memory, count, output and cancellation limits remain authoritative. Bounded
   admission remains available and old recipes preserve its meaning.
+- Default new Python and STEP CLI requests to Normal admission. Preserve
+  Bounded C++ aggregates and old recipes, Legacy construction effort and the
+  inherited 512 MiB modeled working allowance.
 - Admit the actual initial numerical mesh before growing its live storage;
   account for queue growth, compaction and overlapping temporary allocations.
   Separate construction stages that do not coexist in memory.

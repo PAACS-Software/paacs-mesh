@@ -1024,6 +1024,6 @@ PYBIND11_MODULE(_native, m) {
              py::arg("construction_effort") = "legacy",
              py::arg("max_surface_points") = py::none(), py::arg("max_surface_chord_points") = py::none(),
              py::arg("max_interior_candidates") = py::none(), py::arg("max_interior_sites") = py::none(),
-             py::arg("resource_policy") = "bounded");
+             py::arg("resource_policy") = "normal");
     m.def("read_step", &readStep, py::arg("path"), py::kw_only(), py::arg("max_file_bytes") = py::none(), py::arg("names") = true, py::arg("retain_source") = false);
 }

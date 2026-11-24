@@ -24,7 +24,7 @@ _QUERY_FIELDS = {"tags", "name", "group", "surface", "body", "area", "radius",
                  "centroid_box", "normal", "adjacent_to", "expect", "tolerance"}
 _MAX_FACE_CONTROLS = 10000
 _DEFAULT_CONSTRUCTION_EFFORT = "legacy"
-_DEFAULT_RESOURCE_POLICY = "bounded"
+_DEFAULT_RESOURCE_POLICY = "normal"
 _RESOURCE_POLICIES = ("normal", "bounded")
 _RESOURCE_FIELDS = ("resource_policy",)
 _CONSTRUCTION_LIMITS = ("max_surface_points", "max_surface_chord_points",
@@ -309,7 +309,7 @@ class CadModel:
         ``assembly="conforming"`` request; this method preserves the default
         ``preserve_parts`` assembly policy rather than changing it for controls.
 
-        ``resource_policy`` selects normal or bounded resource admission.
+        ``resource_policy`` selects normal (the default) or bounded admission.
         An omitted ``max_work`` uses the selected policy; an explicit positive
         limit always applies. Other omitted budgets retain native defaults.
         ``max_seconds`` is

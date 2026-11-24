@@ -44,7 +44,7 @@ void writeInitialFrontFallback(const paacs::geo::NativeCadInitialFrontFallbackRe
 int runNativeCadCli(int argc,char** argv) {
     using namespace paacs;
     geo::NativeCadImportOptions io;geo::NativeCadImportOutcome cad;
-    geo::NativeCadMeshOptions options;geo::NativeCadMeshOutcome result;mesh::Mesh mesh;
+    auto options=geo::normalNativeCadMeshOptions();geo::NativeCadMeshOutcome result;mesh::Mesh mesh;
     bool report=false,archivePublished=false;double sizeFactor=0,importSeconds=0,growth=1.3;
     std::optional<std::uint64_t> requestedWork;
     const auto boundedValidationWork=geo::NativeCadMeshOptions{}.maximumValidationWork;

@@ -76,15 +76,31 @@ def main():
                          "archive_preserved": not success, "result": receipt})
             return receipt
 
-        normal = run("normal_resource_admission", "cylinder.step",
-                     ("--resource-policy", "normal"), success=True, size=".7")
+        normal = run("default_normal_resource_admission", "cylinder.step", success=True, size=".7")
         resource = normal.get("resources", {})
         if (resource.get("policy") != "normal" or resource.get("requested_max_work") is not None
                 or resource.get("logical_work_cap_disabled") is not True
                 or resource.get("effective_max_work", 0) < 2**60
                 or resource.get("max_working_bytes") != 512 * 1024**2
-                or normal.get("audit_valid") is not True):
+                or normal.get("audit_valid") is not True
+                or normal.get("construction", {}).get("effort") != "legacy"):
             raise RuntimeError(f"Normal admission did not retain explicit resource evidence: {normal}")
+        default_normal_bytes = output.read_bytes()
+        explicit_normal = run("explicit_normal_resource_admission", "cylinder.step",
+                              ("--resource-policy", "normal"), success=True, size=".7")
+        if (explicit_normal.get("resources") != resource or output.read_bytes() != default_normal_bytes):
+            raise RuntimeError("Default and explicit Normal requests differ in resource intent or archive")
+        bounded = run("explicit_bounded_resource_admission", "cylinder.step",
+                      ("--resource-policy", "bounded"), success=True, size=".7")
+        bounded_resource = bounded.get("resources", {})
+        if (bounded_resource.get("policy") != "bounded"
+                or bounded_resource.get("requested_max_work") is not None
+                or bounded_resource.get("effective_max_work") != 50_000_000
+                or bounded_resource.get("logical_work_cap_disabled") is not False
+                or bounded_resource.get("max_working_bytes") != 512 * 1024**2
+                or bounded.get("construction", {}).get("effort") != "legacy"
+                or bounded.get("audit_valid") is not True):
+            raise RuntimeError("Explicit Bounded admission lost its historical limits or native checks")
         for name, options in (
                 ("normal_explicit_work_before_policy", ("--max-work", "100000000", "--resource-policy", "normal")),
                 ("normal_explicit_work_after_policy", ("--resource-policy", "normal", "--max-work", "100000000"))):
@@ -102,7 +118,7 @@ def main():
                 ("normal_one_byte_working_memory", ("--max-working-bytes", "1")),
                 ("normal_tiny_nodes", ("--max-nodes", "5")),
                 ("normal_tiny_cells", ("--max-cells", "8"))):
-            refused = run(name, "cylinder.step", ("--resource-policy", "normal", *options),
+            refused = run(name, "cylinder.step", options,
                           reason="budget-exceeded", size=".7")
             if refused.get("resources", {}).get("policy") != "normal":
                 raise RuntimeError("Resource refusal lost the requested Normal policy")
@@ -115,7 +131,7 @@ def main():
         # End every otherwise valid prefix with an unknown flag so these checks
         # exercise parsing and receipts without importing CAD or constructing a mesh.
         parser_cases = (
-            ("parse_default", ("--unknown-resource-test-option",), "bounded", None),
+            ("parse_default", ("--unknown-resource-test-option",), "normal", None),
             ("parse_normal", ("--resource-policy", "normal", "--unknown-resource-test-option"), "normal", None),
             ("parse_normal_then_bounded", ("--resource-policy", "normal", "--resource-policy", "bounded", "--unknown-resource-test-option"), "bounded", None),
             ("parse_bounded_then_normal", ("--resource-policy", "bounded", "--resource-policy", "normal", "--unknown-resource-test-option"), "normal", None),
@@ -127,7 +143,7 @@ def main():
             ("parse_last_valid_work", ("--max-work", "123456", "--resource-policy", "normal", "--max-work", "654321", "--unknown-resource-test-option"), "normal", 654321),
             ("parse_invalid_policy_preserves_normal", ("--resource-policy", "normal", "--resource-policy", "unexpected"), "normal", None),
             ("parse_missing_policy_preserves_normal", ("--resource-policy", "normal", "--resource-policy"), "normal", None),
-            ("parse_zero_work_preserves_default", ("--max-work", "0"), "bounded", None),
+            ("parse_zero_work_preserves_default", ("--max-work", "0"), "normal", None),
             ("parse_zero_work_preserves_normal", ("--resource-policy", "normal", "--max-work", "0"), "normal", None),
             ("parse_zero_work_preserves_explicit", ("--max-work", "123456", "--resource-policy", "normal", "--max-work", "0"), "normal", 123456),
             ("parse_invalid_work_preserves_explicit", ("--max-work", "123456", "--resource-policy", "normal", "--max-work", "invalid"), "normal", 123456),
@@ -239,9 +255,10 @@ def main():
                 or front.get("front_advances", 0) + front.get("void_activations", 0) == 0
                 or front.get("diagnostic") not in {"targets_satisfied", "targets_unmet", "budget_limited"}):
             raise RuntimeError(f"advancing interior front did not report audited construction: {advancing}")
-        uniform_options = ("--max-work", "100000000", "--max-chord-error", ".008660254037844387",
+        uniform_options = ("--resource-policy", "bounded", "--max-work", "100000000",
+                           "--max-chord-error", ".008660254037844387",
                            "--min-quality", "0", "--warning-quality", ".25")
-        initial = run("default_uniform_initial_interior_front", "cylinder.step",
+        initial = run("bounded_uniform_initial_interior_front", "cylinder.step",
                       uniform_options, success=True)
         initial_body = initial["bodies"][0]
         seed = initial_body.get("initial_front", {})
@@ -279,7 +296,7 @@ def main():
                 or initial_body.get("recovery_steiner_nodes") != 0
                 or initial_body.get("local_delaunay_refinement_nodes") != 0
                 or initial_body.get("local_delaunay_quality_edits") != 0):
-            raise RuntimeError(f"default initial construction lost its strict native publication guards: {initial}")
+            raise RuntimeError(f"bounded initial construction lost its strict native publication guards: {initial}")
         automatic_bytes = output.read_bytes()
         forced = run("initial_front_last_flag_on", "cylinder.step",
                      (*uniform_options, "--no-advancing-interior-front", "--advancing-interior-front"), success=True)
@@ -411,7 +428,7 @@ def main():
             ("spatial_sizing_assembly", "assembly.step",
              ("--size-box", ".2", ".2", ".2", ".8", ".8", ".8", ".1"), "unsupported-control"),
             ("strict_quality", "cylinder.step", ("--min-quality", "1"), "quality-requirement-not-met"),
-            ("zero_work", "cylinder.step", ("--max-work", "0"), "budget-exceeded"),
+            ("zero_work", "cylinder.step", ("--max-work", "0"), "invalid-request"),
             ("one_work", "cylinder.step", ("--max-work", "1"), "budget-exceeded"),
             ("working_storage", "cylinder.step", ("--max-working-bytes", "1"), "budget-exceeded"),
             ("audit_storage", "cylinder.step", ("--max-audit-bytes", "1"), "budget-exceeded"),

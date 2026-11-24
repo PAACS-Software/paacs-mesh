@@ -29,6 +29,7 @@ class ResourcePolicyTests(unittest.TestCase):
         self.model, self.native = model_stub()
 
     def test_explicit_signatures_defaults_and_omitted_limits_are_preserved(self):
+        self.assertEqual(cad._DEFAULT_RESOURCE_POLICY, "normal")
         for function in (cad.CadModel.mesh, wf.create_recipe):
             parameter = inspect.signature(function).parameters["resource_policy"]
             self.assertEqual(parameter.default, cad._DEFAULT_RESOURCE_POLICY)
@@ -58,7 +59,7 @@ class ResourcePolicyTests(unittest.TestCase):
         self.native.mesh.assert_not_called()
 
     def test_recipe_roundtrip_and_missing_policy_keep_literal_bounded_meaning(self):
-        recipe = wf.create_recipe(self.model, .5, resource_policy="normal")
+        recipe = wf.create_recipe(self.model, .5)
         self.assertEqual(recipe["options"]["resource_policy"], "normal")
         self.assertIsNone(recipe["options"]["max_work"])
         with tempfile.TemporaryDirectory() as temporary:
@@ -83,7 +84,7 @@ class ResourcePolicyTests(unittest.TestCase):
         success = self.native.mesh.return_value
         self.native.mesh.side_effect = [synthetic_refusal("native-plc-cavity-material-refusal"),
                                        synthetic_refusal("native-plc-final-centroid-outside"), success]
-        recipe = wf.create_recipe(self.model, .5, resource_policy="normal", max_work=345678,
+        recipe = wf.create_recipe(self.model, .5, max_work=345678,
             max_working_bytes=987654, allow_advanced=True, finer_factors=[.5], max_attempts=3)
         result = wf.run_recipe(self.model, recipe)
         self.assertEqual([call.args[0] for call in self.native.mesh.call_args_list], [.5, .5, .25])
@@ -122,6 +123,19 @@ class ResourcePolicyTests(unittest.TestCase):
                     cli.main(["source.step", "out.vtk", "--size", ".5", flag, value])
                 self.assertEqual(caught.exception.code, 2)
                 read.assert_not_called()
+
+    def test_cli_defaults_to_normal_and_preserves_an_explicit_work_limit(self):
+        for flags, work in (((), None), (("--max-work", "345678"), 345678)):
+            with self.subTest(flags=flags), \
+                    patch.object(cli, "read_step", return_value=self.model), \
+                    patch.object(cli, "_native_output_to_stderr", contextlib.nullcontext), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(cli.main(["source.step", "out.vtk", "--size", ".5", *flags]), 0)
+            options = self.native.mesh.call_args.kwargs
+            self.assertEqual(options["resource_policy"], "normal")
+            self.assertEqual(options["max_work"], work)
+            self.assertIsNone(options["max_working_bytes"])
+            self.assertEqual(options["construction_effort"], "legacy")
 
     def test_discovery_and_diagnostics_preserve_reported_resource_evidence(self):
         capabilities = pm.capabilities()["resources"]

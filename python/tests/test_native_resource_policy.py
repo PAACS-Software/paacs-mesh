@@ -71,6 +71,29 @@ class NativeResourcePolicyTests(unittest.TestCase):
         self.assertFalse(error.report["resources"]["logical_work_cap_disabled"])
         self.assert_valid(mesh)
 
+    def test_public_and_private_defaults_match_explicit_normal(self):
+        source_bytes = fixture_path().read_bytes()
+        options = {"workers": 1, "validation_workers": 1, "max_seconds": 90}
+        explicit = self.model.mesh(.7, resource_policy="normal", **options)
+        self.assert_valid(explicit)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            explicit.write_archive(root / "explicit.paacsmesh")
+            expected = (root / "explicit.paacsmesh").read_bytes()
+            for name, call in (("public", self.model.mesh), ("private", self.model._native.mesh)):
+                with self.subTest(binding=name):
+                    default = call(.7, **options)
+                    self.assert_valid(default)
+                    self.assertEqual(default.report["resources"], explicit.report["resources"])
+                    self.assertEqual(default.report["resources"]["policy"], "normal")
+                    self.assertTrue(default.report["resources"]["logical_work_cap_disabled"])
+                    self.assertEqual(default.report["resources"]["max_working_bytes"], 512 * 1024**2)
+                    self.assertEqual(default.report["construction"]["effort"], "legacy")
+                    path = root / f"{name}.paacsmesh"
+                    default.write_archive(path)
+                    self.assertEqual(path.read_bytes(), expected)
+                    self.assertEqual(fixture_path().read_bytes(), source_bytes)
+
     def test_old_recipe_absence_replays_the_bounded_legacy_mesh_exactly(self):
         recipe = wf.create_recipe(self.model, .7, resource_policy="normal",
                                   construction_effort="auto", max_seconds=90)
@@ -112,7 +135,7 @@ class NativeResourcePolicyTests(unittest.TestCase):
             for limits, reason in requests:
                 with self.subTest(limits=limits):
                     with self.assertRaises(pm.MeshingError) as caught:
-                        candidate = self.model.mesh(.7, resource_policy="normal", workers=1,
+                        candidate = self.model.mesh(.7, workers=1,
                                                     validation_workers=1, max_seconds=90, **limits)
                         candidate.write_archive(output)
                     self.assertEqual(caught.exception.reason, reason)
@@ -157,7 +180,7 @@ class NativeResourcePolicyTests(unittest.TestCase):
             sentinel = b"Existing output must survive a native cancellation"
             output.write_bytes(sentinel)
             with self.assertRaises(pm.MeshingError) as caught:
-                candidate = self.model.mesh(.7, resource_policy="normal", workers=1,
+                candidate = self.model.mesh(.7, workers=1,
                                             validation_workers=1, max_seconds=1e-9)
                 candidate.write_archive(output)
             error = caught.exception
