@@ -175,6 +175,16 @@ struct NativeCadMeshOptions {
     // Finalize numerical slivers after point insertion without moving nodes.
     // Unset enables the bounded stage for Normal admission only.
     std::optional<bool> initialTopologyQuality;
+    // Experimental provider substitution after a named geometric chart/wire
+    // refusal. Retains the live constructor and all Native validity checks.
+    // Explicit local surface controls/caps are not bypassed.
+    // A source refusal remains on this pipeline rather than retrying a legacy
+    // whole-method constructor. This toggle does not force initial-front ON.
+    bool allowNativeSourceFallback=false;
+    // Experimental order within the live size-field constructor: recover the
+    // boundary before placing interior sites. Does not force that constructor.
+    // A failed source is not replaced by legacy whole-method retry in AUTO.
+    bool recoverBoundaryBeforeInteriorSites=false;
 };
 
 // Existing aggregate options retain their bounded defaults. This preset opts
@@ -251,6 +261,13 @@ struct NativeCadInitialTopologyQualityReport {
     double searchBelowMeanRatio=1e-6;
     std::uint64_t workLimit=0;
 };
+struct NativeCadSourceConstructionWitness {
+    const char* stage="not_reported";
+    const char* detail="not_reported";
+    int edgeTag=-1,faceTag=-1;
+    std::optional<std::uint64_t> useId;
+    bool geometricRefusal=false;
+};
 struct NativeCadSourceShellAttempt {
     double chordErrorLimit=0,seconds=0;
     double signedVolume=0,cadVolume=0,relativeVolumeError=0;
@@ -258,6 +275,12 @@ struct NativeCadSourceShellAttempt {
     bool published=false,sourceModelUnmodified=false,volumeCriterionMet=false;
     bool constructionBudgetLimited=false,constructionStalled=false;
     const char* surfaceDiagnostic="not_attempted";
+    const char* provider="not_reported";
+    // Configuration evidence, not achieved spacing or a point-count certificate.
+    bool globalSizingApplied=false;
+    unsigned curvaturePointsPerTurn=0;
+    double angularDeflection=0;
+    NativeCadSourceConstructionWitness witness;
 };
 struct NativeCadSourceShellReport {
     // Source geometry retries are bounded independently of volume recovery.
@@ -267,6 +290,8 @@ struct NativeCadSourceShellReport {
     double requestedGlobalSize=0,requestedChordError=0,maximumRelativeVolumeError=0;
     bool accepted=false;
     const char* diagnostic="not_attempted";
+    bool nativeFallbackRequested=false,nativeFallbackAttempted=false;
+    const char* nativeFallbackDiagnostic="disabled";
 };
 // AUTO may retry the legacy route only after a bounded source-stage refusal,
 // before any initial point construction. This records the discarded trial;
@@ -297,6 +322,21 @@ struct NativeCadRouteResolutionReport {
     std::array<NativeCadRouteAttemptReport,2> attempts{};
     unsigned count=0;
 };
+// Cumulative material-admission batches within one live volume attempt. The
+// completion/source flags describe the last batch, not publication of a mesh.
+struct NativeCadMaterialClassificationReport {
+    const char* diagnostic="not_attempted";
+    bool completed=false,sourceModelUnmodified=false;
+    // A native query is counted when started; interruption need not yield a
+    // decision. These attempts never stand in for the completed batch mask.
+    std::uint64_t attempts=0,requestedPoints=0,attemptedPoints=0;
+    std::uint64_t nativeQueries=0,strictReuses=0,rayAdmissions=0,work=0;
+    double seconds=0;
+    // Only explicitly profiled strict serial batches contribute these fields.
+    // Zero profiledBatches means unavailable, not zero classification cost.
+    std::uint64_t profiledBatches=0,rayWitnessAttempts=0;
+    double classifierSetupSeconds=0,nativeQuerySeconds=0,rayWitnessSeconds=0;
+};
 struct NativeCadBodyMeshReport {
     int solidTag = -1;
     const char* route = "unsupported";
@@ -312,6 +352,7 @@ struct NativeCadBodyMeshReport {
     const char* nativeVolumeReason = "not_attempted";
     double surfaceDeflection = 0, surfaceChordErrorLimit = 0;
     NativeCadSourceShellReport sourceShell;
+    NativeCadMaterialClassificationReport materialClassification;
     // An absent value means this route has not supplied construction evidence.
     // True records use of a volume size field, not verification of every cell.
     std::optional<bool> volumeSizingApplied;

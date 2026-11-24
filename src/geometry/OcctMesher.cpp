@@ -457,12 +457,17 @@ bool nativeStarFallback(const OcctModel& model,const View& view,const NativeCadM
     report.sourceShell={};report.sourceShell.requestedGlobalSize=o.targetSize;
     report.sourceShell.requestedChordError=options.maximumChordError;
     report.sourceShell.maximumRelativeVolumeError=options.maximumRelativeVolumeError;
+    report.sourceShell.nativeFallbackRequested=options.allowNativeSourceFallback;
+    if(options.allowNativeSourceFallback)
+        report.sourceShell.nativeFallbackDiagnostic="requires_single_body_live_constructor";
     double deflection=chord*.4;
     for(unsigned attempt=0;attempt<3;++attempt) {
         work.tick();++report.surfaceAttempts;report.surfaceDeflection=deflection;
         auto& sourceAttempt=report.sourceShell.attempts[report.sourceShell.count++];
         sourceAttempt.chordErrorLimit=chord;
+        sourceAttempt.provider="native_tessellation";
         OcctBoundaryOptions bo;bo.linearDeflection=deflection;bo.maximumChordError=chord;
+        sourceAttempt.angularDeflection=bo.angularDeflection;
         bo.maximumNodes=o.maximumNodes;bo.maximumTriangles=o.maximumCells/2;
         bo.maximumOutputBytes=o.maximumOutputBytes;
         bo.maximumWork=std::min(o.maximumMeshingWork,options.maximumValidationWork-work.count);
@@ -1098,10 +1103,15 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
                     trial.reason==NativeCadMeshReason::UnsupportedBody||
                     trial.reason==NativeCadMeshReason::RecognitionFailed||
                     trial.reason==NativeCadMeshReason::MeshingFailed;
-                const bool beforeInitialStage=!trial.bodies.empty()&&
+                // The explicit provider experiment keeps the live constructor.
+                // A declined/failed provider is not silently retried through a
+                // different whole-method fallback which could ignore its caps.
+                const bool beforeInitialStage=!o.allowNativeSourceFallback&&
+                    !o.recoverBoundaryBeforeInteriorSites&&!trial.bodies.empty()&&
                     std::all_of(trial.bodies.begin(),trial.bodies.end(),[](const auto& body){
                         return body.initialFront.diagnostic&&
-                            std::string_view(body.initialFront.diagnostic)=="not_attempted";
+                            std::string_view(body.initialFront.diagnostic)=="not_attempted"&&
+                            !body.sourceShell.nativeFallbackAttempted;
                     });
                 if((structured||(enabled&&beforeInitialStage))&&!trial.published&&trial.destinationUnchanged&&sourceRefusal&&
                    trial.validationWork<o.maximumValidationWork&&trial.validationWork<o.geometry.maximumMeshingWork){
@@ -1463,6 +1473,7 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
                         const auto recovered=detail::buildOcctFrontVolume(model,solid->tag(),o,
                             maximumWork,body,earlyConstraintWork,surfaceMode,liveMaterialTrial);
                         report.sourceShell=recovered.sourceShell;
+                        report.materialClassification=recovered.materialClassification;
                         report.initialTopologyQuality=recovered.initialTopologyQuality;
                         // Preserve completed stage evidence before tick observes
                         // cancellation. A stopped call must not erase the work
