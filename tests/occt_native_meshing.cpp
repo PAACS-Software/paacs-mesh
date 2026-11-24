@@ -52,6 +52,8 @@ void checkResourcePolicyPresets(const geo::OcctModel& model,const std::string& s
         check(request.construction.effort==geo::CadConstructionEffort::Legacy&&
               request.maximumPrimitiveWorkingBytes==512ULL*1024*1024,
               "resource preset changed construction effort or inherited working memory");
+        check(!request.useAdvancingInteriorFront.has_value()&&request.advancingInteriorFrontEnabled(1),
+              "resource preset no longer selects automatic Tet4 construction");
         mesh::Mesh destination;destination.addNode({-10,-10,-10},{3,99});
         const auto sentinel=mesh::meshHash(destination);
         const auto accepted=geo::meshNativeCad(model,request,destination);
@@ -62,6 +64,9 @@ void checkResourcePolicyPresets(const geo::OcctModel& model,const std::string& s
         check(accepted.validationWork>1&&accepted.validationWork<=request.maximumValidationWork&&
               accepted.validationWork<=request.geometry.maximumMeshingWork,
               "resource preset did not perform charged work within its effective allowance");
+        check(accepted.bodies.front().initialFront.work>0&&
+              std::string_view(accepted.bodies.front().initialFront.diagnostic)!="not_attempted",
+              "resource preset bypassed automatic initial-point construction");
         std::uint64_t tetrahedra=0;
         for(Index cell=0;cell<destination.cellCount();++cell) {
             if(destination.cell(cell).type!=mesh::CellType::Tet4)continue;
@@ -129,6 +134,9 @@ int main(int argc,char** argv) {
                 checkResourcePolicyPresets(*cad.model,importedSnapshot);++checks;
             }
             geo::NativeCadMeshOptions options;options.geometry.targetSize=.3;
+            // This compatibility matrix exercises analytic sweeps and established
+            // star/partition routes. The preset tests above cover automatic Tet4 dispatch.
+            options.useAdvancingInteriorFront=false;
             if(!fixture.supported)options.useNativeSurfaceFallback=false;
             mesh::Mesh mesh;mesh.addNode({-10,-10,-10},{3,99});
             const auto before=mesh::meshHash(mesh);
@@ -234,6 +242,10 @@ int main(int argc,char** argv) {
                 check(geo::meshNativeCad(*cad.model,cap,mesh).published,"per-body face-control filtering");++checks;
             }
             if(std::string_view(fixture.name)=="cylinder"){
+                check(result.bodies.size()==1&&std::string_view(result.bodies.front().route)=="cylinder"&&
+                      cad.model->face(result.bodies.front().startFaceTag)!=nullptr&&
+                      result.bodies.front().startFaceTag!=result.bodies.front().endFaceTag,
+                      "profile-cap compatibility requires audited analytic cylinder face tags");++checks;
                 options.faceSizes={{result.bodies.at(0).startFaceTag,.15,1.3}};options.minimumSize=.12;
                 auto refined=geo::meshNativeCad(*cad.model,options,mesh);
                 check(refined.published&&refined.bodies.at(0).primitive.profiledVolume,"imported cap sizing");
