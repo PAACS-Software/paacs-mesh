@@ -50,6 +50,7 @@ struct OcctInitialPointFrontLimits {
     std::size_t maximumAuxiliaryCells=65'536;
     bool balanceSourceAndBulk=false;
     bool progressiveResources=false;
+    bool cacheGeometryRefusals=false;
     std::uint64_t reservedBulkCandidates=0,reservedBulkWork=0,reservedBulkQueries=0;
     std::size_t reservedBulkSites=0;
 };
@@ -106,6 +107,7 @@ struct OcctInitialPointFrontReport {
     std::uint64_t auxiliaryGrowthAttempts=0,auxiliaryGrowths=0,auxiliaryGrowthWork=0;
     std::uint64_t maximumCombinedModeledBytes=0,maximumHeapCapacity=0,resourceRetries=0;
     const char* auxiliaryResourceDiagnostic="not_attempted";
+    std::uint64_t geometryRefusalCacheHits=0,cachedGeometryRefusals=0;
 };
 
 namespace occt_initial_point_front_detail {
@@ -820,6 +822,12 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
             });
             bool accepted=false;
             for(const auto& candidate:candidates){
+                if(limits.cacheGeometryRefusals&&!candidate.fresh){
+                    tick();
+                    if(found->second.geometryRejected.contains(candidate.vertex)){
+                        ++out.geometryRefusalCacheHits;continue;
+                    }
+                }
                 if(front.cells.size()>=coneCap||front.front.size()+3>stateCap){
                     if(sourceBudgetActive)throw SourceYield{};
                     throw Limit{"cone_or_front_limit"};
@@ -829,7 +837,20 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
                 bool valid=false;
                 try{valid=front.valid(Front::Front{f},candidate.vertex,cone);}
                 catch(...){if(candidate.fresh)front.vertices.pop_back();throw;}
-                if(!valid){if(candidate.fresh)front.vertices.pop_back();++out.geometryRejects;continue;}
+                if(!valid){
+                    if(candidate.fresh)front.vertices.pop_back();
+                    // Stored apices have immutable coordinates. Fixed-vertex,
+                    // original-boundary and occupied-cell witnesses persist.
+                    // Keep this bounded by the per-front-state storage model;
+                    // a full cache merely repeats the original exact checks.
+                    if(limits.cacheGeometryRefusals&&!candidate.fresh&&front.lastGeometryRefusal&&
+                       found->second.geometryRejected.size()<16){
+                        tick();
+                        if(found->second.geometryRejected.insert(candidate.vertex).second)
+                            ++out.cachedGeometryRefusals;
+                    }
+                    ++out.geometryRejects;continue;
+                }
                 if(candidate.fresh){
                     bool committed=false;
                     const auto firstAdded=auxiliary.storedCells();
