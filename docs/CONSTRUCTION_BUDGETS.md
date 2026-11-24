@@ -65,8 +65,11 @@ advancing interior front. Use the separate `advancing_interior_front` and
 
 ## Resource policy
 
-`resource_policy` is independent of construction effort and recovery. The
-initial development default is `bounded` while normal admission is qualified.
+`resource_policy` is independent of construction effort and recovery. New
+Python meshing calls, newly created recipes and direct STEP CLI requests in
+the development sources default to `normal`. Explicit `bounded` retains
+historical admission. Saved recipes use their recorded policy; an older recipe
+without this field retains literal `bounded` semantics.
 
 | Policy | Omitted `max_work` | Explicit positive `max_work` |
 | --- | --- | --- |
@@ -158,10 +161,10 @@ resource budgets.
 
 Older recipe-v1 files lack these fields. Each missing effort field resolves to
 the literal historical value `legacy`; each missing cap resolves to `None`.
-This normalization is independent of any future default for new requests.
+This normalization is independent of the default for new requests.
 Source, kernel, engine, selection and other recipe guards remain active.
-An old recipe lacking `resource_policy` resolves to literal `bounded`, even if
-new requests later adopt another default. An omitted work value remains
+An old recipe lacking `resource_policy` resolves to literal `bounded`, although
+new requests default to `normal`. An omitted work value remains
 `None` in the recipe and is resolved by that saved policy. A recipe's workflow
 deadline remains separate from native resource policy.
 
@@ -178,7 +181,9 @@ override flags.
 The direct command also accepts `--resource-policy normal|bounded`,
 `--max-work`, `--max-working-bytes`, `--max-nodes` and `--max-cells`. Saved
 `run` commands replay resource intent from the recipe; they do not accept
-resource override flags.
+resource override flags. An explicit positive work cap wins regardless of
+policy/cap flag order. Invalid work-cap tokens do not replace a previously valid
+configuration in a native CLI error receipt.
 
 ## Diagnostics
 

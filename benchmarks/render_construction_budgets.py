@@ -201,7 +201,7 @@ def _gallery(rows, directory, budget, args, warnings):
         svg.append(f'<image x="{x + 1}" y="{y + 145}" width="1198" height="899" href="data:image/svg+xml;base64,{payload}"/>')
         html.append('<article><h2>' + escape(heading) + '</h2>' + ''.join('<p>' + escape(c) + '</p>' for c in captions)
                     + '<img alt="' + escape(heading) + '" src="data:image/svg+xml;base64,' + payload + '"></article>')
-    footer = "Larger stage caps do not guarantee better quality. Adaptive policies remain opt-in. Shape measurements do not establish simulation convergence."
+    footer = "Larger caps do not guarantee better quality. Auto/Thorough scheduling stays opt-in. Shape measurements do not establish simulation convergence."
     svg += [f'<text x="24" y="{height - 20}" font-family="sans-serif" font-size="14" fill="#17364b">{escape(footer)}</text>', '</svg>']
     html += ['</section><footer>' + escape(footer) + '</footer></body></html>']
     budget.write(directory / "gallery.svg", '\n'.join(svg).encode("utf-8"))
@@ -425,7 +425,7 @@ def render(args):
         if len(hashes) > 1:
             warnings.append("Different recorded native binaries: retained-run evidence, not an isolated algorithm comparison.")
         if len(globals_seen) > 1:
-            warnings.append("Global budgets differ. Larger stage caps can worsen quality when the remaining global allowance is tighter.")
+            warnings.append("Resource policies or global limits differ; these are not equal-work performance comparisons.")
         if unknown_resources or unknown_report_pairing:
             unavailable = [name for name, missing in (("effective resource limits", unknown_resources),
                            ("saved report file hash", unknown_report_pairing)) if missing]

@@ -1,7 +1,8 @@
 # Resource policy implementation and qualification
 
-Status: implementation and qualification in progress. No release is scheduled
-by this plan.
+Status: native implementation, default-policy qualification, paired corpus
+checks and visual evidence are complete. Final installed-wheel qualification
+is in progress. No release is scheduled by this plan.
 
 The immediate defect is capacity-dependent admission: a larger permitted
 auxiliary complex can require a larger bootstrap reservation even before those
@@ -113,4 +114,38 @@ results support its behavior. Any remaining quality, recovery, topology or
 sizing gap must be reported explicitly. Changing policy does not establish
 that arbitrary CAD or every requested mesh resolution can be completed.
 
+The completed qualification supports Normal for new Python meshing calls, new
+recipes and direct STEP CLI requests. This removes hidden historical admission
+ceilings while retaining explicit limits and the 512 MiB modeled memory
+default. It does not promise faster execution or better quality for every
+request. Historical recipes missing the policy and C++ aggregate options retain
+Bounded defaults; construction effort remains Legacy.
+
 Release tags and PyPI publication remain outside this work.
+
+## Measured qualification checkpoints
+
+- The frozen parent and corrected Normal profiles each publish the same 32 of
+  51 original inputs within the 90-second process deadline, with one meshing
+  worker and one validation worker. Both explicit-work and inherited-work
+  Normal profiles preserve that set. This is preservation, not a coverage gain.
+- Independent archive screens cover every published mesh through verified
+  source, archive and body-tag identities. They supplement the saved native
+  CAD checks; they do not repeat CAD classification or global intersections.
+- All 36 owned-fixture scaling attempts and 72 fixed work/memory-grid attempts
+  publish. Three-repeat summaries require stable identities. The results show
+  both improvements and adverse quality/runtime changes.
+- The five-size inherited-policy cylinder series completes all 30 attempts,
+  with ten stable three-repeat groups. Normal removes the fine-size count
+  reversal on this fixture, but very flat individual cells and modeled-memory
+  stops remain. The 0.08 mm native median is 111.146 seconds, outside the
+  separate original-corpus 90-second criterion.
+- Verified whole-element cutaways retain original cell IDs and expose every
+  selected poor cell through an x-ray overlay. The
+  [resource study](RESOURCE_POLICY_STUDY.md) records measured limitations and
+  the distinct final-wheel qualification, rather than inferring that more
+  resources complete every requested resolution.
+
+Remaining mesh-quality, fallback-sizing and recovery limitations are separate
+algorithm work. They must not be hidden by relaxing validity checks or by
+reclassifying an unfinished placement queue as completed sizing.

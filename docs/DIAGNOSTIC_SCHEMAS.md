@@ -191,12 +191,16 @@ than inventing a policy or completion certificate. Capability discovery adds
 `resources.policies`, `default`, `explicit_limits_override_policy`,
 `logical_work_is_cpu_instructions` and `modeled_memory_is_OS_hard_limit`.
 
-The development Python/CLI default remains `bounded`; `normal` is explicit.
+New development Python meshing calls, new recipes and direct STEP CLI requests
+default to `normal`. Saved recipes retain their policy; missing-policy older
+recipes and the C++ options aggregate retain literal `bounded` defaults.
 Normal with omitted work retains the native 512 MiB modeled allowance unless
 the caller changes `max_working_bytes`. Explicit work, node, cell, output,
 validation, cancellation and cooperative time limits still apply. Normal
 admission does not select experimental `construction_effort="auto"` or
 `"thorough"`, relax validity gates or guarantee arbitrary CAD compatibility.
+The default effort remains `legacy`. These are resource-admission semantics,
+not quality, requested-sizing, runtime or solver-accuracy guarantees.
 
 ## Mesh exploration contracts
 
