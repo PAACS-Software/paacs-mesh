@@ -11,6 +11,7 @@
 #pragma once
 
 #include "../bnd/TetPlcGiftWrapping.hpp"
+#include "../bnd/TetConstructionProbe.hpp"
 #include "OcctInitialDelaunayScorer.hpp"
 #include "PlcVoidGeometry.hpp"
 #include <queue>
@@ -151,7 +152,8 @@ template<class SizeField,class AdmitNode,class Charge>
 mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
     const SizeField& field,double baseTarget,mesh::Classification region,
     const OcctInitialPointFrontLimits& limits,AdmitNode admitNode,Charge charge,
-    OcctInitialPointFrontReport* report=nullptr) {
+    OcctInitialPointFrontReport* report=nullptr,
+    bnd::detail::TetNumericalTopology* numericalTopology=nullptr) {
     using namespace occt_initial_point_front_detail;
     using Front=bnd::detail::PlcGiftWrapping;
     using Vertex=bnd::TetFacetVertexId;
@@ -301,6 +303,19 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
     std::map<Face,std::size_t> attemptedAt;
     std::map<Face,std::size_t> compactionRetryAtSite;
     std::map<Face,std::array<std::uint64_t,3>> resourceRetryAtState;
+    OcctInitialDelaunayScorer auxiliary;
+    struct ObserveFinal {
+        const OcctInitialDelaunayScorer& source;
+        int tag;
+        std::size_t originalNodes;
+        void emit()const noexcept {
+            if(source.initialized())bnd::detail::observeTetConstruction({
+                "initial_scoring_final",tag,&source.complexForDiagnostics(),nullptr,
+                source.relevanceForDiagnostics(),originalNodes,8,0,source.storedCells(),{},true,
+                source.bootstrapOriginalCoordinateRetryUsed});
+        }
+        ~ObserveFinal(){emit();}
+    } observeFinal{auxiliary,region.tag,ns};
     try {
         std::vector<std::vector<double>> incident(ns);
         for(Index i=0;i<boundary.cellCount();++i){
@@ -338,7 +353,6 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
                 (availableAuxiliaryBytes-32ULL*1024*1024)/(8192+heapBytesPerCell));
         const auto auxiliaryBytes=limits.progressiveResources?availableAuxiliaryBytes:
             availableAuxiliaryBytes-auxiliaryCells*heapBytesPerCell;
-        OcctInitialDelaunayScorer auxiliary;
         bool initialized=false;
         try{
             initialized=auxiliary.initialize(boundary,region,std::size_t(auxiliaryCells),auxiliaryBytes,account,
@@ -365,6 +379,9 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
             return done();
         }
         auxiliary.compactionEnabled=limits.enableAuxiliaryCompaction;
+        bnd::detail::observeTetConstruction({"initial_scoring_bootstrap",region.tag,
+            &auxiliary.complexForDiagnostics(),nullptr,auxiliary.relevanceForDiagnostics(),ns,8,
+            0,auxiliary.storedCells(),{},true,auxiliary.bootstrapOriginalCoordinateRetryUsed});
         auxiliary.useCertifiedConeCavities=true;
         out.auxiliaryInitialized=true;
         std::uint64_t currentReservation=payload;
@@ -815,10 +832,15 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
                 if(!valid){if(candidate.fresh)front.vertices.pop_back();++out.geometryRejects;continue;}
                 if(candidate.fresh){
                     bool committed=false;
+                    const auto firstAdded=auxiliary.storedCells();
                     try{committed=auxiliary.commit(*candidate.auxiliaryPlan,candidate.vertex);}
                     catch(...){syncAuxiliary();front.vertices.pop_back();throw;}
                     syncAuxiliary();
                     if(!committed){front.vertices.pop_back();++out.auxiliaryInvalidRejects;continue;}
+                    bnd::detail::observeTetConstruction({"initial_scoring_commit",region.tag,
+                        &auxiliary.complexForDiagnostics(),nullptr,auxiliary.relevanceForDiagnostics(),ns,8,
+                        firstAdded,auxiliary.storedCells()-firstAdded,candidate.auxiliaryPlan->patch.removed,false,
+                        auxiliary.bootstrapOriginalCoordinateRetryUsed});
                     ++out.auxiliaryCommits;
                     if(candidate.auxiliaryPlan->available){
                         ++out.auxiliaryRankedCommits;
@@ -867,6 +889,14 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
         checkCancellation();
     }catch(const OcctInitialConstructionCancelled&){out.cancelled=true;
     }catch(const Limit& limit){out.budgetLimited=true;out.budgetReason=limit.reason;}
+    if(numericalTopology&&auxiliary.initialized()&&!out.cancelled){
+        // A valid budget-limited placement is still useful. The move itself
+        // neither allocates nor consumes further construction work; the later
+        // bounded remap/import accounts all of its linear work and peak storage.
+        observeFinal.emit();
+        try{auxiliary.releaseNumericalTopology(*numericalTopology,region);}
+        catch(const OcctInitialConstructionCancelled&){out.cancelled=true;}
+    }
     out.remainingFrontFaces=front.front.size();
     if(out.sites>=siteCap&&!out.frontClosed){out.budgetLimited=true;
         if(std::string_view(out.budgetReason)=="none")out.budgetReason="site_limit";}

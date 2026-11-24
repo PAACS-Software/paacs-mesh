@@ -211,8 +211,9 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             std::uint64_t(ns)*1024+std::uint64_t(nf)*4096+96ULL*1024*1024:
             std::uint64_t(ns)*1024+std::uint64_t(nf)*16384+frontCells*512+apexStorage+96ULL*1024*1024;
         need(retained<options.maximumPrimitiveWorkingBytes,NativeCadMeshReason::BudgetExceeded,"native-plc-front-storage-admission");
-        // Initial placement owns and releases its numerical complex/heap before
-        // the volume frontier, apex cache and recovery workspace are created.
+        // Initial placement releases its heap and proposal front before volume
+        // recovery. Normal retains its checked numerical connectivity through
+        // a separately admitted old-plus-new remap, then releases that owner.
         // Retain the boundary/keys/size field and existing kernel slack here;
         // the later volume stages keep their full, separate admission below.
         const std::uint64_t placementRetained=progressiveResources?
@@ -237,6 +238,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                  NativeCadMeshReason::BudgetExceeded,"native-plc-placement-retained-capacity");
         }
         mesh::Mesh pendingRecovery;
+        bnd::detail::TetNumericalTopology initialTopology;
         const auto buildConstraintSeed=[&](const mesh::Mesh& sites,mesh::Mesh& seed,
                                           std::uint64_t maximumSeedTets=UINT64_MAX,
                                           bool reserveRetry=false){
@@ -257,7 +259,13 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 constraintWork,constraintBytes,
                 std::min(frontCells,maximumSeedTets),o.cancellation,seed,
                 std::min<std::uint64_t>(64,o.maximumNodes-std::uint64_t(sites.nodeCount())),
-                false,true,advancingInteriorFront,progressiveResources);
+                false,true,advancingInteriorFront,progressiveResources,
+                initialTopology.available?&initialTopology:nullptr);
+            const auto priorTopologyUsed=out.constraintRecovery.initialTopologyUsed;
+            const auto priorTopologyDiagnostic=out.constraintRecovery.initialTopologyDiagnostic;
+            const auto priorTopologyCells=out.constraintRecovery.initialTopologyCells;
+            const auto priorTopologyWork=out.constraintRecovery.initialTopologyImportWork;
+            const auto priorTopologyPeak=out.constraintRecovery.initialTopologyPeakModeledBytes;
             out.constraintRecovery={constraints.diagnostic,constraints.candidateCells,
                 constraints.missingEdgesBefore,constraints.missingFacesBefore,
                 constraints.missingEdgesAfter,constraints.missingFacesAfter,constraints.patches,
@@ -265,12 +273,25 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 constraints.edgeWalks,constraints.facetWalks,constraints.walkFallbacks,
                 constraints.steinerAttempts,constraints.steinerWork,constraints.steinerNodes,
                 constraints.retainedSteinerNodes,constraints.piercingPatches};
+            out.constraintRecovery.initialTopologyUsed=priorTopologyUsed||constraints.initialTopologyUsed;
+            out.constraintRecovery.initialTopologyDiagnostic=
+                std::string_view(constraints.initialTopologyDiagnostic)=="not_available"?
+                    priorTopologyDiagnostic:constraints.initialTopologyDiagnostic;
+            out.constraintRecovery.initialTopologyCells=std::max(priorTopologyCells,constraints.initialTopologyCells);
+            out.constraintRecovery.initialTopologyImportWork=priorTopologyWork+constraints.initialTopologyImportWork;
+            out.constraintRecovery.initialTopologyPeakModeledBytes=std::max(priorTopologyPeak,constraints.initialTopologyPeakModeledBytes);
+            // Any refused handoff remains visible. A later boundary-only
+            // fallback may not retain its old private allocation or callbacks.
+            initialTopology=bnd::detail::TetNumericalTopology{};
             recovering.finish(constraints.diagnostic);
             // The private recovery has already performed this work, including
             // the last cancelled attempt. Record it before observing the stop.
             accountCompleted(constraints.work);
             need(std::string_view(constraints.diagnostic)!="cancelled",NativeCadMeshReason::Cancelled,"cancelled");
             need(std::string_view(constraints.diagnostic)!="allocation_failed",NativeCadMeshReason::AllocationFailed,"allocation-failed");
+            const std::string_view topologyDiagnostic=constraints.initialTopologyDiagnostic;
+            need(!topologyDiagnostic.starts_with("topology_")||topologyDiagnostic.ends_with("_budget"),
+                 NativeCadMeshReason::InternalError,"native-plc-topology-handoff-invalid");
         };
         OcctSolidClassifier classifier(OcctModelAccess::solid(model,tag));
         const auto tol=model.tolerance(3,tag);
@@ -471,7 +492,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                             ++siteQueries;++out.nativeQueries;
                             classifier.Perform(gp_Pnt(p.x,p.y,p.z),tol);
                             return classifier.State()==TopAbs_IN;
-                        },siteAccount,&built);
+                        },siteAccount,&built,progressiveResources?&initialTopology:nullptr);
                     recordInitialPlacement();
                     need(!built.cancelled,NativeCadMeshReason::Cancelled,"cancelled");
                 }else{
@@ -494,9 +515,13 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 throw Stop{NativeCadMeshReason::Cancelled,"cancelled"};
             }catch(const SiteLimit&){
                 // This optional preparation leaves the original shell intact.
+                initialTopology=bnd::detail::TetNumericalTopology{};
                 if(advancingInteriorFront)out.initialFront.budgetReason="work_limit";
             }catch(const std::bad_alloc&){
                 // Preparation is transactional; retain the ordinary seed route.
+                // Returning/assigning Mesh may allocate after the no-throw
+                // topology move. Never pair that cloud with a different source.
+                initialTopology=bnd::detail::TetNumericalTopology{};
                 if(advancingInteriorFront)out.initialFront.budgetReason="allocation_failed";
             }
             if(advancingInteriorFront){
@@ -1041,6 +1066,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             need(result.reason!=bnd::TetPlcCavityReason::AllocationFailed,NativeCadMeshReason::AllocationFailed,"allocation-failed");need(result.reason!=bnd::TetPlcCavityReason::Cancelled,NativeCadMeshReason::Cancelled,"cancelled");need(result.reason!=bnd::TetPlcCavityReason::BudgetExceeded,NativeCadMeshReason::BudgetExceeded,result.diagnostic);
             need(result.published,localRefinementBound?NativeCadMeshReason::BudgetExceeded:NativeCadMeshReason::GeometryError,localRefinementBound?"native-plc-refinement-budget":"native-plc-cavity-material-refusal");out.cavitiesClosed+=result.cavitiesClosed;completed.swap(repaired);out.surfaceTriangles=boundary.cellCount();
         }
+        bnd::detail::observeTetMesh("volume_before_sizing",tag,completed);
         // Uniform requests use only the initial point construction above.
         // Explicit local controls can additionally require adaptive sizing.
         if(advancingInteriorFront&&(!options.faceSizes.empty()||!options.sizeBoxes.empty())){
@@ -1087,6 +1113,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             out.interiorFrontSeconds=std::chrono::duration<double>(Clock::now()-started).count();
             construction.finish(out.interiorFrontDiagnostic);
         }
+        bnd::detail::observeTetMesh("volume_after_sizing",tag,completed);
         if(improveQuality&&out.nativeQueries<maximumSpacedCandidateQueries){
             // Reserve work and queries for the strict validation of the
             // candidate. Swaps retain the existing boundary and its nodes.
@@ -1134,6 +1161,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 native,nativeCentroid,qualityTick);
             optimization.finish(out.localDelaunayQualityEdits?"improved":"unchanged");
         }
+        bnd::detail::observeTetMesh("volume_before_cad_validation",tag,completed);
         trace.next("cad_validation");
         for(Index i=0;i<completed.nodeCount();++i)if(completed.nodeClass(i).dim==3)need(native(completed.node(i)),NativeCadMeshReason::GeometryError,"native-plc-final-interior-node-outside");
         for(Index i=0;i<completed.cellCount();++i)if(completed.cell(i).type==mesh::CellType::Tet4){const auto* p=completed.cellNodes(i);Vec3 center{};for(unsigned j=0;j<4;++j)center=center+completed.node(p[j])*.25;need(nativeCentroid(center),NativeCadMeshReason::GeometryError,"native-plc-final-centroid-outside");}

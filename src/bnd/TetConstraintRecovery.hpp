@@ -6,10 +6,13 @@
 #pragma once
 #include "TetBistellarRecovery.hpp"
 #include "TetEdgeGeneralCavityCadPolicy.hpp"
+#include "TetConstructionProbe.hpp"
+#include "TetNumericalTopology.hpp"
 #include "paacs/algo/TetCandidate.hpp"
 #include "paacs/bnd/TetEdgeGeneralCavity.hpp"
 #include <atomic>
 #include <chrono>
+#include <bit>
 
 namespace paacs::bnd::detail {
 
@@ -24,6 +27,9 @@ struct TetConstraintRecoveryReport {
     double longStarSeconds=0,validationSeconds=0,survivorSeconds=0;
     std::uint64_t piercingPatches=0,convexBipyramids=0;
     std::uint64_t residualAttempts=0,residualLinkRejected=0,residualRecovered=0,residualExpanded=0;
+    bool initialTopologyUsed=false;
+    const char* initialTopologyDiagnostic="not_available";
+    std::uint64_t initialTopologyCells=0,initialTopologyImportWork=0,initialTopologyPeakModeledBytes=0;
 };
 
 namespace constraint_detail {
@@ -39,6 +45,93 @@ struct StageTime {
     Clock::time_point began=Clock::now();
     ~StageTime(){seconds+=std::chrono::duration<double>(Clock::now()-began).count();}
 };
+
+// Reindex the complete certified numerical complex, retaining the exact
+// ordered corner coordinates. The producer put guards after source vertices;
+// recovery expects them after all admitted sites. Rebuild only incidence and
+// spatial lookup tables, never a second triangulation of the same point cloud.
+inline const char* importNumericalTopology(TetNumericalTopology& topology,
+    const mesh::Mesh& boundary,mesh::Classification region,const std::map<Face,Face>& source,
+    std::span<const Vec3> points,Complex& destination,std::uint64_t maximumBytes,
+    std::uint64_t sourceEnvelope,TetConstraintRecoveryReport& report) {
+    report.initialTopologyDiagnostic="importing";
+    const auto began=report.work;
+    struct Account {TetConstraintRecoveryReport& report;std::uint64_t began;
+        ~Account(){report.initialTopologyImportWork+=report.work-began;}} account{report,began};
+    const auto fail=[&](const char* why){report.initialTopologyDiagnostic=why;return why;};
+    destination.charge();
+    const auto& old=topology.complex;
+    const auto ns=std::size_t(boundary.nodeCount()),original=topology.sourceNodes;
+    if(!topology.available||topology.region.dim!=region.dim||topology.region.tag!=region.tag||
+       original>ns||old.vertices.size()!=points.size()||points.size()!=ns+8||
+       old.alive.size()!=old.cells.size()||old.neighbours.size()!=old.cells.size()||
+       old.chargeWork||!old.walkConstraints||!old.requiredFaces.empty()||!old.requiredEdges.empty()||
+       !old.protectedFaces.empty()||!old.protectedEdges.empty())return fail("topology_contract_mismatch");
+    if(topology.liveCells>destination.maximumStoredCells)return fail("topology_storage_budget");
+    const auto retained=topology.retainedModeledBytes();
+    if(sourceEnvelope>maximumBytes||retained>maximumBytes-sourceEnvelope||
+       topology.liveCells>(maximumBytes-sourceEnvelope-retained)/4096)
+        return fail("topology_memory_budget");
+    report.initialTopologyPeakModeledBytes=sourceEnvelope+retained+4096ULL*topology.liveCells;
+    destination.charge(source.size());
+    if(source!=topology.sourceFaces)return fail("topology_source_mismatch");
+    const auto remap=[&](TetFacetVertexId id)->TetFacetVertexId{
+        return id<original?id:id<original+8?TetFacetVertexId(ns+id-original):id-8;
+    };
+    const auto same=[](Vec3 a,Vec3 b){
+        return std::bit_cast<std::uint64_t>(a.x)==std::bit_cast<std::uint64_t>(b.x)&&
+            std::bit_cast<std::uint64_t>(a.y)==std::bit_cast<std::uint64_t>(b.y)&&
+            std::bit_cast<std::uint64_t>(a.z)==std::bit_cast<std::uint64_t>(b.z);
+    };
+    for(std::size_t i=0;i<old.vertices.size();++i){
+        destination.charge();
+        if(old.vertices[i].sequence!=i+1||!same(old.vertices[i].position,points[remap(TetFacetVertexId(i))]))
+            return fail("topology_point_mismatch");
+    }
+    destination.charge(points.size());
+    destination.vertices.reserve(points.size());
+    for(const auto p:points)destination.vertices.push_back({p,destination.vertices.size()+1});
+    destination.cells.reserve(topology.liveCells);destination.alive.reserve(topology.liveCells);
+    destination.cellBoxes.reserve(topology.liveCells);destination.neighbours.reserve(topology.liveCells);
+    for(std::size_t id=0;id<old.cells.size();++id){
+        destination.charge();if(!old.alive[id])continue;
+        auto cell=old.cells[id];
+        if(cell.classification.dim!=region.dim||cell.classification.tag!=region.tag)
+            return fail("topology_region_mismatch");
+        for(auto& v:cell.vertices){
+            if(v>=old.vertices.size())return fail("topology_connectivity_mismatch");v=remap(v);
+        }
+        const auto& v=cell.vertices;
+        destination.charge();
+        if(predicates::orient3dFiltered(points[v[0]],points[v[1]],points[v[2]],points[v[3]])!=predicates::Sign::Positive)
+            return fail("topology_orientation_mismatch");
+        const auto keys=Complex::faceKeys(old.cells[id]);
+        for(unsigned side=0;side<4;++side){
+            destination.charge();
+            const auto owners=old.faces.find(keys[side]);
+            if(owners==old.faces.end()||!owners->second.contains(id)||owners->second.size()>2)
+                return fail("topology_adjacency_mismatch");
+            const auto other=old.neighbours[id][side];
+            if(owners->second.size()==1){if(other!=Complex::noCell)return fail("topology_adjacency_mismatch");}
+            else if(other>=old.cells.size()||!old.alive[other]||!owners->second.contains(other)||other==id||
+                std::ranges::count(old.neighbours[other],id)!=1)return fail("topology_adjacency_mismatch");
+            const auto imported=destination.faces.find(Complex::key(tet_facet_detail::outwardFace(cell,side)));
+            if(imported!=destination.faces.end()&&imported->second.size()>=2)
+                return fail("topology_adjacency_mismatch");
+        }
+        destination.insert(cell);
+    }
+    if(destination.cells.size()!=topology.liveCells)return fail("topology_live_count_mismatch");
+    // Charge retirement while the old immutable owner is still available. A
+    // work/cancellation stop here leaves its complete carrier untouched.
+    destination.charge(11*std::uint64_t(old.cells.size())+old.vertices.size()+topology.sourceFaces.size());
+    report.initialTopologyCells=destination.cells.size();
+    report.initialTopologyUsed=true;report.initialTopologyDiagnostic="preserved";
+    // The staged import is now complete. Retire the former owner before later
+    // recovery allocates any patches. Its callbacks were already cleared.
+    topology=TetNumericalTopology{};
+    return nullptr;
+}
 
 inline constexpr std::size_t residualMaximumCells=40;
 inline constexpr std::size_t residualMaximumVertices=18;
@@ -509,7 +602,8 @@ inline TetConstraintRecoveryReport recoverTetConstraints(const mesh::Mesh& bound
     mesh::Classification region, std::uint64_t maximumWork, std::uint64_t maximumBytes,
     std::uint64_t maximumCells, const std::atomic_bool* cancellation, mesh::Mesh& destination,
     std::uint64_t maximumSteinerNodes=64, bool profile=false, bool expandResidualEdges=true,
-    bool boundedConstruction=false, bool progressiveResources=false) {
+    bool boundedConstruction=false, bool progressiveResources=false,
+    TetNumericalTopology* numericalTopology=nullptr) {
     using namespace constraint_detail;
     TetConstraintRecoveryReport report;
     const auto start=Clock::now();
@@ -598,6 +692,14 @@ inline TetConstraintRecoveryReport recoverTetConstraints(const mesh::Mesh& bound
         // Roll out online construction limits with the experimental initial
         // front. Keep the established constructor and accounting unchanged
         // for callers that have not selected that mode.
+        bool originalCoordinateRetryUsed=false;
+        const bool hasTopology=numericalTopology&&numericalTopology->available;
+        if(hasTopology){
+            originalCoordinateRetryUsed=numericalTopology->originalCoordinateRetryUsed;
+            if(const auto why=importNumericalTopology(*numericalTopology,boundary,region,source,points,
+                complex,maximumBytes,sourceEnvelope,report))return why;
+            report.candidateCells=complex.cells.size();
+        }else{
         algo::TetCandidateBuildOutcome built;
         if (onlineConstruction) {
             algo::TetCandidateBuildLimits limits;
@@ -610,6 +712,7 @@ inline TetConstraintRecoveryReport recoverTetConstraints(const mesh::Mesh& bound
             built=algo::buildTetCandidate(points,limits);
         } else built=algo::buildTetCandidate(points);
         const auto& m=built.metrics;
+        originalCoordinateRetryUsed=m.originalCoordinateRetryUsed;
         const auto candidateWork=onlineConstruction?m.boundedWork:
             m.construction.conflictInsphereTests+m.construction.conflictOrientationTests+
             m.validationFaceUses+m.validationHullTests+m.candidateCells+m.discardedCandidateWork;
@@ -638,6 +741,9 @@ inline TetConstraintRecoveryReport recoverTetConstraints(const mesh::Mesh& bound
             complex.insert(tet);
         }
         built.candidate.reset();
+        }
+        observeTetConstruction({hasTopology?"recovery_topology_import":"recovery_delaunay_import",region.tag,&complex,nullptr,{},
+            std::size_t(ns),8,0,complex.cells.size(),{},true,originalCoordinateRetryUsed});
         std::vector<Edge> missingEdges;
         std::vector<Face> missingFaces;
         for (auto edge:complex.requiredEdges) {
@@ -714,12 +820,15 @@ inline TetConstraintRecoveryReport recoverTetConstraints(const mesh::Mesh& bound
         for (auto edge:missingEdges) report.missingEdgesAfter+=!complex.edges.contains(edge);
         for (auto face:missingFaces) report.missingFacesAfter+=!complex.faces.contains(face);
         const bool complete=report.missingFacesAfter==0;
+        observeTetConstruction({"recovery_after_constraints",region.tag,&complex,nullptr,{},
+            std::size_t(ns),8,0,complex.cells.size(),{},true,originalCoordinateRetryUsed});
         {
             StageTime timer{report.carveSeconds};
             if (!carve(complex,source,boundary,region,complete,maximumCells,destination,report,
                        progressiveResources)) return "material_carve_refused";
         }
         report.seedCells=destination.cellCount();
+        observeTetMesh("recovery_material_seed",region.tag,destination);
         return complete?"complete_seed":limited?"partial_seed_budget":"partial_seed";
     };
     try {report.diagnostic=run();}
@@ -728,6 +837,8 @@ inline TetConstraintRecoveryReport recoverTetConstraints(const mesh::Mesh& bound
     catch (const CellLimit&) {report.diagnostic="cell_budget";}
     catch (const std::length_error&) {report.diagnostic="storage_budget";}
     catch (const std::bad_alloc&) {report.diagnostic="allocation_failed";}
+    if(std::string_view(report.initialTopologyDiagnostic)=="importing")
+        report.initialTopologyDiagnostic=report.diagnostic;
     report.seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();
     return report;
 }

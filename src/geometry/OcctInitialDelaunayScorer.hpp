@@ -9,6 +9,7 @@
 
 #include "OcctDelaunayCavity.hpp"
 #include "../bnd/TetPlcGiftWrapping.hpp"
+#include "../bnd/TetNumericalTopology.hpp"
 #include "paacs/algo/TetCandidate.hpp"
 #include "paacs/mesh/Mesh.hpp"
 #include "paacs/mesh/Quality.hpp"
@@ -48,6 +49,7 @@ public:
     bool useCertifiedConeCavities=false;
     std::uint64_t coneCertificateAttempts=0,coneCertificates=0,coneCertificateFallbacks=0;
     std::uint64_t bootstrapWork=0,bootstrapPeakTemporaryBytes=0;
+    bool bootstrapOriginalCoordinateRetryUsed=false;
     std::uint64_t bootstrapWorkLimit=0,bootstrapTemporaryLimitBytes=0;
     std::uint64_t bootstrapImportedCells=0,bootstrapImportWork=0,bootstrapImportModeledBytes=0;
     std::uint64_t capacityGrowthAttempts=0,capacityGrowths=0,growthWork=0;
@@ -162,6 +164,7 @@ public:
         bootstrapWorkLimit=buildLimits.maxWork;bootstrapTemporaryLimitBytes=buildLimits.maxTemporaryBytes;
         auto built=algo::buildTetCandidate(points,buildLimits);
         const auto& m=built.metrics;
+        bootstrapOriginalCoordinateRetryUsed=m.originalCoordinateRetryUsed;
         bootstrapWork=m.boundedWork;bootstrapPeakTemporaryBytes=m.boundedPeakTemporaryBytes;
         if(progressiveResources_)maximumResourceModeledBytes=std::max(maximumResourceModeledBytes,
             fixed+bootstrapPeakTemporaryBytes);
@@ -397,6 +400,30 @@ public:
     }
 
     bool initialized()const noexcept{return initialized_;}
+    // End the private owner lifetime without reconstructing a Delaunay mesh
+    // from its point cloud. Export every live/exterior cell, not just cells
+    // already classified as material. Recovery must still impose the source
+    // constraints, carve material and perform the ordinary native audits.
+    bool releaseNumericalTopology(bnd::detail::TetNumericalTopology& destination,
+                                  mesh::Classification region) {
+        checkCancellation();
+        if(!initialized_||destination.available)return false;
+        if(!live_.protectedFaces.empty()||!live_.protectedEdges.empty()||
+           !live_.requiredFaces.empty()||!live_.requiredEdges.empty())
+            throw std::logic_error("initial topology handoff requires unprotected numerical complex");
+        static_assert(std::is_nothrow_move_assignable_v<Complex>);
+        // chargeWork captures this owner; discard it before any lifetime ends.
+        live_.chargeWork={};
+        destination.complex=std::move(live_);
+        destination.sourceFaces.swap(sourceFaces_);
+        destination.sourceNodes=originalNodes_;
+        destination.liveCells=activeCells_;
+        destination.region=region;
+        destination.originalCoordinateRetryUsed=bootstrapOriginalCoordinateRetryUsed;
+        destination.available=true;
+        initialized_=false;
+        return true;
+    }
     std::size_t storedCells()const noexcept{return live_.cells.size();}
     std::size_t liveCells()const noexcept{return activeCells_;}
     std::uint64_t workingBytes()const noexcept{return workingBytes_;}
