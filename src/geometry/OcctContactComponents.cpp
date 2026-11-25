@@ -50,7 +50,8 @@ struct Budget {
         need(!options.geometry.cancellation||!options.geometry.cancellation->load(std::memory_order_relaxed),"cancelled",NativeCadMeshReason::Cancelled);
         need(n<=remaining(),"component_work_budget",NativeCadMeshReason::BudgetExceeded);work+=n;
     }
-    void collect(std::uint64_t n){need(n<=remaining(),"component_work_budget",NativeCadMeshReason::BudgetExceeded);work+=n;tick(0);}
+    void charge(std::uint64_t n){need(n<=remaining(),"component_work_budget",NativeCadMeshReason::BudgetExceeded);work+=n;}
+    void collect(std::uint64_t n){charge(n);tick(0);}
     void working(std::uint64_t bytes){maximumWorking=std::max(maximumWorking,bytes);
         need(bytes<=options.maximumPrimitiveWorkingBytes,"component_working_budget",NativeCadMeshReason::BudgetExceeded);tick(0);}
 };
@@ -419,9 +420,13 @@ NativeCadMeshOutcome buildOcctIndependentParts(const OcctModel& original,const N
             out.nativeProjectionReuses=add(out.nativeProjectionReuses,child.nativeProjectionReuses);
             out.nativeTrimmedProjectionQueries=add(out.nativeTrimmedProjectionQueries,child.nativeTrimmedProjectionQueries);
             out.nativeTrimmedProjectionMemoHits=add(out.nativeTrimmedProjectionMemoHits,child.nativeTrimmedProjectionMemoHits);
-            budget.collect(child.validationWork);out.preparationSeconds+=child.preparationSeconds;out.generationSeconds+=child.generationSeconds;out.validationSeconds+=child.validationSeconds;out.auditSeconds+=child.auditSeconds;out.qualitySeconds+=child.qualitySeconds;
+            // Charge completed child work before retaining its bounded receipt.
+            // Defer the cancellation poll until its timings/reports are copied,
+            // so a deadline cannot erase the attempt that consumed the time.
+            budget.charge(child.validationWork);out.preparationSeconds+=child.preparationSeconds;out.generationSeconds+=child.generationSeconds;out.validationSeconds+=child.validationSeconds;out.auditSeconds+=child.auditSeconds;out.qualitySeconds+=child.qualitySeconds;
             if(child.bodies.empty()){NativeCadBodyMeshReport report;report.solidTag=body;report.reason=child.reason;report.initialFrontFallback=child.initialFrontFallback;out.bodies.push_back(report);}
             for(auto& report:child.bodies){report.solidTag=body;if(report.startFaceTag>0)report.startFaceTag=tags[2].at(report.startFaceTag);if(report.endFaceTag>0)report.endFaceTag=tags[2].at(report.endFaceTag);if(report.contactSourceEdgeTag>0)report.contactSourceEdgeTag=tags[1].at(report.contactSourceEdgeTag);if(report.contactTargetEdgeTag>0)report.contactTargetEdgeTag=tags[1].at(report.contactTargetEdgeTag);out.bodies.push_back(std::move(report));}
+            budget.tick(0);
             if(!child.published){
                 need(child.destinationUnchanged,"independent_parts_child_transaction",NativeCadMeshReason::InternalError);
                 if(child.reason==NativeCadMeshReason::Cancelled||child.reason==NativeCadMeshReason::AllocationFailed||child.reason==NativeCadMeshReason::InternalError||child.reason==NativeCadMeshReason::InvalidRequest||child.reason==NativeCadMeshReason::QualityRequirementNotMet||child.reason==NativeCadMeshReason::SizeRequirementNotMet)throw Stop{child.reason,"independent_parts_child_refused"};

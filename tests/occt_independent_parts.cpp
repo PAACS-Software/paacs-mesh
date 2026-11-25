@@ -19,10 +19,188 @@
 #include <sstream>
 #include <iostream>
 #include <set>
+#include <atomic>
+#include <bit>
+#include <cstdint>
+#include <string_view>
 using namespace paacs;using namespace paacs::geo;using namespace paacs::geo::detail;
 void check(bool ok,const char* why){if(!ok)throw std::runtime_error(why);}
 std::string snapshot(const OcctModel& m){std::ostringstream s;BRepTools::Write(OcctModelAccess::shape(m),s);return s.str();}
+namespace {
+enum class CancelChildAt { Never, SecondBegin, SecondEnd, InsideSecond };
+struct PartTrace {
+    std::atomic_bool* cancellation = nullptr;
+    CancelChildAt cancelAt = CancelChildAt::Never;
+    int activeOriginalPart = -1;
+    unsigned begun = 0, ended = 0;
+    bool fired = false;
+};
+thread_local PartTrace* partTrace = nullptr;
+
+void observePart(const NativeCadStageEvent& event) noexcept {
+    if(!partTrace || !event.stage) return;
+    auto& state = *partTrace;
+    const std::string_view stage(event.stage);
+    bool cancel = false;
+    if(stage == "contact_part_meshing") {
+        if(event.beginning) {
+            state.activeOriginalPart = event.entityTag;
+            ++state.begun;
+            cancel = event.entityTag == 2 && state.cancelAt == CancelChildAt::SecondBegin;
+        } else {
+            ++state.ended;
+            cancel = event.entityTag == 2 && state.cancelAt == CancelChildAt::SecondEnd;
+        }
+    } else if(stage == "cad_validation" && event.beginning &&
+              state.activeOriginalPart == 2 && state.cancelAt == CancelChildAt::InsideSecond) {
+        cancel = true;
+    }
+    if(cancel && !state.fired) {
+        state.fired = true;
+        state.cancellation->store(true, std::memory_order_relaxed);
+    }
+}
+
+class PartTraceScope {
+public:
+    explicit PartTraceScope(PartTrace& state) noexcept : previous_(partTrace) { partTrace = &state; }
+    ~PartTraceScope() { partTrace = previous_; }
+    PartTraceScope(const PartTraceScope&) = delete;
+    PartTraceScope& operator=(const PartTraceScope&) = delete;
+private:
+    PartTrace* previous_;
+};
+
+// Compare the complete semantic payload bit for bit, without reading struct
+// padding or substituting a hash for the coordinate/connectivity comparison.
+bool sameMeshPayload(const mesh::Mesh& a, const mesh::Mesh& b) {
+    if(a.nodeCount() != b.nodeCount() || a.cellCount() != b.cellCount() ||
+       a.connectivityCount() != b.connectivityCount()) return false;
+    for(Index i = 0; i < a.nodeCount(); ++i) {
+        const auto p = a.node(i), q = b.node(i);
+        if(std::bit_cast<std::uint64_t>(p.x) != std::bit_cast<std::uint64_t>(q.x) ||
+           std::bit_cast<std::uint64_t>(p.y) != std::bit_cast<std::uint64_t>(q.y) ||
+           std::bit_cast<std::uint64_t>(p.z) != std::bit_cast<std::uint64_t>(q.z) ||
+           a.nodeClass(i) != b.nodeClass(i)) return false;
+    }
+    for(Index i = 0; i < a.cellCount(); ++i) {
+        const auto& p = a.cell(i);
+        const auto& q = b.cell(i);
+        if(p.type != q.type || p.first != q.first || p.onEntity != q.onEntity) return false;
+        for(int j = 0; j < mesh::nodesPerCell(p.type); ++j)
+            if(a.cellNodes(i)[j] != b.cellNodes(i)[j]) return false;
+    }
+    return true;
+}
+
+void checkCancelledPartReceipts() {
+    BRep_Builder builder;
+    TopoDS_Compound shape;
+    builder.MakeCompound(shape);
+    for(int i = 0; i < 3; ++i)
+        builder.Add(shape, BRepPrimAPI_MakeBox(gp_Pnt(3. * i, 0., 0.), 1., 1., 1.).Shape());
+    auto imported = OcctModelAccess::fromShape(shape);
+    check(imported.imported() && imported.model->solids().size() == 3, "cancelled child fixture import");
+    const auto& model = *imported.model;
+    const auto original = snapshot(model);
+    NativeCadMeshOptions options;
+    options.assemblyPolicy = NativeCadAssemblyPolicy::IndependentParts;
+    options.useAdvancingInteriorFront = false; // Isolate wrapper telemetry from AUTO's aggregate reason policy.
+    options.geometry.targetSize = .5;
+    options.geometry.threads = 1;
+    options.maximumNativeValidationThreads = 1;
+    options.maximumValidationWork = 10'000'000;
+    options.geometry.maximumMeshingWork = options.maximumValidationWork;
+
+    mesh::Mesh reference;
+    const auto referenceResult = meshNativeCad(model, options, reference);
+    check(referenceResult.published && referenceResult.validatedParts == 3 && referenceResult.bodies.size() == 3 &&
+          referenceResult.audit.valid && referenceResult.nativeContactSourceGuard && snapshot(model) == original,
+          "three-part reference publication and source identity");
+
+    std::atomic_bool cancellation{false};
+    auto recording = options;
+    recording.geometry.cancellation = &cancellation;
+    recording.stageObserver = observePart;
+    PartTrace noCancellation{&cancellation};
+    mesh::Mesh observed;
+    NativeCadMeshOutcome observedResult;
+    {
+        PartTraceScope tracing(noCancellation);
+        observedResult = meshNativeCad(model, recording, observed);
+    }
+    check(!noCancellation.fired && noCancellation.begun == 3 && noCancellation.ended == 3 &&
+          observedResult.published && observedResult.validationWork == referenceResult.validationWork &&
+          sameMeshPayload(reference, observed) && snapshot(model) == original,
+          "recording observer preserves exact mesh payload, work and original source bytes");
+    check(observedResult.interferences.size() == referenceResult.interferences.size(), "observer interference count");
+    for(std::size_t i = 0; i < observedResult.interferences.size(); ++i) {
+        const auto& p = observedResult.interferences[i];
+        const auto& q = referenceResult.interferences[i];
+        check(p.firstSolidTag == q.firstSolidTag && p.secondSolidTag == q.secondSolidTag &&
+              p.state == q.state && p.nativeOverlapVolume == q.nativeOverlapVolume,
+              "observer preserves interference evidence");
+    }
+    for(std::size_t i = 0; i < observedResult.bodies.size(); ++i) {
+        const auto& p = observedResult.bodies[i];
+        const auto& q = referenceResult.bodies[i];
+        check(p.solidTag == q.solidTag && p.reason == q.reason &&
+              p.nativeCentroidsChecked == q.nativeCentroidsChecked &&
+              p.nativeCentroidSourceGuard == q.nativeCentroidSourceGuard,
+              "observer preserves per-part Native certificate counts");
+    }
+
+    // A sentinel destination must survive every refusal exactly.
+    mesh::Mesh destination;
+    destination.addNode({9., 8., 7.}, {3, 17});
+    const mesh::Mesh sentinel = destination;
+    auto cancelledAt = [&](CancelChildAt point) {
+        cancellation.store(false, std::memory_order_relaxed);
+        PartTrace state{&cancellation, point};
+        NativeCadMeshOutcome result;
+        {
+            PartTraceScope tracing(state);
+            result = meshNativeCad(model, recording, destination);
+        }
+        check(state.fired && state.begun == 2 && state.ended == 2,
+              "synchronous cancellation entered only two owned children");
+        check(!result.published && result.destinationUnchanged && result.reason == NativeCadMeshReason::Cancelled &&
+              result.validatedParts == 1 && sameMeshPayload(destination, sentinel) && snapshot(model) == original &&
+              result.nativeContactSourceGuard && result.validationWork <= options.maximumValidationWork,
+              "child cancellation preserves aggregate resource, source and publication gates");
+        check(result.bodies.size() == 2 && result.bodies[0].solidTag == 1 && result.bodies[1].solidTag == 2 &&
+              result.bodies[0].nativeCentroidSourceGuard && result.bodies[0].nativeCentroidsChecked > 0,
+              "cancelled second child receipt survives beside the validated first part");
+        return result;
+    };
+
+    const auto beforeSecond = cancelledAt(CancelChildAt::SecondBegin);
+    check(beforeSecond.bodies[1].reason == NativeCadMeshReason::Cancelled,
+          "child cancelled before construction keeps its refusal");
+    const auto afterSecond = cancelledAt(CancelChildAt::SecondEnd);
+    check(afterSecond.validationWork > beforeSecond.validationWork &&
+          afterSecond.validationWork < referenceResult.validationWork &&
+          afterSecond.generationSeconds > 0. &&
+          afterSecond.bodies[1].reason == NativeCadMeshReason::None,
+          "completed second child work and generation survive cancellation before wrapper validation");
+    const auto insideSecond = cancelledAt(CancelChildAt::InsideSecond);
+    check(insideSecond.bodies[1].reason == NativeCadMeshReason::Cancelled &&
+          insideSecond.validationWork > beforeSecond.validationWork,
+          "inside-child cancellation retains the refused child and its completed work");
+
+    cancellation.store(false, std::memory_order_relaxed);
+    auto tiny = options;
+    tiny.maximumValidationWork = 1;
+    tiny.geometry.maximumMeshingWork = 1;
+    const auto exhausted = meshNativeCad(model, tiny, destination);
+    check(!exhausted.published && exhausted.reason == NativeCadMeshReason::BudgetExceeded &&
+          exhausted.validationWork <= 1 && sameMeshPayload(destination, sentinel) && snapshot(model) == original,
+          "independent-part aggregate work boundary stays transactional");
+}
+} // namespace
+
 int main(){try{
+ checkCancelledPartReceipts();
  BRep_Builder builder;TopoDS_Compound shape;builder.MakeCompound(shape);builder.Add(shape,BRepPrimAPI_MakeBox(1.,1.,1.).Shape());builder.Add(shape,BRepPrimAPI_MakeBox(gp_Pnt(.5,0,0),1.,1.,1.).Shape());auto imported=OcctModelAccess::fromShape(shape);check(imported.imported()&&imported.model->solids().size()==2,"overlapping assembly import");const auto& model=*imported.model;const auto source=snapshot(model);
  NativeCadMeshOptions o;o.geometry.targetSize=.6;o.maximumValidationWork=10000000;o.geometry.maximumMeshingWork=10000000;o.maximumNativeValidationThreads=2;
  mesh::Mesh output;output.addNode({9,8,7});const auto untouched=mesh::meshHash(output);auto rejected=meshNativeCad(model,o,output);check(!rejected.published&&rejected.reason==NativeCadMeshReason::UnresolvedBodyInterface&&mesh::meshHash(output)==untouched,"default conforming overlap refusal");
