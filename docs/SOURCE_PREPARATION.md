@@ -198,6 +198,63 @@ the frozen matrix binary. Its Python STEP wheel and mesh qualification workflows
 both completed successfully. No merge, tag or package release follows from this
 development qualification.
 
+## Advanced source-mismatch prioritization
+
+A later experiment ranks source-facet recovery proposals using existing
+original-CAD centroid refusals. Exact parity against the current closed source
+PLC distinguishes those inside the source from outside or ambiguous witnesses;
+nearby missing facets receive priority. Body, source generation and source hash
+bind the evidence. The bounded helper makes no additional Native classification
+queries and retains all projection, trim, material, contact and final validity
+gates. It remains default-off, behind Advanced recovery and
+`native_source_fallback=True`, while regional recovery is deferred. Standard
+recovery is unchanged.
+
+One public-Python CAD27 request per captured build used the same explicit
+Advanced settings, one meshing worker, one validation worker, a 120-second
+cooperative allowance and a 150-second process deadline. Both requests cancelled
+near 120 seconds without publishing. Candidate ranking completed in 0.0291
+seconds: 71 original-CAD-refused locations were inside the source, and 87 missing
+facets received priority. Both attempts added 32 source-facet nodes. This pilot
+established no coverage or runtime gain; it is separate from the earlier accepted
+CAD27 profile. Actual Native-worker peak memory is unknown: the launcher sampled
+an unverified launcher handle, so its small working-set observations are unusable
+for that comparison. Modeled helper payload is a separate quantity.
+
+A separate frozen-candidate observer captured the remaining costs and partial
+meshes. It also cancelled near 120 seconds. Archive writing consumed 0.055
+seconds; all captured states remain unpublished diagnostics.
+
+| Trace stage | Seconds |
+| --- | ---: |
+| Cavity refill, all three calls | 82.940 |
+| Regional search within cavity refill | 70.522 |
+| Source geometry validation after edits | 10.669 |
+| Source-facet projection/refinement | 1.559 |
+| Local partial-mesh remap | 0.068 |
+
+These are nested clocks. Regional search is included in cavity refill, and all
+stages are included in the Native call. Accumulated regional search explored
+6,780 states. During the final refill, the archived Tet4 count stayed at 11,846
+for 71.679 seconds. Internal rejected trials are not captured by that count.
+
+The 32 selected parent facets span seven CAD faces and 18 edge-connected
+components. Their projected points preserve every original source-node
+coordinate and classification byte. A bounded file-only recheck of the same 71
+physical witness locations, using four exact-binary ray directions, found 21
+outside the edited source and 50 still inside; all directions agreed. Missing
+source-facet connectivity grew from 108 before editing to 177 after remapping,
+then fell to 169 after cheap refill. These measurements motivate testing smaller
+connected batches and recomputing witnesses for each source generation before
+large regional searches. They do not prove causation from proximity, replace
+original CAD acceptance, or qualify that proposed policy.
+
+The [focused numeric record](data/source-mismatch-priority.json) separates the
+paired pilot from the instrumented trace, records settings and artifact hashes,
+and retains unknown measurements. Raw imported CAD, diagnostic archives and
+figures remain in ignored local evidence. No release qualification follows from
+this experiment.
+
 ## Historical development qualification
 
 The base build at `be303775` passed 266 Python tests, with one expected POSIX-only skip,
