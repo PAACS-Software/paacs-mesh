@@ -6,6 +6,7 @@
 #include "OcctContactComponents.hpp"
 #include "OcctContactAssembly.hpp"
 #include "OcctCancellationProgress.hpp"
+#include "OcctGeneratorFamily.hpp"
 #include "OcctModelInternal.hpp"
 #include "OcctNativeValidation.hpp"
 #include "OcctStageTrace.hpp"
@@ -13,11 +14,13 @@
 #include "paacs/geometry/OcctBoundary.hpp"
 #include "paacs/bnd/TetFacetGeometry.hpp"
 #include <BRepAlgoAPI_Common.hxx>
+#include <BRepAdaptor_Surface.hxx>
 #include <BRepBuilderAPI_Copy.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include "OcctSolidClassifier.hpp"
 #include <BRepClass_FaceClassifier.hxx>
 #include <BRepGProp.hxx>
+#include <BRep_Tool.hxx>
 #include <BRep_Builder.hxx>
 #include <GProp_GProps.hxx>
 #include <NCollection_IndexedMap.hxx>
@@ -26,6 +29,9 @@
 #include <TopExp_Explorer.hxx>
 #include <TopTools_ShapeMapHasher.hxx>
 #include <TopoDS_Compound.hxx>
+#include <TopoDS.hxx>
+#include <gp_Cylinder.hxx>
+#include <gp_Pln.hxx>
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -42,6 +48,10 @@ using ShapeMap=NCollection_IndexedMap<TopoDS_Shape,TopTools_ShapeMapHasher>;
 using Tri=std::array<Index,3>;
 using Clock=std::chrono::steady_clock;
 struct Stop {NativeCadMeshReason reason;const char* diagnostic;};
+struct PhaseSeconds {
+    double& value;Clock::time_point began=Clock::now();
+    ~PhaseSeconds(){value+=std::chrono::duration<double>(Clock::now()-began).count();}
+};
 void need(bool b,const char* s,NativeCadMeshReason reason=NativeCadMeshReason::GeometryError){if(!b)throw Stop{reason,s};}
 std::uint64_t add(std::uint64_t a,std::uint64_t b);
 struct Budget {
@@ -155,6 +165,39 @@ void nativePoints(const OcctModel& original,int body,std::span<const Vec3> point
     if(result.reason==OcctNativeValidationReason::Cancelled)throw Stop{NativeCadMeshReason::Cancelled,"cancelled"};
     if(result.reason==OcctNativeValidationReason::AllocationFailed)throw Stop{NativeCadMeshReason::AllocationFailed,"allocation_failed"};
     need(result.completed&&result.sourceModelUnmodified,"component_original_native_node_or_centroid_outside");
+}
+NativeCadRouteResolutionReport generatorHint(const ShapeMap& faces,std::uint64_t retained,Budget& budget){
+    NativeCadRouteResolutionReport report;
+    const auto count=static_cast<std::uint64_t>(faces.Extent());
+    // Optional recognition does not exceed the explicit analysis allowance.
+    // No query has occurred when the family is too large for this preflight.
+    if(count<4||count>budget.options.geometry.maximumAnalysisWork/2||count>budget.remaining()/2)return report;
+    const auto progress=budget.options.geometry.cancellation?OcctCancellationProgress::retainedPayloadBytes():0;
+    const auto maximum=budget.options.maximumPrimitiveWorkingBytes;
+    const auto scratch=2*sizeof(BRepAdaptor_Surface)+2*sizeof(GeneratorFace)+256;
+    if(retained>maximum||progress>maximum-retained||scratch>maximum-retained-progress)return report;
+    budget.working(add(retained,scratch));
+    const auto began=Clock::now();const auto initialWork=budget.work;
+    report.preflightAttempted=true;
+    const auto faceAt=[&](std::size_t i){
+        const auto face=TopoDS::Face(faces(static_cast<int>(i+1)));
+        BRepAdaptor_Surface surface(face,true);GeneratorFace result;
+        if(surface.GetType()==GeomAbs_Plane){
+            result.kind=GeneratorFaceKind::Plane;const auto plane=surface.Plane();
+            const auto p=plane.Location();const auto d=plane.Axis().Direction();
+            result.origin={p.X(),p.Y(),p.Z()};result.axis={d.X(),d.Y(),d.Z()};
+        }else if(surface.GetType()==GeomAbs_Cylinder){
+            result.kind=GeneratorFaceKind::Cylinder;const auto cylinder=surface.Cylinder();
+            const auto p=cylinder.Location();const auto d=cylinder.Axis().Direction();
+            result.origin={p.X(),p.Y(),p.Z()};result.axis={d.X(),d.Y(),d.Z()};
+        }
+        result.tolerance=BRep_Tool::Tolerance(face);return result;
+    };
+    const bool eligible=analyticGeneratorFamily(count,faceAt,[&]{budget.tick();});
+    budget.tick(0);
+    report.preflightWork=budget.work-initialWork;report.preflightSeconds=std::chrono::duration<double>(Clock::now()-began).count();
+    if(eligible){report.reason="analytic_generator_legacy_eligibility";report.candidate="legacy_dispatch";}
+    return report;
 }
 }
 
@@ -404,8 +447,32 @@ NativeCadMeshOutcome buildOcctIndependentParts(const OcctModel& original,const N
                 for(std::size_t t=1;t<tags[d].size();++t)need(tags[d][t]>0,"independent_parts_history_incomplete");}
             const auto live=retained(localMetadata);need(live<options.maximumPrimitiveWorkingBytes&&budget.remaining()>0,"independent_parts_working_budget",NativeCadMeshReason::BudgetExceeded);
             auto request=options;request.assemblyPolicy=NativeCadAssemblyPolicy::ConformingDomain;request.separateMatchedNativeFaceContacts=false;request.separateMatchedBoxFaceContacts=false;request.separateLowerDimensionalContacts=false;
+            NativeCadRouteResolutionReport hint;
+            if(independentGeneratorHintAllowed(options,original.solids().size()))hint=generatorHint(localMaps[2],live,budget);
+            std::string localBefore;std::uint64_t snapshotReservation=0;
+            if(std::string_view(hint.reason)=="analytic_generator_legacy_eligibility"){
+                const auto at=Clock::now();const auto initialWork=budget.work;
+                const auto available=options.maximumPrimitiveWorkingBytes-live;
+                const auto progress=options.geometry.cancellation?OcctCancellationProgress::retainedPayloadBytes():0;
+                const auto guardAvailable=progress<available?available-progress:0;
+                const auto limit=std::min(snapshotLimit,guardAvailable/8);
+                if(limit>=256&&budget.remaining()>1){
+                    retained(add(localMetadata,mul(limit,2)));
+                    budget.tick();const auto source=snapshotOcctContactSource(*local.model,limit,localBefore);budget.tick(0);
+                    if(source==NativeCadMeshReason::AllocationFailed)throw Stop{source,"allocation_failed"};
+                    if(source!=NativeCadMeshReason::None&&source!=NativeCadMeshReason::BudgetExceeded)
+                        throw Stop{source,"independent_parts_local_source_audit"};
+                    if(source==NativeCadMeshReason::None&&localBefore.capacity()<=guardAvailable/8){
+                        snapshotReservation=mul(localBefore.capacity(),4);retained(add(localMetadata,snapshotReservation));
+                        request.useAdvancingInteriorFront=false;
+                    }
+                }
+                hint.preflightWork=add(hint.preflightWork,budget.work-initialWork);
+                hint.preflightSeconds+=std::chrono::duration<double>(Clock::now()-at).count();
+                if(!snapshotReservation){hint.reason="analytic_generator_guard_admission_unavailable";hint.candidate="none";std::string{}.swap(localBefore);}
+            }
             request.maximumValidationWork=std::min(options.geometry.maximumMeshingWork,budget.remaining()/(original.solids().size()-ordinal));request.geometry.maximumMeshingWork=request.maximumValidationWork;
-            need(request.maximumValidationWork>0,"independent_parts_work_budget",NativeCadMeshReason::BudgetExceeded);request.maximumPrimitiveWorkingBytes=options.maximumPrimitiveWorkingBytes-live;
+            need(request.maximumValidationWork>0,"independent_parts_work_budget",NativeCadMeshReason::BudgetExceeded);request.maximumPrimitiveWorkingBytes=options.maximumPrimitiveWorkingBytes-live-snapshotReservation;
             // Selection identities are local only during the child call.
             request.faceSizes.clear();for(const auto control:options.faceSizes){for(std::size_t t=1;t<tags[2].size();++t)if(tags[2][t]==control.faceTag)request.faceSizes.push_back({static_cast<int>(t),control.size,control.growth});}
             // The clamp belongs to selected-face sizing. Unselected parts use
@@ -414,22 +481,73 @@ NativeCadMeshOutcome buildOcctIndependentParts(const OcctModel& original,const N
             request.geometry.bodyControls.clear();for(auto control:options.geometry.bodyControls)if(control.solidTag==body){control.solidTag=1;request.geometry.bodyControls.push_back(control);}
             out.preparationSeconds+=std::chrono::duration<double>(Clock::now()-prepareStart).count();
             part.next("contact_part_meshing");
-            mesh::Mesh value;auto child=meshNativeCad(*local.model,request,value);
+            const auto retainChildReceipt=[&](NativeCadMeshOutcome& child){
+                if(child.bodies.empty()){NativeCadBodyMeshReport report;report.solidTag=body;report.reason=child.reason;report.initialFrontFallback=child.initialFrontFallback;report.routeResolution=child.routeResolution;out.bodies.push_back(report);}
+                for(auto& report:child.bodies){report.solidTag=body;report.routeResolution=child.routeResolution;if(report.startFaceTag>0)report.startFaceTag=tags[2].at(report.startFaceTag);if(report.endFaceTag>0)report.endFaceTag=tags[2].at(report.endFaceTag);if(report.contactSourceEdgeTag>0)report.contactSourceEdgeTag=tags[1].at(report.contactSourceEdgeTag);if(report.contactTargetEdgeTag>0)report.contactTargetEdgeTag=tags[1].at(report.contactTargetEdgeTag);out.bodies.push_back(std::move(report));}
+            };
+            const auto callStarted=Clock::now();mesh::Mesh value;auto child=meshNativeCad(*local.model,request,value);
+            if(std::string_view(hint.reason)=="analytic_generator_legacy_eligibility"&&child.routeResolution.count==0&&
+               (std::string_view(child.routeResolution.reason)=="not_reported"||std::string_view(child.routeResolution.reason)=="explicit_legacy_dispatch")){
+                hint.attempts[0]={"legacy_dispatch",child.reason,child.published,child.validationWork,std::chrono::duration<double>(Clock::now()-callStarted).count()};hint.count=1;
+                child.routeResolution=hint;
+            }else if(hint.preflightAttempted){
+                child.routeResolution.preflightAttempted=true;
+                child.routeResolution.preflightWork=add(child.routeResolution.preflightWork,hint.preflightWork);
+                child.routeResolution.preflightSeconds+=hint.preflightSeconds;
+            }
+            if(hint.count==1&&!child.published&&child.destinationUnchanged&&generatorLegacyRetryReason(child.reason)&&
+               child.validationWork<request.maximumValidationWork&&child.validationWork<request.geometry.maximumMeshingWork){
+                // Charge and preserve the completed refusal before any source
+                // guard, cancellation poll or second call can stop execution.
+                const auto spent=child.validationWork;budget.charge(spent);
+                need(accumulateIndependentAttemptMetrics(out,child),"independent_parts_attempt_accounting",NativeCadMeshReason::InternalError);
+                const auto reportStart=out.bodies.size();retainChildReceipt(child);budget.tick(0);
+                const auto guardStarted=Clock::now();const auto guardWork=budget.work;
+                std::string localAfter,originalAfter;
+                {
+                PhaseSeconds timing(out.preparationSeconds);
+                budget.tick();const auto localSource=snapshotOcctContactSource(*local.model,localBefore.size(),localAfter);budget.tick(0);
+                need(localSource==NativeCadMeshReason::None,"independent_parts_local_source_audit",localSource);
+                need(localBefore==localAfter,"independent_parts_local_source_changed",NativeCadMeshReason::InternalError);
+                budget.tick();const auto originalSource=snapshotOcctContactSource(original,snapshotLimit,originalAfter);budget.tick(0);
+                need(originalSource==NativeCadMeshReason::None,"independent_parts_source_audit",originalSource);
+                need(before==originalAfter,"independent_parts_source_changed",NativeCadMeshReason::InternalError);
+                }
+                hint.preflightWork=add(hint.preflightWork,budget.work-guardWork);
+                const auto guardSeconds=std::chrono::duration<double>(Clock::now()-guardStarted).count();
+                hint.preflightSeconds+=guardSeconds;
+                auto retry=request;retry.useAdvancingInteriorFront.reset();
+                retry.maximumValidationWork=generatorRetryWork(request.maximumValidationWork,add(spent,budget.work-guardWork),budget.remaining());
+                retry.geometry.maximumMeshingWork=retry.maximumValidationWork;
+                need(retry.maximumValidationWork>0,"independent_parts_work_budget",NativeCadMeshReason::BudgetExceeded);
+                // Drop the refused attempt's dynamic receipts and both guard
+                // strings before entering the original AUTO path. Only its
+                // bounded route receipt and already charged metrics remain.
+                out.bodies.resize(reportStart);child=NativeCadMeshOutcome{};
+                std::string{}.swap(localBefore);std::string{}.swap(localAfter);std::string{}.swap(originalAfter);
+                retry.maximumPrimitiveWorkingBytes=options.maximumPrimitiveWorkingBytes-live;
+                budget.tick(0);const auto retryStarted=Clock::now();child=meshNativeCad(*local.model,retry,value);
+                hint.reason="analytic_generator_legacy_refused_auto_retry";
+                hint.candidate=child.routeResolution.candidate;hint.wholeBodyVerified=child.routeResolution.wholeBodyVerified;
+                hint.preflightWork=add(hint.preflightWork,child.routeResolution.preflightWork);
+                hint.preflightSeconds+=child.routeResolution.preflightSeconds;
+                // The second slot is one complete AUTO invocation, including
+                // its internal attempts. Its full work/time is counted once;
+                // preflight fields are descriptive subsets of that cost.
+                hint.attempts[1]={"automatic_dispatch",child.reason,child.published,child.validationWork,
+                    std::chrono::duration<double>(Clock::now()-retryStarted).count()};hint.count=2;
+                child.routeResolution=hint;
+            }
+            std::string{}.swap(localBefore);
             part.finish(nativeCadMeshReasonName(child.reason));
-            // AUTO is deferred only for a single independent part. Preserve
-            // its child fallback metadata even when no child body published.
+            // Preserve each deferred child's method and fallback metadata,
+            // including eligibility hints and receipts from refused children.
             if(child.initialFrontFallback.attempted)out.initialFrontFallback=child.initialFrontFallback;
-            out.nativeProjectionQueries=add(out.nativeProjectionQueries,child.nativeProjectionQueries);
-            out.nativeProjectionInitializations=add(out.nativeProjectionInitializations,child.nativeProjectionInitializations);
-            out.nativeProjectionReuses=add(out.nativeProjectionReuses,child.nativeProjectionReuses);
-            out.nativeTrimmedProjectionQueries=add(out.nativeTrimmedProjectionQueries,child.nativeTrimmedProjectionQueries);
-            out.nativeTrimmedProjectionMemoHits=add(out.nativeTrimmedProjectionMemoHits,child.nativeTrimmedProjectionMemoHits);
             // Charge completed child work before retaining its bounded receipt.
             // Defer the cancellation poll until its timings/reports are copied,
             // so a deadline cannot erase the attempt that consumed the time.
-            budget.charge(child.validationWork);out.preparationSeconds+=child.preparationSeconds;out.generationSeconds+=child.generationSeconds;out.validationSeconds+=child.validationSeconds;out.auditSeconds+=child.auditSeconds;out.qualitySeconds+=child.qualitySeconds;
-            if(child.bodies.empty()){NativeCadBodyMeshReport report;report.solidTag=body;report.reason=child.reason;report.initialFrontFallback=child.initialFrontFallback;report.routeResolution=child.routeResolution;out.bodies.push_back(report);}
-            for(auto& report:child.bodies){report.solidTag=body;report.routeResolution=child.routeResolution;if(report.startFaceTag>0)report.startFaceTag=tags[2].at(report.startFaceTag);if(report.endFaceTag>0)report.endFaceTag=tags[2].at(report.endFaceTag);if(report.contactSourceEdgeTag>0)report.contactSourceEdgeTag=tags[1].at(report.contactSourceEdgeTag);if(report.contactTargetEdgeTag>0)report.contactTargetEdgeTag=tags[1].at(report.contactTargetEdgeTag);out.bodies.push_back(std::move(report));}
+            budget.charge(child.validationWork);need(accumulateIndependentAttemptMetrics(out,child),"independent_parts_attempt_accounting",NativeCadMeshReason::InternalError);
+            retainChildReceipt(child);
             budget.tick(0);
             if(!child.published){
                 need(child.destinationUnchanged,"independent_parts_child_transaction",NativeCadMeshReason::InternalError);

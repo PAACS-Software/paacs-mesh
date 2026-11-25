@@ -30,6 +30,14 @@ Inspect `auto_dispatch_scope` and each body's `route_resolution`; wrapper sizing
 metadata does not imply that every part used the same method. Explicit false,
 explicit true and Bounded requests retain their existing eligibility and refusal
 behavior. A child success does not qualify an incomplete assembly.
+Uncontrolled analytic plane/cylinder parts with a common straight generator
+may prefer the existing constructor. This bounded eligibility hint does not
+certify sweepability. A named geometric refusal can admit one original AUTO
+call with the remaining shared work and deadline, after source-integrity
+checks. `automatic_dispatch` records that complete AUTO call, including its
+internal attempts; preflight fields are already included in the parent
+outcome's total work/time. Cancellation,
+allocation, source-integrity and requested quality/size failures remain terminal.
 `--no-advancing-interior-front` selects the previous placement and recognized
 primitive, planar or swept routes.
 Check `archive_published`, `audit_valid` and each body's `route` in the JSON

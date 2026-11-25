@@ -439,6 +439,20 @@ volumes. This result does not certify a globally non-overlapping material domain
 Choose `assembly="conforming"` to request the engine's conforming-domain policy;
 unsupported or unresolved interfaces are refused.
 
+With Normal resources and automatic Tet4 construction, independent parts
+resolve their constructors separately. `auto_dispatch_scope="per_original_body"`
+records this dispatch; each body's `route_resolution` records its own decision.
+Uncontrolled analytic plane/cylinder parts with a common straight generator
+can retain the existing legacy constructor. The
+`analytic_generator_legacy_eligibility` receipt is a bounded route hint, not a
+verified sweep or an acceptance certificate. Explicit constructor choices,
+sizing controls and Bounded resources retain their dispatch rules. Every
+selected constructor still runs its original mesh and CAD checks.
+After a named geometric refusal, one original AUTO call can use the remaining
+shared work and deadline. Its `automatic_dispatch` route entry includes the
+entire AUTO call and its internal attempts. Preflight costs are descriptive
+subsets of the parent outcome's total work/time; do not add them to that total.
+
 `trimmed_ray_witnesses=True` opts into strict serial Original-CAD ray
 certificates during validation:
 

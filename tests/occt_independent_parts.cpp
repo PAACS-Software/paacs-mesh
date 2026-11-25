@@ -4,12 +4,15 @@
 // SPDX-License-Identifier: MPL-2.0
 
 #include "OcctModelInternal.hpp"
+#include "OcctGeneratorFamily.hpp"
 #include "paacs/geometry/OcctMesher.hpp"
 #include "paacs/mesh/MeshAudit.hpp"
 #include <BRepPrimAPI_MakeBox.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
+#include <BRepPrimAPI_MakeTorus.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_NurbsConvert.hxx>
 #include <gp_Pln.hxx>
 #include <BRep_Builder.hxx>
 #include <BRepTools.hxx>
@@ -23,11 +26,75 @@
 #include <atomic>
 #include <bit>
 #include <cstdint>
+#include <limits>
+#include <vector>
 #include <string_view>
 using namespace paacs;using namespace paacs::geo;using namespace paacs::geo::detail;
 void check(bool ok,const char* why){if(!ok)throw std::runtime_error(why);}
 std::string snapshot(const OcctModel& m){std::ostringstream s;BRepTools::Write(OcctModelAccess::shape(m),s);return s.str();}
 namespace {
+
+void checkGeneratorEligibility() {
+    const auto plane=[](Vec3 origin,Vec3 axis,double tolerance=1e-7){return GeneratorFace{GeneratorFaceKind::Plane,origin,axis,tolerance};};
+    const auto cylinder=[](Vec3 axis){return GeneratorFace{GeneratorFaceKind::Cylinder,{0,0,0},axis,1e-7};};
+    const std::vector<GeneratorFace> family{plane({0,0,0},{0,0,1}),plane({0,0,2},{0,0,-1}),plane({1,0,0},{1,0,0}),cylinder({0,0,1})};
+    const auto eligible=[&](const auto& faces){std::uint64_t work=0;const bool result=analyticGeneratorFamily(faces.size(),[&](std::size_t i){return faces.at(i);},[&]{++work;});
+        check(work<=2*faces.size(),"Generator hint uses at most two charged scans");return result;};
+    check(eligible(family),"Plane/cylinder generator family is eligible, not certified");
+    auto changed=family;changed.push_back(cylinder({0,0,-1}));check(eligible(changed),"Opposite analytic cylinder axes share one generator");
+    changed=family;changed.push_back(cylinder({1,0,0}));check(!eligible(changed),"Nonparallel cylinders do not select the generator route");
+    changed=family;changed[2].axis=Vec3{1,0,1}.normalized();check(!eligible(changed),"Oblique planes are not caps or generator sideplanes");
+    changed=family;changed.push_back(plane({0,0,1},{0,0,1}));check(!eligible(changed),"A third distinct cap level refuses eligibility");
+    changed=family;changed.push_back(plane({0,0,1e-8},{0,0,1}));changed.push_back(plane({0,0,2+1e-8},{0,0,1}));
+    check(eligible(changed),"Split caps at two offsets respect their existing source tolerances");
+    changed=family;changed[0].tolerance=0;changed.push_back(plane({0,0,.05},{0,0,1},.1));changed.push_back(plane({0,0,.09},{0,0,1},0));
+    check(!eligible(changed),"A broad-tolerance plane cannot chain two distinct strict cap positions into one level");
+    changed=family;changed.push_back(plane({0,0,1},{0,0,1},2));
+    check(!eligible(changed),"A source interval overlapping both cap groups has no arbitrary assignment");
+    std::reverse(changed.begin(),changed.end());
+    check(!eligible(changed),"Reversed broad-tolerance cap order cannot produce false-positive eligibility");
+    changed=family;changed[1].origin.z=1e-8;check(!eligible(changed),"Cap separation must exceed reported source tolerances");
+    changed=family;changed[2]=cylinder({0,0,1});check(!eligible(changed),"Plain cylinders and tubes without sideplanes retain primitive dispatch");
+    changed=family;changed[3].kind=GeneratorFaceKind::Other;check(!eligible(changed),"Non-generator curved families retain AUTO");
+    changed=family;changed[1].tolerance=std::numeric_limits<double>::quiet_NaN();check(!eligible(changed),"Nonfinite source tolerance cannot admit a route hint");
+    std::uint64_t stoppedWork=0;bool stopped=false;
+    try{analyticGeneratorFamily(family.size(),[&](std::size_t i){return family.at(i);},[&]{if(stoppedWork==2)throw 17;++stoppedWork;});}
+    catch(int value){stopped=value==17;}
+    check(stopped&&stoppedWork==2,"Hint query/cancellation work admission propagates before the next Native face");
+
+    auto options=normalNativeCadMeshOptions();options.assemblyPolicy=NativeCadAssemblyPolicy::IndependentParts;
+    check(independentGeneratorHintAllowed(options,2)&&!independentGeneratorHintAllowed(options,1),"Generator hint is restricted to Normal multi-part requests");
+    for(bool value:{false,true}){auto explicitRequest=options;explicitRequest.useAdvancingInteriorFront=value;
+        check(!independentGeneratorHintAllowed(explicitRequest,2),"Explicit initial constructor is never replaced by a hint");}
+    auto disabled=options;disabled.construction.resourcePolicy=CadResourcePolicy::Bounded;check(!independentGeneratorHintAllowed(disabled,2),"Bounded dispatch remains unchanged");
+    disabled=options;disabled.assemblyPolicy=NativeCadAssemblyPolicy::ConformingDomain;check(!independentGeneratorHintAllowed(disabled,2),"Conforming dispatch remains unchanged");
+    disabled=options;disabled.faceSizes.push_back({1,.2,1.3});check(!independentGeneratorHintAllowed(disabled,2),"Face controls cannot be bypassed by generator eligibility");
+    disabled=options;disabled.sizeBoxes.push_back({});check(!independentGeneratorHintAllowed(disabled,2),"Volume controls cannot be bypassed by generator eligibility");
+    disabled=options;disabled.geometry.bodyControls.push_back({});check(!independentGeneratorHintAllowed(disabled,2),"Per-body controls cannot be bypassed by generator eligibility");
+    disabled=options;disabled.geometry.strategy=algo::GeometryStrategy::BoundaryConformingTet4;check(!independentGeneratorHintAllowed(disabled,2),"Explicit geometry strategy cannot be bypassed by eligibility");
+    disabled=options;disabled.construction.surfacePointsPerFace=1;check(!independentGeneratorHintAllowed(disabled,2),"Explicit construction ceilings retain their original dispatch");
+    disabled=options;disabled.initialTopologyQuality=true;check(!independentGeneratorHintAllowed(disabled,2),"Explicit topology quality retains its existing dispatch");
+    disabled=options;disabled.optimizeProfileInterior=true;check(!independentGeneratorHintAllowed(disabled,2),"Explicit profile optimization retains its existing dispatch");
+    for(unsigned i=0;i<=static_cast<unsigned>(NativeCadMeshReason::SizeRequirementNotMet);++i){
+        const auto reason=static_cast<NativeCadMeshReason>(i);
+        const bool allowed=reason==NativeCadMeshReason::GeometryError||reason==NativeCadMeshReason::UnsupportedBody||reason==NativeCadMeshReason::RecognitionFailed;
+        check(generatorLegacyRetryReason(reason)==allowed,"Only named geometric legacy refusals admit one original AUTO attempt");
+    }
+    check(generatorRetryWork(100,32,80)==68&&generatorRetryWork(100,32,50)==50&&
+          generatorRetryWork(100,100,100)==0&&generatorRetryWork(100,101,100)==0,
+          "Retry work subtracts failed work and guards, stays within shared admission, and never underflows");
+    NativeCadMeshOutcome total,first,second;
+    first.preparationSeconds=1;first.generationSeconds=2;first.validationSeconds=3;first.auditSeconds=4;first.qualitySeconds=5;
+    first.nativeProjectionQueries=7;first.nativeProjectionInitializations=2;first.nativeProjectionReuses=5;first.nativeTrimmedProjectionQueries=3;first.nativeTrimmedProjectionMemoHits=1;
+    second=first;check(accumulateIndependentAttemptMetrics(total,first)&&accumulateIndependentAttemptMetrics(total,second)&&
+          total.preparationSeconds==2&&total.generationSeconds==4&&total.validationSeconds==6&&total.auditSeconds==8&&total.qualitySeconds==10&&
+          total.nativeProjectionQueries==14&&total.nativeProjectionInitializations==4&&total.nativeProjectionReuses==10&&
+          total.nativeTrimmedProjectionQueries==6&&total.nativeTrimmedProjectionMemoHits==2,
+          "Every phase and query cost from both method attempts is accumulated once");
+    const auto accounted=total;second.nativeProjectionQueries=UINT64_MAX;
+    check(!accumulateIndependentAttemptMetrics(total,second)&&total.nativeProjectionQueries==accounted.nativeProjectionQueries&&
+          total.generationSeconds==accounted.generationSeconds,"Attempt accounting rejects overflow without partially publishing counters");
+}
 enum class CancelChildAt { Never, SecondBegin, SecondEnd, InsideSecond };
 struct PartTrace {
     std::atomic_bool* cancellation = nullptr;
@@ -149,8 +216,8 @@ void checkNormalPerBodyAuto() {
     check(!selection.published&&selection.reason==NativeCadMeshReason::InvalidRequest&&sameMeshPayload(destination,sentinel),
           "Per-body AUTO does not discard invalid original control selections");
 
-    // An owned through-bore cannot be certified as a complete cylinder/block.
-    // A mixed assembly must allow that child to choose a different general route.
+    // A through-bore is an eligible plane/cylinder generator family. Its hint
+    // retains the audited legacy route, without claiming a verified sweep.
     const auto block=BRepPrimAPI_MakeBox(gp_Pnt(4,0,0),2.,2.,1.).Shape();
     const auto tool=BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(5,1,-.1),gp_Dir(0,0,1)),.3,1.2).Shape();
     BRepAlgoAPI_Cut cut(block,tool);check(cut.IsDone(),"owned through-bore Boolean");
@@ -163,11 +230,45 @@ void checkNormalPerBodyAuto() {
           variedResult.nativeContactSourceGuard&&snapshot(*varied.model)==before,
           "Normal AUTO independently completes mixed mapped and general curved children");
     check(variedResult.bodies[0].routeResolution.wholeBodyVerified&&
-          std::string_view(variedResult.bodies[1].routeResolution.candidate)=="native_front"&&
+          std::string_view(variedResult.bodies[1].routeResolution.reason)=="analytic_generator_legacy_eligibility"&&
+          std::string_view(variedResult.bodies[1].routeResolution.candidate)=="legacy_dispatch"&&
+          variedResult.bodies[1].routeResolution.preflightWork>0&&variedResult.bodies[1].routeResolution.count==1&&
           !variedResult.bodies[1].routeResolution.wholeBodyVerified,
-          "Mixed children retain distinct capability/route decisions");
+          "Generator child retains its charged eligibility hint and audited legacy result");
     for(const auto& body:variedResult.bodies)check(body.nativeCentroidSourceGuard&&body.nativeCentroidsChecked>0,
           "Mixed AUTO children retain original-body final material validation");
+
+    TopoDS_Compound analyticMixed;builder.MakeCompound(analyticMixed);builder.Add(analyticMixed,BRepPrimAPI_MakeBox(1.,1.,1.).Shape());
+    builder.Add(analyticMixed,BRepPrimAPI_MakeTorus(gp_Ax2(gp_Pnt(4,0,0),gp_Dir(0,0,1)),1.,.25).Shape());
+    auto analytic=OcctModelAccess::fromShape(analyticMixed);check(analytic.imported(),"Owned torus and mapped box import");
+    const auto analyticSource=snapshot(*analytic.model);mesh::Mesh analyticMesh;auto analyticOptions=options;analyticOptions.geometry.targetSize=.8;
+    const auto analyticResult=meshNativeCad(*analytic.model,analyticOptions,analyticMesh);
+    check(analyticResult.published&&analyticResult.validatedParts==2&&analyticResult.audit.valid&&analyticResult.quality.valid&&
+          analyticResult.nativeContactSourceGuard&&snapshot(*analytic.model)==analyticSource&&analyticResult.bodies.size()==2,
+          "Mixed non-generator primitive and mapped children preserve successful Native validation");
+    check(analyticResult.bodies[0].routeResolution.wholeBodyVerified&&analyticResult.bodies[1].routeResolution.wholeBodyVerified&&
+          std::string_view(analyticResult.bodies[1].routeResolution.reason)=="verified_whole_body_primitive"&&
+          std::string_view(analyticResult.bodies[1].routeResolution.candidate)=="torus",
+          "Non-generator torus retains its verified AUTO primitive capability");
+
+    // Converting an owned cylinder to NURBS keeps its exact geometry but
+    // removes the analytic generator classification. It still resolves AUTO
+    // through the general constructor, independently of its mapped neighbor.
+    const auto round=BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(4,0,0),gp_Dir(0,0,1)),.4,.8).Shape();
+    BRepBuilderAPI_NurbsConvert nurbs(round,true);check(nurbs.IsDone(),"Owned exact NURBS conversion");
+    TopoDS_Compound nonGenerator;builder.MakeCompound(nonGenerator);builder.Add(nonGenerator,BRepPrimAPI_MakeBox(1.,1.,1.).Shape());builder.Add(nonGenerator,nurbs.Shape());
+    auto curved=OcctModelAccess::fromShape(nonGenerator);check(curved.imported(),"Owned non-generator assembly import");
+    const auto curvedSource=snapshot(*curved.model);mesh::Mesh curvedMesh;curvedMesh.addNode({9,8,7},{3,92});const mesh::Mesh curvedSentinel=curvedMesh;live.geometry.targetSize=.5;
+    const auto curvedResult=meshNativeCad(*curved.model,live,curvedMesh);
+    check(curvedResult.nativeContactSourceGuard&&snapshot(*curved.model)==curvedSource&&curvedResult.bodies.size()==2&&
+          std::string_view(curvedResult.bodies[1].routeResolution.candidate)=="native_front"&&
+          !curvedResult.bodies[1].routeResolution.wholeBodyVerified,
+          "Non-generator child retains AUTO front regardless of its current meshing outcome");
+    if(curvedResult.published)check(curvedResult.validatedParts==2&&curvedResult.audit.valid&&curvedResult.quality.valid&&
+          curvedResult.bodies[1].nativeCentroidSourceGuard&&curvedResult.bodies[1].nativeCentroidsChecked>0,
+          "Any completed NURBS mesh retains every original Native validity gate");
+    else check(curvedResult.destinationUnchanged&&sameMeshPayload(curvedMesh,curvedSentinel)&&curvedResult.reason!=NativeCadMeshReason::None,
+          "A currently refused NURBS construction preserves the destination and explicit method receipt");
 }
 
 void checkCancelledPartReceipts() {
@@ -277,6 +378,7 @@ void checkCancelledPartReceipts() {
 } // namespace
 
 int main(){try{
+ checkGeneratorEligibility();
  checkNormalPerBodyAuto();
  checkCancelledPartReceipts();
  BRep_Builder builder;TopoDS_Compound shape;builder.MakeCompound(shape);builder.Add(shape,BRepPrimAPI_MakeBox(1.,1.,1.).Shape());builder.Add(shape,BRepPrimAPI_MakeBox(gp_Pnt(.5,0,0),1.,1.,1.).Shape());auto imported=OcctModelAccess::fromShape(shape);check(imported.imported()&&imported.model->solids().size()==2,"overlapping assembly import");const auto& model=*imported.model;const auto source=snapshot(model);
