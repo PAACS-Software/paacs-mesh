@@ -317,6 +317,12 @@ class NativeSourceFallbackContractTests(unittest.TestCase):
             self.assertIs(report["effective_policy"]["requested_boundary_first"], requested)
             self.assertIs(report["requested_advancing_interior_front"], False)
             self.assertTrue(report["audit"]["valid"] and report["quality"]["valid"])
+            for body in report["bodies"]:
+                # This structured primitive bypasses source construction.
+                self.assertEqual(body["surface_triangles"], 0)
+                self.assertIs(type(body["surface_attempts"]), int)
+                self.assertGreaterEqual(body["surface_attempts"], 0)
+                self.assertEqual(body["recovery_source_facet_nodes"], 0)
             self.assertTrue(all(body["source_shell"]["native_fallback_attempted"] is False
                                 and body["initial_front"]["diagnostic"] == "not_attempted"
                                 for body in report["bodies"]))
@@ -340,6 +346,10 @@ class NativeSourceFallbackContractTests(unittest.TestCase):
         self.assertIs(report["requested_native_source_fallback"], False)
         self.assertTrue(report["audit"]["valid"] and report["quality"]["valid"])
         body = report["bodies"][0]
+        self.assertGreater(body["surface_triangles"], 0)
+        self.assertIs(type(body["surface_attempts"]), int)
+        self.assertGreaterEqual(body["surface_attempts"], 0)
+        self.assertEqual(body["recovery_source_facet_nodes"], 0)
         self.assertEqual(body["initial_front"]["diagnostic"], "deferred_until_boundary_recovery")
         self.assertEqual(body["initial_front"]["nodes"], 0)
         self.assertGreater(body["constraint_recovery"]["seed_cells"], 0)

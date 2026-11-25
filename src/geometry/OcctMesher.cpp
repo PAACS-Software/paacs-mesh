@@ -1503,6 +1503,9 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
                         report.liveMaterialRemainingRejects+=recovered.liveMaterialRemainingRejects;
                         report.liveMaterialPatches+=recovered.liveMaterialPatches;
                         report.localDelaunayUsedGlobalFallback|=recovered.localDelaunayUsedGlobalFallback;
+                        // Retain committed private source changes even when tick observes cancellation.
+                        report.recoverySourceFacetNodes+=recovered.sourceFacetNodes;
+                        if(recovered.sourceShell.accepted)report.surfaceTriangles=recovered.surfaceTriangles;
                         work.tick(recovered.workUsed);
                         if(recovered.reason==NativeCadMeshReason::Cancelled||recovered.reason==NativeCadMeshReason::AllocationFailed||recovered.reason==NativeCadMeshReason::InternalError)throw Stop{recovered.reason};
                         if(earlyConstraintWork&&!recovered.published){
@@ -1521,7 +1524,7 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
                             report.rebuiltSurfaceCharts=recovered.rebuiltSurfaceCharts;
                         }
                         report.recoveryRemovedInteriorNodes+=recovered.removedInteriorNodes;report.recoveryRemovedIncidentCells+=recovered.removedIncidentCells;report.recoveryRemovedCentroidCells+=recovered.removedCentroidCells;report.recoveryRandomRetries+=recovered.randomRetries;report.recoveryRandomCandidateProposals+=recovered.randomCandidateProposals;
-                        report.recoveryMergedComponents+=recovered.mergedComponents;report.recoverySourceBlockedCandidates+=recovered.sourceBlockedCandidates;report.recoveryOtherComponentBlockedCandidates+=recovered.otherComponentBlockedCandidates;report.recoverySourceFacetNodes+=recovered.sourceFacetNodes;
+                        report.recoveryMergedComponents+=recovered.mergedComponents;report.recoverySourceBlockedCandidates+=recovered.sourceBlockedCandidates;report.recoveryOtherComponentBlockedCandidates+=recovered.otherComponentBlockedCandidates;
                         if(recovered.published){report.route=spatialSizing?"native_spatial_sizing":!spaceSurface?
                                 (recovered.liveMaterialPatches?"native_plc_live_material":"native_plc_cavity"):
                                 surfaceMode==OcctFrontSurface::Curvature?"native_curvature_surface":

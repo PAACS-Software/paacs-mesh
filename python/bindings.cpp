@@ -606,6 +606,9 @@ struct MeshResult {
             b["reason"] = geo::nativeCadMeshReasonName(body.reason);
             b["surface_reason"] = body.nativeSurfaceReason;
             b["volume_reason"] = body.nativeVolumeReason;
+            b["surface_triangles"] = body.surfaceTriangles;
+            b["surface_attempts"] = body.surfaceAttempts;
+            b["recovery_source_facet_nodes"] = body.recoverySourceFacetNodes;
             b["native_surface_work"] = body.nativeSurfaceWork;
             b["native_volume_work"] = body.nativeVolumeWork;
             b["native_surface_seconds"] = finiteValue(body.nativeSurfaceSeconds);
