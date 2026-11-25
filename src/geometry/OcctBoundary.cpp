@@ -630,6 +630,63 @@ mesh::Mesh extract(const OcctModel& model, int bodyTag, BRepBuilderAPI_Copy* cop
                 }
             }
         }
+        if(spaceSurface&&curveMetric){
+            // A geometrically accurate coarse curve polygon can still cross
+            // another trim chord across a narrow feature. Repair the shared
+            // canonical interval before emitting any incident face triangles.
+            // Existing samples stay fixed; unrelated curves are not resampled.
+            detail::OcctStageTrace topologyTrace("surface_wire_topology",bodyTag);
+            std::set<int> pending;
+            for(const auto& face:faces)if(face.rebuild)pending.insert(face.tag);
+            constexpr unsigned maximumRounds=std::numeric_limits<double>::digits;
+            for(unsigned round=0;!pending.empty();++round){
+                std::set<detail::OcctChartSplitInterval> intervals;
+                for(int tag:pending){
+                    std::uint64_t nodes=0;
+                    for(const auto& wire:model.boundaryUses(tag))for(const auto& use:wire.edges){
+                        context.tick();
+                        const auto count=edges.at(use.edgeTag).ids.size()-1;
+                        context.require(count<=std::uint64_t((std::numeric_limits<int>::max)())-nodes,
+                                        OcctBoundaryReason::BudgetExceeded);
+                        nodes+=count;
+                    }
+                    admitRepair(std::max<std::uint64_t>(4096,nodes*2));
+                    std::vector<detail::OcctChartTriangle> unused;
+                    const auto complete=detail::rebuildOcctWireChart(model,tag,edges,{},
+                        position,tick,remaining,unused,nullptr,false,noRefine,true,
+                        std::size_t(nodes),&aliasReceipt.witness,&intervals);
+                    context.require(complete,OcctBoundaryReason::NonconformingEdge);
+                }
+                if(intervals.empty())break;
+                if(round>=maximumRounds){
+                    aliasReceipt.witness={"shared_chart_sampling","chart_crossing_round_limit",
+                                          -1,-1,std::nullopt,true};
+                    context.require(false,OcctBoundaryReason::NonconformingEdge);
+                }
+                const auto append=[&](int tag,double at,std::uint64_t ordinal){
+                    return appendPoint(model.edge(tag)->pointAt(at),{1,tag},ordinal);
+                };
+                const auto complete=detail::bisectOcctChartIntervals(edges,intervals,append,tick,
+                    [&](std::size_t reserve){admitRepair(std::uint64_t(reserve)*2);},&aliasReceipt.witness);
+                context.require(complete,OcctBoundaryReason::NonconformingEdge);
+                pending.clear();
+                for(auto first=intervals.begin();first!=intervals.end();){
+                    const int tag=first->edgeTag;
+                    const auto& chain=edges.at(tag);
+                    // Node IDs/coordinates/classifications stay unchanged.
+                    // Keys retain their documented increasing edge ordinal.
+                    for(std::size_t i=1;i+1<chain.ids.size();++i){
+                        context.tick();points[chain.ids[i]].key.ordinal=i;
+                    }
+                    for(int face:model.edgeFaces(tag)){
+                        context.tick();
+                        for(const auto& owner:model.faceOwners(face))
+                            if(owner.solidTag==bodyTag){pending.insert(face);break;}
+                    }
+                    do {context.tick();++first;}while(first!=intervals.end()&&first->edgeTag==tag);
+                }
+            }
+        }
         std::vector<FaceSamples*> rebuild;
         for(auto& face:faces)if(face.rebuild)rebuild.push_back(&face);
         context.require(rebuild.size()<=aliasOptions.maximumRebuiltCharts,OcctBoundaryReason::BudgetExceeded);

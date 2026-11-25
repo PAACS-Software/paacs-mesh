@@ -5,6 +5,7 @@
 
 #include "paacs/geometry/OcctBoundary.hpp"
 #include "nonlinear_parameter_prism.hpp"
+#include "narrow_trim_prism.hpp"
 #include "paacs/algo/Delaunay2D.hpp"
 #include "paacs/mesh/MeshAudit.hpp"
 #include "../src/geometry/OcctBoundaryInternal.hpp"
@@ -183,6 +184,214 @@ int chartConstructionWitnesses(const geo::OcctModel& model) {
           "successful chart retained a stale refusal witness");
     return 4;
 }
+int narrowTrimTopology(const std::filesystem::path& folder) {
+    using namespace geo::detail;
+    const auto shape=test::narrowTrimPrism();
+    check(BRepCheck_Analyzer(shape).IsValid(),"owned narrow-trim prism is Native-valid");
+    auto cad=load(shape,folder/"narrow-trim-prism.brep");
+    const auto& model=*cad.model;const auto before=snapshot(model);
+    check(model.solids().size()==1,"narrow-trim prism lost its body identity");
+    int cap=-1;
+    for(const auto* face:model.faces()){
+        const auto properties=model.faceProperties(face->tag());
+        if(properties&&properties->surfaceType==geo::OcctSurfaceType::Plane&&properties->bounds&&
+           std::abs(properties->bounds->lower.z)<1e-5&&std::abs(properties->bounds->upper.z)<1e-5)
+            cap=face->tag();
+    }
+    check(cap>0,"narrow-trim prism has no original lower planar cap");
+    struct Chain {std::vector<int> ids;std::vector<double> parameters;};
+    std::map<int,Chain> chains;std::map<int,int> vertexIds;std::vector<Vec3> points;
+    std::vector<mesh::Classification> classifications;
+    const auto vertex=[&](int tag){
+        if(auto found=vertexIds.find(tag);found!=vertexIds.end())return found->second;
+        const auto id=int(points.size());points.push_back(model.vertex(tag)->position());
+        classifications.push_back({0,tag});
+        vertexIds.emplace(tag,id);return id;
+    };
+    for(const auto* edge:model.edges()){
+        double first,last;edge->parameterBounds(first,last);
+        chains.emplace(edge->tag(),Chain{{vertex(edge->startVertexTag()),vertex(edge->endVertexTag())},{first,last}});
+    }
+    // Retain a non-endpoint sample on an unrelated straight curve as well.
+    for(const auto* edge:model.edges()){
+        double first,last;edge->parameterBounds(first,last);const auto at=std::midpoint(first,last);
+        if(edge->curvatureAt(at)!=0)continue;
+        auto& chain=chains.at(edge->tag());const auto id=int(points.size());
+        points.push_back(edge->pointAt(at));classifications.push_back({1,edge->tag()});
+        chain.ids.insert(chain.ids.begin()+1,id);chain.parameters.insert(chain.parameters.begin()+1,at);
+        break;
+    }
+    const auto originalPoints=points;const auto originalChains=chains;
+    const auto originalClassifications=classifications;
+    std::uint64_t work=0;const auto tick=[&](std::uint64_t n){work+=n;};
+    const auto remaining=[&](){return std::uint64_t(10'000'000)-work;};
+    const auto refine=[](auto&,auto&,auto&,const auto&){return true;};
+    const auto position=[&](int id){return points.at(std::size_t(id));};
+    std::vector<OcctChartTriangle> ignored;
+    OcctBoundaryConstructionWitness witness;
+    std::set<OcctChartSplitInterval> intervals;
+    check(rebuildOcctWireChart(model,cap,chains,{},position,tick,remaining,ignored,nullptr,
+        false,refine,true,4096,&witness,&intervals)&&intervals.size()==2,
+        "coarse valid curved trim did not expose its two crossing canonical intervals");
+    bool reversed=false;
+    for(const auto& wire:model.boundaryUses(cap))for(const auto& use:wire.edges)
+        reversed|=use.sense<0&&std::ranges::any_of(intervals,[&](const auto& interval){
+            return interval.edgeTag==use.edgeTag;});
+    check(reversed,"crossing recovery did not exercise a reversed native curve use");
+    check(!rebuildOcctWireChart(model,cap,chains,{},position,tick,remaining,ignored,nullptr,
+        false,refine,true,4096,&witness)&&std::string_view(witness.detail)=="planar_crossing_constraints",
+        "crossing endpoint-only trim was unexpectedly triangulated");
+    std::uint64_t admitted=0;
+    const auto append=[&](int tag,double at,std::uint64_t){
+        const auto id=int(points.size());points.push_back(model.edge(tag)->pointAt(at));
+        classifications.push_back({1,tag});return id;
+    };
+    check(bisectOcctChartIntervals(chains,intervals,append,tick,
+        [&](std::size_t reserve){admitted=std::max(admitted,std::uint64_t(reserve));},&witness)&&
+        points.size()==originalPoints.size()+2&&admitted>0,
+        "crossing repair did not add exactly two bounded native midpoint samples");
+    for(std::size_t i=0;i<originalPoints.size();++i)
+        check(same(points[i],originalPoints[i])&&classifications[i].dim==originalClassifications[i].dim&&
+            classifications[i].tag==originalClassifications[i].tag,
+            "crossing repair moved or reclassified an original canonical node");
+    for(const auto& [tag,original]:originalChains){
+        const auto& chain=chains.at(tag);
+        check(chain.ids.front()==original.ids.front()&&chain.ids.back()==original.ids.back(),
+            "crossing repair replaced an original CAD vertex identity");
+        for(std::size_t i=0;i<original.ids.size();++i)
+            check(std::ranges::find(chain.ids,original.ids[i])!=chain.ids.end(),
+                "crossing repair discarded an original shared curve sample");
+        if(std::ranges::none_of(intervals,[&](const auto& interval){return interval.edgeTag==tag;}))
+            check(chain.ids==original.ids&&chain.parameters==original.parameters,
+                "crossing repair resampled an unrelated canonical curve");
+    }
+    std::set<OcctChartSplitInterval> remainingCrossings;
+    check(rebuildOcctWireChart(model,cap,chains,{},position,tick,remaining,ignored,nullptr,
+        false,refine,true,4096,&witness,&remainingCrossings)&&remainingCrossings.empty(),
+        "two source-curve midpoints did not resolve the trim chord crossing");
+    std::vector<OcctChartTriangle> triangles;
+    check(rebuildOcctWireChart(model,cap,chains,{},position,tick,remaining,triangles,nullptr,
+        true,refine,true,4096,&witness)&&!triangles.empty(),
+        "repaired curved trim was not triangulated with its unchanged physical metric");
+    std::map<std::array<int,2>,unsigned> incidence;
+    for(const auto& triangle:triangles)for(unsigned j=0;j<3;++j){
+        const auto [a,b]=std::minmax(triangle.nodes[j],triangle.nodes[(j+1)%3]);++incidence[{a,b}];
+        check((model.face(cap)->pointAt(triangle.uv[j])-points[triangle.nodes[j]]).norm()<=1e-6,
+            "repaired chart node has no original CAD parameter correspondence");
+    }
+    unsigned sharedChecks=0;
+    for(const auto& interval:intervals){
+        const auto& chain=chains.at(interval.edgeTag);
+        for(std::size_t i=1;i<chain.ids.size();++i){
+            const auto [a,b]=std::minmax(chain.ids[i-1],chain.ids[i]);
+            check(incidence[{a,b}]==1,"repaired chart lost a canonical shared-edge segment");
+        }
+        for(int face:model.edgeFaces(interval.edgeTag)){
+            bool used=false;
+            for(const auto& wire:model.boundaryUses(face))for(const auto& use:wire.edges)
+                if(use.edgeTag==interval.edgeTag){
+                    for(double at:chain.parameters){Vec2 uv;check(model.parameterOnUse(use.useId,at,uv),
+                        "shared midpoint has no unchanged incident-face pcurve correspondence");}
+                    used=true;
+                }
+            check(used,"shared midpoint lost its original incident-face use");
+            ++sharedChecks;
+        }
+    }
+    check(sharedChecks>=4,"narrow-trim test did not inspect both incident faces of each split edge");
+    // Numerical exhaustion must not invent a point or modify the chain.
+    const double a=.5,b=std::nextafter(a,std::numeric_limits<double>::infinity());
+    std::map<int,Chain> adjacent{{1,Chain{{0,1},{a,b}}}};
+    bool appended=false;
+    check(!bisectOcctChartIntervals(adjacent,{{1,a,b}},
+        [&](int,double,std::uint64_t){appended=true;return 2;},tick,[](std::size_t){},&witness)&&
+        !appended&&adjacent.at(1).ids==std::vector<int>{0,1}&&
+        std::string_view(witness.detail)=="chart_parameter_resolution"&&witness.geometricRefusal,
+        "unrepresentable chart interval was silently changed");
+    struct AdmissionStop {};
+    for(bool stopAtAdmission:std::array{false,true}){
+        auto stopped=originalChains;bool added=false,caught=false;
+        try {
+            bisectOcctChartIntervals(stopped,intervals,
+                [&](int,double,std::uint64_t){added=true;return 1000;},
+                [&](std::uint64_t){if(!stopAtAdmission)throw AdmissionStop{};},
+                [&](std::size_t){if(stopAtAdmission)throw AdmissionStop{};});
+        }catch(const AdmissionStop&){caught=true;}
+        check(caught&&!added,"crossing recovery ignored work or memory admission");
+        for(const auto& [tag,chain]:originalChains)
+            check(stopped.at(tag).ids==chain.ids&&stopped.at(tag).parameters==chain.parameters,
+                "pre-admission refusal changed a canonical chain");
+    }
+    // The ordinary mesher retains all native geometry and embedding gates.
+    geo::OcctBoundaryOptions options;options.maximumChordError=.015;options.maximumWork=100'000'000;
+    options.construction.resourcePolicy=geo::CadResourcePolicy::Normal;
+    mesh::Mesh boundary;OcctBoundaryAliasReceipt receipt;
+    // Deliberately coarse global request on the same curved source. The
+    // source constructor can add its own geometry/growth samples; its total
+    // node count is not a topology-repair counter. The exact two-split control
+    // above isolates recovery. Here independently certify the whole shell
+    // and verify every retained shared node/face identity.
+    // This large chord request is not a geometry-accuracy or volume-mesh claim.
+    auto coarseOptions=options;coarseOptions.maximumChordError=100.;
+    const auto coarse=buildSpacedOcctBoundary(model,1,coarseOptions,1e6,64ULL*1024*1024,
+        boundary,receipt,false,false,1);
+    const auto coarseCertificate=certifyOcctBoundarySurface(boundary,OcctStarOptions{});
+    std::cout<<"narrow trim coarse: "<<geo::occtBoundaryReasonName(coarse.reason)
+        <<" nodes="<<coarse.nodes<<" vertices="<<model.vertices().size()
+        <<" triangles="<<coarse.triangles<<" published="<<coarse.published
+        <<" source_unchanged="<<coarse.sourceModelUnmodified
+        <<" witness="<<receipt.witness.stage<<'/'<<receipt.witness.detail
+        <<" certificate="<<coarseCertificate.diagnostic<<'\n';
+    check(coarse.published&&coarse.sourceModelUnmodified&&coarse.closed&&coarse.oriented&&coarse.vertexManifold&&
+        coarseCertificate.certified,
+        "integrated curved-trim source failed original-CAD surface certification");
+    std::set<geo::OcctBoundaryNodeKey> uniqueKeys;
+    std::map<Index,std::set<int>> incidentFaces;
+    for(Index i=0;i<boundary.cellCount();++i){
+        const auto& cell=boundary.cell(i);
+        check(cell.type==mesh::CellType::Tri3&&cell.onEntity.dim==2&&model.face(cell.onEntity.tag),
+            "shared topology recovery lost original CAD face tags");
+        for(unsigned j=0;j<3;++j)incidentFaces[boundary.cellNodes(i)[j]].insert(cell.onEntity.tag);
+    }
+    std::set<int> retainedVertices;
+    unsigned sharedCurveNodes=0;
+    for(Index i=0;i<boundary.nodeCount();++i){
+        const auto& key=coarse.nodeKeys[std::size_t(i)];
+        const auto classification=boundary.nodeClass(i);
+        check(uniqueKeys.insert(key).second&&key.dimension==classification.dim&&key.tag==classification.tag,
+            "shared topology recovery duplicated or reclassified a native provenance key");
+        if(classification.dim==0){
+            check(model.vertex(classification.tag)&&retainedVertices.insert(classification.tag).second&&
+                same(boundary.node(i),model.vertex(classification.tag)->position()),
+                "integrated topology recovery moved or replaced an original CAD vertex");
+        }else if(classification.dim==1){
+            check(model.edge(classification.tag)!=nullptr,"recovered node lost its original CAD edge tag");
+            for(int face:model.edgeFaces(classification.tag))
+                check(incidentFaces[i].contains(face),
+                    "integrated topology recovery did not share one node ID across incident CAD faces");
+            ++sharedCurveNodes;
+        }
+    }
+    check(retainedVertices.size()==model.vertices().size()&&sharedCurveNodes>0,
+        "integrated topology recovery omitted original vertices or exercised no shared curve nodes");
+    const auto full=buildSpacedOcctBoundary(model,1,options,.3,64ULL*1024*1024,boundary,receipt,true);
+    check(full.published&&full.closed&&full.oriented&&full.vertexManifold&&full.sourceModelUnmodified&&
+        full.connectedShells==1&&certifyOcctBoundarySurface(boundary,OcctStarOptions{}).certified,
+        "owned narrow-trim prism failed full original-CAD surface certification");
+    mesh::Mesh sentinel;sentinel.addNode({-7,-8,-9},{3,999});
+    const auto sentinelHash=mesh::meshHash(sentinel);
+    auto limited=options;limited.maximumNodes=3;
+    auto refused=buildSpacedOcctBoundary(model,1,limited,.3,64ULL*1024*1024,sentinel,receipt,true);
+    check(!refused.published&&refused.reason==geo::OcctBoundaryReason::BudgetExceeded&&
+        mesh::meshHash(sentinel)==sentinelHash,"limited curved trim published a partial boundary");
+    std::atomic<bool> cancel{true};limited=options;limited.cancellation=&cancel;
+    refused=buildSpacedOcctBoundary(model,1,limited,.3,64ULL*1024*1024,sentinel,receipt,true);
+    check(!refused.published&&refused.reason==geo::OcctBoundaryReason::Cancelled&&
+        mesh::meshHash(sentinel)==sentinelHash,"cancelled curved trim published a partial boundary");
+    check(snapshot(model)==before,"narrow-trim recovery modified the original Native BRep");
+    return 21;
+}
+
 int constrainedChartRegions() {
     // Each strip consists of two triangles between the outer and inner wire.
     // The final two triangles fill the inner loop and must be marked exterior.
@@ -399,6 +608,7 @@ int main(int argc,char**argv) {
             }
             check(nonlinear,"owned control lost its nonuniform physical parameterization");
             checks+=boundedParameterCorrespondence(*owned.model)+2;
+            checks+=narrowTrimTopology(folder);
         }
         {
             auto owned=load(BRepPrimAPI_MakeBox(1.,2.,3.).Shape(),folder/"chart-witness-box.brep");
