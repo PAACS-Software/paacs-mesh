@@ -91,7 +91,114 @@ pilots do not update the original full-corpus coverage score. Downloaded CAD
 sources and their figures remain in ignored local evidence; owned fixtures can
 be redistributed with the tests.
 
-## Windows development qualification
+## Paired original 51-file development qualification
+
+The frozen Windows/Python 3.12 candidate `fb6997d0` was compared with
+`be303775` on all 51 pinned STEP inputs, once per side in two separate profiles.
+Both used size `0.15 × body-bounds diagonal`, growth 1.3, one meshing worker
+and one validation worker, a 120-second cooperative allowance and a 150-second
+process deadline. Native validity and CAD tolerances were unchanged. These are
+development-build results, not installed-wheel or cross-platform qualification.
+
+| Profile | Native and independently inspected, baseline → candidate | Native gains | Native regressions |
+| --- | ---: | --- | --- |
+| Default | 30/51 → 30/51 | None | None |
+| Both experimental switches | 31/51 → 33/51 | CAD27, CAD7272 | None |
+
+All 30 default passes were preserved. Fifteen Native-accepted attempts initially
+hit the 60-second file-inspection allowance. Extended archive-only inspection
+qualified all 15: two actual audits took 92.17 and 88.64 seconds, with 13 exact
+proof reuses. Reuse requires identical archive bytes, numerical implementation,
+options and limits; each attempt retains its own Native/CAD/source and tag
+binding. No geometry gate or non-time resource limit changed, and no remeshing
+was performed. CAD4149 already passed Native gates on both builds; the original
+inspection timeout was not a meshing failure or new coverage gain.
+
+The 90-second counts depend on the clock. Every counted mesh has completed
+independent inspection. Native and pipeline clocks count their own work across
+every generation attempt. The controller clock additionally charges the complete
+referenced inspection proof, including earlier failed inspections:
+
+| Profile | Native API call | Import + mesh + export | Full controller process |
+| --- | ---: | ---: | ---: |
+| Default, baseline → candidate | 28 → 28 | 28 → 28 | 23 → 24 |
+| Experimental, baseline → candidate | 29 → 31 | 29 → 31 | 25 → 27 |
+
+The target of 34/51 within 90 seconds has not been met. The two profiles have a
+descriptive union of 34 accepted files; that is not an implemented dispatcher,
+a single coverage score or a combined runtime result. The original 204 screen
+attempts consumed 12,192.72 controller seconds. Including 12 held-out requests
+and 40 fixed-slow repeats gives 256 generation attempts and 16,372.86 controller
+seconds; the completed inspection follow-up adds 182.58 seconds of actual work,
+counting shared audits once and retaining verification overhead. Per-case
+qualification still charges the full referenced audit, so proof reuse does not
+turn a slow qualification into a sub-90-second result. Native and pipeline clocks
+remain unknown for 26 generation attempts; known subtotals are not full totals.
+
+In the experimental CAD03 pair, Native time fell from 113.52 to 84.34 seconds
+with the same recorded archive hash, quality and CAD errors. Import/mesh/export
+took 85.58 seconds; controller-observed process time was 90.23 seconds. The
+worker's shorter reported time is a different clock. These are single paired
+observations, not timing medians. CAD27 passes the Native and independent checks
+with 12,210 Tet4 cells at 93.71 Native seconds, but its minimum mean ratio is
+about `4.32e-11`. Positive orientation and geometric validity do not make these
+very poor cells suitable for simulation.
+
+File 7272 also changed from refused to accepted, producing 7,176 Tet4 cells in
+47.83 Native seconds with three source-facet additions. Its minimum mean ratio
+is about 0.0226; it is another validity result, not a solver-quality claim.
+
+Three repeats were completed for the five preselected slow files. Only three
+files per profile qualified on both builds in every repeat, with identical
+recorded archive hashes, achieved sizing, CAD errors and tags:
+
+| Profile / input | Native median, baseline → candidate (s) | Controller median, baseline → candidate (s) |
+| --- | ---: | ---: |
+| Default / CAD20 | 79.90 → 81.55 | 87.97 → 89.56 |
+| Default / CAD04 | 106.69 → 107.16 | 111.58 → 111.90 |
+| Default / CAD2727 | 30.22 → 30.76 | 39.26 → 39.74 |
+| Experimental / CAD24 | 44.88 → 41.15 | 50.60 → 46.87 |
+| Experimental / CAD20 | 79.56 → 80.54 | 87.57 → 88.74 |
+| Experimental / CAD2727 | 23.83 → 23.83 | 32.59 → 32.59 |
+
+Default CAD24/CAD8181 and experimental CAD04/CAD8181 did not qualify across all
+repeats. Their costs remain in the totals. The complete five-case median cannot
+be reported, and halving it has not been demonstrated. The qualified pairs show
+an 8.31% Native median reduction for experimental CAD24; the other matched
+Native medians were approximately flat or 0.44–2.07% slower. These local medians
+do not establish scaling or broad speed superiority.
+
+A separate four-run CAD16 CLI trial compared stock queries with existing face-tool
+reuse, leaving adaptive recovery and memoization disabled. Median CLI time fell
+from 22.74 to 21.41 seconds (5.82%). All runs retained identical archive bytes
+and CAD-error signatures; the archive also matches the Python matrix result.
+All 54,088 projection queries remained. Facet-witness time fell from 6.73 to
+6.05 seconds, while centroid checking showed no benefit. This is a modest
+initialization saving under a separate CLI timing policy, not a new default or
+an extrapolated corpus speedup.
+
+Each build/profile accepted one of three preselected held-out files. That
+success, CAD8645, had already qualified previously. CAD3393 and CAD5235 were
+first executed this iteration and failed. This is useful failure evidence,
+not general unseen coverage.
+
+The implementation changes address named stages. Source facet projection and
+swept-patch remapping repair original-CAD material disagreement while preserving
+unaffected cells and all subsequent audits. Canonical chart repair retains
+shared curve nodes; inconsistent original trims still refuse, including CAD13.
+Bounded source-coverage diagnostics and exact-bit trim memoization reduce
+repeated core work. The earlier source-first probe remains Advanced-only
+because its pilot did not improve total time; these changes are not a quality
+optimization or a default-mode promotion.
+
+The [numeric record](data/source-preparation.json) retains historical pilots,
+all three clocks, unknown measurements, exact proof identities and the completed
+repeat results. The later diagnostics-only commit `c829ba34` is separate from
+the frozen matrix binary. Its Python STEP wheel and mesh qualification workflows
+both completed successfully. No merge, tag or package release follows from this
+development qualification.
+
+## Historical development qualification
 
 The base build at `be303775` passed 266 Python tests, with one expected POSIX-only skip,
 all 104 STEP CLI cases, 94 native meshing assertions and the expanded native
@@ -122,7 +229,7 @@ allowance, a 150-second process deadline, one meshing worker, one validation
 worker and the same geometry/resource settings. There were no external retries
 within these requests. Earlier failed development attempts are also retained in
 the [numeric record](data/source-preparation.json); single samples are not
-timing medians. The original 51-file score has not been rerun.
+timing medians. These historical pilot results do not replace the later paired qualification above.
 
 CAD03's regular chart source passed on its first attempt; it did not need native
 source substitution. Boundary recovery resolved the remaining five edges and
