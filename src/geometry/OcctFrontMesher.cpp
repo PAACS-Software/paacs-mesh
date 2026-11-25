@@ -12,6 +12,8 @@
 #include "OcctStarMesher.hpp"
 #include "OcctWireRefinement.hpp"
 #include "OcctFacetRefinement.hpp"
+#include "../bnd/TetFacetPatchRemap.hpp"
+#include "../bnd/TetSourceFaceCoverage.hpp"
 #include "OcctNativeWireAuthority.hpp"
 #include "OcctBoundaryDiagonalClosure.hpp"
 #include "OcctPlcMaterialFilter.hpp"
@@ -733,8 +735,9 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
         recovery.maximumLocalFrontTets=usesConstraintSeed?512:0;
         const auto partialFrom=[&](const bnd::detail::PlcGiftWrapping& value){mesh::Mesh partial;for(Index i=0;i<Index(value.vertices.size());++i){tick();partial.addNode(value.vertices[i].position,i<boundary.nodeCount()?boundary.nodeClass(i):mesh::Classification{3,tag});}for(auto c:value.cells){tick();std::array<Index,4> ids;for(unsigned j=0;j<4;++j)ids[j]=c.vertices[j];partial.addCell(mesh::CellType::Tet4,ids,{3,tag});}return partial;};
         mesh::Mesh* evolvingPartial=nullptr;
+        enum class RecoveryEntry { Standard, DeferRegions, RegionsOnly };
         const auto recover=[&](const mesh::Mesh& partial,mesh::Mesh& result,bool diversified=false,
-                               bool combineRefill=false){
+                               bool combineRefill=false,RecoveryEntry entry=RecoveryEntry::Standard){
             mesh::Mesh continuation;
             const auto collect=[&](const bnd::TetPlcCavityOutcome& recovered){
                 auto& profile=out.regionRecovery;
@@ -762,8 +765,13 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 recovery.maximumRandomCandidatePoints=diversified?64:0;
                 recovery.maximumMergedComponents=(diversified||regions)?4:0;
                 OcctStageTrace refill("cavity_refill",tag);
+                bnd::detail::observeTetCavity("cavity_refill_input",tag,boundary,input);
                 mesh::Mesh advanced;auto recovered=bnd::recoverTetPlcCavitiesRetaining(boundary,input,recovery,result,&advanced);
                 refill.finish(recovered.diagnostic);
+                bnd::detail::observeTetCavity("cavity_refill_progress",tag,boundary,
+                    recovered.published?result:advanced.cellCount()?advanced:input,
+                    recovered.unresolvedSourceTriangles,recovered.blockedSourceTriangles,
+                    recovered.diagnostic,recovered.remainingFrontFaces,recovered.workUsed);
                 collect(recovered);
                 if(!recovered.published&&advanced.cellCount()&&!includeVisibility)continuation.swap(advanced);
                 const auto why=std::string_view(recovered.diagnostic);
@@ -777,7 +785,8 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             // A complete constraint seed with a few CAD removals already
             // localizes the cavities. Use one certified front for both
             // visibility and region refill before retrying the usual order.
-            auto recovered=attempt(partial,finalRegions||combineRefill,regionVertices,combineRefill);
+            auto recovered=entry==RecoveryEntry::RegionsOnly?attempt(partial,true):
+                attempt(partial,finalRegions||combineRefill,regionVertices,combineRefill);
             if(combineRefill&&!recovered.published&&out.workUsed<maximumWork&&
                 (recovered.reason==bnd::TetPlcCavityReason::Unavailable||
                  recovered.reason==bnd::TetPlcCavityReason::BudgetExceeded||
@@ -794,7 +803,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 recovered=attempt(continuation.cellCount()?continuation:partial,true,expandedRegionVertices);
                 recovered.cavitiesClosed+=closed;
             }
-            if(!recovered.published&&!finalRegions&&options.maximumRecoveryPatchStates&&
+            if(!recovered.published&&!finalRegions&&entry==RecoveryEntry::Standard&&options.maximumRecoveryPatchStates&&
                 recovered.reason==bnd::TetPlcCavityReason::Unavailable&&out.workUsed<maximumWork){
                 const auto closed=recovered.cavitiesClosed;
                 recovered=attempt(continuation.cellCount()?continuation:partial,true);
@@ -1093,6 +1102,8 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             }
             if(!materialComplete){
                 centroidCache.clear();
+                bnd::detail::observeTetCavity("volume_material_input",tag,boundary,
+                    completeDiscreteSeed?completed:pendingRecovery);
                 classifyCenters(seedCentroids(completeDiscreteSeed?completed:pendingRecovery),
                                 admitted,&strictAdmissions);
                 if(canRetryInward&&!inwardRetry){
@@ -1112,6 +1123,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
         // The explicit approximation policy applies only to cell centroids.
         // Interior vertices and all recovery proposals retain strict admission.
         mesh::Mesh incomplete;if(!initiallyComplete){if(pendingRecovery.cellCount())incomplete.swap(pendingRecovery);else incomplete=partialFrom(front);}mesh::Mesh inside;const auto material=retainOcctPlcMaterial(initiallyComplete?completed:incomplete,ns,native,nativeCentroid,tick,inside);
+        bnd::detail::observeTetCavity("volume_material_retained",tag,boundary,inside);
         out.removedInteriorNodes=material.removedInteriorNodes;out.removedIncidentCells=material.removedIncidentCells;out.removedCentroidCells=material.removedCentroidCells;
         if(!initiallyComplete||material.removedInteriorNodes||material.removedIncidentCells||material.removedCentroidCells){
             need(!curvatureSurface,NativeCadMeshReason::MeshingFailed,"native-curvature-material-refused");
@@ -1125,22 +1137,62 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             const bool localCadHoles=(liveTrial||(regularSurface&&
                 std::string_view(out.constraintRecovery.diagnostic)=="complete_seed"))&&options.maximumRecoveryPatchStates&&
                 !material.removedInteriorNodes&&material.removedCentroidCells>0&&material.removedCentroidCells<=16;
-            auto result=recover(inside,repaired,false,localCadHoles);
-            if(!spaceSurface&&!result.published&&result.reason==bnd::TetPlcCavityReason::Unavailable&&out.randomRetries<options.maximumRecoveryRandomRetries)result=recover(inside,repaired,true);
+            // An admitted spatial source can still leave a thin CAD mismatch
+            // along a curved facet. Diagnose and refine those faces before
+            // changing unrelated curve samples. Explicit sample caps stay hard.
+            const bool recoverSourceGeometry=boundaryFirst&&
+                !options.construction.surfacePointsPerFace&&!options.construction.surfaceChordPointsPerFace;
+            bool regionsDeferred=recoverSourceGeometry&&options.recoveryMode==NativeCadRecoveryMode::Advanced&&!localCadHoles&&
+                material.removedCentroidCells>0&&options.maximumRecoveryPatchStates;
+            auto result=recover(inside,repaired,false,localCadHoles,
+                regionsDeferred?RecoveryEntry::DeferRegions:RecoveryEntry::Standard);
+            regionsDeferred=regionsDeferred&&!result.published&&result.reason==bnd::TetPlcCavityReason::Unavailable;
+            if(regionsDeferred){
+                // A checked cheap continuation can already expose the curved
+                // source responsible for material refusals. Diagnose it before
+                // opening larger regions; unsuccessful selection resumes the
+                // established region route below, with every cost retained.
+                OcctStageTrace coverageTrace("source_geometry_diagnostic",tag);
+                bnd::detail::SourceFaceCoverageLimits limits;
+                limits.maximumWork=remaining();
+                const auto receipts=strictAdmissions.retainedPayloadBytes();
+                need(receipts<availableBytes,NativeCadMeshReason::BudgetExceeded,"native-plc-source-coverage-memory");
+                limits.maximumWorkingBytes=availableBytes-receipts;
+                limits.maximumNodes=o.maximumNodes;limits.maximumSourceTriangles=bo.maximumTriangles;
+                limits.maximumPartialCells=o.maximumCells;limits.cancellation=o.cancellation;
+                auto coverage=bnd::detail::collectMissingSourceTriangles(boundary,inside,{3,tag},limits);
+                coverageTrace.finish(coverage.diagnostic);accountCompleted(coverage.workUsed);
+                need(coverage.reason!=bnd::detail::SourceFaceCoverageReason::Cancelled,NativeCadMeshReason::Cancelled,"cancelled");
+                need(coverage.reason!=bnd::detail::SourceFaceCoverageReason::AllocationFailed,NativeCadMeshReason::AllocationFailed,"allocation-failed");
+                need(coverage.reason!=bnd::detail::SourceFaceCoverageReason::BudgetExceeded,NativeCadMeshReason::BudgetExceeded,coverage.diagnostic);
+                need(coverage.complete,NativeCadMeshReason::InternalError,coverage.diagnostic);
+                result.unresolvedSourceTriangles.swap(coverage.missingSourceTriangles);
+                result.blockedSourceTriangles.clear();
+                if(result.unresolvedSourceTriangles.empty()){
+                    const auto closed=result.cavitiesClosed;
+                    regionsDeferred=false;result=recover(inside,repaired,false,false,RecoveryEntry::RegionsOnly);
+                    result.cavitiesClosed+=closed;
+                }
+            }
+            if(!spaceSurface&&!regionsDeferred&&!result.published&&result.reason==bnd::TetPlcCavityReason::Unavailable&&out.randomRetries<options.maximumRecoveryRandomRetries)result=recover(inside,repaired,true);
             bool localRefinementBound=false;
-            for(unsigned refinement=0;!spaceSurface&&!result.published&&refinement<4&&(!result.unresolvedSourceTriangles.empty()||!result.blockedSourceTriangles.empty());++refinement){
+            for(unsigned refinement=0;(!spaceSurface||recoverSourceGeometry)&&!result.published&&refinement<4&&
+                (!result.unresolvedSourceTriangles.empty()||!result.blockedSourceTriangles.empty());){
                 need(result.reason!=bnd::TetPlcCavityReason::AllocationFailed,NativeCadMeshReason::AllocationFailed,"allocation-failed");need(result.reason!=bnd::TetPlcCavityReason::Cancelled,NativeCadMeshReason::Cancelled,"cancelled");
                 {
                     mesh::Mesh candidate;const auto changed=closeOcctBoundaryDiagonals(model,boundary,inside,16,candidate,[&](std::uint64_t n){tick(n);});
                     if(changed.flips){bo.maximumWork=remaining();const auto facets=auditOcctBoundaryFacets(model,tag,candidate,bo);accountCompleted(facets.work);certificateOptions.maximumWork=remaining();const auto cert=certifyOcctBoundarySurface(candidate,certificateOptions);accountCompleted(cert.workUsed);
                         
-                        if(facets.completed&&facets.sourceModelUnmodified&&cert.certified){boundary.swap(candidate);result=recover(inside,repaired);continue;}
+                        if(facets.completed&&facets.sourceModelUnmodified&&cert.certified){boundary.swap(candidate);++refinement;regionsDeferred=false;result=recover(inside,repaired);continue;}
                     }
                 }
+                const auto previousNodes=boundary.nodeCount();bool changed=false;
+                std::vector<bnd::detail::FacetSourcePatch> sourceEdits;
+                if(!recoverSourceGeometry){
                 using Edge=std::array<Index,2>;std::map<Edge,std::set<int>> owners;const auto edgeKey=[](Index a,Index b){if(b<a)std::swap(a,b);return Edge{a,b};};
                 for(Index i=0;i<boundary.cellCount();++i){const auto* p=boundary.cellNodes(i);for(unsigned j=0;j<3;++j){tick();owners[edgeKey(p[j],p[(j+1)%3])].insert(boundary.cell(i).onEntity.tag);}}
                 std::set<int> edges;for(auto i:result.unresolvedSourceTriangles){need(i>=0&&i<boundary.cellCount(),NativeCadMeshReason::InternalError,"native-plc-diagnostic-face-index");const auto* p=boundary.cellNodes(i);for(unsigned j=0;j<3;++j){const auto a=p[j],b=p[(j+1)%3];const auto edge=actualOcctWire(model,boundary.nodeClass(a),boundary.nodeClass(b),owners.at(edgeKey(a,b)),[&]{tick();});if(edge>0&&model.edge(edge)->kind()!=CurveKind::Line)edges.insert(edge);}}
-                if(edges.size()>16){auto end=edges.begin();std::advance(end,16);edges.erase(end,edges.end());}const auto previousNodes=boundary.nodeCount();bool changed=false;
+                if(edges.size()>16){auto end=edges.begin();std::advance(end,16);edges.erase(end,edges.end());}
                 // A refused first pass can terminate this loop. Admit checked
                 // closed cycles here too, so their recovery does not depend
                 // on an unrelated facet subdivision enabling a later pass.
@@ -1153,17 +1205,158 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                     }
                     changed|=refined.published;
                 }
-                if(!changed){std::vector<OcctFacetSelection> selected;const auto& candidates=result.blockedSourceTriangles.empty()?result.unresolvedSourceTriangles:result.blockedSourceTriangles;for(auto i:candidates){need(i>=0&&i<boundary.cellCount(),NativeCadMeshReason::InternalError,"native-plc-diagnostic-face-index");selected.push_back({tag,i});if(selected.size()==8)break;}
-                    if(!selected.empty()){OcctFacetRefinementOptions facet;facet.selections=selected;facet.maximumProjectionDistance=out.chord;facet.maximumAddedNodes=8;facet.limits=certificateOptions;facet.limits.maximumWork=remaining();const std::array input{OcctFacetBoundary{tag,&boundary}};const auto refined=refineOcctFacets(model,input,facet);out.sourceFacetNodes+=refined.addedNodes;accountCompleted(refined.workUsed);need(refined.reason!=OcctFacetRefinementReason::Cancelled,NativeCadMeshReason::Cancelled,"cancelled");need(refined.reason!=OcctFacetRefinementReason::AllocationFailed,NativeCadMeshReason::AllocationFailed,"allocation-failed");if(refined.reason==OcctFacetRefinementReason::BudgetExceeded){localRefinementBound=true;need(out.workUsed<maximumWork,NativeCadMeshReason::BudgetExceeded,"native-plc-adaptive-facet-budget");}changed=refined.published;}}
-                if(!changed)break;
+                }
+                if(!changed){
+                    std::vector<OcctFacetSelection> selected;
+                    const bool preferUnresolved=(recoverSourceGeometry&&!result.unresolvedSourceTriangles.empty())||result.blockedSourceTriangles.empty();
+                    const auto& candidates=preferUnresolved?result.unresolvedSourceTriangles:result.blockedSourceTriangles;
+                    const auto selectionLimit=recoverSourceGeometry?32u:8u;
+                    for(auto i:candidates){
+                        tick();
+                        need(i>=0&&i<boundary.cellCount(),NativeCadMeshReason::InternalError,"native-plc-diagnostic-face-index");
+                        if(recoverSourceGeometry&&model.face(boundary.cell(i).onEntity.tag)->kind()==SurfaceKind::Plane)continue;
+                        selected.push_back({tag,i});if(selected.size()==(recoverSourceGeometry?1024u:selectionLimit))break;
+                    }
+                    if(!selected.empty()){
+                        OcctStageTrace geometryRefinement("source_geometry_refinement",tag);
+                        OcctFacetRefinementOptions facet;facet.selections=selected;
+                        facet.maximumProjectionDistance=out.chord;facet.maximumAddedNodes=selectionLimit;
+                        if(recoverSourceGeometry)facet.maximumCandidatePatches=selectionLimit;
+                        facet.skipUnavailableCandidates=recoverSourceGeometry;
+                        facet.requireGeometricChange=recoverSourceGeometry;
+                        facet.limits=certificateOptions;facet.limits.maximumWork=remaining();
+                        if(recoverSourceGeometry)admitQueries(std::uint64_t(selected.size())*2);
+                        const std::array input{OcctFacetBoundary{tag,&boundary}};
+                        auto refined=refineOcctFacets(model,input,facet);
+                        geometryRefinement.finish(refined.diagnostic);
+                        if(refined.published){
+                            out.sourceFacetNodes+=refined.addedNodes;out.surfaceTriangles=boundary.cellCount();
+                            sourceEdits=std::move(refined.committedPatches);
+                        }
+                        out.nativeQueries+=refined.nativeQueries;accountCompleted(refined.workUsed);
+                        bnd::detail::observeTetCavity("source_geometry_refinement",tag,boundary,inside,
+                            {},{},refined.diagnostic,0,refined.workUsed);
+                        need(refined.reason!=OcctFacetRefinementReason::Cancelled,NativeCadMeshReason::Cancelled,"cancelled");
+                        need(refined.reason!=OcctFacetRefinementReason::AllocationFailed,NativeCadMeshReason::AllocationFailed,"allocation-failed");
+                        if(refined.reason==OcctFacetRefinementReason::BudgetExceeded){
+                            localRefinementBound=true;
+                            need(out.workUsed<maximumWork,NativeCadMeshReason::BudgetExceeded,"native-plc-adaptive-facet-budget");
+                        }
+                        changed=refined.published;
+                    }
+                }
+                if(!changed){
+                    if(regionsDeferred){
+                        const auto closed=result.cavitiesClosed;
+                        regionsDeferred=false;result=recover(inside,repaired,false,false,RecoveryEntry::RegionsOnly);
+                        result.cavitiesClosed+=closed;continue;
+                    }
+                    break;
+                }
+                ++refinement;
+                regionsDeferred=false;
+                OcctStageTrace sourceRebuild("refined_source_rebuild",tag);
+                need(boundary.nodeCount()>=previousNodes&&inside.nodeCount()>=previousNodes,
+                     NativeCadMeshReason::InternalError,"native-plc-refined-prefix-count");
+                for(Index i=0;i<previousNodes;++i){
+                    tick();
+                    need(pointKey(boundary.node(i))==pointKey(inside.node(i))&&
+                         boundary.nodeClass(i)==inside.nodeClass(i),
+                         NativeCadMeshReason::InternalError,"native-plc-refined-prefix-changed");
+                }
+                // Admit simultaneously retained mesh capacities and the private
+                // checked-front/next-mesh staging before allocating the remap.
+                using occt_initial_point_front_detail::saturatedAdd;
+                using occt_initial_point_front_detail::saturatedMultiply;
+                const auto meshCapacityBytes=[&](const mesh::Mesh& value){
+                    tick(std::uint64_t(value.nodeCount())+std::uint64_t(value.cellCount()));
+                    const auto capacity=value.capacitySnapshot();
+                    need(capacity.complete,NativeCadMeshReason::BudgetExceeded,"native-plc-refined-capacity-overflow");
+                    std::uint64_t bytes=0;
+                    for(const auto [count,unit]:std::array<std::pair<std::uint64_t,std::uint64_t>,7>{{
+                        {capacity.nodeCoordinateCapacity,sizeof(Vec3)},
+                        {capacity.nodeClassificationCapacity,sizeof(mesh::Classification)},
+                        {capacity.cellCapacity,sizeof(mesh::Cell)},
+                        {capacity.connectivityCapacity,sizeof(Index)},
+                        {capacity.dedupBucketCount,16},{capacity.dedupEntryCount,256},
+                        {capacity.dedupIndexCapacity,sizeof(Index)}}})
+                        bytes=saturatedAdd(bytes,saturatedMultiply(count,unit));
+                    return bytes;
+                };
+                auto refinedRetained=saturatedAdd(retained,strictAdmissions.retainedPayloadBytes());
+                refinedRetained=saturatedAdd(refinedRetained,
+                    saturatedMultiply(std::uint64_t(sourceEdits.capacity()),sizeof(bnd::detail::FacetSourcePatch)));
+                for(const auto* value:std::array{&inside,&completed,&incomplete,&pendingRecovery,&repaired})
+                    refinedRetained=saturatedAdd(refinedRetained,meshCapacityBytes(*value));
+                const auto refinedNodes=saturatedAdd(std::uint64_t(boundary.nodeCount()),
+                    std::uint64_t(inside.nodeCount()-previousNodes));
+                need(refinedNodes<=o.maximumNodes&&std::uint64_t(boundary.cellCount())<o.maximumCells,
+                     NativeCadMeshReason::BudgetExceeded,"native-plc-refined-count-budget");
+                if(recoverSourceGeometry){
+                    // Only cells meeting a committed source patch can change
+                    // their relation to the PLC. Preserve all other cells and
+                    // their coordinates; the next recovery still performs its
+                    // complete source/contact/centroid/pair validation.
+                    need(!sourceEdits.empty(),NativeCadMeshReason::InternalError,"native-plc-missing-source-edit-receipt");
+                    need(refinedRetained<options.maximumPrimitiveWorkingBytes,
+                         NativeCadMeshReason::BudgetExceeded,"native-plc-refined-staging-memory");
+                    bnd::detail::FacetPatchRemapLimits limits;
+                    limits.maximumWork=remaining();
+                    limits.maximumWorkingBytes=options.maximumPrimitiveWorkingBytes-refinedRetained;
+                    limits.maximumNodes=o.maximumNodes;
+                    limits.maximumCells=o.maximumCells-std::uint64_t(boundary.cellCount());
+                    limits.maximumPatches=32;limits.maximumRemovedCells=std::uint64_t(inside.cellCount());
+                    limits.cancellation=o.cancellation;
+                    mesh::Mesh next;
+                    const auto remapped=bnd::detail::remapFacetPatchPartial(boundary,inside,
+                        previousNodes,sourceEdits,{3,tag},limits,next);
+                    accountCompleted(remapped.workUsed);
+                    need(remapped.reason!=bnd::detail::FacetPatchRemapReason::Cancelled,
+                         NativeCadMeshReason::Cancelled,"cancelled");
+                    need(remapped.reason!=bnd::detail::FacetPatchRemapReason::BudgetExceeded,
+                         NativeCadMeshReason::BudgetExceeded,remapped.diagnostic);
+                    need(remapped.reason!=bnd::detail::FacetPatchRemapReason::AllocationFailed,
+                         NativeCadMeshReason::AllocationFailed,"allocation-failed");
+                    need(remapped.prepared,NativeCadMeshReason::InternalError,remapped.diagnostic);
+                    inside.swap(next);
+                }else{
+                // Conservative source/index/front-row/next-node payload. Cell
+                // slots below also cover retained-cell indices and next output.
+                const auto refinedFixed=saturatedAdd(saturatedMultiply(refinedNodes,256),
+                    saturatedMultiply(std::uint64_t(boundary.cellCount()),512));
+                refinedRetained=saturatedAdd(refinedRetained,refinedFixed);
+                need(refinedRetained<options.maximumPrimitiveWorkingBytes,
+                     NativeCadMeshReason::BudgetExceeded,"native-plc-refined-staging-memory");
+                const auto refinedRoom=options.maximumPrimitiveWorkingBytes-refinedRetained;
+                const auto refinedApexBytes=std::min<std::uint64_t>({256ULL*1024*1024,
+                    std::uint64_t(options.maximumPrimitiveWorkingBytes/4),std::uint64_t(refinedRoom/4)});
+                const auto refinedCells=std::min({frontCells,o.maximumCells-std::uint64_t(boundary.cellCount()),
+                    (refinedRoom-refinedApexBytes)/1024});
+                need(std::uint64_t(inside.cellCount())<=refinedCells,
+                     NativeCadMeshReason::BudgetExceeded,"native-plc-refined-cell-memory");
                 // Reclassify the retained partial mesh against the refined PLC.
                 // Any crossed cell is discarded before another recovery attempt.
-                bnd::detail::PlcGiftWrapping checked;checked.chargeWork=tick;checked.cancellation=stop.get_token();for(Index i=0;i<boundary.nodeCount();++i)checked.vertices.push_back({boundary.node(i),checked.vertices.size()+1});
+                bnd::detail::PlcGiftWrapping checked;checked.cancellation=stop.get_token();
+                checked.chargeWork=[&](std::uint64_t n){tick(n);need(checked.vertices.size()<=o.maximumNodes,
+                    NativeCadMeshReason::BudgetExceeded,"native-plc-refined-node-budget");};
+                checked.admitApexStorage=[&](std::uint64_t bytes){need(bytes<=refinedApexBytes,
+                    NativeCadMeshReason::BudgetExceeded,"native-plc-refined-apex-storage-budget");};
+                checked.useLocalCandidates=saturatedMultiply(refinedNodes,std::uint64_t(boundary.cellCount()))>
+                    refinedApexBytes/sizeof(std::pair<double,bnd::TetFacetVertexId>);
+                for(Index i=0;i<boundary.nodeCount();++i)checked.vertices.push_back({boundary.node(i),checked.vertices.size()+1});
                 for(Index i=previousNodes;i<inside.nodeCount();++i)checked.vertices.push_back({inside.node(i),checked.vertices.size()+1});for(Index i=0;i<boundary.cellCount();++i){const auto* p=boundary.cellNodes(i);checked.boundary.push_back({unsigned(p[0]),unsigned(p[1]),unsigned(p[2])});}need(checked.initialize(),NativeCadMeshReason::GeometryError,"native-plc-refined-front-invalid");
                 const auto offset=boundary.nodeCount()-previousNodes;for(Index i=0;i<inside.cellCount();++i){bnd::TetFacetCell c;const auto* p=inside.cellNodes(i);for(unsigned j=0;j<4;++j)c.vertices[j]=unsigned(p[j]>=previousNodes?p[j]+offset:p[j]);bnd::TetFacetCell valid;const auto face=bnd::tet_facet_detail::outwardFace(c,0);if(checked.valid(bnd::detail::PlcGiftWrapping::Front{face},c.vertices[0],valid))checked.insert(c);}
-                checked.interiorAdmission=native;checked.centroidAdmission=nativeCentroid;checked.run(static_cast<unsigned>(std::min<std::uint64_t>(frontCells,UINT_MAX)),10,stop.get_token(),100000);
-                mesh::Mesh next;for(Index i=0;i<Index(checked.vertices.size());++i)next.addNode(checked.vertices[i].position,i<boundary.nodeCount()?boundary.nodeClass(i):mesh::Classification{3,tag});for(auto c:checked.cells){std::array<Index,4> ids;for(unsigned j=0;j<4;++j)ids[j]=c.vertices[j];next.addCell(mesh::CellType::Tet4,ids,{3,tag});}inside.swap(next);
-                bo.maximumWork=remaining();const auto audited=auditOcctBoundaryFacets(model,tag,boundary,bo);out.maximumFacetError=std::max(out.maximumFacetError,audited.maximumFacetSampleError);accountCompleted(audited.work);need(audited.completed&&audited.sourceModelUnmodified,NativeCadMeshReason::GeometryError,"native-plc-adaptive-facet-error");
+                checked.interiorAdmission=native;checked.centroidAdmission=nativeCentroid;checked.run(static_cast<unsigned>(std::min<std::uint64_t>(refinedCells,UINT_MAX)),10,stop.get_token(),100000);
+                need(checked.vertices.size()<=o.maximumNodes,NativeCadMeshReason::BudgetExceeded,"native-plc-refined-node-budget");
+                mesh::Mesh next;
+                next.reserveAppend(checked.vertices.size(),checked.cells.size(),checked.cells.size()*4);
+                for(Index i=0;i<Index(checked.vertices.size());++i)next.addNode(checked.vertices[i].position,i<boundary.nodeCount()?boundary.nodeClass(i):mesh::Classification{3,tag});for(auto c:checked.cells){std::array<Index,4> ids;for(unsigned j=0;j<4;++j)ids[j]=c.vertices[j];next.addCell(mesh::CellType::Tet4,ids,{3,tag});}inside.swap(next);
+                }
+                sourceRebuild.finish(recoverSourceGeometry?"local_partial_remap_prepared":"rebuilt_partial");
+                OcctStageTrace sourceAudit("source_geometry_validation",tag);
+                bo.maximumWork=remaining();const auto audited=auditOcctBoundaryFacets(model,tag,boundary,bo);
+                sourceAudit.finish(audited.completed&&audited.sourceModelUnmodified?"accepted":"refused");
+                out.maximumFacetError=std::max(out.maximumFacetError,audited.maximumFacetSampleError);accountCompleted(audited.work);need(audited.completed&&audited.sourceModelUnmodified,NativeCadMeshReason::GeometryError,"native-plc-adaptive-facet-error");
                 result=recover(inside,repaired);if(!result.published&&result.reason==bnd::TetPlcCavityReason::Unavailable&&out.randomRetries<options.maximumRecoveryRandomRetries)result=recover(inside,repaired,true);
             }
             // Only a final refusal reaches this path: previously accepted

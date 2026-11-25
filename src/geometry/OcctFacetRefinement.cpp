@@ -55,6 +55,7 @@ OcctFacetRefinementOutcome refineOcctFacets(const OcctModel& model,
     try {
         tick(0);
         need(!inputs.empty()&&inputs.size()<=64&&!options.selections.empty()&&options.selections.size()<=1024&&
+             options.maximumCandidatePatches<=1024&&
              std::isfinite(options.maximumProjectionDistance)&&options.maximumProjectionDistance>0,
              "invalid-facet-options",OcctFacetRefinementReason::InvalidRequest);
         std::map<int,const mesh::Mesh*> sources;std::set<const mesh::Mesh*> destinations;
@@ -86,24 +87,41 @@ OcctFacetRefinementOutcome refineOcctFacets(const OcctModel& model,
             need(patch.owners.contains(selected.bodyTag),"facet-not-owned-by-body",OcctFacetRefinementReason::InvalidBoundary);
             // Coordinate bits provide a common summation order across opposite
             // face uses and differing body-local node indices.
-            const auto a=point(k.points[0]),b=point(k.points[1]),cpt=point(k.points[2]);
-            const auto center=(a+b+cpt)/3.;Vec2 uv;Vec3 projected;
-            const auto* face=model.face(k.face);tick();++out.nativeQueries;
-            need(face->projectPoint(center,uv,projected)&&face->containsParam(uv)&&!face->singularAt(uv)&&finite(projected),"native-trim-projection-failed");
-            const auto displacement=(projected-center).norm();
-            need(std::isfinite(displacement)&&displacement<=options.maximumProjectionDistance,"projection-displacement-limit");
-            // Re-evaluate the accepted UV on the native surface, and require
-            // agreement at its original raw face tolerance.
-            tick();++out.nativeQueries;
-            need((face->pointAt(uv)-projected).norm()<=model.tolerance(2,k.face),"native-evaluation-disagreement");
-            const auto v=b-a,w=cpt-a,d=projected-a;
-            const auto vv=v.dot(v),vw=v.dot(w),ww=w.dot(w),dv=d.dot(v),dw=d.dot(w),denom=vv*ww-vw*vw;
-            const auto u=(ww*dv-vw*dw)/denom,t=(vv*dw-vw*dv)/denom;
-            need(std::isfinite(denom)&&denom>0&&std::isfinite(u)&&std::isfinite(t)&&u>0&&t>0&&u+t<1,
-                 "projected-point-outside-source-triangle");
-            patch.inserted=projected;out.maximumDisplacement=std::max(out.maximumDisplacement,displacement);
+            const auto* face=model.face(k.face);
+            if(options.requireGeometricChange&&face->kind()==SurfaceKind::Plane){
+                ++out.unchangedCandidates;continue;
+            }
+            try{
+                const auto a=point(k.points[0]),b=point(k.points[1]),cpt=point(k.points[2]);
+                const auto center=(a+b+cpt)/3.;Vec2 uv;Vec3 projected;
+                tick();++out.nativeQueries;
+                need(face->projectPoint(center,uv,projected)&&face->containsParam(uv)&&!face->singularAt(uv)&&finite(projected),"native-trim-projection-failed");
+                const auto displacement=(projected-center).norm();
+                need(std::isfinite(displacement)&&displacement<=options.maximumProjectionDistance,"projection-displacement-limit");
+                if(options.requireGeometricChange&&displacement<=model.tolerance(2,k.face)){
+                    ++out.unchangedCandidates;continue;
+                }
+                // Re-evaluate the accepted UV on the native surface, and require
+                // agreement at its original raw face tolerance.
+                tick();++out.nativeQueries;
+                need((face->pointAt(uv)-projected).norm()<=model.tolerance(2,k.face),"native-evaluation-disagreement");
+                const auto v=b-a,w=cpt-a,d=projected-a;
+                const auto vv=v.dot(v),vw=v.dot(w),ww=w.dot(w),dv=d.dot(v),dw=d.dot(w),denom=vv*ww-vw*vw;
+                need(std::isfinite(denom)&&denom>0,"projected-point-outside-source-triangle");
+                const auto u=(ww*dv-vw*dw)/denom,t=(vv*dw-vw*dv)/denom;
+                need(std::isfinite(u)&&std::isfinite(t)&&u>0&&t>0&&u+t<1,
+                     "projected-point-outside-source-triangle");
+                patch.inserted=projected;out.maximumDisplacement=std::max(out.maximumDisplacement,displacement);
+            }catch(const Stop& e){
+                if(!options.skipUnavailableCandidates||e.reason!=OcctFacetRefinementReason::UnsupportedGeometry)throw;
+                ++out.unavailableCandidates;continue;
+            }
             patches.emplace(k,std::move(patch));
+            if(options.maximumCandidatePatches&&patches.size()>=options.maximumCandidatePatches)break;
         }
+        need(!patches.empty(),"no-usable-facet-candidates");
+        std::vector<bnd::detail::FacetSourcePatch> committed;
+        committed.reserve(static_cast<std::size_t>(std::min<std::uint64_t>(options.maximumAddedNodes,options.selections.size()*inputs.size())));
         std::vector<mesh::Mesh> rebuilt;rebuilt.reserve(inputs.size());
         for(const auto& input:inputs){const auto& s=*input.boundary;mesh::Mesh candidate;std::set<int> bodyFaces;
             for(const int face:model.solid(input.bodyTag)->boundaryFaceTags()){tick();bodyFaces.insert(face);}
@@ -116,6 +134,7 @@ OcctFacetRefinementOutcome refineOcctFacets(const OcctModel& model,
                 need(patch.owners.contains(input.bodyTag)&&patch.seen.insert(input.bodyTag).second,"duplicate-or-unowned-shared-facet",OcctFacetRefinementReason::InvalidBoundary);
                 need(out.addedNodes<options.maximumAddedNodes,"added-node-budget",OcctFacetRefinementReason::BudgetExceeded);
                 const auto newNode=candidate.addNode(patch.inserted,{2,cell.onEntity.tag});++out.addedNodes;
+                committed.push_back({input.bodyTag,cell.onEntity.tag,ci,{ids[0],ids[1],ids[2]},newNode});
                 for(unsigned j=0;j<3;++j){tick();const std::array triangle{ids[j],ids[(j+1)%3],newNode};candidate.addCell(mesh::CellType::Tri3,triangle,cell.onEntity);}
                 out.addedTriangles+=2;
             }
@@ -128,6 +147,7 @@ OcctFacetRefinementOutcome refineOcctFacets(const OcctModel& model,
         }
         for(const auto& [key,patch]:patches){tick();need(patch.seen==patch.owners,"missing-bitwise-shared-facet");}
         tick(0);for(std::size_t i=0;i<inputs.size();++i)inputs[i].boundary->swap(rebuilt[i]);
+        out.committedPatches.swap(committed);
         out.published=true;out.reason=OcctFacetRefinementReason::None;out.diagnostic="none";
         out.failedFaceTag=-1;out.failedTriangle=-1;
     }catch(const Stop& e){out.reason=e.reason;out.diagnostic=e.diagnostic;}

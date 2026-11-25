@@ -6,6 +6,7 @@
 #pragma once
 #include "paacs/mesh/Mesh.hpp"
 #include <cstddef>
+#include <cstdint>
 #include <span>
 
 namespace paacs::bnd::detail {
@@ -27,6 +28,10 @@ struct TetConstructionObservation {
     std::span<const std::size_t> removedCells{};
     bool completeSnapshot=true;
     bool originalCoordinateRetryUsed=false;
+    const mesh::Mesh* sourceBoundary=nullptr;
+    std::span<const Index> unresolvedSourceTriangles{},blockedSourceTriangles{};
+    const char* diagnostic=nullptr;
+    std::uint64_t remainingFrontFaces=0,work=0;
 };
 using TetConstructionObserver=void (*)(const TetConstructionObservation&,void*) noexcept;
 struct TetConstructionObserverState {
@@ -52,5 +57,16 @@ inline void observeTetConstruction(const TetConstructionObservation& observation
 inline void observeTetMesh(const char* stage,int bodyTag,const mesh::Mesh& mesh) noexcept {
     if(tetConstructionObserver.observer)
         observeTetConstruction({stage,bodyTag,nullptr,&mesh});
+}
+inline void observeTetCavity(const char* stage,int bodyTag,const mesh::Mesh& source,
+    const mesh::Mesh& mesh,std::span<const Index> unresolved={},std::span<const Index> blocked={},
+    const char* diagnostic=nullptr,std::uint64_t remaining=0,std::uint64_t work=0) noexcept {
+    if(tetConstructionObserver.observer){
+        TetConstructionObservation view{stage,bodyTag,nullptr,&mesh};
+        view.sourceBoundary=&source;view.unresolvedSourceTriangles=unresolved;
+        view.blockedSourceTriangles=blocked;view.diagnostic=diagnostic;
+        view.remainingFrontFaces=remaining;view.work=work;
+        observeTetConstruction(view);
+    }
 }
 } // namespace paacs::bnd::detail
