@@ -459,6 +459,13 @@ Final centroid accounting describes completed checks. A refused assembly can
 retain child or partial-stage receipts; those do not certify a completed
 original-body validation or a published assembly.
 
+Body `region_recovery` reports retain the existing Native search, backtrack,
+candidate and bound-hit counters, with preparation, visibility, search,
+publication and validation timings. These describe recovery calls within the
+last retained front attempt. Nested timers can overlap and do not partition
+total volume time. Material-removal and blocked-candidate counts remain
+separate from source-mismatch ordering evidence; neither certifies a mesh.
+
 Development builds provide an opt-in relation query before meshing:
 
 ```python

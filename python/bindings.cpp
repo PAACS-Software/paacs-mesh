@@ -290,6 +290,24 @@ py::dict materialClassificationReport(const geo::NativeCadMaterialClassification
     return r;
 }
 
+py::dict regionRecoveryReport(const geo::NativeCadRegionRecoveryReport& source) {
+    py::dict r;
+    r["attempts"]=source.attempts;r["states"]=source.states;r["backtracks"]=source.backtracks;
+    r["candidates"]=source.candidates;r["pair_cache_hits"]=source.pairCacheHits;
+    r["patches"]=source.patches;r["bound_hits"]=source.boundHits;
+    r["vertex_bound_hits"]=source.vertexBoundHits;r["state_bound_hits"]=source.stateBoundHits;
+    r["largest_vertices"]=source.largestVertices;r["largest_faces"]=source.largestFaces;
+    r["search_seconds"]=finiteValue(source.searchSeconds);
+    r["preparation_seconds"]=finiteValue(source.preparationSeconds);
+    r["visibility_seconds"]=finiteValue(source.visibilitySeconds);
+    r["publication_seconds"]=finiteValue(source.publicationSeconds);
+    r["validation_seconds"]=finiteValue(source.validationSeconds);
+    r["local_front_tets"]=source.localFrontTets;r["local_front_closed"]=source.localFrontClosed;
+    r["local_front_seconds"]=finiteValue(source.localFrontSeconds);
+    r["scope"]="recover calls within last retained front attempt; nested timers may overlap and do not partition total volume time";
+    return r;
+}
+
 py::dict sourceMismatchPriorityReport(const geo::NativeCadSourceMismatchPriorityReport& source) {
     py::dict r;r["available"]=source.attempts>0;r["diagnostic"]=source.diagnostic;
     r["fallback_reason"]=source.fallbackReason;r["attempts"]=source.attempts;
@@ -687,6 +705,12 @@ struct MeshResult {
             b["constraint_recovery"] = constraintRecoveryReport(body.constraintRecovery);
             b["material_classification"] = materialClassificationReport(body.materialClassification);
             b["source_mismatch_priority"] = sourceMismatchPriorityReport(body.sourceMismatchPriority);
+            b["region_recovery"] = regionRecoveryReport(body.recoveryRegions);
+            b["recovery_removed_interior_nodes"] = body.recoveryRemovedInteriorNodes;
+            b["recovery_removed_incident_cells"] = body.recoveryRemovedIncidentCells;
+            b["recovery_removed_centroid_cells"] = body.recoveryRemovedCentroidCells;
+            b["recovery_source_blocked_candidates"] = body.recoverySourceBlockedCandidates;
+            b["recovery_other_component_blocked_candidates"] = body.recoveryOtherComponentBlockedCandidates;
             py::dict sizingApplication;
             sizingApplication["applied"]=py::cast(body.volumeSizingApplied);
             sizingApplication["diagnostic"]=body.volumeSizingDiagnostic;
