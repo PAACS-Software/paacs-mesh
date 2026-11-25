@@ -140,7 +140,8 @@ if(PAACS_WITH_OCCT)
         src/geometry/OcctBoxContact.cpp src/geometry/OcctNativeValidation.cpp src/geometry/OcctQueryContext.cpp
         src/geometry/OcctContactAssembly.cpp src/geometry/OcctContactComponents.cpp src/geometry/OcctNativeSweep.cpp
         src/geometry/OcctPairedShell.cpp src/geometry/OcctRecoveryMesher.cpp src/geometry/OcctPlcFrontRecovery.cpp src/geometry/OcctFrontMesher.cpp
-        src/geometry/OcctWireRefinement.cpp src/geometry/OcctFacetRefinement.cpp)
+        src/geometry/OcctWireRefinement.cpp src/geometry/OcctFacetRefinement.cpp
+        src/geometry/OcctBodyRelations.cpp)
     add_library(PAACS::occt ALIAS paacs_occt)
     # Target-name compatibility only; the older V1 CAD APIs are not restored.
     add_library(PAACS::MeshOCCT ALIAS paacs_occt)

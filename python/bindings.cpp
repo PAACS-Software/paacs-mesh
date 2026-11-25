@@ -11,6 +11,7 @@
 
 #include "paacs/algo/Meshers.hpp"
 #include "paacs/geometry/OcctBoundary.hpp"
+#include "paacs/geometry/OcctBodyRelations.hpp"
 #include "paacs/geometry/OcctMesher.hpp"
 #include "paacs/geometry/OcctPreview.hpp"
 #include "paacs/sdk/MeshArchive.hpp"
@@ -1116,6 +1117,7 @@ std::unique_ptr<CadModel> readStep(const fs::path& path, const py::object& maxFi
 
 #include "CadInspection.hpp"
 #include "CadPreview.hpp"
+#include "CadBodyRelations.hpp"
 
 // Private diagnostic query: distances are to trimmed faces, including their
 // edges/vertices, not merely projections onto the underlying infinite surface.
@@ -1300,6 +1302,12 @@ PYBIND11_MODULE(_native, m) {
              py::arg("topology") = false, py::arg("max_uses") = 10000)
         .def("_preview", &previewCad, py::kw_only(), py::arg("linear_deflection"),
              py::arg("max_points") = py::int_(50000), py::arg("max_triangles") = py::int_(100000))
+        .def("_body_relations", &bodyRelations, py::arg("pairs"), py::kw_only(),
+             py::arg("distance_tolerance") = py::float_(1e-7),
+             py::arg("max_work") = py::int_(100000),
+             py::arg("max_working_bytes") = py::int_(64 * 1024 * 1024),
+             py::arg("max_seconds") = py::float_(30.0),
+             "Query selected native body relations without constructing a mesh interface.")
         .def("_face_distances", &faceDistances, py::arg("points"), py::arg("face_tags"), py::kw_only(),
              py::arg("max_work") = py::int_(100000), py::arg("max_seconds") = py::float_(10.0),
              py::arg("include_faces") = false, py::arg("max_result_bytes") = py::int_(8 * 1024 * 1024),

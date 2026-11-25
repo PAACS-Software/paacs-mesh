@@ -384,6 +384,20 @@ class CadModel:
             boundary_first=boundary_first,
             **construction, **fidelity)
 
+    def body_relations(self, pairs, *, distance_tolerance=1e-7, max_work=100000,
+                       max_working_bytes=64 * 1024 * 1024, max_seconds=30):
+        """Inspect up to 64 selected body pairs; this does not mesh or join parts.
+
+        Results distinguish disconnected parts, face/edge/point contact,
+        material overlap and unresolved geometry. ``max_seconds`` is
+        cooperative; one native query can run past it. Tracked storage bounds
+        exclude native kernel allocations. Tags and placements belong to this
+        imported model. Near contact is not proof of a shared mesh interface.
+        """
+        from .body_relations import inspect_body_relations
+        return inspect_body_relations(self, pairs, distance_tolerance=distance_tolerance,
+            max_work=max_work, max_working_bytes=max_working_bytes, max_seconds=max_seconds)
+
     def preview(self, selection=None, *, linear_deflection=.02, max_points=50000, max_triangles=100000):
         """Return owned, tagged display geometry for visual selection checks."""
         from .preview import preview_model

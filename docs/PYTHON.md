@@ -436,6 +436,38 @@ volumes. This result does not certify a globally non-overlapping material domain
 Choose `assembly="conforming"` to request the engine's conforming-domain policy;
 unsupported or unresolved interfaces are refused.
 
+Development builds provide an opt-in relation query before meshing:
+
+```python
+relations = model.body_relations([(1, 2)], max_seconds=30)
+for pair in relations["pairs"]:
+    print(pair["relation"], pair["evidence"], pair["issue"])
+```
+
+Supply explicit, distinct unordered pairs of imported body tags, at most 64 per
+call. There is no implicit all-body scan. The query distinguishes disconnected
+parts, face/edge/point contact, material overlap and unresolved relations.
+It uses the original placed bodies and reports the input hash, model identity,
+source guard, measurements and Native query counts. Contact area is in mm²,
+length and distance in mm, and overlap volume in mm³.
+
+`completed=True` means the selected query completed with its source guard;
+individual pairs can still be `unresolved`. A small distance or intersecting
+bounding boxes alone does not prove contact. `distance_tolerance` is a separation
+and ambiguity threshold, not a repair tolerance or permission to close a gap.
+No body is fused, no nodes are welded and no mesh interface is certified.
+Bonded interfaces and separate contact interfaces still need an appropriate
+meshing route and explicit physical interpretation.
+
+The query accepts `max_work`, `max_working_bytes` and cooperative `max_seconds`.
+Tracked storage covers diagnostic records and source snapshots; it does not cap
+OCCT's internal allocations. One Native call is not preemptible.
+Source snapshots admit at most one quarter of `max_working_bytes`, capped at
+64 MiB per snapshot; the default admits 16 MiB per snapshot. Query failure
+raises `SelectionError` with `stage="body_relations"` and a bounded receipt in
+`report`; any retained partial measurements are diagnostics, not a completed
+query. Tags remain local to this imported STEP snapshot.
+
 Meshing and validation each default to one worker. Native import and meshing
 calls are serialized within a Python process because the engine uses a shared
 worker dispatcher. The GIL is released during those calls, so other Python work
