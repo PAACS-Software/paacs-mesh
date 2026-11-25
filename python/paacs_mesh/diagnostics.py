@@ -82,6 +82,8 @@ def capabilities():
                       "modeled_memory_is_OS_hard_limit": False},
         "assemblies": {"default": "preserve_parts", "interference": "reported_without_fusing",
                        "independent_parts_certify_global_nonoverlap": False,
+                       "normal_auto_dispatch": "per_original_body",
+                       "bounded_auto_dispatch": "historical_whole_request",
                        "body_relations": {"explicit_pairs_required": True, "maximum_pairs": 64,
                            "relations": ["disconnected", "face_contact", "edge_contact", "point_contact",
                                          "material_overlap", "unresolved"],

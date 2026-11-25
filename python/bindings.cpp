@@ -805,6 +805,9 @@ struct MeshResult {
         policy["requested_boundary_first"] = requestedBoundaryFirst;
         policy["wrapper_native_sizing"] = sizing.native;
         policy["wrapper_sizing_mode"] = sizing.native ? "spatial" : "standard";
+        policy["auto_dispatch_scope"] =
+            std::string_view(outcome.routeResolution.reason) == "automatic_independent_part_dispatch"
+                ? "per_original_body" : "whole_request";
         policy["body_routes"] = std::move(bodyRoutes);
         r["effective_policy"] = std::move(policy);
         return r;

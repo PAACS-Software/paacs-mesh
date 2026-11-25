@@ -424,8 +424,8 @@ NativeCadMeshOutcome buildOcctIndependentParts(const OcctModel& original,const N
             // Defer the cancellation poll until its timings/reports are copied,
             // so a deadline cannot erase the attempt that consumed the time.
             budget.charge(child.validationWork);out.preparationSeconds+=child.preparationSeconds;out.generationSeconds+=child.generationSeconds;out.validationSeconds+=child.validationSeconds;out.auditSeconds+=child.auditSeconds;out.qualitySeconds+=child.qualitySeconds;
-            if(child.bodies.empty()){NativeCadBodyMeshReport report;report.solidTag=body;report.reason=child.reason;report.initialFrontFallback=child.initialFrontFallback;out.bodies.push_back(report);}
-            for(auto& report:child.bodies){report.solidTag=body;if(report.startFaceTag>0)report.startFaceTag=tags[2].at(report.startFaceTag);if(report.endFaceTag>0)report.endFaceTag=tags[2].at(report.endFaceTag);if(report.contactSourceEdgeTag>0)report.contactSourceEdgeTag=tags[1].at(report.contactSourceEdgeTag);if(report.contactTargetEdgeTag>0)report.contactTargetEdgeTag=tags[1].at(report.contactTargetEdgeTag);out.bodies.push_back(std::move(report));}
+            if(child.bodies.empty()){NativeCadBodyMeshReport report;report.solidTag=body;report.reason=child.reason;report.initialFrontFallback=child.initialFrontFallback;report.routeResolution=child.routeResolution;out.bodies.push_back(report);}
+            for(auto& report:child.bodies){report.solidTag=body;report.routeResolution=child.routeResolution;if(report.startFaceTag>0)report.startFaceTag=tags[2].at(report.startFaceTag);if(report.endFaceTag>0)report.endFaceTag=tags[2].at(report.endFaceTag);if(report.contactSourceEdgeTag>0)report.contactSourceEdgeTag=tags[1].at(report.contactSourceEdgeTag);if(report.contactTargetEdgeTag>0)report.contactTargetEdgeTag=tags[1].at(report.contactTargetEdgeTag);out.bodies.push_back(std::move(report));}
             budget.tick(0);
             if(!child.published){
                 need(child.destinationUnchanged,"independent_parts_child_transaction",NativeCadMeshReason::InternalError);

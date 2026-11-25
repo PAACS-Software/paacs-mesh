@@ -94,8 +94,11 @@ In development, Normal AUTO first considers verified whole-body primitive,
 affine-block and linear-sweep capabilities for compatible constant-size requests.
 Other eligible single-solid Tet4 requests construct wall sites before filling
 interior gaps. Face and volume controls retain the size-field front. The default
-assembly policy still preserves parts; multi-part assembly dispatch is unchanged.
-Bounded admission retains historical automatic selection.
+assembly policy still preserves parts. Normal Tet4 assemblies resolve AUTO for
+each original part, retaining each child's eligibility checks and route receipt.
+Bounded admission retains historical automatic selection. The wrapper's sizing
+metadata describes the request; `effective_policy.auto_dispatch_scope` and each
+body's `route_resolution` describe the construction selection.
 
 `advancing_interior_front=None` selects this automatic policy. Set it to `False`
 to use the previous initial constructor, or `True` to explicitly request the new

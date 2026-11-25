@@ -275,6 +275,7 @@ int runNativeCadCli(int argc,char** argv) {
         std::cout<<",\"effective_curvature_points_per_turn\":"<<options.curvaturePointsPerTurn
             <<",\"chord_default\":\""<<(requestedChordError?"explicit":"route_specific")<<"\""
             <<",\"scope\":\"native geometry acceptance limits; measured errors and achieved sizes are separate\"}"
+            <<",\"auto_dispatch_scope\":\""<<(std::string_view(result.routeResolution.reason)=="automatic_independent_part_dispatch"?"per_original_body":"whole_request")<<"\""
             <<",\"route_resolution\":";
         writeRouteResolution(result.routeResolution);
         std::cout<<",\"faces\":"<<cad.faces<<",\"curved_faces\":"<<cad.curvedFaces<<",\"edges\":"<<cad.edges

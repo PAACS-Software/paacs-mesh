@@ -1073,7 +1073,13 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
         try {
             const auto solidCount=model.solids().size();
             bool enabled=o.advancingInteriorFrontEnabled(solidCount);
-            if(enabled&&o.maximumValidationWork!=o.geometry.maximumMeshingWork){
+            // Normal independent parts retain AUTO until each conforming
+            // child can inspect its own capabilities and mapped controls.
+            // Bounded, conforming multi-body and explicit requests are unchanged.
+            const bool deferToNormalParts=solidCount>1&&o.elements==algo::PrimitiveElements::Tet4&&
+                o.construction.resourcePolicy==CadResourcePolicy::Normal&&
+                o.assemblyPolicy==NativeCadAssemblyPolicy::IndependentParts;
+            if((enabled||deferToNormalParts)&&o.maximumValidationWork!=o.geometry.maximumMeshingWork){
                 // AUTO construction, source checks and final validation share
                 // both original ceilings, including an independent wrapper's
                 // own work. Preserve AUTO for the bounded child dispatch; equal
@@ -1087,13 +1093,14 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
                 return result;
             }
             // A single independent part retains its wrapper/source audits. Its
-            // conforming child resolves AUTO once; multi-part requests resolve
-            // false here so their children retain the established dispatch.
+            // conforming child resolves AUTO once. Normal multi-part requests
+            // also defer; historical Bounded multi-part dispatch still resolves
+            // false here. Every child's eligibility and controls remain active.
             // The wrapper changes the child policy to ConformingDomain, so
             // deferral cannot recurse back into the independent-part wrapper.
             const bool deferToSinglePart=enabled&&solidCount==1&&
                 o.assemblyPolicy==NativeCadAssemblyPolicy::IndependentParts;
-            if(!deferToSinglePart){
+            if(!deferToSinglePart&&!deferToNormalParts){
                 bool structured=false;
                 if(enabled&&o.construction.resourcePolicy==CadResourcePolicy::Normal)
                     structured=structuredCapability(model,o,resolution,selectionWork);
@@ -1233,6 +1240,13 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
         detail::OcctStageTrace attempt("independent_parts");
         auto result=detail::buildOcctIndependentParts(model,o,destination);
         if(result.bodies.size()==1)result.routeResolution=result.bodies.front().routeResolution;
+        else if(!o.useAdvancingInteriorFront.has_value()&&o.elements==algo::PrimitiveElements::Tet4&&
+                o.construction.resourcePolicy==CadResourcePolicy::Normal&&model.solids().size()>1){
+            result.routeResolution.reason="automatic_independent_part_dispatch";
+            result.routeResolution.candidate="independent_parts";
+            // Per-child receipts remain authoritative. A global front Boolean
+            // would incorrectly equate primitives with native front children.
+        }
         attempt.finish(nativeCadMeshReasonName(result.reason));
         return result;
     }

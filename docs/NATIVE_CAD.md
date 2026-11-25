@@ -18,10 +18,18 @@ sizes and geometric error limits are in millimetres.
 Normal automatic Tet4 selection first considers verified whole-body primitives,
 affine blocks and linear sweeps for compatible constant-size requests. Local
 face/volume sizing and other eligible requests use native wall and gap point
-placement. Bounded selection retains its historical dispatch. Hex requests, assemblies and explicit
-strategy or body controls retain their existing routing. A single body meshed
-with `--independent-parts` uses the new placement inside its audited part wrapper;
-multiple parts retain their existing construction and interference reports.
+placement. Bounded selection retains its historical dispatch. Hex requests and
+conforming multi-body requests retain their existing routing. Normal Tet4
+`--independent-parts` requests resolve AUTO separately inside each conforming
+child, so verified primitives keep their established method and other eligible
+parts can select the native front. Original body/face controls are mapped and
+checked per part; they are not bypassed. Global work uses the smaller of the
+meshing and validation ceilings before any child work is divided. Body identities,
+interference reports and original-source/final Native audits remain mandatory.
+Inspect `auto_dispatch_scope` and each body's `route_resolution`; wrapper sizing
+metadata does not imply that every part used the same method. Explicit false,
+explicit true and Bounded requests retain their existing eligibility and refusal
+behavior. A child success does not qualify an incomplete assembly.
 `--no-advancing-interior-front` selects the previous placement and recognized
 primitive, planar or swept routes.
 Check `archive_published`, `audit_valid` and each body's `route` in the JSON

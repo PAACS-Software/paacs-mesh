@@ -8,6 +8,7 @@
 #include "paacs/mesh/MeshAudit.hpp"
 #include <BRepPrimAPI_MakeBox.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
+#include <BRepAlgoAPI_Cut.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <gp_Pln.hxx>
 #include <BRep_Builder.hxx>
@@ -91,6 +92,82 @@ bool sameMeshPayload(const mesh::Mesh& a, const mesh::Mesh& b) {
             if(a.cellNodes(i)[j] != b.cellNodes(i)[j]) return false;
     }
     return true;
+}
+
+
+void checkNormalPerBodyAuto() {
+    BRep_Builder builder;TopoDS_Compound boxes;builder.MakeCompound(boxes);
+    builder.Add(boxes,BRepPrimAPI_MakeBox(1.,1.,1.).Shape());
+    builder.Add(boxes,BRepPrimAPI_MakeBox(gp_Pnt(3,0,0),1.,1.,1.).Shape());
+    auto imported=OcctModelAccess::fromShape(boxes);check(imported.imported(),"Normal AUTO owned boxes import");
+    const auto& model=*imported.model;const auto source=snapshot(model);
+    auto options=normalNativeCadMeshOptions();options.assemblyPolicy=NativeCadAssemblyPolicy::IndependentParts;
+    options.geometry.targetSize=.5;options.geometry.threads=1;options.maximumNativeValidationThreads=1;
+    options.maximumValidationWork=50'000'000;options.geometry.maximumMeshingWork=50'000'000;
+    auto legacy=options;legacy.useAdvancingInteriorFront=false;mesh::Mesh oldMesh,automatic;
+    const auto oldResult=meshNativeCad(model,legacy,oldMesh);const auto result=meshNativeCad(model,options,automatic);
+    check(oldResult.published&&result.published&&result.validatedParts==2&&result.audit.valid&&result.quality.valid&&
+          sameMeshPayload(oldMesh,automatic)&&snapshot(model)==source&&result.nativeContactSourceGuard,
+          "Normal per-body AUTO preserves known mapped/primitive mesh, identities and source audits");
+    check(std::string_view(result.routeResolution.reason)=="automatic_independent_part_dispatch"&&result.routeResolution.count==0,
+          "Normal multi-part AUTO records per-body scope rather than a fictitious global method");
+    for(const auto& body:result.bodies)check(body.routeResolution.preflightAttempted&&body.routeResolution.wholeBodyVerified&&
+          std::string_view(body.routeResolution.reason)=="verified_whole_body_mapped_or_sweep"&&
+          body.nativeCentroidSourceGuard&&body.nativeCentroidsChecked>0,
+          "Each known child retains its own verified capability and original Native validation");
+    auto bounded=options;bounded.construction.resourcePolicy=CadResourcePolicy::Bounded;mesh::Mesh boundedMesh;
+    const auto historical=meshNativeCad(model,bounded,boundedMesh);
+    check(historical.published&&sameMeshPayload(boundedMesh,oldMesh)&&
+          std::string_view(historical.routeResolution.reason)=="historical_bounded_dispatch",
+          "Bounded multi-part AUTO retains historical global legacy dispatch");
+    auto conforming=options;conforming.assemblyPolicy=NativeCadAssemblyPolicy::ConformingDomain;mesh::Mesh conformingMesh;
+    const auto joined=meshNativeCad(model,conforming,conformingMesh);
+    check(joined.published&&std::string_view(joined.routeResolution.reason)=="automatic_legacy_dispatch",
+          "Conforming multi-body AUTO is not changed by independent-part deferral");
+    mesh::Mesh destination;destination.addNode({9,8,7},{3,91});const mesh::Mesh sentinel=destination;
+    auto forced=options;forced.useAdvancingInteriorFront=true;
+    const auto unsupported=meshNativeCad(model,forced,destination);
+    check(!unsupported.published&&unsupported.reason==NativeCadMeshReason::UnsupportedControl&&sameMeshPayload(destination,sentinel),
+          "Explicit true retains its existing unsupported whole-assembly eligibility");
+    for(bool smallerGeometry:{false,true}){
+        auto capped=options;capped.maximumValidationWork=smallerGeometry?50'000'000:1;
+        capped.geometry.maximumMeshingWork=smallerGeometry?1:50'000'000;
+        const auto refused=meshNativeCad(model,capped,destination);
+        check(!refused.published&&refused.reason==NativeCadMeshReason::BudgetExceeded&&refused.validationWork<=1&&
+              sameMeshPayload(destination,sentinel)&&snapshot(model)==source,
+              "Normal independent AUTO normalizes both unequal global work caps before deferral");
+    }
+    std::atomic_bool cancellation{false};auto observed=options;observed.geometry.cancellation=&cancellation;observed.stageObserver=observePart;
+    PartTrace cancelSecond{&cancellation,CancelChildAt::SecondBegin};NativeCadMeshOutcome interrupted;
+    {PartTraceScope trace(cancelSecond);interrupted=meshNativeCad(model,observed,destination);}
+    check(cancelSecond.fired&&!interrupted.published&&interrupted.reason==NativeCadMeshReason::Cancelled&&interrupted.validatedParts==1&&
+          interrupted.bodies.size()==2&&interrupted.bodies[0].reason==NativeCadMeshReason::None&&
+          interrupted.bodies[1].solidTag==2&&sameMeshPayload(destination,sentinel)&&snapshot(model)==source,
+          "Per-body AUTO cancellation preserves first receipt, refused second child and transaction");
+    auto invalid=options;invalid.faceSizes.push_back({999999,.2,1.3});
+    const auto selection=meshNativeCad(model,invalid,destination);
+    check(!selection.published&&selection.reason==NativeCadMeshReason::InvalidRequest&&sameMeshPayload(destination,sentinel),
+          "Per-body AUTO does not discard invalid original control selections");
+
+    // An owned through-bore cannot be certified as a complete cylinder/block.
+    // A mixed assembly must allow that child to choose a different general route.
+    const auto block=BRepPrimAPI_MakeBox(gp_Pnt(4,0,0),2.,2.,1.).Shape();
+    const auto tool=BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(5,1,-.1),gp_Dir(0,0,1)),.3,1.2).Shape();
+    BRepAlgoAPI_Cut cut(block,tool);check(cut.IsDone(),"owned through-bore Boolean");
+    TopoDS_Compound mixed;builder.MakeCompound(mixed);builder.Add(mixed,BRepPrimAPI_MakeBox(1.,1.,1.).Shape());builder.Add(mixed,cut.Shape());
+    auto varied=OcctModelAccess::fromShape(mixed);check(varied.imported(),"owned mixed curved assembly import");const auto before=snapshot(*varied.model);
+    auto live=options;live.allowNativeSourceFallback=true;live.recoverBoundaryBeforeInteriorSites=true;live.geometry.targetSize=.6;
+    mesh::Mesh variedMesh;const auto variedResult=meshNativeCad(*varied.model,live,variedMesh);
+    if(!variedResult.published)std::cerr<<nativeCadMeshReasonName(variedResult.reason)<<' '<<variedResult.nativeContactDiagnostic<<'\n';
+    check(variedResult.published&&variedResult.validatedParts==2&&variedResult.bodies.size()==2&&variedResult.audit.valid&&variedResult.quality.valid&&
+          variedResult.nativeContactSourceGuard&&snapshot(*varied.model)==before,
+          "Normal AUTO independently completes mixed mapped and general curved children");
+    check(variedResult.bodies[0].routeResolution.wholeBodyVerified&&
+          std::string_view(variedResult.bodies[1].routeResolution.candidate)=="native_front"&&
+          !variedResult.bodies[1].routeResolution.wholeBodyVerified,
+          "Mixed children retain distinct capability/route decisions");
+    for(const auto& body:variedResult.bodies)check(body.nativeCentroidSourceGuard&&body.nativeCentroidsChecked>0,
+          "Mixed AUTO children retain original-body final material validation");
 }
 
 void checkCancelledPartReceipts() {
@@ -200,6 +277,7 @@ void checkCancelledPartReceipts() {
 } // namespace
 
 int main(){try{
+ checkNormalPerBodyAuto();
  checkCancelledPartReceipts();
  BRep_Builder builder;TopoDS_Compound shape;builder.MakeCompound(shape);builder.Add(shape,BRepPrimAPI_MakeBox(1.,1.,1.).Shape());builder.Add(shape,BRepPrimAPI_MakeBox(gp_Pnt(.5,0,0),1.,1.,1.).Shape());auto imported=OcctModelAccess::fromShape(shape);check(imported.imported()&&imported.model->solids().size()==2,"overlapping assembly import");const auto& model=*imported.model;const auto source=snapshot(model);
  NativeCadMeshOptions o;o.geometry.targetSize=.6;o.maximumValidationWork=10000000;o.geometry.maximumMeshingWork=10000000;o.maximumNativeValidationThreads=2;
