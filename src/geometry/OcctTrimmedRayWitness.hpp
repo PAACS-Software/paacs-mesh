@@ -199,6 +199,9 @@ private:
         const std::array negative{-direction.X(),-direction.Y(),-direction.Z()};
         std::array<std::size_t,128> negativeOnly{};std::size_t deferred=0;
         crossings_.clear();oppositeCrossings_.clear();
+        // Primitive surfaces can share a complete line solve. Other surface
+        // types retain the original directed calls because wider intervals can
+        // change a root decision near the unchanged native tolerance.
         const auto analytic=[&](std::size_t fi){
             switch(faces_[fi].type){
                 case GeomAbs_Plane:case GeomAbs_Cylinder:case GeomAbs_Cone:

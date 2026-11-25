@@ -13,6 +13,7 @@
 #include "../src/geometry/OcctModelInternal.hpp"
 #include "../src/geometry/OcctStarMesher.hpp"
 #include "../src/geometry/OcctWireChart.hpp"
+#include "../src/geometry/OcctTrimMemo.hpp"
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepAlgoAPI_Splitter.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
@@ -583,6 +584,193 @@ int localSharedCurvedPreparation(const std::filesystem::path& folder) {
     return 29;
 }
 }
+namespace {
+int stockTrimMemoQualification(const std::filesystem::path& folder) {
+    using namespace geo;
+    using namespace geo::detail;
+    int checks=0;
+    const auto verify=[&](bool value,const char* message){check(value,message);++checks;};
+    const std::vector<std::pair<const char*,TopoDS_Shape>> ownedShapes{
+        {"box",BRepPrimAPI_MakeBox(1.,1.,1.).Shape()},
+        {"cylinder",BRepPrimAPI_MakeCylinder(1.,2.).Shape()},
+        {"narrow-prism",test::narrowTrimPrism()}};
+    for(const auto& [name,shape]:ownedShapes){
+        auto imported=load(shape,folder/(std::string("memo-")+name+".brep"));
+        const auto& model=*imported.model;const auto before=snapshot(model);
+        for(const auto* face:model.faces()){
+            Vec2 lo,hi;face->paramBounds(lo,hi);
+            const auto u=std::midpoint(lo.u,hi.u),v=std::midpoint(lo.v,hi.v);
+            const std::array queries{
+                Vec2{u,v},Vec2{std::nextafter(u,hi.u),v},Vec2{lo.u,lo.v},
+                Vec2{hi.u,hi.v},Vec2{lo.u-(hi.u-lo.u),lo.v-(hi.v-lo.v)},
+                Vec2{0.,0.},Vec2{-0.,0.},
+                Vec2{std::numeric_limits<double>::quiet_NaN(),0.},
+                Vec2{std::numeric_limits<double>::infinity(),0.}};
+            for(const auto entries:std::array<std::size_t,3>{0,1,4096}){
+                OcctTrimMemoReport report;OcctTrimMemo memo(*face,entries,report);
+                for(auto point:queries)for(unsigned repeat=0;repeat<3;++repeat)
+                    verify(memo.contains(point)==face->containsParam(point),
+                        "exact-bit memo changed an original Native trim decision");
+                verify(report.entries==entries&&report.payloadBytes==entries*OcctTrimMemo::slotBytes,
+                    "trim memo did not account for its complete allocated capacity");
+                memo.release();
+                verify(!memo.enabled()&&report.evictions==(entries?1:0),
+                    "optional trim storage was not released without replacement allocation");
+                verify(memo.contains({u,v})==face->containsParam({u,v}),
+                    "evicted trim memo did not delegate to the original classifier");
+            }
+            OcctTrimMemoReport signedReport;OcctTrimMemo signedMemo(*face,4096,signedReport);
+            (void)signedMemo.contains({0.,0.});(void)signedMemo.contains({-0.,0.});
+            verify(signedReport.phases[0].nativeCalls==2,"trim memo conflated distinct signed-zero UV bit patterns");
+            OcctTrimMemoReport admissionReport;OcctTrimMemo admission(*face,4096,admissionReport);
+            const auto expected=face->containsParam({u,v});
+            verify(admission.contains({u,v})==expected&&admission.contains({u,v})==expected&&
+                admissionReport.phases[0].nativeCalls==1,"optional-storage admission control did not allocate and hit a cache");
+            constexpr std::uint64_t geometricPayload=17*1024;
+            const auto allocated=admission.livePayloadBytes();std::uint64_t combined=999;
+            verify(allocated==4096*OcctTrimMemo::slotBytes&&
+                admission.admitWorkingPayload(geometricPayload,geometricPayload+allocated,combined)&&
+                combined==geometricPayload+allocated&&admission.enabled()&&admissionReport.evictions==0,
+                "exact-fit optional-storage admission discarded valid capacity");
+            verify(admission.admitWorkingPayload(geometricPayload,geometricPayload+allocated-1,combined)&&
+                combined==geometricPayload&&admission.livePayloadBytes()==0&&!admission.enabled()&&admissionReport.evictions==1,
+                "optional-storage admission did not release the full capacity before geometric growth");
+            const auto callsBefore=admissionReport.phases[0].nativeCalls;
+            verify(admission.contains({u,v})==expected&&admission.contains({u,v})==expected&&
+                admissionReport.phases[0].nativeCalls==callsBefore+2,
+                "evicted optional-storage admission did not restore original Native calls");
+            OcctTrimMemoReport refusalReport;OcctTrimMemo refusal(*face,4096,refusalReport);
+            combined=999;
+            verify(!refusal.admitWorkingPayload(geometricPayload,geometricPayload-1,combined)&&combined==999&&
+                refusal.livePayloadBytes()==allocated&&refusalReport.evictions==0,
+                "base-over-limit optional-storage admission waived a geometric limit or changed its output");
+            const auto largest=(std::numeric_limits<std::uint64_t>::max)();
+            verify(!refusal.admitWorkingPayload(largest,largest-1,combined)&&combined==999&&
+                refusal.admitWorkingPayload(largest,largest,combined)&&combined==largest&&refusal.livePayloadBytes()==0,
+                "optional-storage admission overflowed at the unsigned working limit");
+        }
+        Vec3 lo,hi;model.solids().front()->bbox(lo,hi);const auto diagonal=(hi-lo).norm();
+        OcctBoundaryOptions options;options.maximumChordError=.0025*diagonal;
+        options.maximumNodes=500000;options.maximumTriangles=3000000;
+        options.maximumOutputBytes=256ULL*1024*1024;options.maximumWork=cadNormalWorkAllowance;
+        options.construction.resourcePolicy=CadResourcePolicy::Normal;
+        constexpr auto working=64ULL*1024*1024;
+        mesh::Mesh off,cached,ordinary;
+        OcctBoundaryAliasReceipt offReceipt,cachedReceipt,ordinaryReceipt;
+        OcctBoundaryOutcome offOutcome,cachedOutcome;
+        OcctTrimMemoControl offControl;offControl.requestedEntries=0;
+        offControl.reports.reserve(OcctTrimMemoControl::maximumReportedFaces);
+        {OcctTrimMemoScope scope(offControl);
+            offOutcome=buildSpacedOcctBoundary(model,model.solids().front()->tag(),options,.15*diagonal,
+                working,off,offReceipt,true,false,0,nullptr);}
+        OcctTrimMemoControl cachedControl;cachedControl.requestedEntries=4096;
+        cachedControl.reports.reserve(OcctTrimMemoControl::maximumReportedFaces);
+        {OcctTrimMemoScope scope(cachedControl);
+            cachedOutcome=buildSpacedOcctBoundary(model,model.solids().front()->tag(),options,.15*diagonal,
+                working,cached,cachedReceipt,true,false,0,nullptr);}
+        const auto ordinaryOutcome=buildSpacedOcctBoundary(model,model.solids().front()->tag(),options,.15*diagonal,
+            working,ordinary,ordinaryReceipt,true,false,0,nullptr);
+        for(const auto* outcome:std::array<const OcctBoundaryOutcome*,3>{&offOutcome,&cachedOutcome,&ordinaryOutcome})
+            verify(outcome->published&&outcome->sourceModelUnmodified&&outcome->closed&&outcome->oriented&&outcome->vertexManifold,
+                "trim memo modes did not retain original Native surface acceptance");
+        verify(mesh::meshHash(off)==mesh::meshHash(cached)&&mesh::meshHash(off)==mesh::meshHash(ordinary),
+            "trim memo changed source coordinates, CAD tags or boundary connectivity");
+        verify(offOutcome.nodeKeys==cachedOutcome.nodeKeys&&offOutcome.nodeKeys==ordinaryOutcome.nodeKeys&&
+            offOutcome.solidTag==cachedOutcome.solidTag&&offOutcome.solidTag==ordinaryOutcome.solidTag,
+            "trim memo changed original boundary keys or body ownership");
+        verify(offOutcome.work==cachedOutcome.work&&offOutcome.work==ordinaryOutcome.work&&
+            offOutcome.maximumFacetSampleError==cachedOutcome.maximumFacetSampleError&&
+            offOutcome.relativeVolumeError==cachedOutcome.relativeVolumeError,
+            "trim memo changed geometry work or measured source fidelity");
+        verify(certifyOcctBoundarySurface(off,OcctStarOptions{}).certified&&
+            certifyOcctBoundarySurface(cached,OcctStarOptions{}).certified&&
+            certifyOcctBoundarySurface(ordinary,OcctStarOptions{}).certified,
+            "trim memo modes did not pass the independent embedded-shell certificate");
+        verify(!offControl.truncated&&!cachedControl.truncated&&
+            cachedReceipt.maximumWorkingPayloadEstimate<=working,
+            "bounded trim memo diagnostics or working allowance exceeded its cap");
+        std::uint64_t cacheHits=0;
+        for(const auto& report:cachedControl.reports){
+            verify(report.entries<=4096&&report.payloadBytes==report.entries*OcctTrimMemo::slotBytes,
+                "integrated trim memo omitted allocated slot capacity");
+            for(const auto& phase:report.phases)cacheHits+=phase.hits;
+        }
+        verify(cacheHits>0,"owned trim memo test did not exercise an exact repeated query");
+        if(std::string_view(name)=="box"){
+            // At this allowance the original 4096-node chart reserve dominates
+            // its actual small mesh. Determine that stock requirement, then
+            // leave no room for optional cache slots alongside the peak reserve.
+            mesh::Mesh planning;OcctBoundaryAliasReceipt planningReceipt;
+            OcctTrimMemoControl planningControl;planningControl.requestedEntries=0;
+            OcctBoundaryOutcome planned;
+            {OcctTrimMemoScope scope(planningControl);
+                planned=buildSpacedOcctBoundary(model,model.solids().front()->tag(),options,.15*diagonal,
+                    12ULL*1024*1024,planning,planningReceipt,true,false,0,nullptr);}
+            verify(planned.published,"owned tight-budget planning baseline did not mesh");
+            const auto required=planningReceipt.maximumWorkingPayloadEstimate;
+            auto tightWorking=(((required*4+2)/3+7)/8)*8;
+            mesh::Mesh tightOff,tightCached;OcctBoundaryAliasReceipt tightOffReceipt,tightCachedReceipt;
+            OcctBoundaryOutcome tightOffOutcome,tightCachedOutcome;
+            bool stableAllowance=false;
+            // The stock chart planning reserve can itself shrink with its
+            // allowance. Bound this stock-only search and require a fixed
+            // peak before testing optional storage alongside actual growth.
+            for(unsigned attempt=0;attempt<4;++attempt){
+                OcctTrimMemoControl tightOffControl;tightOffControl.requestedEntries=0;
+                tightOffReceipt={};
+                {OcctTrimMemoScope scope(tightOffControl);
+                    tightOffOutcome=buildSpacedOcctBoundary(model,model.solids().front()->tag(),options,.15*diagonal,
+                        tightWorking,tightOff,tightOffReceipt,true,false,0,nullptr);}
+                verify(tightOffOutcome.published,"stock-only tight allowance search lost a valid boundary");
+                const auto next=(((tightOffReceipt.maximumWorkingPayloadEstimate*4+2)/3+7)/8)*8;
+                if(next>=tightWorking){stableAllowance=true;break;}
+                tightWorking=next;
+            }
+            verify(stableAllowance,"owned stock-only tight allowance search did not converge within its fixed cap");
+            OcctTrimMemoControl tightControl;tightControl.requestedEntries=4096;
+            {OcctTrimMemoScope scope(tightControl);
+                tightCachedOutcome=buildSpacedOcctBoundary(model,model.solids().front()->tag(),options,.15*diagonal,
+                    tightWorking,tightCached,tightCachedReceipt,true,false,0,nullptr);}
+            verify(tightOffOutcome.published&&tightCachedOutcome.published&&
+                mesh::meshHash(tightOff)==mesh::meshHash(tightCached)&&mesh::meshHash(tightOff)==mesh::meshHash(off),
+                "optional trim storage reduced the original geometric allowance near its memory ceiling");
+            std::uint64_t evictions=0;for(const auto& report:tightControl.reports)evictions+=report.evictions;
+            std::cout<<"trim memo tight: planning_peak="<<required<<" outer_working="<<tightWorking
+                <<" alias_working="<<(tightWorking-2*(tightWorking/8))
+                <<" stock_peak="<<tightOffReceipt.maximumWorkingPayloadEstimate
+                <<" cached_peak="<<tightCachedReceipt.maximumWorkingPayloadEstimate
+                <<" evictions="<<evictions<<'\n';
+            for(const auto& report:tightControl.reports)
+                std::cout<<"trim memo face="<<report.faceTag<<" requested="<<tightControl.requestedEntries
+                    <<" entries="<<report.entries<<" allocated_peak="<<report.payloadBytes
+                    <<" evictions="<<report.evictions<<'\n';
+            for(const auto& report:tightControl.reports)
+                verify(report.entries<=tightControl.requestedEntries&&
+                    report.payloadBytes==report.entries*OcctTrimMemo::slotBytes,
+                    "tight-budget source construction allocated unaccounted optional capacity");
+            const auto aliasWorking=tightWorking-2*(tightWorking/8);
+            verify(tightOffReceipt.maximumWorkingPayloadEstimate<=aliasWorking&&
+                tightCachedReceipt.maximumWorkingPayloadEstimate<=aliasWorking&&
+                tightOffOutcome.work==tightCachedOutcome.work,
+                "trim memo eviction waived a working or geometry-work admission");
+            mesh::Mesh sentinel;sentinel.addNode({7,8,9},{3,999});const auto hash=mesh::meshHash(sentinel);
+            auto limited=options;limited.maximumWork=1;OcctBoundaryAliasReceipt refusedReceipt;
+            const auto refused=buildSpacedOcctBoundary(model,model.solids().front()->tag(),limited,.15*diagonal,
+                working,sentinel,refusedReceipt,true,false,0,nullptr);
+            verify(!refused.published&&refused.reason==OcctBoundaryReason::BudgetExceeded&&mesh::meshHash(sentinel)==hash,
+                "cached source construction published a partial work-budget failure");
+            std::atomic<bool> cancel{true};limited=options;limited.cancellation=&cancel;
+            const auto cancelled=buildSpacedOcctBoundary(model,model.solids().front()->tag(),limited,.15*diagonal,
+                working,sentinel,refusedReceipt,true,false,0,nullptr);
+            verify(!cancelled.published&&cancelled.reason==OcctBoundaryReason::Cancelled&&mesh::meshHash(sentinel)==hash,
+                "cached source construction published a cancelled partial boundary");
+        }
+        verify(snapshot(model)==before,"exact stock memo changed the original Native BRep bytes");
+    }
+    return checks;
+}
+}
+
 int main(int argc,char**argv) {
     try {
         const auto folder=argc==2?std::filesystem::path(argv[1]):std::filesystem::path("out/occt-boundary-tests");
@@ -609,6 +797,7 @@ int main(int argc,char**argv) {
             check(nonlinear,"owned control lost its nonuniform physical parameterization");
             checks+=boundedParameterCorrespondence(*owned.model)+2;
             checks+=narrowTrimTopology(folder);
+            checks+=stockTrimMemoQualification(folder);
         }
         {
             auto owned=load(BRepPrimAPI_MakeBox(1.,2.,3.).Shape(),folder/"chart-witness-box.brep");

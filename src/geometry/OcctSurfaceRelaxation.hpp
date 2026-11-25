@@ -7,6 +7,7 @@
 
 #include "paacs/algo/Delaunay2D.hpp"
 #include "OcctChartTrim.hpp"
+#include "OcctTrimMemo.hpp"
 #include "paacs/geometry/OcctModel.hpp"
 #include "paacs/predicates/Predicates.hpp"
 #include <algorithm>
@@ -41,7 +42,8 @@ inline bool occtNearlyEquilateral(const std::array<Vec3,3>& p) {
 template<class Position,class Charge>
 void improveOcctSurfaceDiagonals(const GFace& face,const std::vector<Vec2>& uv,
     const std::vector<int>& ids,std::vector<algo::Tri>& triangles,
-    const std::set<std::array<int,2>>& protectedEdges,double chord,Position position,Charge charge) {
+    const std::set<std::array<int,2>>& protectedEdges,double chord,Position position,Charge charge,
+    OcctTrimMemo* stockTrim=nullptr) {
     using Edge=std::array<Index,2>;
     constexpr auto unused=std::numeric_limits<std::size_t>::max();
     const auto edge=[](Index a,Index b){return Edge{std::min(a,b),std::max(a,b)};};
@@ -66,7 +68,8 @@ void improveOcctSurfaceDiagonals(const GFace& face,const std::vector<Vec2>& uv,
         charge(1);
         const auto parameter=(uv[a]+uv[b]+uv[c])*(1./3);
         const auto p=points(t);
-        return (face.pointAt(parameter)-(p[0]+p[1]+p[2])/3.).norm()<=chord&&face.containsParam(parameter);
+        return (face.pointAt(parameter)-(p[0]+p[1]+p[2])/3.).norm()<=chord&&
+            (stockTrim?stockTrim->contains(parameter):face.containsParam(parameter));
     };
     std::vector<Edge> candidates;
     for(const auto& [e,uses]:owners){
@@ -102,7 +105,8 @@ void improveOcctSurfaceDiagonals(const GFace& face,const std::vector<Vec2>& uv,
         charge(1);
         const auto midpointError=(face.pointAt(mid)-(position(ids[w])+position(ids[d]))*.5).norm();
         if(!(midpointError<=chord)||
-            !face.containsParam(mid)||!admitted(first)||!admitted(second))continue;
+            !(stockTrim?stockTrim->contains(mid):face.containsParam(mid))||
+            !admitted(first)||!admitted(second))continue;
         for(const auto owner:{i,j})for(const auto key:sides(triangles[owner])) {
             charge(1);
             const auto at=owners.find(key);
@@ -123,7 +127,8 @@ template<class Position,class Update,class Charge>
 void relaxOcctSurface(const OcctModel& model,int faceTag,std::vector<Vec2>& uv,
     const std::vector<int>& ids,const std::vector<algo::Tri>& triangles,
     const std::set<std::array<int,2>>& protectedEdges,double chord,
-    Position position,Update update,Charge charge,bool physicalWeights=false,OcctChartTrim* trim=nullptr) {
+    Position position,Update update,Charge charge,bool physicalWeights=false,OcctChartTrim* trim=nullptr,
+    OcctTrimMemo* stockTrim=nullptr) {
     const auto* face=model.face(faceTag);
     std::vector<bool> fixed(uv.size());
     for(const auto& [a,b]:protectedEdges){
@@ -141,11 +146,17 @@ void relaxOcctSurface(const OcctModel& model,int faceTag,std::vector<Vec2>& uv,
     std::map<std::pair<double,double>,bool> trimDecisions;
     const auto contains=[&](Vec2 parameter){
         if(trim)return trim->contains(parameter);
-        if(!std::isfinite(parameter.u)||!std::isfinite(parameter.v))return false;
+        if(stockTrim&&stockTrim->enabled())return stockTrim->contains(parameter);
+        if(!std::isfinite(parameter.u)||!std::isfinite(parameter.v)){
+            if(stockTrim)stockTrim->nonfinite();
+            return false;
+        }
         const auto key=std::pair{parameter.u,parameter.v};
-        if(const auto found=trimDecisions.find(key);found!=trimDecisions.end())
+        if(const auto found=trimDecisions.find(key);found!=trimDecisions.end()){
+            if(stockTrim)stockTrim->legacyHit();
             return found->second;
-        const auto accepted=face->containsParam(parameter);
+        }
+        const auto accepted=stockTrim?stockTrim->contains(parameter):face->containsParam(parameter);
         if(trimDecisions.size()<maximumTrimDecisions)trimDecisions.try_emplace(key,accepted);
         return accepted;
     };

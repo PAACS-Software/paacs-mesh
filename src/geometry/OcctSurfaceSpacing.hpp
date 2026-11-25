@@ -7,6 +7,7 @@
 
 #include "OcctCurveMetric.hpp"
 #include "OcctChartTrim.hpp"
+#include "OcctTrimMemo.hpp"
 #include "paacs/algo/Delaunay2D.hpp"
 #include "paacs/predicates/Predicates.hpp"
 #include "paacs/geometry/CadConstructionBudget.hpp"
@@ -28,7 +29,8 @@ bool spaceOcctChart(const OcctModel& model,int faceTag,std::vector<Vec2>& uv,
     unsigned pointsPerTurn=16,OcctChartTrim* trimClassifier=nullptr,
     const OcctSpatialSizing* sizeField=nullptr,const CadConstructionBudget& construction={},
     std::uint64_t maximumAdditionalNodes=(std::numeric_limits<std::uint64_t>::max)(),
-    std::size_t maximumChartNodes=4096,CadSurfaceSpacingReport* report=nullptr) {
+    std::size_t maximumChartNodes=4096,CadSurfaceSpacingReport* report=nullptr,
+    OcctTrimMemo* stockTrim=nullptr) {
     using Sign=predicates::Sign;
     using Edge=std::array<Index,2>;
     const auto* face=model.face(faceTag);
@@ -287,7 +289,8 @@ bool spaceOcctChart(const OcctModel& model,int faceTag,std::vector<Vec2>& uv,
         const auto h=regularFront?0.:localSize(center,face->pointAt(center));
         const auto admit=[&](Vec2 candidate,double separation,std::optional<Edge> split={}) {
             charge(1);
-            if (!finite(candidate)||!(trimClassifier?trimClassifier->contains(candidate):face->containsParam(candidate))) return false;
+            if (!finite(candidate)||!(trimClassifier?trimClassifier->contains(candidate):
+                stockTrim?stockTrim->contains(candidate):face->containsParam(candidate))) return false;
             const auto p=face->pointAt(candidate);
             const auto spacing=localSize(candidate,p);
             if (!(spacing>0&&std::isfinite(spacing))) return false;
