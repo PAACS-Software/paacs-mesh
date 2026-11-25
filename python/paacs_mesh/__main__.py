@@ -146,6 +146,8 @@ def _legacy(argv):
                         help="experimental bounded native source after supported chart/wire refusal; preserves Native validity checks")
     parser.add_argument("--boundary-first", action=argparse.BooleanOptionalAction, default=False,
                         help="experimental live Tet4 order: recover boundary before interior insertion; does not force a constructor")
+    parser.add_argument("--trimmed-ray-witnesses", action=argparse.BooleanOptionalAction, default=False,
+                        help="opt in to strict serial CAD ray validation, with ordinary classifier fallback")
     parser.add_argument("--growth", type=float, default=1.3,
                         help="size-field growth, at least 1 (default: 1.3)")
     parser.add_argument("--native-sizing", action=argparse.BooleanOptionalAction, default=None,
@@ -184,6 +186,7 @@ def _legacy(argv):
                               initial_topology_quality=args.initial_topology_quality,
                               native_source_fallback=args.native_source_fallback,
                               boundary_first=args.boundary_first,
+                              trimmed_ray_witnesses=args.trimmed_ray_witnesses,
                               construction_effort=args.construction_effort,
                               **{name: getattr(args, name) for name in _CONSTRUCTION_LIMITS})
             mesh.write(args.output)

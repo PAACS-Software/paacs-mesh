@@ -439,6 +439,26 @@ volumes. This result does not certify a globally non-overlapping material domain
 Choose `assembly="conforming"` to request the engine's conforming-domain policy;
 unsupported or unresolved interfaces are refused.
 
+`trimmed_ray_witnesses=True` opts into strict serial Original-CAD ray
+certificates during validation:
+
+```python
+mesh = model.mesh(.5, trimmed_ray_witnesses=True, validation_workers=1)
+```
+
+Ambiguous or unsupported queries use the ordinary Native classifier. This
+option changes neither geometry tolerance nor the assembly policy, and does
+not force a construction method. It also applies to the final original-body
+checks after independent part meshing. It defaults to `False`, survives saved
+recipes and retries, and is available as `--trimmed-ray-witnesses` in both
+CLIs. Python's CLI also accepts `--no-trimmed-ray-witnesses`.
+Body reports separate ordinary `native_centroids_checked`, positive
+`native_final_ray_admissions` and `native_centroid_exact_reuses`. A ray
+certificate is a Native geometric check; it is not solver approval.
+Final centroid accounting describes completed checks. A refused assembly can
+retain child or partial-stage receipts; those do not certify a completed
+original-body validation or a published assembly.
+
 Development builds provide an opt-in relation query before meshing:
 
 ```python

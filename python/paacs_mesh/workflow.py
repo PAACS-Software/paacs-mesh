@@ -41,7 +41,7 @@ _BUDGETS = ("max_nodes", "max_cells", "max_work", "max_output_bytes",
             "max_working_bytes", "max_audit_bytes")
 _QUALITY_FIELDS = ("warning_quality", "minimum_quality")
 _PLACEMENT_FIELDS = ("advancing_interior_front", "initial_topology_quality")
-_EXPERIMENTAL_FIELDS = ("native_source_fallback", "boundary_first")
+_EXPERIMENTAL_FIELDS = ("native_source_fallback", "boundary_first", "trimmed_ray_witnesses")
 _OPTION_FIELDS = {"size", "assembly", "workers", "validation_workers", "face_sizes",
                   "volume_controls", "min_size", "growth", "native_sizing", *_QUALITY_FIELDS,
                   *_PLACEMENT_FIELDS, *_EXPERIMENTAL_FIELDS, *_BUDGETS, *_CONSTRUCTION_FIELDS, *_RESOURCE_FIELDS, *_FIDELITY_FIELDS, *_CURVATURE_FIELDS}
@@ -256,6 +256,7 @@ def _options(values):
         boolean(result["initial_topology_quality"], "initial_topology_quality")
     result["native_source_fallback"] = boolean(values.get("native_source_fallback", False), "native_source_fallback")
     result["boundary_first"] = boolean(values.get("boundary_first", False), "boundary_first")
+    result["trimmed_ray_witnesses"] = boolean(values.get("trimmed_ray_witnesses", False), "trimmed_ray_witnesses")
     if result["assembly"] not in ("preserve_parts", "conforming"):
         raise ValueError("assembly must be preserve_parts or conforming")
     if result["workers"] > 1024 or result["validation_workers"] > 8:
@@ -324,6 +325,7 @@ def create_recipe(model, size, *, face_sizes=(), selected_face_sizes=(), volume_
                   min_size=None, growth=1.3, native_sizing=None, assembly="preserve_parts",
                   warning_quality=None, minimum_quality=None, advancing_interior_front=None,
                   initial_topology_quality=None, native_source_fallback=False, boundary_first=False,
+                  trimmed_ray_witnesses=False,
                   construction_effort=_DEFAULT_CONSTRUCTION_EFFORT, max_surface_points=None,
                   max_surface_chord_points=None, max_interior_candidates=None, max_interior_sites=None,
                   resource_policy=_DEFAULT_RESOURCE_POLICY, max_chord_error=None,
@@ -364,6 +366,7 @@ def create_recipe(model, size, *, face_sizes=(), selected_face_sizes=(), volume_
             initial_topology_quality=initial_topology_quality,
             native_source_fallback=native_source_fallback,
             boundary_first=boundary_first,
+            trimmed_ray_witnesses=trimmed_ray_witnesses,
             construction_effort=construction_effort, resource_policy=resource_policy,
             max_chord_error=max_chord_error, max_relative_volume_error=max_relative_volume_error,
             curvature_points_per_turn=curvature_points_per_turn,

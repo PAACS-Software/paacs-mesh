@@ -497,6 +497,7 @@ struct MeshResult {
     std::optional<bool> requestedInitialTopologyQuality;
     bool requestedNativeSourceFallback=false;
     bool requestedBoundaryFirst=false;
+    bool requestedTrimmedRayWitnesses=false;
     std::optional<bool> requestedAdvancingInteriorFront;
     double warningQuality = 0, minimumQuality = 0;
     unsigned workers = 1, validationWorkers = 1;
@@ -562,6 +563,7 @@ struct MeshResult {
         r["requested_initial_topology_quality"]=py::cast(requestedInitialTopologyQuality);
         r["requested_native_source_fallback"]=requestedNativeSourceFallback;
         r["requested_boundary_first"]=requestedBoundaryFirst;
+        r["requested_trimmed_ray_witnesses"]=requestedTrimmedRayWitnesses;
         r["workers"] = workers;
         r["validation_workers"] = validationWorkers;
         // Early refusals may retain the native outcome's default policy. With
@@ -665,6 +667,10 @@ struct MeshResult {
             b["boundary_embedding_certified"] = body.boundaryEmbeddingCertified;
             b["centroid_outside_distance_limit"] = finiteValue(body.centroidOutsideDistanceLimit);
             b["native_centroids_checked"] = body.nativeCentroidsChecked;
+            b["native_final_ray_admissions"] = body.nativeFinalRayAdmissions;
+            b["native_centroid_exact_reuses"] = body.nativeCentroidExactReuses;
+            b["native_centroid_reference_queries"] = body.nativeCentroidReferenceQueries;
+            b["native_centroid_source_guard"] = body.nativeCentroidSourceGuard;
             b["native_candidate_queries"] = body.nativeCandidateQueries;
             b["native_candidate_ray_admissions"] = body.nativeCandidateRayAdmissions;
             b["local_delaunay_refinement_nodes"] = body.localDelaunayRefinementNodes;
@@ -803,6 +809,7 @@ struct MeshResult {
         policy["requested_advancing_interior_front"] = py::cast(requestedAdvancingInteriorFront);
         policy["requested_native_source_fallback"] = requestedNativeSourceFallback;
         policy["requested_boundary_first"] = requestedBoundaryFirst;
+        policy["requested_trimmed_ray_witnesses"] = requestedTrimmedRayWitnesses;
         policy["wrapper_native_sizing"] = sizing.native;
         policy["wrapper_sizing_mode"] = sizing.native ? "spatial" : "standard";
         policy["auto_dispatch_scope"] =
@@ -896,7 +903,8 @@ struct CadModel {
         const py::object& maxInteriorSites, const std::string& resourcePolicy,
         const py::object& maxChordError, const py::object& maxRelativeVolumeError,
         const py::object& curvaturePointsPerTurn, const py::object& initialTopologyQuality,
-        const py::object& nativeSourceFallback, const py::object& boundaryFirst) {
+        const py::object& nativeSourceFallback, const py::object& boundaryFirst,
+        const py::object& trimmedRayWitnesses) {
         if(resourcePolicy!="normal"&&resourcePolicy!="bounded")
             throw py::value_error("resource_policy must be 'normal' or 'bounded'");
         auto options=resourcePolicy=="normal"?geo::normalNativeCadMeshOptions():geo::NativeCadMeshOptions{};
@@ -907,6 +915,9 @@ struct CadModel {
         if(!py::isinstance<py::bool_>(boundaryFirst))
             throw py::type_error("boundary_first must be bool");
         options.recoverBoundaryBeforeInteriorSites=boundaryFirst.cast<bool>();
+        if(!py::isinstance<py::bool_>(trimmedRayWitnesses))
+            throw py::type_error("trimmed_ray_witnesses must be bool");
+        options.useTrimmedRayWitnesses=trimmedRayWitnesses.cast<bool>();
         if(!initialTopologyQuality.is_none()){
             if(!py::isinstance<py::bool_>(initialTopologyQuality))
                 throw py::type_error("initial_topology_quality must be bool or None");
@@ -1039,6 +1050,7 @@ struct CadModel {
         result->requestedInitialTopologyQuality=options.initialTopologyQuality;
         result->requestedNativeSourceFallback=options.allowNativeSourceFallback;
         result->requestedBoundaryFirst=options.recoverBoundaryBeforeInteriorSites;
+        result->requestedTrimmedRayWitnesses=options.useTrimmedRayWitnesses;
         result->requestedAdvancingInteriorFront = requestedPlacement;
         result->warningQuality = options.geometry.warningElementQuality;
         result->minimumQuality = options.geometry.minimumElementQuality;
@@ -1351,6 +1363,7 @@ PYBIND11_MODULE(_native, m) {
              py::arg("resource_policy") = "normal",
              py::arg("max_chord_error") = py::none(), py::arg("max_relative_volume_error") = py::none(),
              py::arg("curvature_points_per_turn") = py::none(), py::arg("initial_topology_quality") = py::none(),
-             py::arg("native_source_fallback") = py::bool_(false), py::arg("boundary_first") = py::bool_(false));
+             py::arg("native_source_fallback") = py::bool_(false), py::arg("boundary_first") = py::bool_(false),
+             py::arg("trimmed_ray_witnesses") = py::bool_(false));
     m.def("read_step", &readStep, py::arg("path"), py::kw_only(), py::arg("max_file_bytes") = py::none(), py::arg("names") = true, py::arg("retain_source") = false);
 }

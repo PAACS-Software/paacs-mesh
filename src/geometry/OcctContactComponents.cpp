@@ -143,7 +143,7 @@ void nativePoints(const OcctModel& original,int body,std::span<const Vec3> point
     need(b.remaining()>0,"component_work_budget",NativeCadMeshReason::BudgetExceeded);
     OcctNativeValidationOptions options;options.maximumThreads=b.options.maximumNativeValidationThreads;options.maximumPoints=points.size();options.maximumWork=b.remaining();
     options.maximumSnapshotBytes=std::min<std::uint64_t>(64ULL*1024*1024,b.options.maximumPrimitiveWorkingBytes/8);
-    options.maximumOutsideDistance=maximumOutsideDistance;
+    options.maximumOutsideDistance=maximumOutsideDistance;options.useTrimmedRayWitnesses=b.options.useTrimmedRayWitnesses;
     b.working(retained);options.maximumWorkingBytes=b.options.maximumPrimitiveWorkingBytes-retained;options.cancellation=b.options.geometry.cancellation;
     result=validateOcctNativeInteriorPoints(original,body,points,options);b.collect(result.workUsed);
     b.working(add(retained,result.maximumWorkingPayloadEstimate));
@@ -322,7 +322,7 @@ NativeCadMeshOutcome buildOcctContactComponents(const OcctModel& original,const 
             if(certificate.reason==OcctStarReason::AllocationFailed)throw Stop{NativeCadMeshReason::AllocationFailed,"allocation_failed"};
             need(certificate.certified,"component_original_exterior_not_certified");
             report.cadVolume=cad;report.meshVolume=q.totalVolume;report.relativeVolumeError=std::abs(q.totalVolume-cad)/cad;report.reason=NativeCadMeshReason::None;
-            report.nativeCentroidThreads=centroids.threadsUsed;report.nativeCentroidsChecked=centroids.nativeQueries;report.nativeCentroidReferenceQueries=centroids.originalReferenceQueries;
+            report.nativeCentroidThreads=centroids.threadsUsed;report.nativeCentroidsChecked=centroids.nativeQueries;report.nativeCentroidReferenceQueries=centroids.originalReferenceQueries;report.nativeFinalRayAdmissions=centroids.trimmedRayAdmissions;report.nativeCentroidExactReuses=centroids.strictAdmissionReuses;
             report.nativeCentroidGeometryPairs=centroids.copiedGeometryValuePairs;report.nativeCentroidSourceGuard=nodes.sourceModelUnmodified&&centroids.sourceModelUnmodified;
             report.boundaryEmbeddingCertified=true;
             retained(add(mul(points.capacity(),sizeof(Vec3)),add(payload(exterior),mul(exteriorIds.size(),128))));
@@ -444,7 +444,7 @@ NativeCadMeshOutcome buildOcctIndependentParts(const OcctModel& original,const N
                 report.centroidOutsideDistanceLimit<=report.surfaceChordErrorLimit&&report.nativeChordSamplesChecked==4*centers.size();
             const double allowance=checkedPlcBand?report.centroidOutsideDistanceLimit:0;
             if(!interior.empty())nativePoints(original,body,interior,validationLive,budget,nodes);nativePoints(original,body,centers,validationLive,budget,centroids,allowance);
-            report.nativeCentroidThreads=centroids.threadsUsed;report.nativeCentroidsChecked=centroids.nativeQueries;report.nativeCentroidReferenceQueries=centroids.originalReferenceQueries;report.nativeCentroidGeometryPairs=centroids.copiedGeometryValuePairs;report.nativeCentroidSourceGuard=centroids.sourceModelUnmodified&&(interior.empty()||nodes.sourceModelUnmodified);
+            report.nativeCentroidThreads=centroids.threadsUsed;report.nativeCentroidsChecked=centroids.nativeQueries;report.nativeCentroidReferenceQueries=centroids.originalReferenceQueries;report.nativeFinalRayAdmissions=centroids.trimmedRayAdmissions;report.nativeCentroidExactReuses=centroids.strictAdmissionReuses;report.nativeCentroidGeometryPairs=centroids.copiedGeometryValuePairs;report.nativeCentroidSourceGuard=centroids.sourceModelUnmodified&&(interior.empty()||nodes.sourceModelUnmodified);
             if(checkedPlcBand){
                 report.centroidsWithinChordTolerance=centroids.pointsWithinDistanceBand;report.nativeCentroidDistanceQueries=centroids.nativeDistanceQueries;report.maximumOutsideCentroidDistance=centroids.maximumOutsideDistance;
                 std::vector<Vec3> samples;need(centers.size()<=(options.maximumPrimitiveWorkingBytes-validationLive)/(4*sizeof(Vec3)),"independent_parts_chord_sample_storage",NativeCadMeshReason::BudgetExceeded);samples.reserve(centers.size()*4);

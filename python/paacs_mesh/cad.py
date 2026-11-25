@@ -321,7 +321,8 @@ class CadModel:
              max_interior_candidates=None, max_interior_sites=None,
              resource_policy=_DEFAULT_RESOURCE_POLICY,
              max_chord_error=None, max_relative_volume_error=None, curvature_points_per_turn=None,
-             initial_topology_quality=None, native_source_fallback=False, boundary_first=False):
+             initial_topology_quality=None, native_source_fallback=False, boundary_first=False,
+             trimmed_ray_witnesses=False):
         """Generate an owned, audited Tet4 mesh; lengths and sizes are in mm.
 
         ``face_sizes`` contains native ``FaceSize`` controls. Alternatively,
@@ -350,6 +351,9 @@ class CadModel:
         ``boundary_first`` explicitly changes the compatible live constructor's
         order: recover its boundary before interior insertion. It does not force
         that constructor or enable a source-provider fallback.
+        ``trimmed_ray_witnesses`` opts into strict serial original-CAD ray
+        certificates during validation. Ambiguous or unsupported queries use
+        the ordinary classifier; geometry limits and source guards still apply.
         """
         self._assert_identity()
         resource_policy = _resource_policy_value(resource_policy)
@@ -359,6 +363,7 @@ class CadModel:
             boolean(initial_topology_quality, "initial_topology_quality")
         boolean(native_source_fallback, "native_source_fallback")
         boolean(boundary_first, "boundary_first")
+        boolean(trimmed_ray_witnesses, "trimmed_ray_witnesses")
         construction = _construction_options(construction_effort,
             max_surface_points=max_surface_points, max_surface_chord_points=max_surface_chord_points,
             max_interior_candidates=max_interior_candidates, max_interior_sites=max_interior_sites)
@@ -382,6 +387,7 @@ class CadModel:
             initial_topology_quality=initial_topology_quality,
             native_source_fallback=native_source_fallback,
             boundary_first=boundary_first,
+            trimmed_ray_witnesses=trimmed_ray_witnesses,
             **construction, **fidelity)
 
     def body_relations(self, pairs, *, distance_tolerance=1e-7, max_work=100000,
