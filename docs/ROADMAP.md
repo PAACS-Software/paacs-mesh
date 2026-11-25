@@ -62,6 +62,41 @@ distinct in the report.
 identity, boundary and void checks, CAD deviation, achieved size, runtime,
 peak memory and bounded failure diagnostics.
 
+### Explicit CAD preparation (planned)
+
+Add repair and defeaturing as separate operations, both disabled by default.
+Ordinary import, meshing and recovery must not silently enable either one.
+Repair addresses diagnosed representation defects under explicit tolerance
+limits. Defeaturing intentionally removes selected features, such as small
+fillets, chamfers or unwanted holes. Neither operation guarantees better mesh
+quality or simulation accuracy.
+
+Preserve the imported baseline and perform preparation on an owned copy. Return
+a validated prepared model with a change report and retained, modified, split,
+merged, deleted and new entity history. Protect requested body identities,
+placements, interfaces, named selections, sizing controls and analysis-critical
+holes, gaps and thin walls. A deleted or ambiguous protected selection must be
+reported rather than rebound to a nearby face.
+
+Start with explicitly selected features and a before/after preview. Record
+original/prepared geometry and option hashes, units, validity, topology counts,
+volume changes, tolerance changes, measured geometric deviation, unavailable
+checks, work and time. Validate meshes against their prepared geometry and
+report deviation from the original separately. Modified variants do not count
+as successful meshes of the unchanged source.
+
+The current strict importer rejects invalid CAD. Repair therefore needs a
+separate bounded preparation path for raw input; it must return a valid model
+before that geometry can enter the mesher. Keep the current import and mesh
+validity gates in place.
+
+**Qualification.** Use owned fixtures with short edges, sliver faces, inconsistent
+edge parameters, small gaps, fillets and holes. Check unchanged baselines,
+protected features, assembly identity, truthful entity history, rollback and
+resource limits. Compare prepared and unchanged variants at measured achieved
+sizes, with quality distributions and geometry changes reported together.
+Continue improving surface and volume construction on unchanged geometry.
+
 ## 2. Build Prism6 wall layers with conforming transitions
 
 Connect the prepared wall-layer components to CAD-tagged surface patches and
