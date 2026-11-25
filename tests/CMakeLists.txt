@@ -4,6 +4,16 @@
 # SPDX-License-Identifier: MPL-2.0
 
 find_package(Boost 1.74 CONFIG QUIET)
+add_executable(paacs-source-mismatch-priority occt_source_mismatch_priority.cpp)
+target_link_libraries(paacs-source-mismatch-priority PRIVATE PAACS::mesh)
+set_target_properties(paacs-source-mismatch-priority PROPERTIES DISABLE_PRECOMPILE_HEADERS ON)
+if(MSVC)
+    target_compile_options(paacs-source-mismatch-priority PRIVATE /fp:strict)
+else()
+    target_compile_options(paacs-source-mismatch-priority PRIVATE -fno-fast-math -ffp-contract=off)
+endif()
+add_test(NAME paacs.geometry.source_mismatch_priority COMMAND paacs-source-mismatch-priority)
+set_tests_properties(paacs.geometry.source_mismatch_priority PROPERTIES TIMEOUT 60 LABELS "geometry;recovery;hardening")
 add_executable(paacs-tet-source-face-coverage tet_source_face_coverage.cpp)
 target_link_libraries(paacs-tet-source-face-coverage PRIVATE PAACS::mesh)
 set_target_properties(paacs-tet-source-face-coverage PROPERTIES DISABLE_PRECOMPILE_HEADERS ON)

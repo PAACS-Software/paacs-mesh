@@ -86,6 +86,21 @@ void writeMaterialClassification(const paacs::geo::NativeCadMaterialClassificati
         <<",\"ray_witness_seconds\":"<<JsonFinite{r.rayWitnessSeconds}
         <<",\"scope\":\"cumulative material classification attempts; last batch status; not final publication\"}";
 }
+void writeSourceMismatchPriority(const paacs::geo::NativeCadSourceMismatchPriorityReport& r){
+    std::cout<<"{\"available\":"<<(r.attempts?"true":"false")<<",\"diagnostic\":\""<<r.diagnostic
+        <<"\",\"fallback_reason\":\""<<r.fallbackReason<<"\",\"attempts\":"<<r.attempts
+        <<",\"completed_attempts\":"<<r.completedAttempts<<",\"requested_points\":"<<r.requestedPoints
+        <<",\"inside_source_outside_cad\":"<<r.insideSourceOutsideCad
+        <<",\"outside_source\":"<<r.outsideSource<<",\"ambiguous_source\":"<<r.ambiguousSource
+        <<",\"prioritized_facets\":"<<r.prioritizedFacets
+        <<",\"inside_witnesses_near_missing_facets\":"<<r.insideWitnessesNearMissingFacets
+        <<",\"priority_applied\":"<<(r.priorityApplied?"true":"false")
+        <<",\"work\":"<<r.work<<",\"seconds\":"<<JsonFinite{r.seconds}
+        <<",\"maximum_working_payload_estimate\":"<<r.maximumWorkingPayloadEstimate
+        <<",\"source_generation\":"<<r.sourceGeneration
+        <<",\"source_mesh_hash_u64\":\""<<r.sourceMeshHash
+        <<"\",\"scope\":\"diagnostic ordering only; no CAD or material acceptance; cumulative attempts and last fallback reason\"}";
+}
 void writeSourceShell(const paacs::geo::NativeCadSourceShellReport& report){
     const auto count=std::min<std::size_t>(report.count,report.attempts.size());
     const auto positive=[](double value){if(value>0)std::cout<<JsonFinite{value};else std::cout<<"null";};
@@ -352,6 +367,7 @@ int runNativeCadCli(int argc,char** argv) {
             std::cout<<",\"source_shell\":";writeSourceShell(b.sourceShell);
             std::cout<<",\"initial_topology_quality\":";writeInitialTopologyQuality(b.initialTopologyQuality);
             std::cout<<",\"material_classification\":";writeMaterialClassification(b.materialClassification);
+            std::cout<<",\"source_mismatch_priority\":";writeSourceMismatchPriority(b.sourceMismatchPriority);
             std::cout<<",\"route_resolution\":";writeRouteResolution(b.routeResolution);
             std::cout<<",\"fidelity\":{\"effective_max_chord_error\":";
             if(b.effectiveMaximumChordError)std::cout<<JsonFinite{*b.effectiveMaximumChordError};else std::cout<<"null";

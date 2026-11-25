@@ -31,6 +31,7 @@
 #include "OcctInitialPointFront.hpp"
 #include "OcctInitialTopologyQuality.hpp"
 #include "OcctSourceFallbackPolicy.hpp"
+#include "OcctSourceMismatchPriority.hpp"
 #include "paacs/algo/BoundaryConformingMesher.hpp"
 #include "paacs/bnd/TetPlcCavityRecovery.hpp"
 #include "../bnd/TetPlcRetainedRecovery.hpp"
@@ -1209,7 +1210,93 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 if(!changed){
                     std::vector<OcctFacetSelection> selected;
                     const bool preferUnresolved=(recoverSourceGeometry&&!result.unresolvedSourceTriangles.empty())||result.blockedSourceTriangles.empty();
-                    const auto& candidates=preferUnresolved?result.unresolvedSourceTriangles:result.blockedSourceTriangles;
+                    const auto& originalCandidates=preferUnresolved?result.unresolvedSourceTriangles:result.blockedSourceTriangles;
+                    std::span<const Index> candidates=originalCandidates;
+                    std::vector<Index> mismatchOrder;
+                    // Experimental ordering only. Reuse completed ORIGINAL CAD
+                    // refusals, never a PLC result as material admission. Scan
+                    // the actual seed so a truncated raw-ID sample cannot hide
+                    // later mismatch clusters. No additional Native queries.
+                    if(options.allowNativeSourceFallback&&options.recoveryMode==NativeCadRecoveryMode::Advanced&&
+                       regionsDeferred&&recoverSourceGeometry&&!material.removedInteriorNodes&&!material.removedIncidentCells){
+                        auto& mismatch=out.sourceMismatchPriority;
+                        ++mismatch.attempts;mismatch.requestedPoints+=material.removedCentroidCells;
+                        mismatch.diagnostic="source-mismatch-started";mismatch.fallbackReason="source-mismatch-interrupted";
+                        struct MismatchTiming {
+                            NativeCadSourceMismatchPriorityReport& report;
+                            const std::uint64_t& work;
+                            std::uint64_t before;
+                            std::chrono::steady_clock::time_point started=std::chrono::steady_clock::now();
+                            ~MismatchTiming(){report.work+=work-before;
+                                report.seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();}
+                        } mismatchTiming{mismatch,out.workUsed,out.workUsed};
+                        OcctStageTrace mismatchTrace("source_mismatch_priority",tag);
+                        const auto receipts=strictAdmissions.retainedPayloadBytes();
+                        if(receipts<availableBytes){
+                            OcctSourceMismatchLimits mismatchLimits;
+                            mismatchLimits.maximumWork=std::min<std::uint64_t>(2'000'000,remaining()/8);
+                            mismatchLimits.maximumWorkingBytes=availableBytes-receipts;
+                            mismatchLimits.maximumNodes=o.maximumNodes;
+                            mismatchLimits.maximumSourceTriangles=bo.maximumTriangles;
+                            mismatchLimits.cancellation=o.cancellation;
+                            const auto& materialSeed=initiallyComplete?completed:incomplete;
+                            const auto capacity=std::min({std::uint64_t(materialSeed.cellCount()),material.removedCentroidCells,
+                                mismatchLimits.maximumRejectedPoints,mismatchLimits.maximumWorkingBytes/(16*sizeof(Vec3))});
+                            std::vector<Vec3> rejectedPoints;rejectedPoints.reserve(static_cast<std::size_t>(capacity));
+                            bool allRejectedRetained=true;
+                            for(Index cell=0;cell<materialSeed.cellCount();++cell){
+                                tick();if(materialSeed.cell(cell).type!=mesh::CellType::Tet4)continue;
+                                need(materialSeed.cell(cell).onEntity==mesh::Classification{3,tag},
+                                    NativeCadMeshReason::InternalError,"source-mismatch-seed-body");
+                                Vec3 center{};const auto* nodes=materialSeed.cellNodes(cell);
+                                for(unsigned j=0;j<4;++j)center=center+materialSeed.node(nodes[j])*.25;
+                                const auto verdict=centroidCache.find(pointKey(center));
+                                if(verdict==centroidCache.end()||verdict->second)continue;
+                                if(rejectedPoints.size()==capacity){allRejectedRetained=false;break;}
+                                rejectedPoints.push_back(center);
+                            }
+                            const auto pointBytes=std::uint64_t(rejectedPoints.capacity())*sizeof(Vec3);
+                            mismatch.maximumWorkingPayloadEstimate=std::max(mismatch.maximumWorkingPayloadEstimate,pointBytes);
+                            if(allRejectedRetained&&rejectedPoints.size()==material.removedCentroidCells&&!rejectedPoints.empty()){
+                                need(pointBytes<=mismatchLimits.maximumWorkingBytes,NativeCadMeshReason::InternalError,
+                                    "source-mismatch-point-storage");
+                                mismatchLimits.maximumWorkingBytes-=pointBytes;
+                                tick(std::uint64_t(boundary.nodeCount())*8+std::uint64_t(boundary.cellCount())*12);
+                                const OcctSourceMismatchStamp stamp{tag,refinement,mesh::meshHash(boundary)};
+                                mismatch.sourceGeneration=stamp.generation;mismatch.sourceMeshHash=stamp.sourceMeshHash;
+                                const auto priority=rankOcctSourceMismatchFacets(boundary,stamp,stamp,
+                                    rejectedPoints,originalCandidates,mismatchLimits);
+                                accountCompleted(priority.workUsed);mismatchTrace.finish(priority.diagnostic);
+                                mismatch.diagnostic=priority.diagnostic;
+                                mismatch.insideSourceOutsideCad+=priority.insideSourceOutsideCad;
+                                mismatch.outsideSource+=priority.outsideSource;mismatch.ambiguousSource+=priority.ambiguousSource;
+                                mismatch.prioritizedFacets+=priority.prioritizedFacets;
+                                mismatch.insideWitnessesNearMissingFacets+=priority.insideWitnessesNearMissingFacets;
+                                mismatch.completedAttempts+=priority.complete;
+                                if(priority.modeledBytes<=mismatchLimits.maximumWorkingBytes)
+                                    mismatch.maximumWorkingPayloadEstimate=std::max(mismatch.maximumWorkingPayloadEstimate,
+                                        priority.modeledBytes+pointBytes);
+                                mismatch.fallbackReason=priority.complete?"no-inside-source-missing-facet-witnesses":priority.diagnostic;
+                                need(priority.reason!=OcctSourceMismatchReason::Cancelled,NativeCadMeshReason::Cancelled,"cancelled");
+                                if(priority.complete&&priority.source==stamp&&priority.prioritizedFacets){
+                                    mismatchOrder.reserve(priority.facets.size());
+                                    for(const auto& facet:priority.facets){tick();mismatchOrder.push_back(facet.triangle);}
+                                    candidates=mismatchOrder;
+                                    mismatch.priorityApplied=true;mismatch.fallbackReason="none";
+                                }
+                                // Local diagnostic exhaustion/refusal keeps the
+                                // original candidate route and all its gates.
+                                // No partial priority is used or published.
+                            }else{
+                                mismatch.diagnostic=!allRejectedRetained?"source-mismatch-point-cap":
+                                    rejectedPoints.empty()?"no-recorded-native-refusals":"source-mismatch-missing-native-verdicts";
+                                mismatch.fallbackReason=mismatch.diagnostic;mismatchTrace.finish(mismatch.diagnostic);
+                            }
+                        }else{
+                            mismatch.diagnostic=mismatch.fallbackReason="source-mismatch-working-cap";
+                            mismatchTrace.finish(mismatch.diagnostic);
+                        }
+                    }
                     const auto selectionLimit=recoverSourceGeometry?32u:8u;
                     for(auto i:candidates){
                         tick();

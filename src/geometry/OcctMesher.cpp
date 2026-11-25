@@ -972,6 +972,23 @@ bool nativeLongitudinalFallback(const OcctModel& model,const View& view,const Na
 }
 // Cost counters concern both attempted routes. Geometry, quality and source
 // certificates remain those of the route that is actually published.
+bool accumulateSourceMismatchPriority(NativeCadSourceMismatchPriorityReport& target,
+    const NativeCadSourceMismatchPriorityReport& source,bool latest=true) noexcept {
+    const auto counters=std::array{
+        &NativeCadSourceMismatchPriorityReport::attempts,&NativeCadSourceMismatchPriorityReport::completedAttempts,
+        &NativeCadSourceMismatchPriorityReport::requestedPoints,&NativeCadSourceMismatchPriorityReport::insideSourceOutsideCad,
+        &NativeCadSourceMismatchPriorityReport::outsideSource,&NativeCadSourceMismatchPriorityReport::ambiguousSource,
+        &NativeCadSourceMismatchPriorityReport::prioritizedFacets,&NativeCadSourceMismatchPriorityReport::insideWitnessesNearMissingFacets,
+        &NativeCadSourceMismatchPriorityReport::work};
+    for(const auto member:counters)if(source.*member>UINT64_MAX-target.*member)return false;
+    const bool retainDiagnostic=source.attempts&&(latest||!target.attempts);
+    for(const auto member:counters)target.*member+=source.*member;
+    target.seconds+=source.seconds;target.priorityApplied|=source.priorityApplied;
+    target.maximumWorkingPayloadEstimate=std::max(target.maximumWorkingPayloadEstimate,source.maximumWorkingPayloadEstimate);
+    if(retainDiagnostic){target.diagnostic=source.diagnostic;target.fallbackReason=source.fallbackReason;
+        target.sourceGeneration=source.sourceGeneration;target.sourceMeshHash=source.sourceMeshHash;}
+    return true;
+}
 bool accumulateInitialFrontTrial(NativeCadBodyMeshReport& result,const NativeCadBodyMeshReport& trial) noexcept {
     const std::array workCounters{
         &NativeCadBodyMeshReport::nativeSurfaceWork,&NativeCadBodyMeshReport::nativeVolumeWork,
@@ -994,6 +1011,7 @@ bool accumulateInitialFrontTrial(NativeCadBodyMeshReport& result,const NativeCad
     result.nativeVolumeSeconds+=trial.nativeVolumeSeconds;
     result.nativePartitionSeconds+=trial.nativePartitionSeconds;
     result.nativeAssemblySeconds+=trial.nativeAssemblySeconds;
+    if(!accumulateSourceMismatchPriority(result.sourceMismatchPriority,trial.sourceMismatchPriority,false))return false;
     return true;
 }
 bool accumulateInitialFrontTrial(NativeCadMeshOutcome& result,const NativeCadMeshOutcome& trial) noexcept {
@@ -1474,6 +1492,8 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
                             maximumWork,body,earlyConstraintWork,surfaceMode,liveMaterialTrial);
                         report.sourceShell=recovered.sourceShell;
                         report.materialClassification=recovered.materialClassification;
+                        need(accumulateSourceMismatchPriority(report.sourceMismatchPriority,recovered.sourceMismatchPriority),
+                            NativeCadMeshReason::BudgetExceeded);
                         report.initialTopologyQuality=recovered.initialTopologyQuality;
                         // Preserve completed stage evidence before tick observes
                         // cancellation. A stopped call must not erase the work

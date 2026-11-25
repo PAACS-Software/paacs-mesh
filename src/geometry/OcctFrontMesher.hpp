@@ -29,6 +29,7 @@ struct OcctFrontOutcome {
     NativeCadInitialTopologyQualityReport initialTopologyQuality;
     NativeCadSourceShellReport sourceShell;
     NativeCadMaterialClassificationReport materialClassification;
+    NativeCadSourceMismatchPriorityReport sourceMismatchPriority;
     const char* interiorFrontDiagnostic="not_attempted";
     std::uint64_t interiorFrontNodes=0,interiorFrontCandidates=0;
     std::uint64_t interiorFrontWork=0,interiorFrontQueries=0;

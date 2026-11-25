@@ -290,6 +290,23 @@ py::dict materialClassificationReport(const geo::NativeCadMaterialClassification
     return r;
 }
 
+py::dict sourceMismatchPriorityReport(const geo::NativeCadSourceMismatchPriorityReport& source) {
+    py::dict r;r["available"]=source.attempts>0;r["diagnostic"]=source.diagnostic;
+    r["fallback_reason"]=source.fallbackReason;r["attempts"]=source.attempts;
+    r["completed_attempts"]=source.completedAttempts;r["requested_points"]=source.requestedPoints;
+    r["inside_source_outside_cad"]=source.insideSourceOutsideCad;
+    r["outside_source"]=source.outsideSource;r["ambiguous_source"]=source.ambiguousSource;
+    r["prioritized_facets"]=source.prioritizedFacets;
+    r["inside_witnesses_near_missing_facets"]=source.insideWitnessesNearMissingFacets;
+    r["priority_applied"]=source.priorityApplied;r["work"]=source.work;
+    r["seconds"]=finiteValue(source.seconds);
+    r["maximum_working_payload_estimate"]=source.maximumWorkingPayloadEstimate;
+    r["source_generation"]=source.sourceGeneration;
+    r["source_mesh_hash_u64"]=std::to_string(source.sourceMeshHash);
+    r["scope"]="diagnostic ordering only; no CAD or material acceptance; cumulative attempts and last fallback reason";
+    return r;
+}
+
 py::dict sourceShellReport(const geo::NativeCadSourceShellReport& source) {
     py::dict r;py::list attempts;
     const auto count=std::min<std::size_t>(source.count,source.attempts.size());
@@ -663,6 +680,7 @@ struct MeshResult {
             b["fidelity"]=std::move(bodyFidelity);
             b["constraint_recovery"] = constraintRecoveryReport(body.constraintRecovery);
             b["material_classification"] = materialClassificationReport(body.materialClassification);
+            b["source_mismatch_priority"] = sourceMismatchPriorityReport(body.sourceMismatchPriority);
             py::dict sizingApplication;
             sizingApplication["applied"]=py::cast(body.volumeSizingApplied);
             sizingApplication["diagnostic"]=body.volumeSizingDiagnostic;

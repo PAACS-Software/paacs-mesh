@@ -337,6 +337,20 @@ struct NativeCadMaterialClassificationReport {
     std::uint64_t profiledBatches=0,rayWitnessAttempts=0;
     double classifierSetupSeconds=0,nativeQuerySeconds=0,rayWitnessSeconds=0;
 };
+// Experimental recovery ordering evidence. Source-PLC inclusion never admits
+// an original-CAD rejection. Counts accumulate across private route attempts;
+// an interrupted attempt may contain only partial diagnostic measurements.
+struct NativeCadSourceMismatchPriorityReport {
+    const char* diagnostic="not_attempted";
+    const char* fallbackReason="not_attempted";
+    std::uint64_t attempts=0,completedAttempts=0,requestedPoints=0;
+    std::uint64_t insideSourceOutsideCad=0,outsideSource=0,ambiguousSource=0;
+    std::uint64_t prioritizedFacets=0,insideWitnessesNearMissingFacets=0;
+    std::uint64_t work=0,maximumWorkingPayloadEstimate=0;
+    std::uint64_t sourceGeneration=0,sourceMeshHash=0;
+    bool priorityApplied=false;
+    double seconds=0;
+};
 struct NativeCadBodyMeshReport {
     int solidTag = -1;
     const char* route = "unsupported";
@@ -353,6 +367,7 @@ struct NativeCadBodyMeshReport {
     double surfaceDeflection = 0, surfaceChordErrorLimit = 0;
     NativeCadSourceShellReport sourceShell;
     NativeCadMaterialClassificationReport materialClassification;
+    NativeCadSourceMismatchPriorityReport sourceMismatchPriority;
     // An absent value means this route has not supplied construction evidence.
     // True records use of a volume size field, not verification of every cell.
     std::optional<bool> volumeSizingApplied;
