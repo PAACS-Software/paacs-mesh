@@ -93,12 +93,18 @@ be redistributed with the tests.
 
 ## Windows development qualification
 
-The matched build passed 266 Python tests, with one expected POSIX-only skip,
+The base build at `be303775` passed 266 Python tests, with one expected POSIX-only skip,
 all 104 STEP CLI cases, 94 native meshing assertions and the expanded native
 boundary, curve-resource, interior-front, source-fallback and classification
 tests. Python subprocess tests explicitly loaded the same source and native
 extension. This is development-build evidence, not installed-wheel or
 cross-platform qualification.
+
+The subsequent cavity/chart candidate passed all 32 selected C++ regression
+suites, including 2,156 boundary checks, 449 facet-refinement checks and 32
+source-coverage checks. Its matching Python run passed 266 tests with one
+expected platform skip and 82 redirected subprocesses; all 104 STEP CLI checks
+passed. These regression results do not replace the paired 51-file qualification.
 
 The production sampler completed all 500 curves in three pinned inputs. Staged
 diagnostics recovered four CAD03 curves at the artificial-cut fix and nineteen
@@ -134,3 +140,65 @@ Tet4 cells, preserves tags/source bytes, and survives archive reopening and a
 boundary audit. Minimum mean ratio is 0.0227; source spacing remains unverified.
 It is a recovery regression, not a typical-quality benchmark. Its STEP
 roundtrip is unqualified and is not counted as STEP coverage.
+
+## Diagnosed source recovery
+
+A closed polygonal boundary can pass its chord and volume criteria while a
+small volume next to a concave curved face cannot satisfy original-CAD material
+admission. Increasing the cavity search budget cannot repair that discrepancy.
+The experimental boundary-first route can refine diagnosed source facets by
+projecting their centres onto their original trimmed CAD faces. This is geometry
+recovery; it does not introduce a user sizing region or relax CAD tolerances.
+
+Each proposed point retains the original trim, evaluation, displacement and
+triangle-foot requirements. Unavailable proposals and planar no-ops can be
+omitted from this private candidate set. The accepted subset is committed only
+after complete surface closure, embedding and shared-owner checks. Cancellation,
+allocation failure and work, node or memory exhaustion still refuse the batch.
+The route has at most four rounds and 32 added source nodes per round. Explicit
+per-face sampling caps remain hard limits.
+
+After a committed `ABC → ABP / BCP / CAP` edit, the changed domain is contained
+in `conv(A, B, C, P)`. The local remapper tests retained tetrahedra against these
+sweeps with the existing identity-aware geometry predicates. It preserves legal
+contacts, drops affected cells and keeps other coordinates and body ownership.
+This produces a partial candidate, not a completed mesh. The following recovery
+still performs its full source, contact, centroid and cell-pair checks, followed
+by the original final CAD, volume and mesh audits.
+
+Standard recovery diagnoses these source edits after its bounded connected-region
+attempt. Advanced recovery can probe them earlier, before the larger region
+search. The early probe is experimental: one local pilot completed correctly but
+used more source points without reducing total time. It is not the Standard
+default. Both routes retain the same publication checks and explicit limits.
+
+The source-shell receipt describes the initially admitted provider. Subsequent
+committed source changes are reported separately: `surface_triangles` describes
+the latest retained source, and `recovery_source_facet_nodes` counts cumulative
+committed private additions across attempts. These additions are not necessarily
+all present in the final mesh. Source geometry refinement, partial remapping and
+source validation times are nested in native volume time. Boundary-error maxima
+can include earlier admitted source configurations and are conservative rather
+than final-only measurements.
+
+Shared-edge chart repair separately bisects only canonical curve intervals whose
+polygon chords cross. All incident faces reuse the inserted curve nodes. The
+existing native coordinates, face/body identities and construction limits stay
+in force. Inconsistent stored 2D trim curves are a distinct issue: a successful
+projection onto an underlying surface does not by itself establish membership
+in that original trimmed face. The original trim gates remain enabled.
+
+Original-CAD ray admission also retains its existing two direction-pair
+certificates. Analytic faces can share one line solve between eligible opposite
+halves. Nonanalytic faces retain their original directed solves, and a refused
+positive half avoids unnecessary deferred negative queries. Margins, trim and
+transition tests, ambiguity handling and ordinary-classifier fallback remain
+unchanged. This reduces repeated work; it does not certify element quality or
+solver accuracy.
+
+Surface construction can also reuse identical original trim queries within one
+face. Keys retain the exact floating-point parameter bits, and misses call the
+original classifier. The optional cache holds at most 4,096 entries per active
+face. Its storage is included in the working-memory receipt and released before
+otherwise admissible geometric growth needs the space. It does not reduce the
+existing geometric planning allowance or change trim tolerances.
