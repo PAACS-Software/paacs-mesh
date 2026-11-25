@@ -42,6 +42,8 @@ Conversely, an uncontrolled Normal independent-part AUTO request can retry
 legacy after one unverified front refuses geometry. It retains both charged
 attempts and the discarded front's source/volume diagnostics. Explicit front
 requests and already attempted two-method routes do not gain another retry.
+See [assembly qualification and remaining failures](ASSEMBLY_DIAGNOSTICS.md)
+for measured scope, diagnostics and limitations.
 `--no-advancing-interior-front` selects the previous placement and recognized
 primitive, planar or swept routes.
 Check `archive_published`, `audit_valid` and each body's `route` in the JSON
