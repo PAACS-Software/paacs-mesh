@@ -65,7 +65,7 @@ public:
                 const auto safe=box(bound);
                 if(!safe)return false;
                 body.Add(bound);
-                faces.push_back({*safe,std::make_unique<IntCurvesFace_Intersector>(face,tolerance,true,true)});
+                faces.push_back({*safe,std::make_unique<IntCurvesFace_Intersector>(face,tolerance,true,true),surface.GetType()});
             }
             const auto bounds=box(body);
             if(!bounds)return false;
@@ -108,7 +108,7 @@ public:
             unsigned pairs=0;
             for(const auto axis:directions){
                 const auto forward=gp_Dir(axis[0],axis[1],axis[2]);
-                if(!exits(point,forward)||!exits(point,forward.Reversed()))continue;
+                if(!pairExits(point,forward))continue;
                 if(++pairs==requiredPairs)return true;
             }
         }catch(const Standard_OutOfMemory&){throw std::bad_alloc{};}
@@ -118,7 +118,7 @@ public:
 
 private:
     struct Box {std::array<double,3> lo,hi;};
-    struct Face {Box bounds;std::unique_ptr<IntCurvesFace_Intersector> surface;};
+    struct Face {Box bounds;std::unique_ptr<IntCurvesFace_Intersector> surface;GeomAbs_SurfaceType type;};
     struct Crossing {double distance;IntCurveSurface_TransitionOnCurve transition;};
 
     static bool surfaceBounds(const BRepAdaptor_Surface& surface,double tolerance,Bnd_Box& bounds){
@@ -179,29 +179,12 @@ private:
         return true;
     }
 
-    bool exits(const gp_Pnt& point,const gp_Dir& direction){
-        const gp_Lin line(point,direction);
-        const std::array origin{point.X(),point.Y(),point.Z()};
-        const std::array vector{direction.X(),direction.Y(),direction.Z()};
-        crossings_.clear();
-        for(const auto& face:faces_){
-            if(!intersects(origin,vector,face.bounds))continue;
-            auto& surface=*face.surface;
-            surface.Perform(line,-margin_,reach_);
-            if(!surface.IsDone()||surface.IsParallel())return false;
-            for(int i=1;i<=surface.NbPnt();++i){
-                const auto distance=surface.WParameter(i);
-                const auto transition=surface.Transition(i);
-                if(!(distance>margin_&&distance<reach_)||surface.State(i)!=TopAbs_IN||
-                   transition==IntCurveSurface_Tangent||crossings_.size()>=256)return false;
-                crossings_.push_back({distance,transition});
-            }
-        }
-        if(crossings_.size()%2==0)return false;
-        std::ranges::sort(crossings_,std::less<>{},&Crossing::distance);
+    bool validCrossings(std::vector<Crossing>& crossings)const{
+        if(crossings.size()%2==0)return false;
+        std::ranges::sort(crossings,std::less<>{},&Crossing::distance);
         double previous=0.;
-        for(std::size_t i=0;i<crossings_.size();++i){
-            const auto& crossing=crossings_[i];
+        for(std::size_t i=0;i<crossings.size();++i){
+            const auto& crossing=crossings[i];
             const auto expected=i%2==0?IntCurveSurface_Out:IntCurveSurface_In;
             if(crossing.transition!=expected||crossing.distance-previous<=margin_)return false;
             previous=crossing.distance;
@@ -209,8 +192,70 @@ private:
         return true;
     }
 
+    bool pairExits(const gp_Pnt& point,const gp_Dir& direction){
+        const gp_Lin line(point,direction);
+        const std::array origin{point.X(),point.Y(),point.Z()};
+        const std::array vector{direction.X(),direction.Y(),direction.Z()};
+        const std::array negative{-direction.X(),-direction.Y(),-direction.Z()};
+        std::array<std::size_t,128> negativeOnly{};std::size_t deferred=0;
+        crossings_.clear();oppositeCrossings_.clear();
+        const auto analytic=[&](std::size_t fi){
+            switch(faces_[fi].type){
+                case GeomAbs_Plane:case GeomAbs_Cylinder:case GeomAbs_Cone:
+                case GeomAbs_Sphere:case GeomAbs_Torus:return true;
+                default:return false;
+            }
+        };
+        const auto directed=[&](std::size_t fi,bool positive){
+            auto& surface=*faces_[fi].surface;
+            const gp_Lin ray(point,positive?direction:direction.Reversed());
+            surface.Perform(ray,-margin_,reach_);
+            if(!surface.IsDone()||surface.IsParallel())return false;
+            auto& hits=positive?crossings_:oppositeCrossings_;
+            for(int i=1;i<=surface.NbPnt();++i){
+                const auto distance=surface.WParameter(i);const auto transition=surface.Transition(i);
+                if(!(distance>margin_&&distance<reach_)||surface.State(i)!=TopAbs_IN||
+                   transition==IntCurveSurface_Tangent||hits.size()>=256)return false;
+                hits.push_back({distance,transition});
+            }
+            return true;
+        };
+        const auto consume=[&](std::size_t fi,bool positive,bool negativeHalf){
+            auto& surface=*faces_[fi].surface;
+            surface.Perform(line,negativeHalf?-reach_:-margin_,positive?reach_:margin_);
+            if(!surface.IsDone()||surface.IsParallel())return false;
+            for(int i=1;i<=surface.NbPnt();++i){
+                const auto distance=surface.WParameter(i),inverse=-distance;
+                if(!std::isfinite(distance))return false;
+                const auto transition=surface.Transition(i);
+                const auto add=[&](double t,IntCurveSurface_TransitionOnCurve tr,std::vector<Crossing>& hits){
+                    if(!(t>margin_&&t<reach_)||surface.State(i)!=TopAbs_IN||
+                       tr==IntCurveSurface_Tangent||hits.size()>=256)return false;
+                    hits.push_back({t,tr});return true;
+                };
+                if(positive&&distance>=-margin_&&distance<=reach_&&!add(distance,transition,crossings_))return false;
+                if(negativeHalf&&inverse>=-margin_&&inverse<=reach_&&!add(inverse,(transition==IntCurveSurface_Out?IntCurveSurface_In:transition==IntCurveSurface_In?IntCurveSurface_Out:transition),oppositeCrossings_))return false;
+            }
+            return true;
+        };
+        for(std::size_t fi=0;fi<faces_.size();++fi){
+            const bool positive=intersects(origin,vector,faces_[fi].bounds);
+            const bool negativeHalf=intersects(origin,negative,faces_[fi].bounds);
+            const bool share=positive&&negativeHalf&&analytic(fi);
+            if(positive){const bool accepted=share?consume(fi,true,true):directed(fi,true);if(!accepted)return false;}
+            if(negativeHalf&&!share)negativeOnly[deferred++]=fi;
+        }
+        // Preserve the old forward-half early refusal. Negative hits from
+        // shared faces are retained, but negative-only faces are not queried
+        // when the first half cannot provide a complete certificate.
+        if(!validCrossings(crossings_))return false;
+        for(std::size_t i=0;i<deferred;++i)
+            if(!directed(negativeOnly[i],false))return false;
+        return validCrossings(oppositeCrossings_);
+    }
+
     std::vector<Face> faces_;
-    std::vector<Crossing> crossings_;
+    std::vector<Crossing> crossings_,oppositeCrossings_;
     Box bounds_{};
     double margin_=0.,reach_=0.;
 };
