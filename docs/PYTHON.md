@@ -452,6 +452,12 @@ After a named geometric refusal, one original AUTO call can use the remaining
 shared work and deadline. Its `automatic_dispatch` route entry includes the
 entire AUTO call and its internal attempts. Preflight costs are descriptive
 subsets of the parent outcome's total work/time; do not add them to that total.
+Uncontrolled Normal multi-part AUTO can also try the legacy constructor after
+one unverified front refuses geometry. `automatic_front_refused_legacy_retry`
+records this choice and `initial_front_fallback` retains the failed source and
+volume diagnostics. An explicit front request does not acquire this fallback.
+Diagnostic face and edge tags refer to the original model. IDs for edge
+occurrences in extracted parts are `null` when their original mapping is unproved.
 
 `trimmed_ray_witnesses=True` opts into strict serial Original-CAD ray
 certificates during validation:

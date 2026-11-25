@@ -38,6 +38,10 @@ checks. `automatic_dispatch` records that complete AUTO call, including its
 internal attempts; preflight fields are already included in the parent
 outcome's total work/time. Cancellation,
 allocation, source-integrity and requested quality/size failures remain terminal.
+Conversely, an uncontrolled Normal independent-part AUTO request can retry
+legacy after one unverified front refuses geometry. It retains both charged
+attempts and the discarded front's source/volume diagnostics. Explicit front
+requests and already attempted two-method routes do not gain another retry.
 `--no-advancing-interior-front` selects the previous placement and recognized
 primitive, planar or swept routes.
 Check `archive_published`, `audit_valid` and each body's `route` in the JSON
@@ -50,8 +54,8 @@ disabled policy. It does not force the initial front or replace verified
 primitive/mapped routing. Explicit local surface controls and construction caps
 are not bypassed. Inspect each source attempt's provider, witness and configured
 angle in `source_shell`; native tessellation is not an achieved-size certificate.
-An opted-in live request that refuses its source stays refused rather than
-silently switching to legacy star/partition construction.
+An explicit front request that refuses its source stays refused. Automatic
+independent-part routing can use the reported, bounded method fallback above.
 The three-attempt source bound includes provider and chord retries together
 (Bounded explicit opt-in uses at most two; default Bounded retains one).
 

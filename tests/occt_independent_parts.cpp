@@ -34,6 +34,58 @@ void check(bool ok,const char* why){if(!ok)throw std::runtime_error(why);}
 std::string snapshot(const OcctModel& m){std::ostringstream s;BRepTools::Write(OcctModelAccess::shape(m),s);return s.str();}
 namespace {
 
+void checkDiagnosticIdentityHistory() {
+    std::array<std::vector<int>,4> tags;
+    tags[1]={-1,101,102};tags[2]={-1,201,202};
+    NativeCadMeshOutcome child;child.bodies.resize(1);
+    const auto shell=[](int face,int edge){NativeCadSourceShellReport s;s.count=1;s.attempts[0].witness.faceTag=face;
+        s.attempts[0].witness.edgeTag=edge;s.attempts[0].witness.useId=77;return s;};
+    child.initialFrontFallback.sourceShell=shell(1,2);
+    child.bodies[0].sourceShell=shell(2,1);child.bodies[0].initialFrontFallback.sourceShell=shell(1,1);
+    child.bodies[0].surfaceSpacing.push_back({});child.bodies[0].surfaceSpacing[0].faceTag=2;
+    std::uint64_t work=0;
+    check(remapIndependentChildDiagnostics(child,tags,[&]{++work;})&&work==5,
+          "Diagnostic identity conversion charges each bounded shell/body/spacing entry once");
+    check(child.initialFrontFallback.sourceShell.attempts[0].witness.faceTag==201&&
+          child.initialFrontFallback.sourceShell.attempts[0].witness.edgeTag==102&&
+          child.bodies[0].sourceShell.attempts[0].witness.faceTag==202&&
+          child.bodies[0].sourceShell.attempts[0].witness.edgeTag==101&&
+          child.bodies[0].initialFrontFallback.sourceShell.attempts[0].witness.faceTag==201&&
+          child.bodies[0].surfaceSpacing[0].faceTag==202,
+          "Body, discarded-front, aggregate and spacing diagnostics use original CAD entity tags");
+    check(!child.initialFrontFallback.sourceShell.attempts[0].witness.useId&&
+          !child.bodies[0].sourceShell.attempts[0].witness.useId&&
+          !child.bodies[0].initialFrontFallback.sourceShell.attempts[0].witness.useId,
+          "Child-local edge-use occurrences are unavailable instead of guessed as original IDs");
+    auto invalid=shell(3,1);const auto invalidFace=invalid.attempts[0].witness.faceTag;
+    check(!remapIndependentSourceShell(invalid,tags,[]{})&&invalid.attempts[0].witness.faceTag==invalidFace&&invalid.attempts[0].witness.edgeTag==1,
+          "An unmapped source witness refuses without half-converting that witness");
+    invalid=shell(-1,-1);invalid.count=static_cast<unsigned>(invalid.attempts.size()+1);
+    check(!remapIndependentSourceShell(invalid,tags,[]{}),"Out-of-range diagnostic attempt count is bounded");
+}
+
+void checkOriginalDiagnosticNamespaces(const OcctModel& model,const NativeCadMeshOutcome& outcome){
+    for(const auto& body:outcome.bodies){
+        const auto ownsFace=[&](int face){if(!model.face(face))return false;for(const auto owner:model.faceOwners(face))if(owner.solidTag==body.solidTag)return true;return false;};
+        const auto shell=[&](const NativeCadSourceShellReport& source){
+            check(source.count<=source.attempts.size(),"Owned diagnostic attempt count");
+            for(unsigned i=0;i<source.count;++i){const auto& witness=source.attempts[i].witness;
+                check(!witness.useId,"No child-local use ID is presented as original");
+                if(witness.faceTag>0)check(ownsFace(witness.faceTag),"Diagnostic witness face belongs to its original body");
+                if(witness.edgeTag>0){bool owned=false;for(const auto face:model.edgeFaces(witness.edgeTag))owned|=ownsFace(face);
+                    check(model.edge(witness.edgeTag)&&owned,"Diagnostic witness edge belongs to its original body");}
+            }
+        };
+        shell(body.sourceShell);shell(body.initialFrontFallback.sourceShell);
+        for(const auto& spacing:body.surfaceSpacing)check(ownsFace(spacing.faceTag),"Sizing diagnostic uses its original selected body face");
+    }
+    const auto& aggregate=outcome.initialFrontFallback.sourceShell;
+    check(aggregate.count<=aggregate.attempts.size(),"Aggregate diagnostic attempt count is bounded");
+    for(unsigned i=0;i<aggregate.count;++i){const auto& witness=aggregate.attempts[i].witness;
+        check(!witness.useId&&(witness.faceTag<1||model.face(witness.faceTag))&&(witness.edgeTag<1||model.edge(witness.edgeTag)),
+              "Aggregate fallback diagnostics retain only original IDs or explicit unavailability");}
+}
+
 void checkGeneratorEligibility() {
     const auto plane=[](Vec3 origin,Vec3 axis,double tolerance=1e-7){return GeneratorFace{GeneratorFaceKind::Plane,origin,axis,tolerance};};
     const auto cylinder=[](Vec3 axis){return GeneratorFace{GeneratorFaceKind::Cylinder,{0,0,0},axis,1e-7};};
@@ -80,6 +132,23 @@ void checkGeneratorEligibility() {
         const bool allowed=reason==NativeCadMeshReason::GeometryError||reason==NativeCadMeshReason::UnsupportedBody||reason==NativeCadMeshReason::RecognitionFailed;
         check(generatorLegacyRetryReason(reason)==allowed,"Only named geometric legacy refusals admit one original AUTO attempt");
     }
+    NativeCadMeshOutcome frontRefusal;frontRefusal.reason=NativeCadMeshReason::GeometryError;
+    frontRefusal.routeResolution.candidate="native_front";frontRefusal.routeResolution.count=1;
+    frontRefusal.routeResolution.attempts[0].method="native_front";
+    check(independentAutoMayRetryLegacy(options,2,frontRefusal),"An uncontrolled single AUTO-front geometric refusal may try audited legacy");
+    for(unsigned i=0;i<=static_cast<unsigned>(NativeCadMeshReason::SizeRequirementNotMet);++i){
+        auto trial=frontRefusal;trial.reason=static_cast<NativeCadMeshReason>(i);
+        check(independentAutoMayRetryLegacy(options,2,trial)==generatorLegacyRetryReason(trial.reason),
+              "Reverse fallback never absorbs a hard, quality, size or other unnamed stop");
+    }
+    auto twice=frontRefusal;twice.routeResolution.count=2;
+    check(!independentAutoMayRetryLegacy(options,2,twice),"AUTO's already-tried second route cannot become a third method");
+    auto forced=options;forced.useAdvancingInteriorFront=true;
+    check(!independentAutoMayRetryLegacy(forced,2,frontRefusal),"Explicit front cannot acquire a reverse whole-method fallback");
+    auto changedDestination=frontRefusal;changedDestination.destinationUnchanged=false;
+    check(!independentAutoMayRetryLegacy(options,2,changedDestination),"A changed private destination cannot enter a retry");
+    auto verified=frontRefusal;verified.routeResolution.wholeBodyVerified=true;
+    check(!independentAutoMayRetryLegacy(options,2,verified),"Verified structured AUTO is not reclassified as a failed general front");
     check(generatorRetryWork(100,32,80)==68&&generatorRetryWork(100,32,50)==50&&
           generatorRetryWork(100,100,100)==0&&generatorRetryWork(100,101,100)==0,
           "Retry work subtracts failed work and guards, stays within shared admission, and never underflows");
@@ -176,6 +245,7 @@ void checkNormalPerBodyAuto() {
     check(oldResult.published&&result.published&&result.validatedParts==2&&result.audit.valid&&result.quality.valid&&
           sameMeshPayload(oldMesh,automatic)&&snapshot(model)==source&&result.nativeContactSourceGuard,
           "Normal per-body AUTO preserves known mapped/primitive mesh, identities and source audits");
+    checkOriginalDiagnosticNamespaces(model,result);
     check(std::string_view(result.routeResolution.reason)=="automatic_independent_part_dispatch"&&result.routeResolution.count==0,
           "Normal multi-part AUTO records per-body scope rather than a fictitious global method");
     for(const auto& body:result.bodies)check(body.routeResolution.preflightAttempted&&body.routeResolution.wholeBodyVerified&&
@@ -237,6 +307,7 @@ void checkNormalPerBodyAuto() {
           "Generator child retains its charged eligibility hint and audited legacy result");
     for(const auto& body:variedResult.bodies)check(body.nativeCentroidSourceGuard&&body.nativeCentroidsChecked>0,
           "Mixed AUTO children retain original-body final material validation");
+    checkOriginalDiagnosticNamespaces(*varied.model,variedResult);
 
     TopoDS_Compound analyticMixed;builder.MakeCompound(analyticMixed);builder.Add(analyticMixed,BRepPrimAPI_MakeBox(1.,1.,1.).Shape());
     builder.Add(analyticMixed,BRepPrimAPI_MakeTorus(gp_Ax2(gp_Pnt(4,0,0),gp_Dir(0,0,1)),1.,.25).Shape());
@@ -250,6 +321,7 @@ void checkNormalPerBodyAuto() {
           std::string_view(analyticResult.bodies[1].routeResolution.reason)=="verified_whole_body_primitive"&&
           std::string_view(analyticResult.bodies[1].routeResolution.candidate)=="torus",
           "Non-generator torus retains its verified AUTO primitive capability");
+    checkOriginalDiagnosticNamespaces(*analytic.model,analyticResult);
 
     // Converting an owned cylinder to NURBS keeps its exact geometry but
     // removes the analytic generator classification. It still resolves AUTO
@@ -261,14 +333,25 @@ void checkNormalPerBodyAuto() {
     const auto curvedSource=snapshot(*curved.model);mesh::Mesh curvedMesh;curvedMesh.addNode({9,8,7},{3,92});const mesh::Mesh curvedSentinel=curvedMesh;live.geometry.targetSize=.5;
     const auto curvedResult=meshNativeCad(*curved.model,live,curvedMesh);
     check(curvedResult.nativeContactSourceGuard&&snapshot(*curved.model)==curvedSource&&curvedResult.bodies.size()==2&&
-          std::string_view(curvedResult.bodies[1].routeResolution.candidate)=="native_front"&&
           !curvedResult.bodies[1].routeResolution.wholeBodyVerified,
-          "Non-generator child retains AUTO front regardless of its current meshing outcome");
+          "Non-generator child retains guarded original AUTO without a fictitious generator certificate");
+    const auto& nonGeneratorReport=curvedResult.bodies[1];
+    if(std::string_view(nonGeneratorReport.routeResolution.candidate)=="legacy_dispatch"){
+        const auto& route=nonGeneratorReport.routeResolution;const auto& witness=nonGeneratorReport.initialFrontFallback;
+        check(std::string_view(route.reason)=="automatic_front_refused_legacy_retry"&&route.count==2&&
+              std::string_view(route.attempts[0].method)=="automatic_dispatch"&&std::string_view(route.attempts[1].method)=="legacy_dispatch"&&
+              !route.attempts[0].published&&generatorLegacyRetryReason(route.attempts[0].reason)&&
+              witness.attempted&&witness.reason==route.attempts[0].reason&&witness.work==route.attempts[0].work&&
+              witness.seconds==route.attempts[0].seconds&&witness.surfaceDiagnostic&&witness.volumeDiagnostic&&witness.sourceShell.count>0,
+              "A reverse legacy choice retains the actual single-front refusal, source shell and every attempt cost");
+    }else check(std::string_view(nonGeneratorReport.routeResolution.candidate)=="native_front",
+          "Non-generator without a reverse retry retains the original AUTO front candidate");
     if(curvedResult.published)check(curvedResult.validatedParts==2&&curvedResult.audit.valid&&curvedResult.quality.valid&&
           curvedResult.bodies[1].nativeCentroidSourceGuard&&curvedResult.bodies[1].nativeCentroidsChecked>0,
           "Any completed NURBS mesh retains every original Native validity gate");
     else check(curvedResult.destinationUnchanged&&sameMeshPayload(curvedMesh,curvedSentinel)&&curvedResult.reason!=NativeCadMeshReason::None,
           "A currently refused NURBS construction preserves the destination and explicit method receipt");
+    checkOriginalDiagnosticNamespaces(*curved.model,curvedResult);
 }
 
 void checkCancelledPartReceipts() {
@@ -378,6 +461,7 @@ void checkCancelledPartReceipts() {
 } // namespace
 
 int main(){try{
+ checkDiagnosticIdentityHistory();
  checkGeneratorEligibility();
  checkNormalPerBodyAuto();
  checkCancelledPartReceipts();

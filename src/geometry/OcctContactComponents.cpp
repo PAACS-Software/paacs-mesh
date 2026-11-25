@@ -448,9 +448,10 @@ NativeCadMeshOutcome buildOcctIndependentParts(const OcctModel& original,const N
             const auto live=retained(localMetadata);need(live<options.maximumPrimitiveWorkingBytes&&budget.remaining()>0,"independent_parts_working_budget",NativeCadMeshReason::BudgetExceeded);
             auto request=options;request.assemblyPolicy=NativeCadAssemblyPolicy::ConformingDomain;request.separateMatchedNativeFaceContacts=false;request.separateMatchedBoxFaceContacts=false;request.separateLowerDimensionalContacts=false;
             NativeCadRouteResolutionReport hint;
-            if(independentGeneratorHintAllowed(options,original.solids().size()))hint=generatorHint(localMaps[2],live,budget);
+            const bool portfolioAllowed=independentGeneratorHintAllowed(options,original.solids().size());
+            if(portfolioAllowed)hint=generatorHint(localMaps[2],live,budget);
             std::string localBefore;std::uint64_t snapshotReservation=0;
-            if(std::string_view(hint.reason)=="analytic_generator_legacy_eligibility"){
+            if(portfolioAllowed){
                 const auto at=Clock::now();const auto initialWork=budget.work;
                 const auto available=options.maximumPrimitiveWorkingBytes-live;
                 const auto progress=options.geometry.cancellation?OcctCancellationProgress::retainedPayloadBytes():0;
@@ -464,12 +465,13 @@ NativeCadMeshOutcome buildOcctIndependentParts(const OcctModel& original,const N
                         throw Stop{source,"independent_parts_local_source_audit"};
                     if(source==NativeCadMeshReason::None&&localBefore.capacity()<=guardAvailable/8){
                         snapshotReservation=mul(localBefore.capacity(),4);retained(add(localMetadata,snapshotReservation));
-                        request.useAdvancingInteriorFront=false;
+                        if(std::string_view(hint.reason)=="analytic_generator_legacy_eligibility")request.useAdvancingInteriorFront=false;
                     }
                 }
                 hint.preflightWork=add(hint.preflightWork,budget.work-initialWork);
                 hint.preflightSeconds+=std::chrono::duration<double>(Clock::now()-at).count();
-                if(!snapshotReservation){hint.reason="analytic_generator_guard_admission_unavailable";hint.candidate="none";std::string{}.swap(localBefore);}
+                hint.preflightAttempted=true;
+                if(!snapshotReservation){hint.reason="independent_portfolio_guard_admission_unavailable";hint.candidate="none";std::string{}.swap(localBefore);}
             }
             request.maximumValidationWork=std::min(options.geometry.maximumMeshingWork,budget.remaining()/(original.solids().size()-ordinal));request.geometry.maximumMeshingWork=request.maximumValidationWork;
             need(request.maximumValidationWork>0,"independent_parts_work_budget",NativeCadMeshReason::BudgetExceeded);request.maximumPrimitiveWorkingBytes=options.maximumPrimitiveWorkingBytes-live-snapshotReservation;
@@ -482,6 +484,14 @@ NativeCadMeshOutcome buildOcctIndependentParts(const OcctModel& original,const N
             out.preparationSeconds+=std::chrono::duration<double>(Clock::now()-prepareStart).count();
             part.next("contact_part_meshing");
             const auto retainChildReceipt=[&](NativeCadMeshOutcome& child){
+                PhaseSeconds timing(out.preparationSeconds);
+                // Each fresh child call is converted exactly once. A refused
+                // receipt is discarded before the next fresh local call.
+                // Charge bounded metadata visits without polling cancellation
+                // until the completed child receipt has been retained.
+                need(remapIndependentChildDiagnostics(child,tags,[&]{budget.charge(1);}),
+                     "independent_parts_diagnostic_history_invalid",NativeCadMeshReason::InternalError);
+                if(child.initialFrontFallback.attempted)out.initialFrontFallback=child.initialFrontFallback;
                 if(child.bodies.empty()){NativeCadBodyMeshReport report;report.solidTag=body;report.reason=child.reason;report.initialFrontFallback=child.initialFrontFallback;report.routeResolution=child.routeResolution;out.bodies.push_back(report);}
                 for(auto& report:child.bodies){report.solidTag=body;report.routeResolution=child.routeResolution;if(report.startFaceTag>0)report.startFaceTag=tags[2].at(report.startFaceTag);if(report.endFaceTag>0)report.endFaceTag=tags[2].at(report.endFaceTag);if(report.contactSourceEdgeTag>0)report.contactSourceEdgeTag=tags[1].at(report.contactSourceEdgeTag);if(report.contactTargetEdgeTag>0)report.contactTargetEdgeTag=tags[1].at(report.contactTargetEdgeTag);out.bodies.push_back(std::move(report));}
             };
@@ -495,12 +505,30 @@ NativeCadMeshOutcome buildOcctIndependentParts(const OcctModel& original,const N
                 child.routeResolution.preflightWork=add(child.routeResolution.preflightWork,hint.preflightWork);
                 child.routeResolution.preflightSeconds+=hint.preflightSeconds;
             }
-            if(hint.count==1&&!child.published&&child.destinationUnchanged&&generatorLegacyRetryReason(child.reason)&&
+            const bool reverse=snapshotReservation&&independentAutoMayRetryLegacy(options,original.solids().size(),child);
+            if(reverse){
+                hint=child.routeResolution;
+                hint.attempts[0]={"automatic_dispatch",child.reason,child.published,child.validationWork,
+                    std::chrono::duration<double>(Clock::now()-callStarted).count()};hint.count=1;
+            }
+            if((hint.count==1&&(reverse||std::string_view(hint.reason)=="analytic_generator_legacy_eligibility"))&&
+               !child.published&&child.destinationUnchanged&&generatorLegacyRetryReason(child.reason)&&
                child.validationWork<request.maximumValidationWork&&child.validationWork<request.geometry.maximumMeshingWork){
                 // Charge and preserve the completed refusal before any source
                 // guard, cancellation poll or second call can stop execution.
-                const auto spent=child.validationWork;budget.charge(spent);
+                const auto firstAdmissionWork=budget.work;const auto spent=child.validationWork;budget.charge(spent);
                 need(accumulateIndependentAttemptMetrics(out,child),"independent_parts_attempt_accounting",NativeCadMeshReason::InternalError);
+                NativeCadInitialFrontFallbackReport frontRefusal;
+                if(reverse){
+                    frontRefusal={true,child.reason,child.validationWork,hint.attempts[0].seconds,
+                        child.bodies.empty()?"not_attempted":child.bodies.front().nativeSurfaceReason};
+                    if(!child.bodies.empty()){
+                        frontRefusal.volumeDiagnostic=child.bodies.front().nativeVolumeReason;
+                        frontRefusal.sourceShell=child.bodies.front().sourceShell;
+                    }
+                    child.initialFrontFallback=frontRefusal;
+                    for(auto& report:child.bodies)report.initialFrontFallback=frontRefusal;
+                }
                 const auto reportStart=out.bodies.size();retainChildReceipt(child);budget.tick(0);
                 const auto guardStarted=Clock::now();const auto guardWork=budget.work;
                 std::string localAfter,originalAfter;
@@ -516,8 +544,9 @@ NativeCadMeshOutcome buildOcctIndependentParts(const OcctModel& original,const N
                 hint.preflightWork=add(hint.preflightWork,budget.work-guardWork);
                 const auto guardSeconds=std::chrono::duration<double>(Clock::now()-guardStarted).count();
                 hint.preflightSeconds+=guardSeconds;
-                auto retry=request;retry.useAdvancingInteriorFront.reset();
-                retry.maximumValidationWork=generatorRetryWork(request.maximumValidationWork,add(spent,budget.work-guardWork),budget.remaining());
+                auto retry=request;
+                if(reverse)retry.useAdvancingInteriorFront=false;else retry.useAdvancingInteriorFront.reset();
+                retry.maximumValidationWork=generatorRetryWork(request.maximumValidationWork,budget.work-firstAdmissionWork,budget.remaining());
                 retry.geometry.maximumMeshingWork=retry.maximumValidationWork;
                 need(retry.maximumValidationWork>0,"independent_parts_work_budget",NativeCadMeshReason::BudgetExceeded);
                 // Drop the refused attempt's dynamic receipts and both guard
@@ -527,22 +556,23 @@ NativeCadMeshOutcome buildOcctIndependentParts(const OcctModel& original,const N
                 std::string{}.swap(localBefore);std::string{}.swap(localAfter);std::string{}.swap(originalAfter);
                 retry.maximumPrimitiveWorkingBytes=options.maximumPrimitiveWorkingBytes-live;
                 budget.tick(0);const auto retryStarted=Clock::now();child=meshNativeCad(*local.model,retry,value);
-                hint.reason="analytic_generator_legacy_refused_auto_retry";
-                hint.candidate=child.routeResolution.candidate;hint.wholeBodyVerified=child.routeResolution.wholeBodyVerified;
+                hint.reason=reverse?"automatic_front_refused_legacy_retry":"analytic_generator_legacy_refused_auto_retry";
+                hint.candidate=reverse?"legacy_dispatch":child.routeResolution.candidate;
+                hint.wholeBodyVerified=!reverse&&child.routeResolution.wholeBodyVerified;
                 hint.preflightWork=add(hint.preflightWork,child.routeResolution.preflightWork);
                 hint.preflightSeconds+=child.routeResolution.preflightSeconds;
-                // The second slot is one complete AUTO invocation, including
-                // its internal attempts. Its full work/time is counted once;
-                // preflight fields are descriptive subsets of that cost.
-                hint.attempts[1]={"automatic_dispatch",child.reason,child.published,child.validationWork,
+                // An automatic_dispatch slot is a complete AUTO invocation,
+                // including its internal attempts. Preflight is a descriptive
+                // subset of that cost, never an additional work charge.
+                hint.attempts[1]={reverse?"legacy_dispatch":"automatic_dispatch",child.reason,child.published,child.validationWork,
                     std::chrono::duration<double>(Clock::now()-retryStarted).count()};hint.count=2;
                 child.routeResolution=hint;
+                if(reverse){child.initialFrontFallback=frontRefusal;for(auto& report:child.bodies)report.initialFrontFallback=frontRefusal;}
             }
             std::string{}.swap(localBefore);
             part.finish(nativeCadMeshReasonName(child.reason));
             // Preserve each deferred child's method and fallback metadata,
             // including eligibility hints and receipts from refused children.
-            if(child.initialFrontFallback.attempted)out.initialFrontFallback=child.initialFrontFallback;
             // Charge completed child work before retaining its bounded receipt.
             // Defer the cancellation poll until its timings/reports are copied,
             // so a deadline cannot erase the attempt that consumed the time.

@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <string_view>
+#include <vector>
 
 namespace paacs::geo::detail {
 
@@ -33,6 +35,14 @@ inline bool generatorLegacyRetryReason(NativeCadMeshReason reason) noexcept {
     return reason==NativeCadMeshReason::GeometryError||reason==NativeCadMeshReason::UnsupportedBody||
         reason==NativeCadMeshReason::RecognitionFailed;
 }
+inline bool independentAutoMayRetryLegacy(const NativeCadMeshOptions& options,std::size_t originalBodies,
+                                        const NativeCadMeshOutcome& first) noexcept {
+    return independentGeneratorHintAllowed(options,originalBodies)&&!first.published&&first.destinationUnchanged&&
+        generatorLegacyRetryReason(first.reason)&&!first.routeResolution.wholeBodyVerified&&
+        first.routeResolution.count==1&&first.routeResolution.candidate&&first.routeResolution.attempts[0].method&&
+        std::string_view(first.routeResolution.candidate)=="native_front"&&
+        std::string_view(first.routeResolution.attempts[0].method)=="native_front";
+}
 inline std::uint64_t generatorRetryWork(std::uint64_t original,std::uint64_t spent,std::uint64_t sharedRemaining) noexcept {
     return spent<original?std::min(original-spent,sharedRemaining):0;
 }
@@ -49,6 +59,40 @@ inline bool accumulateIndependentAttemptMetrics(NativeCadMeshOutcome& parent,con
     parent.nativeTrimmedProjectionQueries=p[3];parent.nativeTrimmedProjectionMemoHits=p[4];
     parent.preparationSeconds=seconds[0];parent.generationSeconds=seconds[1];parent.validationSeconds=seconds[2];
     parent.auditSeconds=seconds[3];parent.qualitySeconds=seconds[4];return true;
+}
+
+template<class Tick>
+bool remapIndependentSourceShell(NativeCadSourceShellReport& shell,const std::array<std::vector<int>,4>& tags,Tick&& tick){
+    if(shell.count>shell.attempts.size())return false;
+    const auto map=[&](int& tag,unsigned dimension){
+        if(tag<=0){tag=-1;return true;}
+        if(static_cast<std::size_t>(tag)>=tags[dimension].size()||tags[dimension][tag]<=0)return false;
+        tag=tags[dimension][tag];return true;
+    };
+    for(unsigned i=0;i<shell.count;++i){
+        tick();auto witness=shell.attempts[i].witness;
+        if(!map(witness.edgeTag,1)||!map(witness.faceTag,2))return false;
+        // Edge-use IDs enumerate face/wire occurrences in one import. A part
+        // copy has a different enumeration; entity history cannot map them.
+        witness.useId.reset();shell.attempts[i].witness=witness;
+    }
+    return true;
+}
+
+template<class Tick>
+bool remapIndependentChildDiagnostics(NativeCadMeshOutcome& child,const std::array<std::vector<int>,4>& tags,Tick&& tick){
+    if(!remapIndependentSourceShell(child.initialFrontFallback.sourceShell,tags,tick))return false;
+    for(auto& body:child.bodies){
+        tick();
+        if(!remapIndependentSourceShell(body.sourceShell,tags,tick)||
+           !remapIndependentSourceShell(body.initialFrontFallback.sourceShell,tags,tick))return false;
+        for(auto& spacing:body.surfaceSpacing){
+            tick();const auto tag=spacing.faceTag;
+            if(tag<=0||static_cast<std::size_t>(tag)>=tags[2].size()||tags[2][tag]<=0)return false;
+            spacing.faceTag=tags[2][tag];
+        }
+    }
+    return true;
 }
 
 enum class GeneratorFaceKind { Other,Plane,Cylinder };

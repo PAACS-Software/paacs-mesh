@@ -293,9 +293,10 @@ struct NativeCadSourceShellReport {
     bool nativeFallbackRequested=false,nativeFallbackAttempted=false;
     const char* nativeFallbackDiagnostic="disabled";
 };
-// AUTO may retry the legacy route only after a bounded source-stage refusal,
-// before any initial point construction. This records the discarded trial;
-// it is separate from the initial-front report for the published route.
+// Single-body AUTO may retry legacy after a bounded source-stage refusal,
+// before initial point construction. Uncontrolled Normal multi-part AUTO
+// can also retain a failed front before one guarded legacy retry. This is
+// the discarded trial, separate from the published route's initial front.
 struct NativeCadInitialFrontFallbackReport {
     bool attempted=false;
     NativeCadMeshReason reason=NativeCadMeshReason::None;
