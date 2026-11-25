@@ -5,6 +5,7 @@
 
 #include "OcctContactComponents.hpp"
 #include "OcctContactAssembly.hpp"
+#include "OcctCancellationProgress.hpp"
 #include "OcctModelInternal.hpp"
 #include "OcctNativeValidation.hpp"
 #include "OcctStageTrace.hpp"
@@ -42,6 +43,7 @@ using Tri=std::array<Index,3>;
 using Clock=std::chrono::steady_clock;
 struct Stop {NativeCadMeshReason reason;const char* diagnostic;};
 void need(bool b,const char* s,NativeCadMeshReason reason=NativeCadMeshReason::GeometryError){if(!b)throw Stop{reason,s};}
+std::uint64_t add(std::uint64_t a,std::uint64_t b);
 struct Budget {
     const NativeCadMeshOptions& options;
     std::uint64_t limit,work=0,maximumWorking=0;
@@ -52,7 +54,7 @@ struct Budget {
     }
     void charge(std::uint64_t n){need(n<=remaining(),"component_work_budget",NativeCadMeshReason::BudgetExceeded);work+=n;}
     void collect(std::uint64_t n){charge(n);tick(0);}
-    void working(std::uint64_t bytes){maximumWorking=std::max(maximumWorking,bytes);
+    void working(std::uint64_t bytes){bytes=add(bytes,options.geometry.cancellation?OcctCancellationProgress::retainedPayloadBytes():0);maximumWorking=std::max(maximumWorking,bytes);
         need(bytes<=options.maximumPrimitiveWorkingBytes,"component_working_budget",NativeCadMeshReason::BudgetExceeded);tick(0);}
 };
 std::uint64_t add(std::uint64_t a,std::uint64_t b){need(b<=UINT64_MAX-a,"component_payload_budget",NativeCadMeshReason::BudgetExceeded);return a+b;}
@@ -86,7 +88,9 @@ TopoDS_Shape skin(const TopoDS_Shape& body){TopoDS_Compound shape;BRep_Builder b
     ShapeMap faces;TopExp::MapShapes(body,TopAbs_FACE,faces);for(int i=1;i<=faces.Extent();++i)builder.Add(shape,faces(i));return shape;}
 TopoDS_Shape common(const TopoDS_Shape& a,const TopoDS_Shape& b,Budget& budget){
     budget.tick();BRepAlgoAPI_Common op;NCollection_List<TopoDS_Shape> first,second;first.Append(a);second.Append(b);
-    op.SetArguments(first);op.SetTools(second);op.SetNonDestructive(true);op.SetRunParallel(false);op.Build();budget.tick(0);
+    op.SetArguments(first);op.SetTools(second);op.SetNonDestructive(true);op.SetRunParallel(false);
+    const auto progress=makeOcctCancellationProgress(budget.options.geometry.cancellation);
+    op.Build(Message_ProgressIndicator::Start(progress));budget.tick(0);
     need(op.IsDone()&&!op.HasErrors(),"component_contact_query_failed",NativeCadMeshReason::UnresolvedBodyInterface);return op.Shape();
 }
 double volume(const TopoDS_Shape& shape,Budget& b){

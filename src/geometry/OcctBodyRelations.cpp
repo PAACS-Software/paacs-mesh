@@ -5,6 +5,7 @@
 
 #include "paacs/geometry/OcctBodyRelations.hpp"
 #include "OcctContactAssembly.hpp"
+#include "OcctCancellationProgress.hpp"
 #include "OcctModelInternal.hpp"
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepAlgoAPI_Section.hxx>
@@ -54,6 +55,7 @@ struct Budget {
         report.work += work;
     }
     void storage(std::uint64_t bytes) {
+        bytes = sum(bytes, options.cancellation ? detail::OcctCancellationProgress::retainedPayloadBytes() : 0);
         report.maximumLogicalWorkingBytes = std::max(report.maximumLogicalWorkingBytes, bytes);
         need(bytes <= options.maximumRetainedBytes,
              NativeCadMeshReason::BudgetExceeded, "body_relations_storage_budget");
@@ -70,7 +72,9 @@ TopoDS_Shape common(const TopoDS_Shape& first, const TopoDS_Shape& second,
     NCollection_List<TopoDS_Shape> a, b;
     a.Append(first); b.Append(second);
     query.SetArguments(a); query.SetTools(b);
-    query.SetNonDestructive(true); query.SetRunParallel(false); query.Build();
+    query.SetNonDestructive(true); query.SetRunParallel(false);
+    const auto progress = detail::makeOcctCancellationProgress(budget.options.cancellation);
+    query.Build(Message_ProgressIndicator::Start(progress));
     budget.tick(0);
     if (!query.IsDone() || query.HasErrors()) return {};
     return query.Shape();
@@ -83,7 +87,9 @@ TopoDS_Shape section(const TopoDS_Shape& first, const TopoDS_Shape& second,
     a.Append(first); b.Append(second);
     query.SetArguments(a); query.SetTools(b);
     query.SetNonDestructive(true); query.SetRunParallel(false);
-    query.Approximation(false); query.Build(); budget.tick(0);
+    query.Approximation(false);
+    const auto progress = detail::makeOcctCancellationProgress(budget.options.cancellation);
+    query.Build(Message_ProgressIndicator::Start(progress)); budget.tick(0);
     if (!query.IsDone() || query.HasErrors()) return {};
     return query.Shape();
 }

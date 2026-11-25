@@ -484,7 +484,9 @@ meshing route and explicit physical interpretation.
 
 The query accepts `max_work`, `max_working_bytes` and cooperative `max_seconds`.
 Tracked storage covers diagnostic records and source snapshots; it does not cap
-OCCT's internal allocations. One Native call is not preemptible.
+OCCT's internal allocations. Boolean and Section queries receive the existing
+cancellation flag through OCCT's cooperative progress channel. Uninstrumented
+parts of a Native call can still overrun the deadline; it is not preemption.
 Source snapshots admit at most one quarter of `max_working_bytes`, capped at
 64 MiB per snapshot; the default admits 16 MiB per snapshot. Query failure
 raises `SelectionError` with `stage="body_relations"` and a bounded receipt in
