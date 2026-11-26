@@ -11,8 +11,9 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -550,6 +551,74 @@ class PythonReleaseTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 release.publish_sources(assets, "v1.2.0-rc.2", self.sha)
             self.assertEqual(calls.call_count, 1)
+
+    def index_install_smoke_code(self):
+        manifest = self.assemble()
+        fixture = self.root / "cylinder.step"
+        fixture.write_bytes(b"owned fixture; meshing subprocess is controlled")
+        response = {"urls": [{"filename": name, "packagetype": "bdist_wheel",
+                              "digests": {"sha256": digest}}
+                             for name, digest in manifest["wheels"].items()]}
+        with patch.object(sys, "argv", ["check_pypi_release.py", "--manifest",
+                str(self.output / "release-manifest.json"), "--fixture", str(fixture),
+                "--output", str(self.root / "index-smoke")]), \
+                patch.object(index_release, "urlopen", return_value=io.BytesIO(json.dumps(response).encode())), \
+                patch.object(index_release.venv, "EnvBuilder") as builder, \
+                patch.object(index_release.subprocess, "run") as processes, \
+                patch.object(sys, "stdout", new=io.StringIO()):
+            builder.return_value.create.side_effect = lambda path: Path(path).mkdir(parents=True)
+            index_release.main()
+        commands = [call.args[0] for call in processes.call_args_list
+                    if call.args[0][1:3] == ["-I", "-c"]]
+        self.assertEqual(len(commands), 1)
+        return commands[0][3]
+
+    @staticmethod
+    def index_smoke_mesh(front_nodes):
+        """Independent API responses; no native mesh or geometry is simulated."""
+        return SimpleNamespace(report={
+            "audit": {"complete": True, "valid": True},
+            "quality": {"valid": True, "inverted_cells": 0},
+            "bodies": [{"initial_front": {"nodes": front_nodes}}]},
+            body_tags=[1], face_tags=[1, 2, 3], node_count=12,
+            tetrahedron_count=20, write=Mock())
+
+    @staticmethod
+    def execute_index_smoke(code, meshes):
+        model = SimpleNamespace(mesh=Mock(side_effect=meshes))
+        module = SimpleNamespace(__version__="test-index-wheel", read_step=Mock(return_value=model))
+        with patch.dict(sys.modules, {"paacs_mesh": module}), \
+                patch.object(sys, "stdout", new=io.StringIO()):
+            exec(compile(code, "<index-install-smoke>", "exec"), {})
+        module.read_step.assert_called_once_with("cylinder.step")
+        return model
+
+    def test_index_smoke_accepts_verified_auto_and_validates_explicit_initial_front(self):
+        code = self.index_install_smoke_code()
+        automatic, front = self.index_smoke_mesh(0), self.index_smoke_mesh(8)
+        model = self.execute_index_smoke(code, [automatic, front])
+        self.assertEqual([(call.args, call.kwargs) for call in model.mesh.call_args_list],
+                         [((.3,), {}), ((.3,), {"assembly": "conforming", "advancing_interior_front": True})])
+        self.assertEqual([call.args for call in automatic.write.call_args_list],
+                         [("cylinder.paacsmesh",), ("cylinder.vtk",)])
+        self.assertEqual([call.args for call in front.write.call_args_list],
+                         [("cylinder-initial-front.paacsmesh",), ("cylinder-initial-front.vtk",)])
+
+    def test_index_smoke_rejects_invalid_evidence_for_either_mesh_and_an_empty_explicit_front(self):
+        code = self.index_install_smoke_code()
+        for route in (0, 1):
+            for group, key, value in (("audit", "complete", False), ("audit", "valid", False),
+                                      ("quality", "valid", False), ("quality", "inverted_cells", 1),
+                                      (None, "body_tags", [2]), (None, "face_tags", [1, 2])):
+                meshes = [self.index_smoke_mesh(0), self.index_smoke_mesh(8)]
+                if group:
+                    meshes[route].report[group][key] = value
+                else:
+                    setattr(meshes[route], key, value)
+                with self.subTest(route=route, group=group, key=key), self.assertRaises(AssertionError):
+                    self.execute_index_smoke(code, meshes)
+        with self.assertRaises(AssertionError):
+            self.execute_index_smoke(code, [self.index_smoke_mesh(0), self.index_smoke_mesh(0)])
 
     def test_index_install_resolves_relative_output_before_changing_child_cwd(self):
         manifest = self.assemble()
