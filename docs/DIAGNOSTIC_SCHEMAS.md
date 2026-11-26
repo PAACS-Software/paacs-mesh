@@ -1,6 +1,7 @@
 # Diagnostic contracts and issue codes
 
-This reference includes unreleased development interfaces. Discover an installed
+This reference includes RC4 candidate interfaces. Published RC3 wheels retain
+their original interface. Discover an installed
 build with `paacs-mesh capabilities --json`; package version alone does not
 identify a locally built development artifact. Preserve its source commit too.
 Readers should accept additive keys, check `schema`, and refuse unknown schema
@@ -11,9 +12,9 @@ versions when they cannot interpret the evidence safely.
 `pm.capabilities()` and the CLI return `paacs-mesh-capabilities-v1`. The object
 contains `package_version`, `engine_version`, `units`, `operations`,
 `cli_commands`, formats, selection predicates, controls, recovery and assembly
-restrictions, diagnostic limits and explicit limitations. Development builds
+restrictions, diagnostic limits and explicit limitations. RC4 bindings
 also describe `mesh_inspection`, `cad_proximity`, `mesh_visualization` and
-`mesh_comparison`. The development `controls` object additionally lists
+`mesh_comparison`. The RC4 `controls` object additionally lists
 `construction_efforts`, `construction_default`, `construction_stage_caps` and
 `construction_caps_override_overall_resources=False`. For example:
 
@@ -140,7 +141,7 @@ does not distinguish an absent carrier from refused import; read the diagnostic.
 Historical reports may omit the object or these additive fields. Diagnostic
 summaries preserve available fields without inventing a successful import.
 
-### Construction receipts (development)
+### Construction receipts (RC4)
 
 See [construction effort and caps](CONSTRUCTION_BUDGETS.md) for request scope and
 replay behaviour. The native report's additive `construction` object records
@@ -264,7 +265,7 @@ than inventing a policy or completion certificate. Capability discovery adds
 `resources.policies`, `default`, `explicit_limits_override_policy`,
 `logical_work_is_cpu_instructions` and `modeled_memory_is_OS_hard_limit`.
 
-New development Python meshing calls, new recipes and direct STEP CLI requests
+New RC4 Python meshing calls, new recipes and direct STEP CLI requests
 default to `normal`. Saved recipes retain their policy; missing-policy older
 recipes and the C++ options aggregate retain literal `bounded` defaults.
 Normal with omitted work retains the native 512 MiB modeled allowance unless
@@ -348,7 +349,7 @@ native operation; nested times must not be added as independent costs.
 the separate original-CAD validity checks, certify achieved sizing or establish
 solver adequacy.
 
-### Method resolution and geometry fidelity (development)
+### Method resolution and geometry fidelity (RC4)
 
 Native reports add `fidelity`: nullable `requested_max_chord_error` and
 `requested_max_relative_volume_error`, plus the effective relative-volume limit.
@@ -403,7 +404,26 @@ construction evidence; they must not be added to outer generation/total times
 as independent elapsed intervals. Zero/default fields do not prove stage entry,
 and these receipts neither redo Native audits nor certify sizing completion.
 
-### Native source-provider fallback (development)
+### Native cap sizing and thin-region ordering (RC4)
+
+Body `native_cap_sizing` records `requested_size`, `applied`, `diagnostic`,
+`attempts`, `work`, `seconds`, `cap_nodes`, `cap_triangles` and nullable
+`maximum_cap_edge_length`. Work and time include every attempted cap route;
+they are nested construction costs, not extra intervals to add to total time.
+A coarse fallback has `applied=false` even when it publishes a valid mesh.
+This receipt is independent of the default-off `thin_region_ordering` option.
+
+Top-level `requested_thin_region_ordering` records intent. Body
+`initial_front.ordering` records `attempted`, `complete`,
+`selected_boundary_first`, `diagnostic`, `work`, `samples`, `distinct_samples`,
+`blocked_samples`, `unknown_samples`, `maximum_modeled_bytes`, `seconds`,
+`proposal_factor` and `minimum_clearance_ratio`. `complete` describes the
+bounded advisory query; it certifies neither final mesh validity nor achieved
+sizing. Selected-face sizing abstains with
+`native_face_sizing_not_qualified`; an ambiguous or limited query retains the
+established order. See [hollow qualification](THIN_HOLLOW_QUALIFICATION.md).
+
+### Native source-provider fallback (RC4)
 
 `requested_native_source_fallback` is the strict Boolean request (default false),
 also retained in `effective_policy`. Each source shell reports
@@ -451,7 +471,7 @@ interrupted callback time remain included in this stage's elapsed time.
 Both switches retain all Native validity checks, and neither certifies
 requested sizing or solver adequacy.
 
-### Material classification progress (development)
+### Material classification progress (RC4)
 
 Body `material_classification` keeps cumulative returned-batch evidence:
 `attempts`, `requested_points`, `attempted_points`, `native_queries`,

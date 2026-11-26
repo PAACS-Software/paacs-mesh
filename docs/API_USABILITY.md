@@ -1,8 +1,8 @@
 # Python requests and failure diagnostics
 
-This guide describes additions to the development interface. Use a wheel built
-from the corresponding source commit; a development artifact's version number
-alone does not identify its Python features.
+This guide describes RC4 candidate additions. Use matching bindings; published
+RC3 wheels retain their original interface. A development artifact's version
+number alone does not identify its Python features.
 
 `CadModel.mesh()` exposes its supported keyword arguments and defaults through
 Python inspection and `help()`:

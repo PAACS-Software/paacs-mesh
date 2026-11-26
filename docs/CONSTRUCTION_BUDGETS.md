@@ -1,6 +1,8 @@
 # Construction effort and caps
 
-These are unreleased development controls requiring rebuilt native bindings.
+These controls are part of the RC4 source candidate and require matching native
+bindings. The matching release uses the complete qualification gates; published
+RC3 wheels retain their original interface.
 The default remains `construction_effort="legacy"` while the alternative
 policies are qualified against geometry, quality and runtime tests.
 
@@ -67,7 +69,7 @@ advancing interior front. Use the separate `advancing_interior_front` and
 
 `resource_policy` is independent of construction effort and recovery. New
 Python meshing calls, newly created recipes and direct STEP CLI requests in
-the development sources default to `normal`. Explicit `bounded` retains
+RC4 default to `normal`. Explicit `bounded` retains
 historical admission. Saved recipes use their recorded policy; an older recipe
 without this field retains literal `bounded` semantics.
 
@@ -207,7 +209,7 @@ a final covering-radius or achieved-size certificate. Later front closure can
 change which regions remain unresolved. A finite value, zero or an exhausted
 queue must not be interpreted as proof that every requested size was met.
 The progressive storage receipts are documented in
-[diagnostic contracts](DIAGNOSTIC_SCHEMAS.md#construction-receipts-development).
+[diagnostic contracts](DIAGNOSTIC_SCHEMAS.md#construction-receipts-rc4).
 
 `diagnose()` emits `construction_budget_limited` when the native report records
 a limited stage, with its actual body and available face tags. This warning is

@@ -1,13 +1,17 @@
 # Python compatibility
 
-The **1.2.0-rc.3 release candidate** supports the expanded matrix below: regular,
+The **1.2.0-rc.4 source candidate** targets the expanded matrix below: regular,
 64-bit CPython 3.12–3.15 on five native platforms. Wheels bundle the CAD runtime and
 install without a compiler or a separate OCCT SDK. Package metadata restricts
 Python to `>=3.12,<3.16`; each interpreter still needs its matching binary wheel.
 
-The expanded implementation has passed the qualification recorded below.
+RC4 requires its own complete qualification. Its matching GitHub release carries
+the publication receipts. The expanded distribution implementation passed the
+historical qualification recorded below; that evidence does not qualify the
+current engine changes.
 Official releases pass the release gates from their own immutable tagged source
-before publication. The previous published `1.2.0rc2` release remains limited to
+before publication. Published RC3 files and their tag remain immutable. The
+earlier `1.2.0rc2` release remains limited to
 CPython 3.12 on Windows x64, macOS ARM64 and Linux x64; its files are unchanged.
 
 ## Qualification evidence
@@ -29,9 +33,10 @@ The qualified workflow checkout was clean virtual merge
 `3d79164059bfe274d20c810e8c8255296c5fbc7c`, with source tree
 `eca306ca6e2d9b623f9f58af48832749c3a7187f`. That tree matched the reviewed candidate.
 These implementation artifacts used the earlier development version; they are
-evidence for the expanded matrix, not published RC3 files. RC3 is rebuilt and
-qualified again from its own immutable tagged source. The native meshing
-algorithms are unchanged by this distribution expansion.
+evidence for the expanded matrix, not published RC3 or RC4 files. RC3
+subsequently repeated its own release qualification. RC4 changes native
+construction and resource admission and requires fresh complete qualification
+from its own versioned source; these historical runs establish no RC4 result.
 
 ## Required artifacts
 
@@ -137,10 +142,13 @@ their existing toolchain selection.
 
 ## Publication gate
 
-RC3 publication requires all 20 wheels and 28 independent consumers to pass from one
+RC4 publication requires all 20 wheels and 28 independent consumers to pass from one
 clean immutable source revision, along with the native regression checks and
-release assembly checks. Assembly verifies the exact target set, interpreter and
-platform tags, metadata, source identity, dependency receipts and artifact hashes.
+release assembly checks. Before tagging, record all seven native and all 55 Python
+jobs and verify their tested tree matches merged main and the tag target. Assembly
+also requires named v2 native/Python resource-policy parity evidence and verifies
+the exact target set, interpreter and platform tags, metadata, source identity,
+dependency receipts and artifact hashes.
 A missing or failed combination blocks publication, including a failed macOS 27
 preview check. Existing release tags and PyPI files remain immutable.
 

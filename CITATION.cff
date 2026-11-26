@@ -12,7 +12,7 @@ authors:
     given-names: Paul
     orcid: "https://orcid.org/0009-0003-9908-6261"
     affiliation: PAACS Software Ltd.
-version: "1.2.0-rc.3"
+version: "1.2.0-rc.4"
 repository-code: "https://github.com/PAACS-Software/paacs-mesh"
-date-released: "2026-11-22"
+date-released: "2026-11-25"
 license: MPL-2.0

@@ -1,8 +1,9 @@
 # Mesh inspection and comparison
 
-**Unreleased development APIs.** These additions are not included in the
-published `1.2.0rc3` wheels. Use a locally built development wheel. This document
-does not announce a release or a change to native meshing algorithms.
+**RC4 candidate APIs.** These additions require RC4 bindings; published
+`1.2.0rc3` wheels retain their original interface. Development wheels require
+matching source receipts. Inspection itself does not change meshing algorithms
+or recertify a supplied report.
 
 Inspection provides independent Tet4 shape measurements, stable element
 queries, optional CAD proximity, reproducible SVG views and comparisons. It
@@ -331,7 +332,7 @@ from this report alone.
 
 ## Command line
 
-The development wheel provides these commands through `paacs-mesh` or
+The RC4 interface provides these commands through `paacs-mesh` or
 `python -m paacs_mesh`:
 
 ```sh

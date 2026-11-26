@@ -9,7 +9,7 @@ Applications can link the core library directly through `PAACS::mesh`. It uses
 the C++ standard library and platform threads. The STEP adapter, CLI tools and
 debug UI bridge are optional.
 
-**Current candidate** · [1.2.0-rc.3](RELEASE_NOTES.md) ·
+**Current candidate** · [1.2.0-rc.4](RELEASE_NOTES.md) ·
 [Validation](docs/RELEASE_READINESS.md) · [Roadmap](docs/ROADMAP.md)
 
 ## Build a first mesh
@@ -38,7 +38,9 @@ target_link_libraries(my_target PRIVATE PAACS::mesh)
 ## STEP preview
 
 The [51-file qualification](docs/RELEASE_READINESS.md) published 32 independently
-audited meshes under the documented time and resource limits.
+audited meshes under the documented time and resource limits. That historical
+score is unchanged. The separate [22-model owned hollow study](docs/THIN_HOLLOW_QUALIFICATION.md)
+records local RC4 construction results and their remaining quality limits.
 
 The optional STEP build downloads and verifies OCCT 8.0.1, then compiles its
 shared libraries and the PAACS tools for your platform.
@@ -70,19 +72,19 @@ box.
 ## Python
 
 The [Python STEP interface](docs/PYTHON.md) imports STEP, generates audited Tet4
-meshes and exports tagged VTK or native archives. The **1.2.0-rc.3 release candidate**
-supports regular, 64-bit CPython 3.12–3.15 on Windows x64/ARM64, Linux x64/ARM64
+meshes and exports tagged VTK or native archives. The **1.2.0-rc.4 candidate**
+targets regular, 64-bit CPython 3.12–3.15 on Windows x64/ARM64, Linux x64/ARM64
 with glibc 2.28 or newer, and macOS ARM64 with a minimum of macOS 15. The same
-macOS wheels are tested on macOS 15, 26 and 27. CAD libraries are bundled; wheel
-users need no compiler or separate OCCT installation.
+macOS wheels must pass installation on macOS 15, 26 and 27. CAD libraries are
+bundled; wheel users need no compiler or separate OCCT installation.
 
 The expanded implementation passed its
 [20-wheel and 28-consumer qualification](docs/PYTHON_COMPATIBILITY.md#qualification-evidence).
 Official releases pass the [publication gates](docs/PYPI_RELEASE.md) from their
-own immutable tagged source. Install RC3 with
-`python -m pip install paacs-mesh==1.2.0rc3`. The previous `1.2.0rc2` release
-supports CPython 3.12 on Windows x64, Linux x64 and macOS ARM64 only; its files
-remain unchanged.
+own immutable tagged source. The matching GitHub release carries RC4 publication
+receipts. Install the candidate with `python -m pip install paacs-mesh==1.2.0rc4`.
+The published RC3 files and tag remain immutable. The earlier `1.2.0rc2` release
+supports CPython 3.12 on Windows x64, Linux x64 and macOS ARM64 only.
 
 The [sizing guide](docs/PYTHON.md#face-sizing-volume-regions-and-growth) covers
 selected-face refinement, volume boxes, minimum size and growth controls.

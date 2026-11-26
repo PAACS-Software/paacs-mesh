@@ -1,77 +1,144 @@
-# PAACS Mesh 1.2.0-rc.3
+# PAACS Mesh 1.2.0-rc.4
 
-This candidate expands the Python distribution and adds inspection and diagnostic
-commands for engineers, scripts and agents. It preserves the native meshing
-algorithms and validity checks from the previous candidate.
+This candidate changes native Tet4 construction and resource admission, adds
+bounded mesh inspection and comparison, and improves supported STEP routes.
+Release qualification uses the gates below. Local studies identify their own
+source, platform and settings; they do not replace the complete release gates.
+The matching GitHub release carries the publication receipts.
 
-## Python installation
+## Python installation and compatibility
+
+Install the exact candidate with:
 
 ```sh
-python -m pip install --pre --upgrade paacs-mesh
+python -m pip install paacs-mesh==1.2.0rc4
 ```
 
-For a reproducible installation, use `paacs-mesh==1.2.0rc3`. The source version is
-`1.2.0-rc.3`; Python package tools normalize it to `1.2.0rc3`.
+The source version is `1.2.0-rc.4`; Python package tools normalize it to
+`1.2.0rc4`. The existing RC3 tag and published files remain immutable.
 
-The release requires a wheel for every regular 64-bit CPython version listed:
+The required matrix remains regular 64-bit CPython 3.12–3.15 on Windows x64 and
+Windows 11 ARM64, Linux x64/ARM64 with glibc 2.28 or newer, and macOS ARM64 with
+minimum macOS 15. The same macOS wheels must pass installation on macOS 15, 26
+and 27. The release requires 20 repaired wheels and 28 independent consumers.
+The macOS 27 public-preview runner remains a required check. Intel macOS, PyPy,
+32-bit, debug and free-threaded Python builds remain outside this wheel matrix.
+CAD runtime dependencies are bundled and NumPy remains optional.
 
-| Platform | Python | System requirement |
-|---|---|---|
-| Windows x64 | 3.12, 3.13, 3.14, 3.15 | Windows x64; independently tested on Windows Server 2022 |
-| Windows ARM64 | 3.12, 3.13, 3.14, 3.15 | Windows 11 ARM64 |
-| Linux x64 | 3.12, 3.13, 3.14, 3.15 | glibc 2.28 or newer |
-| Linux ARM64 | 3.12, 3.13, 3.14, 3.15 | glibc 2.28 or newer |
-| macOS ARM64 | 3.12, 3.13, 3.14, 3.15 | macOS 15 or newer; same wheels tested on 15, 26 and 27 |
+## Resource admission and construction
 
-The CAD runtime is bundled: wheel installations need no compiler or separate
-OCCT installation. NumPy remains optional. Intel macOS, Python 2, PyPy, 32-bit,
-debug and free-threaded Python builds are outside this wheel matrix. The macOS 27
-CI runner is a public preview; its actual OS version and result are checked.
+New Python calls, new saved recipes and direct STEP CLI requests default to
+`resource_policy="normal"`. With `max_work` omitted, Normal has no practical
+logical-work ceiling; an explicit positive limit remains authoritative. Omitted
+modeled working memory retains 512 MiB. Memory, node, cell, output, validation,
+cancellation and cooperative time limits still apply. Normal admits actual live
+construction storage and grows it on demand, including overlapping temporary
+allocations. Modeled memory is not an operating-system hard RSS limit.
 
-## Inspection and diagnostics
+Use `resource_policy="bounded"` for historical resource admission and its
+50-million omitted-work allowance. Old recipes missing the policy and the C++
+`NativeCadMeshOptions{}` aggregate retain Bounded semantics. C++ callers can
+explicitly use `normalNativeCadMeshOptions()`.
 
-The terminal now exposes `capabilities`, paginated `inspect`, saved-recipe `run`
-and `diagnose`. Each supports readable output and `--json`; machine output stays
-on stdout while native messages go to stderr. Unicode CAD names round-trip even
-when the terminal cannot represent their characters directly.
+Construction effort remains `"legacy"`. The separate `"auto"` and `"thorough"`
+policies and explicit surface/interior stage caps are opt-in. Reports distinguish
+construction limits, achieved sizing, measured quality and native validity.
+Increasing a budget does not guarantee completion, better quality or finer cells.
+See [construction controls](docs/CONSTRUCTION_BUDGETS.md).
 
-Python adds `capabilities()`, `diagnose()` and `format_diagnostics()`. Diagnostics
-report the native checks already completed, bounded body evidence, stable issue
-codes and suggested actions. Missing measurements are explicit. They do not
-invent per-cell or per-face quality localization or independently recertify a
-supplied report. Assembly body identities and interference reporting are retained.
+Normal AUTO considers verified primitive, affine-block and linear-sweep methods
+for compatible constant-size requests, and resolves eligible independent assembly
+parts separately. Guarded fallback retains established successful routes and
+charges failed attempts to the same request. Face and volume controls retain
+their compatible spatial constructor. The default assembly policy remains
+`preserve_parts`; independent part meshes do not certify conforming interfaces
+or global non-overlap.
 
-See the [inspection workflow](docs/AGENT_WORKFLOW.md) and its owned cylinder example.
-Face sizing, refinement boxes, growth controls, NumPy snapshots, guarded selections,
-source-bound recipes and tagged exports remain available.
+Native changes also preserve checked interior topology through boundary recovery,
+regularize curve sizing, retain knot-sided and pcurve correspondence, recover
+crossing trim chords and local source facets, and reuse bounded immutable trim
+and rejection queries. Bounded local topology edits address numerical slivers;
+the final quality and original-CAD checks remain independent. Cancellation is
+forwarded into Native Boolean and Section operations, with committed child and
+source-recovery work retained in failure receipts.
 
-## Build and release validation
+## Inspection, diagnostics and guarded identity
 
-The complete release gate requires **20 repaired wheels and 28 independent clean
-installation results** from one immutable source revision. Each target exercises
-STEP import, meshing, auditing, controls, tags, exports, deterministic repeats and
-the CLI, followed by the NumPy versions assigned to that target. Native C++/Python
-parity, binary architecture, compiler configuration and dependency hashes are checked.
+Python and the CLI add bounded per-element Tet4 quality inspection, native-ID
+pagination, spatial distributions, trimmed-CAD centroid distances and
+quality-field VTK export. Deterministic SVG views use whole-element cuts and
+retain real mesh IDs; comparisons can select a common reported-valid region.
+Independent Tet4 shape metrics and guarded mixed-cell volume calculations improve
+quality reporting. These measurements do not certify solver accuracy.
 
-OCCT SDK reuse checks the source pin, build recipe, toolchain and installed files.
-Windows ARM64 selects the validated MSVC 14.44 toolset. A Linux host-directory fix
-allows verified SDK caches to be restored before container builds.
+Python request signatures and guarded face selections are exposed consistently.
+Reports distinguish a bare archive's body tags from source-bound CAD identities,
+admit large body summaries within explicit budgets, and preserve source hashes
+and query provenance. Capability discovery and readable/JSON diagnostics describe
+the available controls, missing measurements, requested policies, actual body
+routes, failed attempts and recovery counters. Explicit bounded CAD body-relation
+inspection can report contact or overlap for selected pairs; it does not fuse
+parts or change assembly policy.
 
-Before publication, the native regression jobs and sanitizers must also pass.
-The GitHub release carries the matching OCCT source, build and qualification
-receipts, source archive and checksums. A final index check verifies the published
-wheel hashes and performs a fresh pip installation, import, mesh and export.
-See [compatibility](docs/PYTHON_COMPATIBILITY.md) and [publication](docs/PYPI_RELEASE.md).
+See [mesh inspection](docs/MESH_INSPECTION.md),
+[API usability](docs/API_USABILITY.md) and
+[diagnostic contracts](docs/DIAGNOSTIC_SCHEMAS.md).
 
-Native STEP remains a preview with bounded failure routes for unsupported geometry
-and recovery limits. This release changes the interface and packaging rather than
-the meshing algorithms; the [recorded CAD corpus results](docs/RELEASE_READINESS.md)
-are the existing engine baseline, not a new corpus run.
+## Hollow parts, physical cap sizing and experimental controls
 
-The CMake package version remains `1.2.0`; SDK and CLI report `1.2.0-rc.3`.
-Rebuild C++ consumers with matching headers and libraries. Mesh archive format v1
-and C bridge ABI version 1 are unchanged. The C++ core builds independently of OCCT.
-The project remains MPL 2.0, copyright PAACS Software Ltd.
+Eligible Normal single-body native cap sweeps without local controls first try a
+physically spaced cap source. A permitted refusal can try the historical cap
+source once within the remaining request budget. Cancellation, allocation,
+source mutation and internal or kernel failures do not trigger that retry.
+`bodies[].native_cap_sizing` records requested size, application, cap counts and
+all attempted cap work and time. A successful coarse fallback is reported as
+unapplied sizing. Bounded admission retains the historical cap dispatch.
 
-Earlier changes are in the [rc.2 notes](docs/RELEASE_NOTES_1.2.0-rc.2.md) and
-[changelog](CHANGELOG.md).
+`thin_region_ordering=False` remains the default. The opt-in boolean makes a
+bounded source-clearance query before choosing the order of compatible Normal
+Tet4 front stages. Explicit `boundary_first=True` takes precedence; selected-face
+controls abstain from the unqualified advisory query. The option neither forces
+the front constructor nor changes CAD, sizing requests or validity limits.
+
+The separate `boundary_first`, `native_source_fallback`, `trimmed_ray_witnesses`
+and advanced recovery controls retain their documented opt-in scope. No importer
+or standard meshing call silently repairs or defeatures CAD.
+
+The [owned hollow study](docs/THIN_HOLLOW_QUALIFICATION.md) completed 22 of 22
+models locally on Windows with the final experimental setting, preserving all
+20 baseline successes and their CAD tags; 14 archives stayed byte-identical.
+Its rounded profiles retain poor quality tails. This is a separate owned-model
+study, not a rerun or a new score for the original 51 downloaded CAD models.
+The [51-file qualification](docs/RELEASE_READINESS.md) remains its historical
+32-published-mesh baseline. Paired construction, source-recovery and resource
+studies retain their complete attempts and limitations.
+
+A separate benchmark preparation prototype qualifies guarded copying of valid
+owned CAD and explicit selected-fillets defeaturing. Invalid-CAD repair and
+STEP-reimport face history remain unqualified. Modified models are separate
+inputs and do not count as unchanged-source coverage. No new solver or simulation
+qualification or arbitrary-CAD completion claim follows from these results.
+
+## Release gates and compatibility
+
+Before tagging, the final versioned tree must pass all seven native qualification
+jobs, including GCC address/undefined and thread sanitizers, and all 55 Python
+qualification jobs. PR virtual-merge trees must match the merged main/tag tree.
+Publication repeats the entire wheel and consumer matrix from one immutable tagged
+source and requires resource-policy native/Python parity, exact metadata and
+hashes, compiler configuration and dependency receipts, and strict Twine checks.
+
+The GitHub release must carry matching source and qualification evidence before
+OIDC Trusted Publishing. The final index job checks all published wheel hashes
+and performs a fresh hash-pinned pip install, import, mesh, export and CLI check.
+See [compatibility](docs/PYTHON_COMPATIBILITY.md) and
+[publication](docs/PYPI_RELEASE.md) for the required process.
+
+The CMake package version remains `1.2.0`; SDK and CLI report `1.2.0-rc.4`.
+Public C++ request/report layouts changed: rebuild C++ consumers with matching
+headers, libraries and toolchain. Mesh archive format v1 and C bridge ABI version
+1 remain unchanged. The C++ core builds independently of OCCT. The project remains
+MPL 2.0, copyright PAACS Software Ltd.
+
+Earlier distribution changes are in the [RC3 notes](docs/RELEASE_NOTES_1.2.0-rc.3.md)
+and [changelog](CHANGELOG.md).
