@@ -83,6 +83,48 @@ class InstalledStepQualificationTests(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(ValueError):
                 self.jobs()
 
+    def test_symlinked_root_accepts_owned_file_but_rejects_outside_symlink(self):
+        actual = self.root / "actual-cad-root"
+        actual.mkdir()
+        alias = self.root / "aliased-cad-root"
+        inside = actual / "inside.step"
+        inside.write_bytes(b"owned inside file")
+        outside = self.root / "outside.step"
+        outside.write_bytes(b"outside the admitted CAD root")
+        escape = actual / "escaped.step"
+        try:
+            alias.symlink_to(actual, target_is_directory=True)
+            escape.symlink_to(outside)
+        except (OSError, NotImplementedError) as error:
+            self.skipTest("Filesystem symlink privilege unavailable: " + str(error))
+        self.assertEqual(runner.inside(alias, "inside.step"), inside.resolve())
+        self.plan["files"] = [{**self.row, "path": "inside.step", "sha256": runner.sha(inside)}]
+        runner.save(self.plan_path, self.plan)
+        job, = runner.read_plan(self.plan_path, alias)
+        self.assertEqual(Path(job["source"]), inside.resolve())
+        with self.assertRaisesRegex(ValueError, "escapes its root"):
+            runner.inside(alias, "escaped.step")
+        self.plan["files"] = [{**self.row, "path": "escaped.step", "sha256": runner.sha(outside)}]
+        runner.save(self.plan_path, self.plan)
+        with self.assertRaisesRegex(ValueError, "escapes its root"):
+            runner.read_plan(self.plan_path, alias)
+
+    def test_relative_root_is_canonicalized_before_comparing_resolved_target(self):
+        actual = self.root / "relative-cad-root"
+        actual.mkdir()
+        inside = actual / "inside.step"
+        inside.write_bytes(b"owned relative-root file")
+        self.plan["files"] = [{**self.row, "path": "inside.step", "sha256": runner.sha(inside)}]
+        runner.save(self.plan_path, self.plan)
+        previous = Path.cwd()
+        try:
+            os.chdir(self.root)
+            self.assertEqual(runner.inside(Path("relative-cad-root"), "inside.step"), inside.resolve())
+            job, = runner.read_plan(self.plan_path, Path("relative-cad-root"))
+            self.assertEqual(Path(job["source"]), inside.resolve())
+        finally:
+            os.chdir(previous)
+
     def test_union_diagonal_sizing_paginates_and_includes_separated_bodies(self):
         pages = {0: {"offset": 0, "total": 2, "next_offset": 1, "entities": [{"tag": 1,
             "bounds": {"lower": [0, 0, 0], "upper": [3, 4, 0]}}]},

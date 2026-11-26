@@ -105,6 +105,11 @@ def normalized_version(value):
 
 
 def inside(root, relative):
+    # Callers may supply platform aliases such as macOS /var -> /private/var.
+    # Compare canonical root and target paths while retaining the escape guard.
+    root = Path(root).resolve(strict=True)
+    if not root.is_dir():
+        raise ValueError("CAD root must be a directory")
     if not isinstance(relative, str) or not relative or "\0" in relative:
         raise ValueError("Expected a relative CAD path")
     windows, posix = PureWindowsPath(relative), PurePosixPath(relative)
@@ -119,6 +124,9 @@ def inside(root, relative):
 
 
 def read_plan(path, root):
+    root = Path(root).resolve(strict=True)
+    if not root.is_dir():
+        raise ValueError("CAD root must be a directory")
     plan = load(path)
     finite_tree(plan)
     if plan.get("schema") != SCHEMA:
