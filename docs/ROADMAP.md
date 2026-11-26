@@ -62,6 +62,11 @@ distinct in the report.
 identity, boundary and void checks, CAD deviation, achieved size, runtime,
 peak memory and bounded failure diagnostics.
 
+The owned [hollow extrusion qualification](THIN_HOLLOW_QUALIFICATION.md)
+isolates wall thickness, length and rigid placement. It exercises initial
+construction, cap sizing and separate explicit preparation prototypes, with
+unchanged-source results kept separate from intentionally modified geometry.
+
 ### Explicit CAD preparation (planned)
 
 Add repair and defeaturing as separate operations, both disabled by default.

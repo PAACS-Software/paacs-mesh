@@ -56,6 +56,10 @@ valid baselines do not require repair.
 
 ## Run through the Python STEP API
 
+The benchmark scripts require Python 3.11 or newer. This is separate from the
+Python versions supported by the library. Rendering additionally uses
+Matplotlib; it is not a dependency of the meshing engine.
+
 The serial qualification runner records every request, refusal and timeout
 separately. It pins the input files, staged Python package, native extension
 and supplied SDK libraries. Each attempt uses one meshing worker and one
