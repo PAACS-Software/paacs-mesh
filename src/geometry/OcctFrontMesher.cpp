@@ -29,6 +29,7 @@
 #include "OcctInteriorSites.hpp"
 #include "OcctInteriorFront.hpp"
 #include "OcctInitialPointFront.hpp"
+#include "OcctThinRegionOrdering.hpp"
 #include "OcctInitialTopologyQuality.hpp"
 #include "OcctSourceFallbackPolicy.hpp"
 #include "OcctSourceMismatchPriority.hpp"
@@ -61,7 +62,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
     const bool advancingInteriorFront=options.useAdvancingInteriorFront.value_or(false);
     const bool spaceSurface=surfaceMode!=OcctFrontSurface::Standard;
     const bool spatialSizing=surfaceMode==OcctFrontSurface::SpatialSizing;
-    const bool boundaryFirst=spatialSizing&&advancingInteriorFront&&options.recoverBoundaryBeforeInteriorSites;
+    bool boundaryFirst=spatialSizing&&advancingInteriorFront&&options.recoverBoundaryBeforeInteriorSites;
     const bool improveQuality=surfaceMode==OcctFrontSurface::RegularQuality||
         (spatialSizing&&options.regularMeshQualityEnabled());
     const bool curvatureSurface=surfaceMode==OcctFrontSurface::Curvature;
@@ -264,6 +265,41 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             std::uint64_t(ns)*1024+std::uint64_t(nf)*4096+96ULL*1024*1024:
             std::uint64_t(ns)*1024+std::uint64_t(nf)*16384+frontCells*512+apexStorage+96ULL*1024*1024;
         need(retained<options.maximumPrimitiveWorkingBytes,NativeCadMeshReason::BudgetExceeded,"native-plc-front-storage-admission");
+        if(!boundaryFirst&&spatialSizing&&advancingInteriorFront&&progressiveResources&&
+           !options.faceSizes.empty()&&options.useThinRegionOrdering)
+            out.initialFront.orderingDiagnostic="native_face_sizing_not_qualified";
+        if(!boundaryFirst&&spatialSizing&&advancingInteriorFront&&progressiveResources&&
+           options.faceSizes.empty()&&
+           options.useThinRegionOrdering){
+            OcctStageTrace ordering("thin_region_ordering",tag);
+            const auto started=Clock::now();
+            auto& report=out.initialFront;
+            report.orderingAttempted=true;
+            report.orderingDiagnostic="interrupted";
+            OcctThinRegionOrderingLimits limits;
+            limits.maximumWork=std::min<std::uint64_t>(5'000'000,remaining()/64);
+            limits.maximumWorkingBytes=std::min<std::uint64_t>(32ULL*1024*1024,
+                options.maximumPrimitiveWorkingBytes-retained);
+            limits.sizeSampleWork=sizeField->queryWork();
+            const auto selected=evaluateOcctThinRegionOrdering(boundary,o.targetSize,
+                [&](Vec3 point){return sizeField->eval(point);},limits,tick,o.cancellation);
+            report.orderingComplete=selected.complete;
+            report.automaticBoundaryFirst=selected.selectBoundaryFirst;
+            report.orderingDiagnostic=selected.diagnostic;
+            report.orderingWork=selected.workUsed;
+            report.orderingSamples=selected.samples;
+            report.orderingDistinctSamples=selected.distinctSamples;
+            report.orderingBlocked=selected.blockedSamples;
+            report.orderingUnknown=selected.unknownSamples;
+            report.orderingMaximumModeledBytes=selected.maximumModeledBytes;
+            report.orderingProposalFactor=selected.proposalFactor;
+            report.orderingMinimumClearanceRatio=selected.blockedSamples?
+                selected.minimumClearanceRatio:std::numeric_limits<double>::infinity();
+            report.orderingSeconds=std::chrono::duration<double>(Clock::now()-started).count();
+            ordering.finish(selected.diagnostic);
+            need(!selected.cancelled,NativeCadMeshReason::Cancelled,"cancelled");
+            boundaryFirst=selected.selectBoundaryFirst;
+        }
         // Initial placement releases its heap and proposal front before volume
         // recovery. Normal retains its checked numerical connectivity through
         // a separately admitted old-plus-new remap, then releases that owner.
@@ -515,6 +551,12 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                     report.auxiliaryResourceDiagnostic=built.auxiliaryResourceDiagnostic;
                     report.geometryRefusalCacheHits=built.geometryRefusalCacheHits;
                     report.cachedGeometryRefusals=built.cachedGeometryRefusals;
+                    report.spacingRejects=built.spacingRejects;
+                    report.shapeRejects=built.shapeRejects;
+                    report.geometryRejects=built.geometryRejects;
+                    report.nativeRejects=built.nativeRejects;
+                    report.auxiliaryInvalidRejects=built.auxiliaryInvalidRejects;
+                    report.auxiliaryQualityRejects=built.auxiliaryQualityRejects;
             };
             try {if(siteCap&&siteBudget&&preparationBytes<=options.maximumPrimitiveWorkingBytes-placementRetained){
                 if(advancingInteriorFront){
@@ -1477,6 +1519,11 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 out.interiorFrontActivations=built.frontActivations;
                 out.interiorVoidActivations=built.voidActivations;
                 out.interiorFrontAdvances=built.frontAdvances;
+                out.interiorSpacingRejects=built.spacingRejects;
+                out.interiorShapeRejects=built.shapeRejects;
+                out.interiorCavityRejects=built.cavityRejects;
+                out.interiorValidityRejects=built.validityRejects;
+                out.interiorNativeRejects=built.nativeRejects;
                 out.interiorFrontSeconds=std::chrono::duration<double>(Clock::now()-started).count();
                 construction.finish(diagnostic);
             };
@@ -1544,8 +1591,27 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 !spatialSizing||improveQuality?&out.localDelaunayQualityEdits:nullptr);
             refinement.finish(out.localDelaunayRefinementNodes||out.localDelaunayQualityEdits?"refined":"unchanged");
         }
-        if(spatialSizing&&options.improveNativeTetQuality){
-            OcctStageTrace optimization("volume_quality",tag);
+        // Boundary-first construction defers the initial complex and therefore
+        // its numerical-sliver cleanup. Restore only that critical topology
+        // pass here; do not turn phase ordering into general smoothing.
+        bool deferredCriticalQuality=false;
+        if(out.initialFront.automaticBoundaryFirst&&
+           options.initialTopologyQuality.value_or(progressiveResources)){
+            for(Index i=0;i<completed.cellCount();++i){
+                tick();
+                if(completed.cell(i).type!=mesh::CellType::Tet4)continue;
+                const auto* v=completed.cellNodes(i);
+                double edges=0.;
+                for(unsigned a=0;a<4;++a)for(unsigned b=a+1;b<4;++b)
+                    edges+=(completed.node(v[a])-completed.node(v[b])).norm2();
+                const auto volume=mesh::tetVolume(completed.node(v[0]),completed.node(v[1]),
+                    completed.node(v[2]),completed.node(v[3]));
+                const auto mean=volume>0.&&edges>0.?12.*std::pow(3.*volume,2./3.)/edges:0.;
+                if(mean<1e-6){deferredCriticalQuality=true;break;}
+            }
+        }
+        if(spatialSizing&&(options.improveNativeTetQuality||deferredCriticalQuality)){
+            OcctStageTrace optimization(deferredCriticalQuality?"volume_critical_quality":"volume_quality",tag);
             const auto queries=out.nativeQueries<maximumSpacedCandidateQueries?
                 std::min<std::uint64_t>(3000,(maximumSpacedCandidateQueries-out.nativeQueries)/4):0;
             // Leave a conservative work share for the mandatory final audits.
@@ -1570,7 +1636,9 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 budget,queries,std::min(frontCells,
                     std::uint64_t(completed.countCells(mesh::CellType::Tet4))+outputGrowth),
                 retainedQuality<availableBytes?availableBytes-retainedQuality:0,
-                native,nativeCentroid,qualityTick);
+                native,nativeCentroid,qualityTick,
+                options.improveNativeTetQuality?OcctDelaunayQualityOptions{}:
+                    OcctDelaunayQualityOptions{1e-6,64,true});
             optimization.finish(out.localDelaunayQualityEdits?"improved":"unchanged");
         }
         bnd::detail::observeTetMesh("volume_before_cad_validation",tag,completed);

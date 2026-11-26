@@ -69,6 +69,13 @@ def capabilities():
                          "material_admission": "positive_original_trimmed_CAD_ray_else_classifier_in_serial_strict_mode",
                          "changes_native_validity_gates": False},
                      "construction_efforts": ["legacy", "auto", "thorough"],
+                     "thin_region_ordering": {"default": False, "experimental": True,
+                         "applies_to": "normal_native_spatial_Tet4_constructor", "forces_initial_front": False,
+                         "source_samples": 64, "maximum_work": 5000000, "maximum_working_bytes": 33554432,
+                         "changes_native_validity_gates": False, "changes_cad": False,
+                         "qualified_sizing": ["global", "analytic_volume_controls"],
+                         "face_controls": "abstain_native_face_sizing_not_qualified",
+                         "scope": "advisory_phase_order; ambiguous_or_limited_queries_keep_original_order"},
                      "construction_default": "legacy",
                      "construction_stage_caps": ["max_surface_points", "max_surface_chord_points",
                                                  "max_interior_candidates", "max_interior_sites"],
@@ -302,7 +309,7 @@ def _native_report(report):
 
 
 def _validate_measurements(native, audit, quality):
-    for name in ("requested_native_source_fallback", "requested_boundary_first"):
+    for name in ("requested_native_source_fallback", "requested_boundary_first", "requested_thin_region_ordering"):
         if name in native and not isinstance(native[name], bool):
             raise ValueError(f"{name} must be bool")
     if native.get("hint") is not None and not isinstance(native["hint"], str):
@@ -647,6 +654,7 @@ def diagnose(report_or_mesh, *, max_issues=32):
                     "route_resolution": native.get("route_resolution"),
                     "requested_native_source_fallback": native.get("requested_native_source_fallback"),
                     "requested_boundary_first": native.get("requested_boundary_first"),
+                    "requested_thin_region_ordering": native.get("requested_thin_region_ordering"),
                     "quality": {key: quality.get(key) for key in _QUALITY}},
         "bodies": [body_summary(body) for body in bodies[:maximum]],
         "bodies_truncated": len(bodies) > maximum,

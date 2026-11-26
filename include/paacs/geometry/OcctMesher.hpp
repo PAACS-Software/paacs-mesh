@@ -149,6 +149,9 @@ struct NativeCadMeshOptions {
     // Experimental positive-only original CAD ray witnesses in the serial
     // strict live Tet4 route. Other routes use ordinary validation.
     bool useTrimmedRayWitnesses = false;
+    // Experimental source-clearance advice for the compatible Tet4 front.
+    // Does not force a constructor or modify CAD, sizing or validity limits.
+    bool useThinRegionOrdering = false;
     // Try local interior-point insertion on a recovered Tet4 mesh in the
     // strict live material recovery trial.
     bool useLocalDelaunayRefinement = false;
@@ -246,6 +249,17 @@ struct NativeCadInitialFrontReport {
     std::uint64_t maximumCombinedModeledBytes=0,maximumHeapCapacity=0,resourceRetries=0;
     const char* auxiliaryResourceDiagnostic="not_attempted";
     std::uint64_t geometryRefusalCacheHits=0,cachedGeometryRefusals=0;
+    std::uint64_t spacingRejects=0,shapeRejects=0,geometryRejects=0,nativeRejects=0;
+    std::uint64_t auxiliaryInvalidRejects=0,auxiliaryQualityRejects=0;
+    // Opt-in advisory phase ordering. It changes no CAD or validity
+    // limit; unresolved source queries retain the established ordering.
+    bool orderingAttempted=false,orderingComplete=false,automaticBoundaryFirst=false;
+    const char* orderingDiagnostic="not_requested";
+    std::uint64_t orderingWork=0,orderingSamples=0,orderingBlocked=0,orderingUnknown=0;
+    std::uint64_t orderingDistinctSamples=0;
+    std::uint64_t orderingMaximumModeledBytes=0;
+    double orderingSeconds=0,orderingProposalFactor=0;
+    double orderingMinimumClearanceRatio=std::numeric_limits<double>::infinity();
 };
 struct NativeCadInitialTopologyQualityReport {
     bool attempted=false,completed=false,changed=false,cancelled=false,budgetLimited=false;
@@ -426,6 +440,8 @@ struct NativeCadBodyMeshReport {
     std::uint64_t interiorFrontWork=0,interiorFrontQueries=0;
     std::uint64_t interiorFrontRemainingOversized=0;
     std::uint64_t interiorFrontActivations=0,interiorVoidActivations=0,interiorFrontAdvances=0;
+    std::uint64_t interiorSpacingRejects=0,interiorShapeRejects=0,interiorCavityRejects=0;
+    std::uint64_t interiorValidityRejects=0,interiorNativeRejects=0;
     double interiorFrontSeconds=0;
     bool localDelaunayUsedGlobalFallback=false;
     NativeCadRegionRecoveryReport recoveryRegions;

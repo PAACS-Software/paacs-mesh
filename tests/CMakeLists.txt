@@ -4,6 +4,12 @@
 # SPDX-License-Identifier: MPL-2.0
 
 find_package(Boost 1.74 CONFIG QUIET)
+add_executable(paacs-thin-region-ordering occt_thin_region_ordering.cpp)
+target_include_directories(paacs-thin-region-ordering PRIVATE ${PROJECT_SOURCE_DIR}/src/geometry)
+target_link_libraries(paacs-thin-region-ordering PRIVATE PAACS::mesh)
+set_target_properties(paacs-thin-region-ordering PROPERTIES DISABLE_PRECOMPILE_HEADERS ON)
+add_test(NAME paacs.geometry.thin_region_ordering COMMAND paacs-thin-region-ordering)
+set_tests_properties(paacs.geometry.thin_region_ordering PROPERTIES TIMEOUT 60 LABELS "geometry;recovery;hardening")
 add_executable(paacs-source-mismatch-priority occt_source_mismatch_priority.cpp)
 target_link_libraries(paacs-source-mismatch-priority PRIVATE PAACS::mesh)
 set_target_properties(paacs-source-mismatch-priority PROPERTIES DISABLE_PRECOMPILE_HEADERS ON)

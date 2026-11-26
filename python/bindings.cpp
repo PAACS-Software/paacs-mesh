@@ -516,6 +516,7 @@ struct MeshResult {
     bool requestedNativeSourceFallback=false;
     bool requestedBoundaryFirst=false;
     bool requestedTrimmedRayWitnesses=false;
+    bool requestedThinRegionOrdering=false;
     std::optional<bool> requestedAdvancingInteriorFront;
     double warningQuality = 0, minimumQuality = 0;
     unsigned workers = 1, validationWorkers = 1;
@@ -582,6 +583,7 @@ struct MeshResult {
         r["requested_native_source_fallback"]=requestedNativeSourceFallback;
         r["requested_boundary_first"]=requestedBoundaryFirst;
         r["requested_trimmed_ray_witnesses"]=requestedTrimmedRayWitnesses;
+        r["requested_thin_region_ordering"]=requestedThinRegionOrdering;
         r["workers"] = workers;
         r["validation_workers"] = validationWorkers;
         // Early refusals may retain the native outcome's default policy. With
@@ -785,6 +787,28 @@ struct MeshResult {
             placement["geometry_refusal_cache_hits"] = initial.geometryRefusalCacheHits;
             placement["cached_geometry_refusals"] = initial.cachedGeometryRefusals;
             placement["auxiliary_resource_diagnostic"] = initial.auxiliaryResourceDiagnostic;
+            placement["spacing_rejects"] = initial.spacingRejects;
+            placement["shape_rejects"] = initial.shapeRejects;
+            placement["geometry_rejects"] = initial.geometryRejects;
+            placement["native_rejects"] = initial.nativeRejects;
+            placement["auxiliary_invalid_rejects"] = initial.auxiliaryInvalidRejects;
+            placement["auxiliary_quality_rejects"] = initial.auxiliaryQualityRejects;
+            py::dict ordering;
+            ordering["attempted"] = initial.orderingAttempted;
+            ordering["complete"] = initial.orderingComplete;
+            ordering["selected_boundary_first"] = initial.automaticBoundaryFirst;
+            ordering["diagnostic"] = initial.orderingDiagnostic;
+            ordering["work"] = initial.orderingWork;
+            ordering["samples"] = initial.orderingSamples;
+            ordering["distinct_samples"] = initial.orderingDistinctSamples;
+            ordering["blocked_samples"] = initial.orderingBlocked;
+            ordering["unknown_samples"] = initial.orderingUnknown;
+            ordering["maximum_modeled_bytes"] = initial.orderingMaximumModeledBytes;
+            ordering["seconds"] = finiteValue(initial.orderingSeconds);
+            ordering["proposal_factor"] = finiteValue(initial.orderingProposalFactor);
+            ordering["minimum_clearance_ratio"] = finiteValue(initial.orderingMinimumClearanceRatio);
+            ordering["scope"] = "Opt-in phase-order advice from frozen source facets; not a CAD, quality or sizing certificate";
+            placement["ordering"] = std::move(ordering);
             b["initial_front"] = std::move(placement);
             py::list surfaceSpacing;
             for(const auto& face:body.surfaceSpacing){
@@ -817,6 +841,11 @@ struct MeshResult {
             interior["front_activations"] = body.interiorFrontActivations;
             interior["void_activations"] = body.interiorVoidActivations;
             interior["front_advances"] = body.interiorFrontAdvances;
+            interior["spacing_rejects"] = body.interiorSpacingRejects;
+            interior["shape_rejects"] = body.interiorShapeRejects;
+            interior["cavity_rejects"] = body.interiorCavityRejects;
+            interior["validity_rejects"] = body.interiorValidityRejects;
+            interior["native_rejects"] = body.interiorNativeRejects;
             interior["seconds"] = finiteValue(body.interiorFrontSeconds);
             b["interior_front"] = std::move(interior);
             py::dict route;
@@ -848,6 +877,7 @@ struct MeshResult {
         policy["requested_native_source_fallback"] = requestedNativeSourceFallback;
         policy["requested_boundary_first"] = requestedBoundaryFirst;
         policy["requested_trimmed_ray_witnesses"] = requestedTrimmedRayWitnesses;
+        policy["requested_thin_region_ordering"] = requestedThinRegionOrdering;
         policy["wrapper_native_sizing"] = sizing.native;
         policy["wrapper_sizing_mode"] = sizing.native ? "spatial" : "standard";
         policy["auto_dispatch_scope"] =
@@ -942,7 +972,7 @@ struct CadModel {
         const py::object& maxChordError, const py::object& maxRelativeVolumeError,
         const py::object& curvaturePointsPerTurn, const py::object& initialTopologyQuality,
         const py::object& nativeSourceFallback, const py::object& boundaryFirst,
-        const py::object& trimmedRayWitnesses) {
+        const py::object& trimmedRayWitnesses, const py::object& thinRegionOrdering) {
         if(resourcePolicy!="normal"&&resourcePolicy!="bounded")
             throw py::value_error("resource_policy must be 'normal' or 'bounded'");
         auto options=resourcePolicy=="normal"?geo::normalNativeCadMeshOptions():geo::NativeCadMeshOptions{};
@@ -956,6 +986,9 @@ struct CadModel {
         if(!py::isinstance<py::bool_>(trimmedRayWitnesses))
             throw py::type_error("trimmed_ray_witnesses must be bool");
         options.useTrimmedRayWitnesses=trimmedRayWitnesses.cast<bool>();
+        if(!py::isinstance<py::bool_>(thinRegionOrdering))
+            throw py::type_error("thin_region_ordering must be bool");
+        options.useThinRegionOrdering=thinRegionOrdering.cast<bool>();
         if(!initialTopologyQuality.is_none()){
             if(!py::isinstance<py::bool_>(initialTopologyQuality))
                 throw py::type_error("initial_topology_quality must be bool or None");
@@ -1089,6 +1122,7 @@ struct CadModel {
         result->requestedNativeSourceFallback=options.allowNativeSourceFallback;
         result->requestedBoundaryFirst=options.recoverBoundaryBeforeInteriorSites;
         result->requestedTrimmedRayWitnesses=options.useTrimmedRayWitnesses;
+        result->requestedThinRegionOrdering=options.useThinRegionOrdering;
         result->requestedAdvancingInteriorFront = requestedPlacement;
         result->warningQuality = options.geometry.warningElementQuality;
         result->minimumQuality = options.geometry.minimumElementQuality;
@@ -1402,6 +1436,7 @@ PYBIND11_MODULE(_native, m) {
              py::arg("max_chord_error") = py::none(), py::arg("max_relative_volume_error") = py::none(),
              py::arg("curvature_points_per_turn") = py::none(), py::arg("initial_topology_quality") = py::none(),
              py::arg("native_source_fallback") = py::bool_(false), py::arg("boundary_first") = py::bool_(false),
-             py::arg("trimmed_ray_witnesses") = py::bool_(false));
+             py::arg("trimmed_ray_witnesses") = py::bool_(false),
+             py::arg("thin_region_ordering") = py::bool_(false));
     m.def("read_step", &readStep, py::arg("path"), py::kw_only(), py::arg("max_file_bytes") = py::none(), py::arg("names") = true, py::arg("retain_source") = false);
 }

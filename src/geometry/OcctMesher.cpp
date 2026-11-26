@@ -1526,6 +1526,11 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
                         report.interiorFrontActivations=recovered.interiorFrontActivations;
                         report.interiorVoidActivations=recovered.interiorVoidActivations;
                         report.interiorFrontAdvances=recovered.interiorFrontAdvances;
+                        report.interiorSpacingRejects=recovered.interiorSpacingRejects;
+                        report.interiorShapeRejects=recovered.interiorShapeRejects;
+                        report.interiorCavityRejects=recovered.interiorCavityRejects;
+                        report.interiorValidityRejects=recovered.interiorValidityRejects;
+                        report.interiorNativeRejects=recovered.interiorNativeRejects;
                         report.interiorFrontSeconds=recovered.interiorFrontSeconds;
                         report.surfaceAttempts+=recovered.sourceShell.count;
                         report.nativeSurfaceWork+=recovered.surfaceWork;
