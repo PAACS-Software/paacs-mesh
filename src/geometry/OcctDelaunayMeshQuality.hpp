@@ -20,7 +20,8 @@ template<class AdmitNode, class AdmitCentroid, class Charge>
 unsigned improveOcctDelaunayMeshQuality(mesh::Mesh& mesh, std::uint64_t maximumWork,
     std::uint64_t maximumQueries, std::uint64_t maximumTets,
     std::uint64_t maximumWorkingBytes, AdmitNode&& admitNode,
-    AdmitCentroid&& admitCentroid, Charge&& charge) try {
+    AdmitCentroid&& admitCentroid, Charge&& charge,
+    const OcctDelaunayQualityOptions& options={}) try {
     using Complex=bnd::detail::BistellarComplex;
     using Vertex=bnd::TetFacetVertexId;
     const auto tets=std::uint64_t(mesh.countCells(mesh::CellType::Tet4));
@@ -72,7 +73,7 @@ unsigned improveOcctDelaunayMeshQuality(mesh::Mesh& mesh, std::uint64_t maximumW
         }
         optimizeOcctDelaunayQuality(live,fixed,
             [&](Vec3 p){return admit(admitCentroid,p);},
-            [&](Vec3 p){return admit(admitNode,p);},edits,maximumTets);
+            [&](Vec3 p){return admit(admitNode,p);},edits,maximumTets,options);
     } catch (const OcctDelaunayQualityLimit&) {
         // Initialization has no edits; optimization stops between transactions.
     }

@@ -4,12 +4,16 @@
 // SPDX-License-Identifier: MPL-2.0
 
 #include "paacs/geometry/OcctBoundary.hpp"
+#include "nonlinear_parameter_prism.hpp"
+#include "narrow_trim_prism.hpp"
 #include "paacs/algo/Delaunay2D.hpp"
 #include "paacs/mesh/MeshAudit.hpp"
 #include "../src/geometry/OcctBoundaryInternal.hpp"
 #include "../src/geometry/OcctCurveMetric.hpp"
 #include "../src/geometry/OcctModelInternal.hpp"
 #include "../src/geometry/OcctStarMesher.hpp"
+#include "../src/geometry/OcctWireChart.hpp"
+#include "../src/geometry/OcctTrimMemo.hpp"
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepAlgoAPI_Splitter.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
@@ -17,6 +21,7 @@
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepBuilderAPI_MakeSolid.hxx>
 #include <BRepBuilderAPI_Sewing.hxx>
+#include <BRepCheck_Analyzer.hxx>
 #include <BRepLib.hxx>
 #include <Geom_BezierSurface.hxx>
 #include <NCollection_Array2.hxx>
@@ -39,11 +44,16 @@
 #include <NCollection_List.hxx>
 #include <gp_Pln.hxx>
 #include <gp_Trsf.hxx>
+#include <Precision.hxx>
 #include <algorithm>
+#include <array>
+#include <atomic>
 #include <bit>
+#include <cmath>
 #include <filesystem>
 #include <iostream>
 #include <map>
+#include <numeric>
 #include <sstream>
 #include <set>
 
@@ -63,6 +73,326 @@ bool same(Vec3 a,Vec3 b) {
            std::bit_cast<std::uint64_t>(a.y)==std::bit_cast<std::uint64_t>(b.y)&&
            std::bit_cast<std::uint64_t>(a.z)==std::bit_cast<std::uint64_t>(b.z);
 }
+int boundedParameterCorrespondence(const geo::OcctModel& model) {
+    using geo::detail::OcctModelAccess;
+    const auto before=snapshot(model);
+    int checks=0,interiorUses=0;
+    for(const auto* face:model.faces())for(const auto& wire:model.boundaryUses(face->tag()))
+        for(const auto& use:wire.edges){
+            const auto edge=OcctModelAccess::edge(model,use.edgeTag);
+            check(BRep_Tool::SameRange(edge)&&BRep_Tool::SameParameter(edge),
+                  "owned correspondence controls retain true Native range/parameter flags");
+            if(use.degenerated)continue;
+            double first,last;model.edge(use.edgeTag)->parameterBounds(first,last);
+            const auto allowed=use.tolerance+model.tolerance(2,face->tag())+
+                std::max(model.tolerance(0,use.startVertexTag),model.tolerance(0,use.endVertexTag))+
+                Precision::Confusion();
+            for(double fraction:std::array{.25,.5,.75}){
+                const auto at=std::lerp(first,last,fraction);
+                Vec2 direct,fitted;
+                // This is an admitted positive control, not a fabricated
+                // primary-correspondence refusal from invalid geometry.
+                check(model.parameterOnUse(use.useId,at,direct),
+                      "valid control direct correspondence must remain available");
+                check(OcctModelAccess::fitParameterOnUse(model,use.useId,
+                    std::lerp(first,last,fraction-.125),at,std::lerp(first,last,fraction+.125),fitted),
+                    "bounded fit failed on a valid interior edge use");
+                const auto error=(face->pointAt(fitted)-model.edge(use.edgeTag)->pointAt(at)).norm();
+                check(std::isfinite(error)&&error<=allowed,
+                      "bounded fit lacks measured agreement with the original physical edge");
+                checks+=3;
+            }
+            ++interiorUses;
+            const auto middle=std::midpoint(first,last);
+            const auto quarter=std::lerp(first,last,.25),threeQuarter=std::lerp(first,last,.75);
+            for(const auto bracket:std::array{
+                    std::array{first,first,middle},std::array{middle,last,last},
+                    std::array{middle,middle,threeQuarter},std::array{quarter,middle,middle},
+                    std::array{threeQuarter,middle,quarter},
+                    std::array{first-(last-first),middle,last},
+                    std::array{first,middle,last+(last-first)}}){
+                Vec2 unchanged{37.,-91.};
+                check(!OcctModelAccess::fitParameterOnUse(model,use.useId,
+                    bracket[0],bracket[1],bracket[2],unchanged)&&unchanged.u==37.&&unchanged.v==-91.,
+                    "endpoint or invalid neighbor bracket changed the fitted output");
+                ++checks;
+            }
+        }
+    check(interiorUses>0,"owned correspondence control exercised no interior edge uses");
+    Vec2 unchanged{37.,-91.};
+    check(!OcctModelAccess::fitParameterOnUse(model,0,0.,.5,1.,unchanged)&&
+          unchanged.u==37.&&unchanged.v==-91.,"unknown use changed the fitted output");
+    check(snapshot(model)==before,"bounded parameter fitting changed the original Native BRep");
+    return checks+3;
+}
+int chartConstructionWitnesses(const geo::OcctModel& model) {
+    using namespace geo::detail;
+    struct Chain {std::vector<int> ids;std::vector<double> parameters;};
+    const auto faces=model.faces();check(!faces.empty(),"chart witness fixture has no face");
+    const auto faceTag=faces.front()->tag();
+    const auto wires=model.boundaryUses(faceTag);
+    check(!wires.empty()&&!wires.front().edges.empty(),"chart witness fixture has no wire use");
+    const auto& firstUse=wires.front().edges.front();
+    std::map<int,Chain> chains;
+    std::map<int,int> vertexIds;
+    std::vector<Vec3> points;
+    const auto vertex=[&](int tag){
+        if(auto found=vertexIds.find(tag);found!=vertexIds.end())return found->second;
+        const auto id=int(points.size());points.push_back(model.vertex(tag)->position());
+        vertexIds.emplace(tag,id);return id;
+    };
+    for(const auto* edge:model.edges()){
+        double first,last;edge->parameterBounds(first,last);
+        chains.emplace(edge->tag(),Chain{{vertex(edge->startVertexTag()),vertex(edge->endVertexTag())},{first,last}});
+    }
+    std::uint64_t work=0;
+    const auto tick=[&](std::uint64_t count){work+=count;};
+    const auto remaining=[](){return std::uint64_t(1'000'000);};
+    const auto refine=[](auto&,auto&,auto&,const auto&){return true;};
+    const auto position=[&](int id){return points.at(std::size_t(id));};
+    std::vector<OcctChartTriangle> ignored;
+    OcctBoundaryConstructionWitness witness{"stale","stale",999,998,std::uint64_t(997),true};
+    auto malformed=chains;
+    malformed.at(firstUse.edgeTag).ids.resize(1);
+    check(!rebuildOcctWireChart(model,faceTag,malformed,{},position,tick,remaining,ignored,nullptr,
+        false,refine,false,4096,&witness),"missing curve samples were accepted");
+    check(std::string_view(witness.stage)=="wire_chart"&&
+          std::string_view(witness.detail)=="curve_samples_missing"&&
+          witness.edgeTag==firstUse.edgeTag&&witness.faceTag==faceTag&&
+          witness.useId==firstUse.useId&&!witness.geometricRefusal,
+          "missing curve samples lost their exact non-geometric entity/use witness");
+    check(!rebuildOcctWireChart(model,faceTag,chains,{},position,tick,remaining,ignored,nullptr,
+        false,refine,false,0,&witness)&&std::string_view(witness.detail)=="chart_node_limit"&&
+        !witness.geometricRefusal&&witness.edgeTag==firstUse.edgeTag&&witness.useId==firstUse.useId,
+        "chart node admission was mislabeled as a geometric fallback opportunity");
+    const auto shifted=[&](int id){return position(id)+Vec3{.01,0,0};};
+    check(!rebuildOcctWireChart(model,faceTag,chains,{},shifted,tick,remaining,ignored,nullptr,
+        false,refine,false,4096,&witness)&&std::string_view(witness.detail)=="pcurve_position_mismatch"&&
+        witness.geometricRefusal&&witness.edgeTag==firstUse.edgeTag&&witness.useId==firstUse.useId,
+        "pcurve correspondence refusal lost its exact geometric witness");
+    std::vector<OcctChartTriangle> plain,observed;
+    check(rebuildOcctWireChart(model,faceTag,chains,{},position,tick,remaining,plain,nullptr,false,refine)&&
+          rebuildOcctWireChart(model,faceTag,chains,{},position,tick,remaining,observed,nullptr,
+            false,refine,false,4096,&witness)&&plain.size()==observed.size(),
+          "optional chart witness changed successful construction");
+    for(std::size_t i=0;i<plain.size();++i){
+        check(plain[i].nodes==observed[i].nodes,"optional chart witness changed node identities");
+        for(unsigned j=0;j<3;++j)check(plain[i].uv[j].u==observed[i].uv[j].u&&
+            plain[i].uv[j].v==observed[i].uv[j].v,"optional chart witness changed parameters");
+    }
+    check(std::string_view(witness.stage)=="not_reported"&&std::string_view(witness.detail)=="not_reported"&&
+          witness.edgeTag==-1&&witness.faceTag==-1&&!witness.useId&&!witness.geometricRefusal,
+          "successful chart retained a stale refusal witness");
+    return 4;
+}
+int narrowTrimTopology(const std::filesystem::path& folder) {
+    using namespace geo::detail;
+    const auto shape=test::narrowTrimPrism();
+    check(BRepCheck_Analyzer(shape).IsValid(),"owned narrow-trim prism is Native-valid");
+    auto cad=load(shape,folder/"narrow-trim-prism.brep");
+    const auto& model=*cad.model;const auto before=snapshot(model);
+    check(model.solids().size()==1,"narrow-trim prism lost its body identity");
+    int cap=-1;
+    for(const auto* face:model.faces()){
+        const auto properties=model.faceProperties(face->tag());
+        if(properties&&properties->surfaceType==geo::OcctSurfaceType::Plane&&properties->bounds&&
+           std::abs(properties->bounds->lower.z)<1e-5&&std::abs(properties->bounds->upper.z)<1e-5)
+            cap=face->tag();
+    }
+    check(cap>0,"narrow-trim prism has no original lower planar cap");
+    struct Chain {std::vector<int> ids;std::vector<double> parameters;};
+    std::map<int,Chain> chains;std::map<int,int> vertexIds;std::vector<Vec3> points;
+    std::vector<mesh::Classification> classifications;
+    const auto vertex=[&](int tag){
+        if(auto found=vertexIds.find(tag);found!=vertexIds.end())return found->second;
+        const auto id=int(points.size());points.push_back(model.vertex(tag)->position());
+        classifications.push_back({0,tag});
+        vertexIds.emplace(tag,id);return id;
+    };
+    for(const auto* edge:model.edges()){
+        double first,last;edge->parameterBounds(first,last);
+        chains.emplace(edge->tag(),Chain{{vertex(edge->startVertexTag()),vertex(edge->endVertexTag())},{first,last}});
+    }
+    // Retain a non-endpoint sample on an unrelated straight curve as well.
+    for(const auto* edge:model.edges()){
+        double first,last;edge->parameterBounds(first,last);const auto at=std::midpoint(first,last);
+        if(edge->curvatureAt(at)!=0)continue;
+        auto& chain=chains.at(edge->tag());const auto id=int(points.size());
+        points.push_back(edge->pointAt(at));classifications.push_back({1,edge->tag()});
+        chain.ids.insert(chain.ids.begin()+1,id);chain.parameters.insert(chain.parameters.begin()+1,at);
+        break;
+    }
+    const auto originalPoints=points;const auto originalChains=chains;
+    const auto originalClassifications=classifications;
+    std::uint64_t work=0;const auto tick=[&](std::uint64_t n){work+=n;};
+    const auto remaining=[&](){return std::uint64_t(10'000'000)-work;};
+    const auto refine=[](auto&,auto&,auto&,const auto&){return true;};
+    const auto position=[&](int id){return points.at(std::size_t(id));};
+    std::vector<OcctChartTriangle> ignored;
+    OcctBoundaryConstructionWitness witness;
+    std::set<OcctChartSplitInterval> intervals;
+    check(rebuildOcctWireChart(model,cap,chains,{},position,tick,remaining,ignored,nullptr,
+        false,refine,true,4096,&witness,&intervals)&&intervals.size()==2,
+        "coarse valid curved trim did not expose its two crossing canonical intervals");
+    bool reversed=false;
+    for(const auto& wire:model.boundaryUses(cap))for(const auto& use:wire.edges)
+        reversed|=use.sense<0&&std::ranges::any_of(intervals,[&](const auto& interval){
+            return interval.edgeTag==use.edgeTag;});
+    check(reversed,"crossing recovery did not exercise a reversed native curve use");
+    check(!rebuildOcctWireChart(model,cap,chains,{},position,tick,remaining,ignored,nullptr,
+        false,refine,true,4096,&witness)&&std::string_view(witness.detail)=="planar_crossing_constraints",
+        "crossing endpoint-only trim was unexpectedly triangulated");
+    std::uint64_t admitted=0;
+    const auto append=[&](int tag,double at,std::uint64_t){
+        const auto id=int(points.size());points.push_back(model.edge(tag)->pointAt(at));
+        classifications.push_back({1,tag});return id;
+    };
+    check(bisectOcctChartIntervals(chains,intervals,append,tick,
+        [&](std::size_t reserve){admitted=std::max(admitted,std::uint64_t(reserve));},&witness)&&
+        points.size()==originalPoints.size()+2&&admitted>0,
+        "crossing repair did not add exactly two bounded native midpoint samples");
+    for(std::size_t i=0;i<originalPoints.size();++i)
+        check(same(points[i],originalPoints[i])&&classifications[i].dim==originalClassifications[i].dim&&
+            classifications[i].tag==originalClassifications[i].tag,
+            "crossing repair moved or reclassified an original canonical node");
+    for(const auto& [tag,original]:originalChains){
+        const auto& chain=chains.at(tag);
+        check(chain.ids.front()==original.ids.front()&&chain.ids.back()==original.ids.back(),
+            "crossing repair replaced an original CAD vertex identity");
+        for(std::size_t i=0;i<original.ids.size();++i)
+            check(std::ranges::find(chain.ids,original.ids[i])!=chain.ids.end(),
+                "crossing repair discarded an original shared curve sample");
+        if(std::ranges::none_of(intervals,[&](const auto& interval){return interval.edgeTag==tag;}))
+            check(chain.ids==original.ids&&chain.parameters==original.parameters,
+                "crossing repair resampled an unrelated canonical curve");
+    }
+    std::set<OcctChartSplitInterval> remainingCrossings;
+    check(rebuildOcctWireChart(model,cap,chains,{},position,tick,remaining,ignored,nullptr,
+        false,refine,true,4096,&witness,&remainingCrossings)&&remainingCrossings.empty(),
+        "two source-curve midpoints did not resolve the trim chord crossing");
+    std::vector<OcctChartTriangle> triangles;
+    check(rebuildOcctWireChart(model,cap,chains,{},position,tick,remaining,triangles,nullptr,
+        true,refine,true,4096,&witness)&&!triangles.empty(),
+        "repaired curved trim was not triangulated with its unchanged physical metric");
+    std::map<std::array<int,2>,unsigned> incidence;
+    for(const auto& triangle:triangles)for(unsigned j=0;j<3;++j){
+        const auto [a,b]=std::minmax(triangle.nodes[j],triangle.nodes[(j+1)%3]);++incidence[{a,b}];
+        check((model.face(cap)->pointAt(triangle.uv[j])-points[triangle.nodes[j]]).norm()<=1e-6,
+            "repaired chart node has no original CAD parameter correspondence");
+    }
+    unsigned sharedChecks=0;
+    for(const auto& interval:intervals){
+        const auto& chain=chains.at(interval.edgeTag);
+        for(std::size_t i=1;i<chain.ids.size();++i){
+            const auto [a,b]=std::minmax(chain.ids[i-1],chain.ids[i]);
+            check(incidence[{a,b}]==1,"repaired chart lost a canonical shared-edge segment");
+        }
+        for(int face:model.edgeFaces(interval.edgeTag)){
+            bool used=false;
+            for(const auto& wire:model.boundaryUses(face))for(const auto& use:wire.edges)
+                if(use.edgeTag==interval.edgeTag){
+                    for(double at:chain.parameters){Vec2 uv;check(model.parameterOnUse(use.useId,at,uv),
+                        "shared midpoint has no unchanged incident-face pcurve correspondence");}
+                    used=true;
+                }
+            check(used,"shared midpoint lost its original incident-face use");
+            ++sharedChecks;
+        }
+    }
+    check(sharedChecks>=4,"narrow-trim test did not inspect both incident faces of each split edge");
+    // Numerical exhaustion must not invent a point or modify the chain.
+    const double a=.5,b=std::nextafter(a,std::numeric_limits<double>::infinity());
+    std::map<int,Chain> adjacent{{1,Chain{{0,1},{a,b}}}};
+    bool appended=false;
+    check(!bisectOcctChartIntervals(adjacent,{{1,a,b}},
+        [&](int,double,std::uint64_t){appended=true;return 2;},tick,[](std::size_t){},&witness)&&
+        !appended&&adjacent.at(1).ids==std::vector<int>{0,1}&&
+        std::string_view(witness.detail)=="chart_parameter_resolution"&&witness.geometricRefusal,
+        "unrepresentable chart interval was silently changed");
+    struct AdmissionStop {};
+    for(bool stopAtAdmission:std::array{false,true}){
+        auto stopped=originalChains;bool added=false,caught=false;
+        try {
+            bisectOcctChartIntervals(stopped,intervals,
+                [&](int,double,std::uint64_t){added=true;return 1000;},
+                [&](std::uint64_t){if(!stopAtAdmission)throw AdmissionStop{};},
+                [&](std::size_t){if(stopAtAdmission)throw AdmissionStop{};});
+        }catch(const AdmissionStop&){caught=true;}
+        check(caught&&!added,"crossing recovery ignored work or memory admission");
+        for(const auto& [tag,chain]:originalChains)
+            check(stopped.at(tag).ids==chain.ids&&stopped.at(tag).parameters==chain.parameters,
+                "pre-admission refusal changed a canonical chain");
+    }
+    // The ordinary mesher retains all native geometry and embedding gates.
+    geo::OcctBoundaryOptions options;options.maximumChordError=.015;options.maximumWork=100'000'000;
+    options.construction.resourcePolicy=geo::CadResourcePolicy::Normal;
+    mesh::Mesh boundary;OcctBoundaryAliasReceipt receipt;
+    // Deliberately coarse global request on the same curved source. The
+    // source constructor can add its own geometry/growth samples; its total
+    // node count is not a topology-repair counter. The exact two-split control
+    // above isolates recovery. Here independently certify the whole shell
+    // and verify every retained shared node/face identity.
+    // This large chord request is not a geometry-accuracy or volume-mesh claim.
+    auto coarseOptions=options;coarseOptions.maximumChordError=100.;
+    const auto coarse=buildSpacedOcctBoundary(model,1,coarseOptions,1e6,64ULL*1024*1024,
+        boundary,receipt,false,false,1);
+    const auto coarseCertificate=certifyOcctBoundarySurface(boundary,OcctStarOptions{});
+    std::cout<<"narrow trim coarse: "<<geo::occtBoundaryReasonName(coarse.reason)
+        <<" nodes="<<coarse.nodes<<" vertices="<<model.vertices().size()
+        <<" triangles="<<coarse.triangles<<" published="<<coarse.published
+        <<" source_unchanged="<<coarse.sourceModelUnmodified
+        <<" witness="<<receipt.witness.stage<<'/'<<receipt.witness.detail
+        <<" certificate="<<coarseCertificate.diagnostic<<'\n';
+    check(coarse.published&&coarse.sourceModelUnmodified&&coarse.closed&&coarse.oriented&&coarse.vertexManifold&&
+        coarseCertificate.certified,
+        "integrated curved-trim source failed original-CAD surface certification");
+    std::set<geo::OcctBoundaryNodeKey> uniqueKeys;
+    std::map<Index,std::set<int>> incidentFaces;
+    for(Index i=0;i<boundary.cellCount();++i){
+        const auto& cell=boundary.cell(i);
+        check(cell.type==mesh::CellType::Tri3&&cell.onEntity.dim==2&&model.face(cell.onEntity.tag),
+            "shared topology recovery lost original CAD face tags");
+        for(unsigned j=0;j<3;++j)incidentFaces[boundary.cellNodes(i)[j]].insert(cell.onEntity.tag);
+    }
+    std::set<int> retainedVertices;
+    unsigned sharedCurveNodes=0;
+    for(Index i=0;i<boundary.nodeCount();++i){
+        const auto& key=coarse.nodeKeys[std::size_t(i)];
+        const auto classification=boundary.nodeClass(i);
+        check(uniqueKeys.insert(key).second&&key.dimension==classification.dim&&key.tag==classification.tag,
+            "shared topology recovery duplicated or reclassified a native provenance key");
+        if(classification.dim==0){
+            check(model.vertex(classification.tag)&&retainedVertices.insert(classification.tag).second&&
+                same(boundary.node(i),model.vertex(classification.tag)->position()),
+                "integrated topology recovery moved or replaced an original CAD vertex");
+        }else if(classification.dim==1){
+            check(model.edge(classification.tag)!=nullptr,"recovered node lost its original CAD edge tag");
+            for(int face:model.edgeFaces(classification.tag))
+                check(incidentFaces[i].contains(face),
+                    "integrated topology recovery did not share one node ID across incident CAD faces");
+            ++sharedCurveNodes;
+        }
+    }
+    check(retainedVertices.size()==model.vertices().size()&&sharedCurveNodes>0,
+        "integrated topology recovery omitted original vertices or exercised no shared curve nodes");
+    const auto full=buildSpacedOcctBoundary(model,1,options,.3,64ULL*1024*1024,boundary,receipt,true);
+    check(full.published&&full.closed&&full.oriented&&full.vertexManifold&&full.sourceModelUnmodified&&
+        full.connectedShells==1&&certifyOcctBoundarySurface(boundary,OcctStarOptions{}).certified,
+        "owned narrow-trim prism failed full original-CAD surface certification");
+    mesh::Mesh sentinel;sentinel.addNode({-7,-8,-9},{3,999});
+    const auto sentinelHash=mesh::meshHash(sentinel);
+    auto limited=options;limited.maximumNodes=3;
+    auto refused=buildSpacedOcctBoundary(model,1,limited,.3,64ULL*1024*1024,sentinel,receipt,true);
+    check(!refused.published&&refused.reason==geo::OcctBoundaryReason::BudgetExceeded&&
+        mesh::meshHash(sentinel)==sentinelHash,"limited curved trim published a partial boundary");
+    std::atomic<bool> cancel{true};limited=options;limited.cancellation=&cancel;
+    refused=buildSpacedOcctBoundary(model,1,limited,.3,64ULL*1024*1024,sentinel,receipt,true);
+    check(!refused.published&&refused.reason==geo::OcctBoundaryReason::Cancelled&&
+        mesh::meshHash(sentinel)==sentinelHash,"cancelled curved trim published a partial boundary");
+    check(snapshot(model)==before,"narrow-trim recovery modified the original Native BRep");
+    return 21;
+}
+
 int constrainedChartRegions() {
     // Each strip consists of two triangles between the outer and inner wire.
     // The final two triangles fill the inner loop and must be marked exterior.
@@ -254,6 +584,193 @@ int localSharedCurvedPreparation(const std::filesystem::path& folder) {
     return 29;
 }
 }
+namespace {
+int stockTrimMemoQualification(const std::filesystem::path& folder) {
+    using namespace geo;
+    using namespace geo::detail;
+    int checks=0;
+    const auto verify=[&](bool value,const char* message){check(value,message);++checks;};
+    const std::vector<std::pair<const char*,TopoDS_Shape>> ownedShapes{
+        {"box",BRepPrimAPI_MakeBox(1.,1.,1.).Shape()},
+        {"cylinder",BRepPrimAPI_MakeCylinder(1.,2.).Shape()},
+        {"narrow-prism",test::narrowTrimPrism()}};
+    for(const auto& [name,shape]:ownedShapes){
+        auto imported=load(shape,folder/(std::string("memo-")+name+".brep"));
+        const auto& model=*imported.model;const auto before=snapshot(model);
+        for(const auto* face:model.faces()){
+            Vec2 lo,hi;face->paramBounds(lo,hi);
+            const auto u=std::midpoint(lo.u,hi.u),v=std::midpoint(lo.v,hi.v);
+            const std::array queries{
+                Vec2{u,v},Vec2{std::nextafter(u,hi.u),v},Vec2{lo.u,lo.v},
+                Vec2{hi.u,hi.v},Vec2{lo.u-(hi.u-lo.u),lo.v-(hi.v-lo.v)},
+                Vec2{0.,0.},Vec2{-0.,0.},
+                Vec2{std::numeric_limits<double>::quiet_NaN(),0.},
+                Vec2{std::numeric_limits<double>::infinity(),0.}};
+            for(const auto entries:std::array<std::size_t,3>{0,1,4096}){
+                OcctTrimMemoReport report;OcctTrimMemo memo(*face,entries,report);
+                for(auto point:queries)for(unsigned repeat=0;repeat<3;++repeat)
+                    verify(memo.contains(point)==face->containsParam(point),
+                        "exact-bit memo changed an original Native trim decision");
+                verify(report.entries==entries&&report.payloadBytes==entries*OcctTrimMemo::slotBytes,
+                    "trim memo did not account for its complete allocated capacity");
+                memo.release();
+                verify(!memo.enabled()&&report.evictions==(entries?1:0),
+                    "optional trim storage was not released without replacement allocation");
+                verify(memo.contains({u,v})==face->containsParam({u,v}),
+                    "evicted trim memo did not delegate to the original classifier");
+            }
+            OcctTrimMemoReport signedReport;OcctTrimMemo signedMemo(*face,4096,signedReport);
+            (void)signedMemo.contains({0.,0.});(void)signedMemo.contains({-0.,0.});
+            verify(signedReport.phases[0].nativeCalls==2,"trim memo conflated distinct signed-zero UV bit patterns");
+            OcctTrimMemoReport admissionReport;OcctTrimMemo admission(*face,4096,admissionReport);
+            const auto expected=face->containsParam({u,v});
+            verify(admission.contains({u,v})==expected&&admission.contains({u,v})==expected&&
+                admissionReport.phases[0].nativeCalls==1,"optional-storage admission control did not allocate and hit a cache");
+            constexpr std::uint64_t geometricPayload=17*1024;
+            const auto allocated=admission.livePayloadBytes();std::uint64_t combined=999;
+            verify(allocated==4096*OcctTrimMemo::slotBytes&&
+                admission.admitWorkingPayload(geometricPayload,geometricPayload+allocated,combined)&&
+                combined==geometricPayload+allocated&&admission.enabled()&&admissionReport.evictions==0,
+                "exact-fit optional-storage admission discarded valid capacity");
+            verify(admission.admitWorkingPayload(geometricPayload,geometricPayload+allocated-1,combined)&&
+                combined==geometricPayload&&admission.livePayloadBytes()==0&&!admission.enabled()&&admissionReport.evictions==1,
+                "optional-storage admission did not release the full capacity before geometric growth");
+            const auto callsBefore=admissionReport.phases[0].nativeCalls;
+            verify(admission.contains({u,v})==expected&&admission.contains({u,v})==expected&&
+                admissionReport.phases[0].nativeCalls==callsBefore+2,
+                "evicted optional-storage admission did not restore original Native calls");
+            OcctTrimMemoReport refusalReport;OcctTrimMemo refusal(*face,4096,refusalReport);
+            combined=999;
+            verify(!refusal.admitWorkingPayload(geometricPayload,geometricPayload-1,combined)&&combined==999&&
+                refusal.livePayloadBytes()==allocated&&refusalReport.evictions==0,
+                "base-over-limit optional-storage admission waived a geometric limit or changed its output");
+            const auto largest=(std::numeric_limits<std::uint64_t>::max)();
+            verify(!refusal.admitWorkingPayload(largest,largest-1,combined)&&combined==999&&
+                refusal.admitWorkingPayload(largest,largest,combined)&&combined==largest&&refusal.livePayloadBytes()==0,
+                "optional-storage admission overflowed at the unsigned working limit");
+        }
+        Vec3 lo,hi;model.solids().front()->bbox(lo,hi);const auto diagonal=(hi-lo).norm();
+        OcctBoundaryOptions options;options.maximumChordError=.0025*diagonal;
+        options.maximumNodes=500000;options.maximumTriangles=3000000;
+        options.maximumOutputBytes=256ULL*1024*1024;options.maximumWork=cadNormalWorkAllowance;
+        options.construction.resourcePolicy=CadResourcePolicy::Normal;
+        constexpr auto working=64ULL*1024*1024;
+        mesh::Mesh off,cached,ordinary;
+        OcctBoundaryAliasReceipt offReceipt,cachedReceipt,ordinaryReceipt;
+        OcctBoundaryOutcome offOutcome,cachedOutcome;
+        OcctTrimMemoControl offControl;offControl.requestedEntries=0;
+        offControl.reports.reserve(OcctTrimMemoControl::maximumReportedFaces);
+        {OcctTrimMemoScope scope(offControl);
+            offOutcome=buildSpacedOcctBoundary(model,model.solids().front()->tag(),options,.15*diagonal,
+                working,off,offReceipt,true,false,0,nullptr);}
+        OcctTrimMemoControl cachedControl;cachedControl.requestedEntries=4096;
+        cachedControl.reports.reserve(OcctTrimMemoControl::maximumReportedFaces);
+        {OcctTrimMemoScope scope(cachedControl);
+            cachedOutcome=buildSpacedOcctBoundary(model,model.solids().front()->tag(),options,.15*diagonal,
+                working,cached,cachedReceipt,true,false,0,nullptr);}
+        const auto ordinaryOutcome=buildSpacedOcctBoundary(model,model.solids().front()->tag(),options,.15*diagonal,
+            working,ordinary,ordinaryReceipt,true,false,0,nullptr);
+        for(const auto* outcome:std::array<const OcctBoundaryOutcome*,3>{&offOutcome,&cachedOutcome,&ordinaryOutcome})
+            verify(outcome->published&&outcome->sourceModelUnmodified&&outcome->closed&&outcome->oriented&&outcome->vertexManifold,
+                "trim memo modes did not retain original Native surface acceptance");
+        verify(mesh::meshHash(off)==mesh::meshHash(cached)&&mesh::meshHash(off)==mesh::meshHash(ordinary),
+            "trim memo changed source coordinates, CAD tags or boundary connectivity");
+        verify(offOutcome.nodeKeys==cachedOutcome.nodeKeys&&offOutcome.nodeKeys==ordinaryOutcome.nodeKeys&&
+            offOutcome.solidTag==cachedOutcome.solidTag&&offOutcome.solidTag==ordinaryOutcome.solidTag,
+            "trim memo changed original boundary keys or body ownership");
+        verify(offOutcome.work==cachedOutcome.work&&offOutcome.work==ordinaryOutcome.work&&
+            offOutcome.maximumFacetSampleError==cachedOutcome.maximumFacetSampleError&&
+            offOutcome.relativeVolumeError==cachedOutcome.relativeVolumeError,
+            "trim memo changed geometry work or measured source fidelity");
+        verify(certifyOcctBoundarySurface(off,OcctStarOptions{}).certified&&
+            certifyOcctBoundarySurface(cached,OcctStarOptions{}).certified&&
+            certifyOcctBoundarySurface(ordinary,OcctStarOptions{}).certified,
+            "trim memo modes did not pass the independent embedded-shell certificate");
+        verify(!offControl.truncated&&!cachedControl.truncated&&
+            cachedReceipt.maximumWorkingPayloadEstimate<=working,
+            "bounded trim memo diagnostics or working allowance exceeded its cap");
+        std::uint64_t cacheHits=0;
+        for(const auto& report:cachedControl.reports){
+            verify(report.entries<=4096&&report.payloadBytes==report.entries*OcctTrimMemo::slotBytes,
+                "integrated trim memo omitted allocated slot capacity");
+            for(const auto& phase:report.phases)cacheHits+=phase.hits;
+        }
+        verify(cacheHits>0,"owned trim memo test did not exercise an exact repeated query");
+        if(std::string_view(name)=="box"){
+            // At this allowance the original 4096-node chart reserve dominates
+            // its actual small mesh. Determine that stock requirement, then
+            // leave no room for optional cache slots alongside the peak reserve.
+            mesh::Mesh planning;OcctBoundaryAliasReceipt planningReceipt;
+            OcctTrimMemoControl planningControl;planningControl.requestedEntries=0;
+            OcctBoundaryOutcome planned;
+            {OcctTrimMemoScope scope(planningControl);
+                planned=buildSpacedOcctBoundary(model,model.solids().front()->tag(),options,.15*diagonal,
+                    12ULL*1024*1024,planning,planningReceipt,true,false,0,nullptr);}
+            verify(planned.published,"owned tight-budget planning baseline did not mesh");
+            const auto required=planningReceipt.maximumWorkingPayloadEstimate;
+            auto tightWorking=(((required*4+2)/3+7)/8)*8;
+            mesh::Mesh tightOff,tightCached;OcctBoundaryAliasReceipt tightOffReceipt,tightCachedReceipt;
+            OcctBoundaryOutcome tightOffOutcome,tightCachedOutcome;
+            bool stableAllowance=false;
+            // The stock chart planning reserve can itself shrink with its
+            // allowance. Bound this stock-only search and require a fixed
+            // peak before testing optional storage alongside actual growth.
+            for(unsigned attempt=0;attempt<4;++attempt){
+                OcctTrimMemoControl tightOffControl;tightOffControl.requestedEntries=0;
+                tightOffReceipt={};
+                {OcctTrimMemoScope scope(tightOffControl);
+                    tightOffOutcome=buildSpacedOcctBoundary(model,model.solids().front()->tag(),options,.15*diagonal,
+                        tightWorking,tightOff,tightOffReceipt,true,false,0,nullptr);}
+                verify(tightOffOutcome.published,"stock-only tight allowance search lost a valid boundary");
+                const auto next=(((tightOffReceipt.maximumWorkingPayloadEstimate*4+2)/3+7)/8)*8;
+                if(next>=tightWorking){stableAllowance=true;break;}
+                tightWorking=next;
+            }
+            verify(stableAllowance,"owned stock-only tight allowance search did not converge within its fixed cap");
+            OcctTrimMemoControl tightControl;tightControl.requestedEntries=4096;
+            {OcctTrimMemoScope scope(tightControl);
+                tightCachedOutcome=buildSpacedOcctBoundary(model,model.solids().front()->tag(),options,.15*diagonal,
+                    tightWorking,tightCached,tightCachedReceipt,true,false,0,nullptr);}
+            verify(tightOffOutcome.published&&tightCachedOutcome.published&&
+                mesh::meshHash(tightOff)==mesh::meshHash(tightCached)&&mesh::meshHash(tightOff)==mesh::meshHash(off),
+                "optional trim storage reduced the original geometric allowance near its memory ceiling");
+            std::uint64_t evictions=0;for(const auto& report:tightControl.reports)evictions+=report.evictions;
+            std::cout<<"trim memo tight: planning_peak="<<required<<" outer_working="<<tightWorking
+                <<" alias_working="<<(tightWorking-2*(tightWorking/8))
+                <<" stock_peak="<<tightOffReceipt.maximumWorkingPayloadEstimate
+                <<" cached_peak="<<tightCachedReceipt.maximumWorkingPayloadEstimate
+                <<" evictions="<<evictions<<'\n';
+            for(const auto& report:tightControl.reports)
+                std::cout<<"trim memo face="<<report.faceTag<<" requested="<<tightControl.requestedEntries
+                    <<" entries="<<report.entries<<" allocated_peak="<<report.payloadBytes
+                    <<" evictions="<<report.evictions<<'\n';
+            for(const auto& report:tightControl.reports)
+                verify(report.entries<=tightControl.requestedEntries&&
+                    report.payloadBytes==report.entries*OcctTrimMemo::slotBytes,
+                    "tight-budget source construction allocated unaccounted optional capacity");
+            const auto aliasWorking=tightWorking-2*(tightWorking/8);
+            verify(tightOffReceipt.maximumWorkingPayloadEstimate<=aliasWorking&&
+                tightCachedReceipt.maximumWorkingPayloadEstimate<=aliasWorking&&
+                tightOffOutcome.work==tightCachedOutcome.work,
+                "trim memo eviction waived a working or geometry-work admission");
+            mesh::Mesh sentinel;sentinel.addNode({7,8,9},{3,999});const auto hash=mesh::meshHash(sentinel);
+            auto limited=options;limited.maximumWork=1;OcctBoundaryAliasReceipt refusedReceipt;
+            const auto refused=buildSpacedOcctBoundary(model,model.solids().front()->tag(),limited,.15*diagonal,
+                working,sentinel,refusedReceipt,true,false,0,nullptr);
+            verify(!refused.published&&refused.reason==OcctBoundaryReason::BudgetExceeded&&mesh::meshHash(sentinel)==hash,
+                "cached source construction published a partial work-budget failure");
+            std::atomic<bool> cancel{true};limited=options;limited.cancellation=&cancel;
+            const auto cancelled=buildSpacedOcctBoundary(model,model.solids().front()->tag(),limited,.15*diagonal,
+                working,sentinel,refusedReceipt,true,false,0,nullptr);
+            verify(!cancelled.published&&cancelled.reason==OcctBoundaryReason::Cancelled&&mesh::meshHash(sentinel)==hash,
+                "cached source construction published a cancelled partial boundary");
+        }
+        verify(snapshot(model)==before,"exact stock memo changed the original Native BRep bytes");
+    }
+    return checks;
+}
+}
+
 int main(int argc,char**argv) {
     try {
         const auto folder=argc==2?std::filesystem::path(argv[1]):std::filesystem::path("out/occt-boundary-tests");
@@ -267,6 +784,27 @@ int main(int argc,char**argv) {
             {"tube",BRepAlgoAPI_Cut(cylinder,BRepPrimAPI_MakeCylinder(.55,2.).Shape()).Shape()}};
         geo::OcctBoundaryOptions options;options.linearDeflection=.01;options.maximumChordError=.021;
         int checks=0;
+        {
+            const auto shape=test::nonlinearParameterPrism();
+            check(BRepCheck_Analyzer(shape).IsValid(),"owned nonlinear-parameter prism is Native-valid");
+            auto owned=load(shape,folder/"nonlinear-parameter-prism.brep");
+            bool nonlinear=false;
+            for(const auto* edge:owned.model->edges()){
+                double first,last;edge->parameterBounds(first,last);
+                nonlinear|=(edge->pointAt(std::midpoint(first,last))-
+                    (edge->pointAt(first)+edge->pointAt(last))*.5).norm()>.05;
+            }
+            check(nonlinear,"owned control lost its nonuniform physical parameterization");
+            checks+=boundedParameterCorrespondence(*owned.model)+2;
+            checks+=narrowTrimTopology(folder);
+            checks+=stockTrimMemoQualification(folder);
+        }
+        {
+            auto owned=load(BRepPrimAPI_MakeBox(1.,2.,3.).Shape(),folder/"chart-witness-box.brep");
+            const auto before=snapshot(*owned.model);
+            checks+=chartConstructionWitnesses(*owned.model);
+            check(snapshot(*owned.model)==before,"chart witness checks changed the source BRep");
+        }
         for(const auto& [name,shape]:fixtures) {
             auto imported=load(shape,folder/(std::string(name)+".brep")); const auto before=snapshot(*imported.model);
             mesh::Mesh boundary;boundary.addNode({-7,-8,-9},{3,999});
@@ -317,6 +855,7 @@ int main(int argc,char**argv) {
                 checks+=4;
             }
             if(std::string_view(name)=="cylinder"){
+                checks+=boundedParameterCorrespondence(*imported.model);
                 std::vector<int> faces;for(const auto* f:imported.model->faces())faces.push_back(f->tag());
                 geo::OcctBoundaryOutcome prepared;auto session=geo::detail::OcctBoundarySession::prepare(*imported.model,options,prepared);
                 check(session!=nullptr,"alias session preparation");geo::detail::OcctBoundaryAliasOptions alias;alias.faceTags=faces;geo::detail::OcctBoundaryAliasReceipt receipt;

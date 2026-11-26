@@ -1,0 +1,1191 @@
+{
+  "schema": "paacs-quality-qualification-figure-v1",
+  "scope": "Actual archived Tet4 faces and independent shape measurements; no native engine or CAD audit called",
+  "metric_conventions": {
+    "version": "paacs-mesh-tet4-quality-v1",
+    "orientation": "sign of dot(cross(p1-p0,p2-p0),p3-p0); zero is degenerate",
+    "mean_ratio": "12*(3*V)^(2/3)/sum(six squared edges) for positive orientation; otherwise zero",
+    "minimum_dihedral_deg": "minimum of six interior dihedral angles, in degrees; null for degeneracy",
+    "scaled_jacobian": "sqrt(2)*signed determinant / maximum of four incident edge-length products",
+    "signed_volume": "signed determinant / 6, in input length units cubed",
+    "edge_median": "arithmetic mean of the third and fourth of six sorted edge lengths",
+    "volume_equivalent_edge": "edge of a regular tetrahedron of equal absolute volume",
+    "range_limited": "a nonzero measurement could not be represented as a finite nonzero binary64 value",
+    "scope": "Tet4 shape only; no CAD, connectivity, overlap, or simulation certificate"
+  },
+  "camera": {
+    "projection": "orthographic",
+    "elevation": 24,
+    "azimuth": -60
+  },
+  "color_scale": {
+    "metric": "mean_ratio",
+    "minimum": 0,
+    "maximum": 1,
+    "colormap": "RdYlBu"
+  },
+  "cutaway": "Whole Tet4 cells retained by a centroid half-space; original exposed faces only",
+  "quality_scope": "All Tet4 cells, including removed and hidden cells; minimum-cell labels need not be visible faces",
+  "timing_comparison_valid": false,
+  "panels": [
+    {
+      "label": "Sphere: previous fan",
+      "archive": {
+        "path": "build\\thin-curved-baseline\\frozen-c154-v1\\sphere-05\\mesh.paacsmesh",
+        "sha256": "e3af73f4faccb30f56d9c99294de2fb00c686e4773564a1f3cb58392043d60e4"
+      },
+      "point_hashes": {
+        "nodes": 1420,
+        "ordered_xyz_sha256": "863e3128451a2ff4762be70bd5c4c530881119c815b4cfcaf0a21c0807cbf0d9",
+        "sorted_xyz_sha256": "a8dfed1b46c8b281f544e163e3a717720c8d9d247a01a089ec1e5416afe47306"
+      },
+      "surface_hashes": {
+        "triangles": 2834,
+        "face_tag_counts": {
+          "1": 2834
+        },
+        "unoriented_geometry_sha256": "50407010728e5072c05d004cbc784b69af09616d3fc204df1568e9580aece394",
+        "oriented_geometry_sha256": "037c841e6d86805164acdf4ee7852209e503bd2910709fcdb3773e26856cf48e",
+        "method": "Exact stored binary64 coordinates and face tags; cyclic rotation preserves orientation"
+      },
+      "tetrahedra": 2834,
+      "body_tet4_counts": {
+        "1": 2834
+      },
+      "quality": {
+        "mean_ratio": {
+          "minimum": 0.021226173780428334,
+          "p01": 0.03365583574842457,
+          "p05": 0.03372878742084051,
+          "median": 0.11351216753893735,
+          "p95": 0.14026242378163828,
+          "maximum": 0.14041654608864582
+        },
+        "minimum_dihedral_deg": {
+          "minimum": 3.322247870169645,
+          "p01": 6.644496429900198,
+          "p05": 6.6666641570313425,
+          "median": 39.80170138395294,
+          "p95": 53.16890366013946,
+          "maximum": 53.24614028101642
+        },
+        "scaled_jacobian": {
+          "minimum": 0.0011082512162393714,
+          "p01": 0.0022127459929265447,
+          "p05": 0.002220143617748336,
+          "median": 0.013774707648113234,
+          "p95": 0.019012176472771276,
+          "maximum": 0.019044380455084255
+        }
+      },
+      "cell_max_edge": {
+        "minimum": 0.999990801136464,
+        "p01": 0.9999911726549549,
+        "p05": 0.9999923424876611,
+        "median": 1.0000001832524252,
+        "p95": 1.0000081192850676,
+        "maximum": 1.0000092144534005
+      },
+      "mean_ratio_below_0p05": 226,
+      "mean_ratio_below_1e_8": 0,
+      "cell_ids": "Zero-based index in the full archive cell sequence, including boundary cells",
+      "worst_cells": [
+        {
+          "cell_id": 1,
+          "mean_ratio": 0.021226173780428334,
+          "minimum_dihedral_deg": 3.322247870169645,
+          "scaled_jacobian": 0.0011082523917627176,
+          "connectivity": [
+            1419,
+            28,
+            2,
+            1
+          ],
+          "centroid": [
+            0.11565362956172635,
+            0.0016875506573825372,
+            -0.7398803964238171
+          ],
+          "retained_in_cutaway": true
+        },
+        {
+          "cell_id": 948,
+          "mean_ratio": 0.02122617378043018,
+          "minimum_dihedral_deg": 3.322247870170076,
+          "scaled_jacobian": 0.0011082523917628618,
+          "connectivity": [
+            1419,
+            523,
+            1,
+            2
+          ],
+          "centroid": [
+            0.11565362956172634,
+            -0.0016875506573827217,
+            -0.7398803964238172
+          ],
+          "retained_in_cutaway": false
+        },
+        {
+          "cell_id": 0,
+          "mean_ratio": 0.02122679427119163,
+          "minimum_dihedral_deg": 3.3333351244371237,
+          "scaled_jacobian": 0.0011082512162393714,
+          "connectivity": [
+            1419,
+            28,
+            1,
+            0
+          ],
+          "centroid": [
+            0.05799966187611631,
+            0.0016875506573825372,
+            -0.7466191787788612
+          ],
+          "retained_in_cutaway": true
+        },
+        {
+          "cell_id": 947,
+          "mean_ratio": 0.02122679427119347,
+          "minimum_dihedral_deg": 3.3333351244375584,
+          "scaled_jacobian": 0.0011082512162395159,
+          "connectivity": [
+            1419,
+            523,
+            0,
+            1
+          ],
+          "centroid": [
+            0.0579996618761163,
+            -0.0016875506573827217,
+            -0.7466191787788612
+          ],
+          "retained_in_cutaway": false
+        },
+        {
+          "cell_id": 1653,
+          "mean_ratio": 0.03353899678781804,
+          "minimum_dihedral_deg": 6.568093999273029,
+          "scaled_jacobian": 0.0022015221851556677,
+          "connectivity": [
+            1419,
+            870,
+            25,
+            24
+          ],
+          "centroid": [
+            0.20071773733691267,
+            0.0033522800870899165,
+            0.7214455905784993
+          ],
+          "retained_in_cutaway": true
+        },
+        {
+          "cell_id": 2820,
+          "mean_ratio": 0.03353899678782095,
+          "minimum_dihedral_deg": 6.568093999273869,
+          "scaled_jacobian": 0.002201522185155954,
+          "connectivity": [
+            1419,
+            1415,
+            24,
+            25
+          ],
+          "centroid": [
+            0.20071773733691264,
+            -0.003352280087090318,
+            0.7214455905784994
+          ],
+          "retained_in_cutaway": false
+        },
+        {
+          "cell_id": 1654,
+          "mean_ratio": 0.03354092715088731,
+          "minimum_dihedral_deg": 6.610533776251804,
+          "scaled_jacobian": 0.0022015198975020313,
+          "connectivity": [
+            1419,
+            870,
+            26,
+            25
+          ],
+          "centroid": [
+            0.14423593003680307,
+            0.0033522800870899165,
+            0.7348320248175081
+          ],
+          "retained_in_cutaway": true
+        },
+        {
+          "cell_id": 2821,
+          "mean_ratio": 0.03354092715089021,
+          "minimum_dihedral_deg": 6.610533776252664,
+          "scaled_jacobian": 0.002201519897502317,
+          "connectivity": [
+            1419,
+            1415,
+            25,
+            26
+          ],
+          "centroid": [
+            0.14423593003680302,
+            -0.003352280087090318,
+            0.734832024817508
+          ],
+          "retained_in_cutaway": false
+        }
+      ],
+      "cutaway": {
+        "axis": "y",
+        "value": 0.0,
+        "retained": "cell centroid >= value",
+        "retained_tetrahedra": 1430,
+        "exposed_triangles": 1484,
+        "retained_cell_ids_sha256": "cc8bf6dfc25a22f7b81b69534e8a41493e3ca5c45400c859f29e803d8fe0ab78",
+        "face_owner_ids_sha256": "3989eb53903ec2ae70722fa915105949b4ed5ff01ac800eb57a7412f36b6224e",
+        "face_mapping_rule": "Sorted node-ID triplets of exposed original faces paired with owning archive cell ID"
+      }
+    },
+    {
+      "label": "Sphere: source retry, h = 0.5",
+      "archive": {
+        "path": "build\\thin-curved-followup\\source-shell-v1\\sphere-05\\mesh.paacsmesh",
+        "sha256": "c31b2de5dcf3c920cb1c6e2b7876683b03f7d6158cefbc89a81a7b20ab340e0d"
+      },
+      "point_hashes": {
+        "nodes": 1301,
+        "ordered_xyz_sha256": "4beb006043012500e07e40bc3d3be0cfd0a265f862de2371d7942b920a7d4272",
+        "sorted_xyz_sha256": "ec7d7f581d8730f67cd5b2b4aaadb123f97f8389a86c40ae7c3817186ba007c0"
+      },
+      "surface_hashes": {
+        "triangles": 2420,
+        "face_tag_counts": {
+          "1": 2420
+        },
+        "unoriented_geometry_sha256": "f3e651d6aafd3ca9340d4bfdc32d934ad87cfde23a8bccc59d9d2c7e2fa68ac0",
+        "oriented_geometry_sha256": "c0492629563111b1806fc759e2afb3bdbf807ee29e7f9e2de9de021c5b7c3ad2",
+        "method": "Exact stored binary64 coordinates and face tags; cyclic rotation preserves orientation"
+      },
+      "tetrahedra": 3637,
+      "body_tet4_counts": {
+        "1": 3637
+      },
+      "quality": {
+        "mean_ratio": {
+          "minimum": 0.016430890471721128,
+          "p01": 0.17365414866740975,
+          "p05": 0.23399009348582542,
+          "median": 0.44324327727058527,
+          "p95": 0.8300334163958714,
+          "maximum": 0.9984907364852762
+        },
+        "minimum_dihedral_deg": {
+          "minimum": 0.12898939708544038,
+          "p01": 5.194919165871875,
+          "p05": 12.37863526043831,
+          "median": 28.58707411911595,
+          "p95": 52.429866132910895,
+          "maximum": 68.93507109125294
+        },
+        "scaled_jacobian": {
+          "minimum": 0.0008682753985449749,
+          "p01": 0.032514305523708945,
+          "p05": 0.047860028756371485,
+          "median": 0.18072168878063485,
+          "p95": 0.602609309764858,
+          "maximum": 0.970250940874243
+        }
+      },
+      "cell_max_edge": {
+        "minimum": 0.13355186302427471,
+        "p01": 0.15903789292568293,
+        "p05": 0.16649346562410516,
+        "median": 0.33527046678065364,
+        "p95": 0.5562902670624451,
+        "maximum": 0.6196951040388495
+      },
+      "mean_ratio_below_0p05": 6,
+      "mean_ratio_below_1e_8": 0,
+      "cell_ids": "Zero-based index in the full archive cell sequence, including boundary cells",
+      "worst_cells": [
+        {
+          "cell_id": 5783,
+          "mean_ratio": 0.016430890471721128,
+          "minimum_dihedral_deg": 0.27034753851407134,
+          "scaled_jacobian": 0.0008682753985449749,
+          "connectivity": [
+            99,
+            1273,
+            1202,
+            1232
+          ],
+          "centroid": [
+            0.2404676972607075,
+            -0.805214750191377,
+            0.08903994352250907
+          ],
+          "retained_in_cutaway": false
+        },
+        {
+          "cell_id": 6043,
+          "mean_ratio": 0.01690923724530372,
+          "minimum_dihedral_deg": 0.12898939708544038,
+          "scaled_jacobian": 0.0012044549216631264,
+          "connectivity": [
+            1292,
+            232,
+            1226,
+            650
+          ],
+          "centroid": [
+            -0.8394174852509151,
+            -0.1678587693535827,
+            0.03171688252890084
+          ],
+          "retained_in_cutaway": false
+        },
+        {
+          "cell_id": 5899,
+          "mean_ratio": 0.02851212126946791,
+          "minimum_dihedral_deg": 0.21825372523218886,
+          "scaled_jacobian": 0.0047093940226882475,
+          "connectivity": [
+            249,
+            1293,
+            1272,
+            878
+          ],
+          "centroid": [
+            -0.5213794715036886,
+            -0.04192236218637366,
+            -0.5345647791198814
+          ],
+          "retained_in_cutaway": false
+        },
+        {
+          "cell_id": 5902,
+          "mean_ratio": 0.031984360615251,
+          "minimum_dihedral_deg": 0.26083786969732614,
+          "scaled_jacobian": 0.005650927181245852,
+          "connectivity": [
+            289,
+            1293,
+            1126,
+            1272
+          ],
+          "centroid": [
+            -0.5689854940955703,
+            -0.0023325695831387383,
+            -0.48343774319202326
+          ],
+          "retained_in_cutaway": false
+        },
+        {
+          "cell_id": 6024,
+          "mean_ratio": 0.04660313487026824,
+          "minimum_dihedral_deg": 0.5745453726096975,
+          "scaled_jacobian": 0.006239602162514972,
+          "connectivity": [
+            205,
+            1258,
+            998,
+            1245
+          ],
+          "centroid": [
+            -0.489433276349859,
+            -0.4352502215616211,
+            -0.6943229467906777
+          ],
+          "retained_in_cutaway": false
+        },
+        {
+          "cell_id": 5972,
+          "mean_ratio": 0.04757993867975755,
+          "minimum_dihedral_deg": 1.531089409491292,
+          "scaled_jacobian": 0.0042806054719144735,
+          "connectivity": [
+            55,
+            1276,
+            1037,
+            1222
+          ],
+          "centroid": [
+            -0.43626107868036385,
+            -0.6928785793359924,
+            0.23775414601637818
+          ],
+          "retained_in_cutaway": false
+        },
+        {
+          "cell_id": 2953,
+          "mean_ratio": 0.06284648952540167,
+          "minimum_dihedral_deg": 1.3638667753332714,
+          "scaled_jacobian": 0.0071601009816854395,
+          "connectivity": [
+            1274,
+            1252,
+            324,
+            594
+          ],
+          "centroid": [
+            -0.23916565939703338,
+            -0.30079130837047935,
+            0.748857708797185
+          ],
+          "retained_in_cutaway": false
+        },
+        {
+          "cell_id": 5769,
+          "mean_ratio": 0.06974294879039666,
+          "minimum_dihedral_deg": 2.02682196407713,
+          "scaled_jacobian": 0.007900594649198227,
+          "connectivity": [
+            1272,
+            206,
+            1258,
+            998
+          ],
+          "centroid": [
+            -0.5130862925965393,
+            -0.3030734909947987,
+            -0.6085748887280936
+          ],
+          "retained_in_cutaway": false
+        }
+      ],
+      "cutaway": {
+        "axis": "y",
+        "value": 0.00013557972835609444,
+        "retained": "cell centroid >= value",
+        "retained_tetrahedra": 1784,
+        "exposed_triangles": 1306,
+        "retained_cell_ids_sha256": "1850795c35c784f6b39af01809cd284b242a8e0eb8af7d37344c46f28280bdc3",
+        "face_owner_ids_sha256": "f3e8e37ec1b8c2f37f549a3bcf649aebc31cd679e20c4f2721da7df56bd9cd25",
+        "face_mapping_rule": "Sorted node-ID triplets of exposed original faces paired with owning archive cell ID"
+      }
+    },
+    {
+      "label": "Sphere: source retry, h = 0.25",
+      "archive": {
+        "path": "build\\thin-curved-followup\\source-shell-v1\\sphere-025\\mesh.paacsmesh",
+        "sha256": "e7371a54a4c4c1a15549fd6bb075c4b4df7a103f600d09ec71e185e71e634790"
+      },
+      "point_hashes": {
+        "nodes": 1833,
+        "ordered_xyz_sha256": "2054d9b4c43ceacfcb406632b1e4db3e3cf640e8d457d876cc21e99ee5b166e2",
+        "sorted_xyz_sha256": "24ea0e54714254b3c3576b5f2b522322eb813d556a5156237e5b01de7e85219f"
+      },
+      "surface_hashes": {
+        "triangles": 2420,
+        "face_tag_counts": {
+          "1": 2420
+        },
+        "unoriented_geometry_sha256": "f3e651d6aafd3ca9340d4bfdc32d934ad87cfde23a8bccc59d9d2c7e2fa68ac0",
+        "oriented_geometry_sha256": "c0492629563111b1806fc759e2afb3bdbf807ee29e7f9e2de9de021c5b7c3ad2",
+        "method": "Exact stored binary64 coordinates and face tags; cyclic rotation preserves orientation"
+      },
+      "tetrahedra": 7390,
+      "body_tet4_counts": {
+        "1": 7390
+      },
+      "quality": {
+        "mean_ratio": {
+          "minimum": 0.03297059900459214,
+          "p01": 0.26160041232653475,
+          "p05": 0.4226752095312251,
+          "median": 0.7464643864305538,
+          "p95": 0.9467559001569981,
+          "maximum": 0.9992813324357696
+        },
+        "minimum_dihedral_deg": {
+          "minimum": 0.33642915522006933,
+          "p01": 8.667671966274117,
+          "p05": 18.07208233165299,
+          "median": 40.35068758268689,
+          "p95": 59.10133043525007,
+          "maximum": 69.23876703514686
+        },
+        "scaled_jacobian": {
+          "minimum": 0.003858700718200261,
+          "p01": 0.08671881765430305,
+          "p05": 0.1846681300495349,
+          "median": 0.4966807963464851,
+          "p95": 0.8120203410729985,
+          "maximum": 0.9764051585914689
+        }
+      },
+      "cell_max_edge": {
+        "minimum": 0.1011759291191186,
+        "p01": 0.15263073823702353,
+        "p05": 0.16124140902516138,
+        "median": 0.23570487735565748,
+        "p95": 0.29673386912124555,
+        "maximum": 0.3326210972690933
+      },
+      "mean_ratio_below_0p05": 3,
+      "mean_ratio_below_1e_8": 0,
+      "cell_ids": "Zero-based index in the full archive cell sequence, including boundary cells",
+      "worst_cells": [
+        {
+          "cell_id": 9717,
+          "mean_ratio": 0.03297059900459214,
+          "minimum_dihedral_deg": 0.33642915522006933,
+          "scaled_jacobian": 0.003858700718200261,
+          "connectivity": [
+            1768,
+            73,
+            843,
+            1271
+          ],
+          "centroid": [
+            -0.8595775210021743,
+            0.24433827386393475,
+            -0.2050562746236126
+          ],
+          "retained_in_cutaway": true
+        },
+        {
+          "cell_id": 9636,
+          "mean_ratio": 0.035683934794720075,
+          "minimum_dihedral_deg": 0.361653294813992,
+          "scaled_jacobian": 0.0046083603142929915,
+          "connectivity": [
+            1717,
+            54,
+            1256,
+            808
+          ],
+          "centroid": [
+            -0.37521644337224225,
+            -0.8049224062656766,
+            0.190790019152828
+          ],
+          "retained_in_cutaway": false
+        },
+        {
+          "cell_id": 9472,
+          "mean_ratio": 0.0432932467258046,
+          "minimum_dihedral_deg": 0.6819744371163216,
+          "scaled_jacobian": 0.005076986386017584,
+          "connectivity": [
+            1427,
+            267,
+            943,
+            1371
+          ],
+          "centroid": [
+            -0.5140512601343854,
+            -0.7025603836991141,
+            -0.36438662517671216
+          ],
+          "retained_in_cutaway": false
+        },
+        {
+          "cell_id": 9755,
+          "mean_ratio": 0.05352064728854,
+          "minimum_dihedral_deg": 0.6311827072959333,
+          "scaled_jacobian": 0.008743392457912516,
+          "connectivity": [
+            370,
+            1396,
+            1646,
+            802
+          ],
+          "centroid": [
+            -0.5763529243839656,
+            -0.1199278192769842,
+            -0.7060516335325151
+          ],
+          "retained_in_cutaway": false
+        },
+        {
+          "cell_id": 9362,
+          "mean_ratio": 0.07269631153173357,
+          "minimum_dihedral_deg": 1.49078482665294,
+          "scaled_jacobian": 0.01041782412036626,
+          "connectivity": [
+            1279,
+            58,
+            957,
+            1260
+          ],
+          "centroid": [
+            -0.6264307933505967,
+            -0.7075757383931872,
+            -0.016170709549279697
+          ],
+          "retained_in_cutaway": false
+        },
+        {
+          "cell_id": 9548,
+          "mean_ratio": 0.0833080236081054,
+          "minimum_dihedral_deg": 1.2327588799167888,
+          "scaled_jacobian": 0.017357405315818968,
+          "connectivity": [
+            1461,
+            375,
+            881,
+            1286
+          ],
+          "centroid": [
+            -0.4672980638063346,
+            0.7643475544599644,
+            0.3051269918185484
+          ],
+          "retained_in_cutaway": true
+        },
+        {
+          "cell_id": 9599,
+          "mean_ratio": 0.09049683895711388,
+          "minimum_dihedral_deg": 1.3724225225381361,
+          "scaled_jacobian": 0.02163922300065023,
+          "connectivity": [
+            146,
+            1327,
+            751,
+            1212
+          ],
+          "centroid": [
+            0.046536727312331175,
+            0.130857501285342,
+            -0.9181396531469792
+          ],
+          "retained_in_cutaway": true
+        },
+        {
+          "cell_id": 9591,
+          "mean_ratio": 0.10236754757274795,
+          "minimum_dihedral_deg": 2.561126589622747,
+          "scaled_jacobian": 0.020816394961602466,
+          "connectivity": [
+            11,
+            1830,
+            906,
+            1221
+          ],
+          "centroid": [
+            0.9244487419290168,
+            -0.05023236529309012,
+            0.07064942027331288
+          ],
+          "retained_in_cutaway": false
+        }
+      ],
+      "cutaway": {
+        "axis": "y",
+        "value": 0.00013557972835609444,
+        "retained": "cell centroid >= value",
+        "retained_tetrahedra": 3638,
+        "exposed_triangles": 1472,
+        "retained_cell_ids_sha256": "0eb7437cdd6e3c97ae2fa692814fe79baa524da8b0c15a8117a910bdd0443169",
+        "face_owner_ids_sha256": "a2123c327ef1efb56fab4180605ff150e8f3055e617a5bc563b309a615f6d71d",
+        "face_mapping_rule": "Sorted node-ID triplets of exposed original faces paired with owning archive cell ID"
+      }
+    },
+    {
+      "label": "Cylinder: rebuilt topology",
+      "archive": {
+        "path": "build\\resource-policy\\v7-default-wall-series\\normal-wall-0p1-work-default-memory-default-repeat-001\\mesh.paacsmesh",
+        "sha256": "bd46e349d2ab7e8e8c509129479ee8c71f6e9876af353738db94a88fbb58d17a"
+      },
+      "point_hashes": {
+        "nodes": 5029,
+        "ordered_xyz_sha256": "ace5985de368b7734790ee2898cdb7875a96dd0bf8fbff47fb6a5b6acc1a2a67",
+        "sorted_xyz_sha256": "ec8c9b1e06cafc6ecd81457e112d1639ee3da52aa8e090e4fd663bec3142079a"
+      },
+      "surface_hashes": {
+        "triangles": 3684,
+        "face_tag_counts": {
+          "1": 2958,
+          "2": 363,
+          "3": 363
+        },
+        "unoriented_geometry_sha256": "0a8740375e7f6e6426b6001f093f35e0ceb5984778a16ae1967764607d083b3d",
+        "oriented_geometry_sha256": "7375f730827b4b59f40deef3483b6417ff4b5aafee39ab67c5a9725af887924e",
+        "method": "Exact stored binary64 coordinates and face tags; cyclic rotation preserves orientation"
+      },
+      "tetrahedra": 25492,
+      "body_tet4_counts": {
+        "1": 25492
+      },
+      "quality": {
+        "mean_ratio": {
+          "minimum": 5.120867619407419e-11,
+          "p01": 0.3797293358496047,
+          "p05": 0.582416250841307,
+          "median": 0.8594751521851113,
+          "p95": 0.9690248626645627,
+          "maximum": 0.9999982967395755
+        },
+        "minimum_dihedral_deg": {
+          "minimum": 2.2841701174016752e-14,
+          "p01": 13.737886880224679,
+          "p05": 25.82258227987476,
+          "median": 48.79861429042274,
+          "p95": 62.163747533762354,
+          "maximum": 70.48085669638306
+        },
+        "scaled_jacobian": {
+          "minimum": 3.9894116722423293e-16,
+          "p01": 0.20468122163407765,
+          "p05": 0.37283311191840485,
+          "median": 0.6517017105976127,
+          "p95": 0.8563324221789068,
+          "maximum": 0.998106432678203
+        }
+      },
+      "cell_max_edge": {
+        "minimum": 0.07377528616029597,
+        "p01": 0.09999999999999998,
+        "p05": 0.10706161788507801,
+        "median": 0.14266483693071394,
+        "p95": 0.25333624308758634,
+        "maximum": 0.43321410764260704
+      },
+      "mean_ratio_below_0p05": 2,
+      "mean_ratio_below_1e_8": 2,
+      "cell_ids": "Zero-based index in the full archive cell sequence, including boundary cells",
+      "worst_cells": [
+        {
+          "cell_id": 4097,
+          "mean_ratio": 5.120867619407419e-11,
+          "minimum_dihedral_deg": 2.2841701174016752e-14,
+          "scaled_jacobian": 3.9894116722423293e-16,
+          "connectivity": [
+            1106,
+            2080,
+            2078,
+            275
+          ],
+          "centroid": [
+            -0.9446285715276721,
+            -0.16104225040955694,
+            0.949999999999979
+          ],
+          "retained_in_cutaway": false
+        },
+        {
+          "cell_id": 8352,
+          "mean_ratio": 1.664509265004851e-10,
+          "minimum_dihedral_deg": 1.2842485732174286e-13,
+          "scaled_jacobian": 2.3493254671459646e-15,
+          "connectivity": [
+            259,
+            260,
+            2067,
+            2066
+          ],
+          "centroid": [
+            -0.5782697691423243,
+            -0.7563987670230827,
+            1.0499999999999856
+          ],
+          "retained_in_cutaway": false
+        },
+        {
+          "cell_id": 27033,
+          "mean_ratio": 0.09745296036680175,
+          "minimum_dihedral_deg": 1.7755858157416535,
+          "scaled_jacobian": 0.02757355979034905,
+          "connectivity": [
+            4917,
+            4836,
+            4102,
+            1093
+          ],
+          "centroid": [
+            0.3458942080942063,
+            -0.869008115352887,
+            0.39400653153136805
+          ],
+          "retained_in_cutaway": false
+        },
+        {
+          "cell_id": 24401,
+          "mean_ratio": 0.11978262599762234,
+          "minimum_dihedral_deg": 2.3466049874803994,
+          "scaled_jacobian": 0.03541902095223962,
+          "connectivity": [
+            4775,
+            2228,
+            2194,
+            3776
+          ],
+          "centroid": [
+            -0.17850110250581258,
+            -0.8929735628067579,
+            1.4249102250123382
+          ],
+          "retained_in_cutaway": false
+        },
+        {
+          "cell_id": 29126,
+          "mean_ratio": 0.1323709283968844,
+          "minimum_dihedral_deg": 2.6749285319310214,
+          "scaled_jacobian": 0.04790711723275126,
+          "connectivity": [
+            5026,
+            4675,
+            3342,
+            3476
+          ],
+          "centroid": [
+            -0.22435921867835595,
+            0.2625905807536753,
+            0.19745698805359724
+          ],
+          "retained_in_cutaway": true
+        },
+        {
+          "cell_id": 28531,
+          "mean_ratio": 0.13616955154259244,
+          "minimum_dihedral_deg": 3.050682252671369,
+          "scaled_jacobian": 0.04386881105704787,
+          "connectivity": [
+            4996,
+            2504,
+            2555,
+            4484
+          ],
+          "centroid": [
+            -0.7065648114177436,
+            0.3164615421000755,
+            1.8664824756605616
+          ],
+          "retained_in_cutaway": true
+        },
+        {
+          "cell_id": 28734,
+          "mean_ratio": 0.14989996430540994,
+          "minimum_dihedral_deg": 3.004044677143017,
+          "scaled_jacobian": 0.05803917101615669,
+          "connectivity": [
+            5006,
+            4689,
+            3080,
+            2507
+          ],
+          "centroid": [
+            -0.13154602507510665,
+            -0.8163514580660929,
+            1.8624142734431066
+          ],
+          "retained_in_cutaway": false
+        },
+        {
+          "cell_id": 25149,
+          "mean_ratio": 0.15354368996153475,
+          "minimum_dihedral_deg": 3.5836522708742695,
+          "scaled_jacobian": 0.05935716578546998,
+          "connectivity": [
+            4817,
+            1508,
+            1983,
+            1292
+          ],
+          "centroid": [
+            -0.9613336607887606,
+            -0.07261909708221838,
+            0.10017764640732717
+          ],
+          "retained_in_cutaway": false
+        }
+      ],
+      "cutaway": {
+        "axis": "y",
+        "value": -9.346125678905137e-05,
+        "retained": "cell centroid >= value",
+        "retained_tetrahedra": 12811,
+        "exposed_triangles": 2406,
+        "retained_cell_ids_sha256": "e64cb31c1b7da8057a4bf109de4b40a18d1b1c2373c1df913bc8d2acdfc13e94",
+        "face_owner_ids_sha256": "e6d980cc45afefa46c1bd0054061db2955d7d06862d141a73763e7e1dbbaf4eb",
+        "face_mapping_rule": "Sorted node-ID triplets of exposed original faces paired with owning archive cell ID"
+      }
+    },
+    {
+      "label": "Cylinder: retained topology",
+      "archive": {
+        "path": "build\\quality-hardening\\cylinder-topology-v2\\published.paacsmesh",
+        "sha256": "07258607ec84539a8d2432720f91259066caa332d22d9c9b3d2c6675075de2ae"
+      },
+      "point_hashes": {
+        "nodes": 5030,
+        "ordered_xyz_sha256": "8189ac7073de296825f2a26e883a60f0973ac0a9ec632e4a0228bd9eca2d07f7",
+        "sorted_xyz_sha256": "bb099af691976119c71b9724f76963bc5b038a72843aa5152606be65983d4b30"
+      },
+      "surface_hashes": {
+        "triangles": 3684,
+        "face_tag_counts": {
+          "1": 2958,
+          "2": 363,
+          "3": 363
+        },
+        "unoriented_geometry_sha256": "0a8740375e7f6e6426b6001f093f35e0ceb5984778a16ae1967764607d083b3d",
+        "oriented_geometry_sha256": "7375f730827b4b59f40deef3483b6417ff4b5aafee39ab67c5a9725af887924e",
+        "method": "Exact stored binary64 coordinates and face tags; cyclic rotation preserves orientation"
+      },
+      "tetrahedra": 25483,
+      "body_tet4_counts": {
+        "1": 25483
+      },
+      "quality": {
+        "mean_ratio": {
+          "minimum": 0.09745296036680277,
+          "p01": 0.38193689976823897,
+          "p05": 0.5857322992576985,
+          "median": 0.8597801791742488,
+          "p95": 0.9690432022069171,
+          "maximum": 0.9999982967395755
+        },
+        "minimum_dihedral_deg": {
+          "minimum": 1.775585815741683,
+          "p01": 13.861255930206509,
+          "p05": 26.034526752688684,
+          "median": 48.8187888993592,
+          "p95": 62.197421904664246,
+          "maximum": 70.48085669638306
+        },
+        "scaled_jacobian": {
+          "minimum": 0.02757355979034949,
+          "p01": 0.20912060351443185,
+          "p05": 0.37458280155221135,
+          "median": 0.6519122830172018,
+          "p95": 0.8563324221789069,
+          "maximum": 0.998106432678203
+        }
+      },
+      "cell_max_edge": {
+        "minimum": 0.07377528616029597,
+        "p01": 0.09999999999999998,
+        "p05": 0.10693486543545497,
+        "median": 0.14260001271417583,
+        "p95": 0.25333624308758634,
+        "maximum": 0.43321410764260704
+      },
+      "mean_ratio_below_0p05": 0,
+      "mean_ratio_below_1e_8": 0,
+      "cell_ids": "Zero-based index in the full archive cell sequence, including boundary cells",
+      "worst_cells": [
+        {
+          "cell_id": 27001,
+          "mean_ratio": 0.09745296036680277,
+          "minimum_dihedral_deg": 1.775585815741683,
+          "scaled_jacobian": 0.02757355979034949,
+          "connectivity": [
+            4917,
+            4837,
+            4102,
+            1093
+          ],
+          "centroid": [
+            0.34589420809420635,
+            -0.869008115352887,
+            0.39400653153136805
+          ],
+          "retained_in_cutaway": false
+        },
+        {
+          "cell_id": 24370,
+          "mean_ratio": 0.11978262599762231,
+          "minimum_dihedral_deg": 2.346604987480397,
+          "scaled_jacobian": 0.03541902095223961,
+          "connectivity": [
+            4775,
+            3776,
+            2228,
+            2194
+          ],
+          "centroid": [
+            -0.17850110250581258,
+            -0.8929735628067579,
+            1.4249102250123382
+          ],
+          "retained_in_cutaway": false
+        },
+        {
+          "cell_id": 29116,
+          "mean_ratio": 0.1323709283968845,
+          "minimum_dihedral_deg": 2.6749285319310228,
+          "scaled_jacobian": 0.0479071172327513,
+          "connectivity": [
+            5027,
+            4675,
+            3342,
+            3476
+          ],
+          "centroid": [
+            -0.22435921867835595,
+            0.2625905807536753,
+            0.1974569880535972
+          ],
+          "retained_in_cutaway": true
+        },
+        {
+          "cell_id": 28522,
+          "mean_ratio": 0.1361695515425925,
+          "minimum_dihedral_deg": 3.050682252671375,
+          "scaled_jacobian": 0.043868811057047895,
+          "connectivity": [
+            4997,
+            4484,
+            2504,
+            2555
+          ],
+          "centroid": [
+            -0.7065648114177437,
+            0.3164615421000755,
+            1.8664824756605616
+          ],
+          "retained_in_cutaway": true
+        },
+        {
+          "cell_id": 28723,
+          "mean_ratio": 0.149899964305411,
+          "minimum_dihedral_deg": 3.004044677143062,
+          "scaled_jacobian": 0.058039171016157305,
+          "connectivity": [
+            5007,
+            4689,
+            3080,
+            2507
+          ],
+          "centroid": [
+            -0.13154602507510665,
+            -0.8163514580660929,
+            1.8624142734431066
+          ],
+          "retained_in_cutaway": false
+        },
+        {
+          "cell_id": 25129,
+          "mean_ratio": 0.1535436899615364,
+          "minimum_dihedral_deg": 3.583652270874327,
+          "scaled_jacobian": 0.059357165785470935,
+          "connectivity": [
+            4818,
+            1983,
+            1292,
+            1508
+          ],
+          "centroid": [
+            -0.9613336607887607,
+            -0.07261909708221839,
+            0.10017764640732717
+          ],
+          "retained_in_cutaway": false
+        },
+        {
+          "cell_id": 28429,
+          "mean_ratio": 0.18016332689258277,
+          "minimum_dihedral_deg": 4.054166448476415,
+          "scaled_jacobian": 0.06781766992456506,
+          "connectivity": [
+            4993,
+            4009,
+            856,
+            2412
+          ],
+          "centroid": [
+            -0.8574093715476335,
+            0.3741523342013031,
+            0.2874957994026785
+          ],
+          "retained_in_cutaway": true
+        },
+        {
+          "cell_id": 25401,
+          "mean_ratio": 0.18031770756330504,
+          "minimum_dihedral_deg": 4.669884498840294,
+          "scaled_jacobian": 0.057940348699639176,
+          "connectivity": [
+            4833,
+            4253,
+            2465,
+            3360
+          ],
+          "centroid": [
+            0.5874369392253569,
+            0.7062612169227577,
+            1.1885237607789076
+          ],
+          "retained_in_cutaway": true
+        }
+      ],
+      "cutaway": {
+        "axis": "y",
+        "value": -9.346125678905137e-05,
+        "retained": "cell centroid >= value",
+        "retained_tetrahedra": 12819,
+        "exposed_triangles": 2402,
+        "retained_cell_ids_sha256": "f5601e30876c6130d5a0dc2911e33742cbde33d701b7633babb9353d5c74168f",
+        "face_owner_ids_sha256": "a8adb4bafcb51dea706444b124b78f2d4003a86f5bf002ec29aa07dad966e75f",
+        "face_mapping_rule": "Sorted node-ID triplets of exposed original faces paired with owning archive cell ID"
+      }
+    }
+  ],
+  "initial_point_comparison": {
+    "before": {
+      "path": "build\\quality-hardening\\cylinder-stage-v1\\initial_unconstrained_with_guards.paacsmesh",
+      "sha256": "10bdfcefa2c48ab2e77bf5e29b8bf31338f0aea7b1268290793751f8cbd48767"
+    },
+    "after": {
+      "path": "build\\quality-hardening\\cylinder-topology-v2\\initial_unconstrained_with_guards.paacsmesh",
+      "sha256": "10bdfcefa2c48ab2e77bf5e29b8bf31338f0aea7b1268290793751f8cbd48767"
+    },
+    "before_hashes": {
+      "nodes": 4734,
+      "ordered_xyz_sha256": "8994644017575742fc3d0bdcbd3b2d8823d3fe6267593fdda332b1fd32184802",
+      "sorted_xyz_sha256": "1e9ed809667c1ac48be1cf7a49d701965390411563b05ed3b36622e08f29e797"
+    },
+    "after_hashes": {
+      "nodes": 4734,
+      "ordered_xyz_sha256": "8994644017575742fc3d0bdcbd3b2d8823d3fe6267593fdda332b1fd32184802",
+      "sorted_xyz_sha256": "1e9ed809667c1ac48be1cf7a49d701965390411563b05ed3b36622e08f29e797"
+    },
+    "exact_ordered_xyz_match": true
+  },
+  "final_boundary_comparison": {
+    "exact_oriented_coordinate_and_tag_match": true,
+    "scope": "Stored Tri3 CAD-boundary cells; no CAD reevaluation"
+  },
+  "cylinder_run_identity": {
+    "artifact": {
+      "path": "build\\quality-hardening\\cylinder-topology-v2\\run-identity.json",
+      "sha256": "6679f9c4adbdd1b0740726a539f74cfc29fdb0e80c6b17edba01e7ff1f37fed8"
+    },
+    "record": {
+      "purpose": "Topology correctness trace only",
+      "timing_comparison_valid": false,
+      "build_contention": true,
+      "meshing_workers": 1,
+      "validation_workers": 1,
+      "native_seconds": 300,
+      "probe_sha256": "ff9fd5c18eb0aa6daaa67671d4d3904dc33e0c2d585ad8764d5938648bfd289c",
+      "native_extension_sha256": "ee1f2bd4547c8e84d6e068badbaa7424880bc5b0dfe11d35184ccfd50d53e57b",
+      "source_sha256": "a05d283e8c8cecee8e0917147db2e359689f3e5d8312a5f051010f002ba42988",
+      "reference_archive_sha256": "bd46e349d2ab7e8e8c509129479ee8c71f6e9876af353738db94a88fbb58d17a"
+    }
+  },
+  "cylinder_native_result": {
+    "artifact": {
+      "path": "build\\quality-hardening\\cylinder-topology-v2\\result.json",
+      "sha256": "9fef1f3f4b38eba79d837219415030c95ab79b1ea64cd319e8cca3fe93e8364f"
+    },
+    "record": {
+      "published": true,
+      "reason": "none",
+      "probe_failed": false,
+      "probe_truncated": false,
+      "probe_visits": 248568,
+      "probe_events": 808,
+      "probe_records": 8,
+      "scope": "private numerical states; not final material or solver certificates"
+    },
+    "basis": "Saved publication outcome; this figure does not independently repeat native CAD gates"
+  },
+  "figure": {
+    "path": "docs\\images\\quality-qualification.png",
+    "sha256": "5948ce3d36e94aff19fb53f6f3ba2a0663b9e05cf3a061e8e6b37f51e19adf02"
+  },
+  "render_seconds": 10.688166599953547
+}

@@ -28,7 +28,11 @@ from ._cad_common import (
     bounds, integer, json_copy, json_text, load_json, number, sequence, text,
 )
 from ._cad_intent import _group
-from .cad import CadModel, FaceSelection, read_step
+from .cad import (CadModel, FaceSelection, _CONSTRUCTION_FIELDS, _CONSTRUCTION_LIMITS, _DEFAULT_CONSTRUCTION_EFFORT,
+                  _DEFAULT_RESOURCE_POLICY, _RESOURCE_FIELDS, _FIDELITY_FIELDS, _fidelity_options,
+                  _CURVATURE_FIELDS, _curvature_value,
+                  _construction_options, _resource_policy_value,
+                  _selected_face_controls, read_step)
 
 
 RECIPE_SCHEMA = "paacs-mesh-recipe-v1"
@@ -36,9 +40,11 @@ DEFAULT_SOURCE_BYTES = 64 * 1024 * 1024
 _BUDGETS = ("max_nodes", "max_cells", "max_work", "max_output_bytes",
             "max_working_bytes", "max_audit_bytes")
 _QUALITY_FIELDS = ("warning_quality", "minimum_quality")
-_PLACEMENT_FIELDS = ("advancing_interior_front",)
+_PLACEMENT_FIELDS = ("advancing_interior_front", "initial_topology_quality")
+_EXPERIMENTAL_FIELDS = ("native_source_fallback", "boundary_first", "trimmed_ray_witnesses", "thin_region_ordering")
 _OPTION_FIELDS = {"size", "assembly", "workers", "validation_workers", "face_sizes",
-                  "volume_controls", "min_size", "growth", "native_sizing", *_QUALITY_FIELDS, *_PLACEMENT_FIELDS, *_BUDGETS}
+                  "volume_controls", "min_size", "growth", "native_sizing", *_QUALITY_FIELDS,
+                  *_PLACEMENT_FIELDS, *_EXPERIMENTAL_FIELDS, *_BUDGETS, *_CONSTRUCTION_FIELDS, *_RESOURCE_FIELDS, *_FIDELITY_FIELDS, *_CURVATURE_FIELDS}
 _FATAL_REASONS = {"invalid_request", "unsupported_body", "unresolved_body_interface",
                   "unsupported_control", "budget_exceeded", "cancelled", "allocation_failed",
                   "internal_error", "publication_checks_failed"}
@@ -69,7 +75,7 @@ def _small(value):
 def _native_summary(report):
     if not isinstance(report, dict):
         return {"available": False}
-    result = {key: _small(report.get(key)) for key in ("status", "reason", "mesh_published")}
+    result = {key: _small(report.get(key)) for key in ("status", "reason", "mesh_published", "hint")}
     for stage in ("audit", "quality"):
         data = report.get(stage)
         if isinstance(data, dict):
@@ -107,7 +113,8 @@ def _error_summary(report, original_reason):
             options = attempt.get("options", {})
             if isinstance(options, dict):
                 item["options_summary"] = {key: _small(options.get(key)) for key in
-                                            ("size", "recovery", "assembly", *_QUALITY_FIELDS, *_BUDGETS)}
+                                            ("size", "recovery", "assembly", *_QUALITY_FIELDS, *_EXPERIMENTAL_FIELDS, *_BUDGETS,
+                                             *_CONSTRUCTION_FIELDS, *_RESOURCE_FIELDS)}
             result["attempts"].append(item)
     return result
 
@@ -223,9 +230,10 @@ def _intent(model):
 
 
 def _options(values):
-    # Recipe v1 predates optional quality and initial-placement choices.
-    # Missing optional choices retain automatic defaults; unknown fields fail.
-    required = _OPTION_FIELDS.difference(_QUALITY_FIELDS, _PLACEMENT_FIELDS)
+    # Older recipe-v1 files predate quality, placement, construction and resource fields.
+    # Construction absence is a historical legacy request, independent of any
+    # future defaults for newly created requests. Unknown fields still fail.
+    required = _OPTION_FIELDS.difference(_QUALITY_FIELDS, _PLACEMENT_FIELDS, _EXPERIMENTAL_FIELDS, _CONSTRUCTION_FIELDS, _RESOURCE_FIELDS, _FIDELITY_FIELDS, _CURVATURE_FIELDS)
     if not isinstance(values, dict) or not required <= values.keys() or values.keys() - _OPTION_FIELDS:
         raise ValueError("Recipe meshing options have unsupported or missing fields")
     result = {"size": _positive(values["size"], "size"), "assembly": values["assembly"],
@@ -233,9 +241,23 @@ def _options(values):
               "validation_workers": integer(values["validation_workers"], "validation_workers"),
               "growth": number(values["growth"], "growth", minimum=1),
               "native_sizing": values["native_sizing"], "min_size": values["min_size"]}
+    # Saved absence always means the historical policy, even if new requests
+    # adopt another default. Do not rewrite requested None work into a number.
+    result["resource_policy"] = _resource_policy_value(values.get("resource_policy", "bounded"))
+    result.update(_fidelity_options(**{key: values.get(key) for key in _FIDELITY_FIELDS}))
+    result["curvature_points_per_turn"] = _curvature_value(values.get("curvature_points_per_turn"))
+    result.update(_construction_options(values.get("construction_effort", "legacy"),
+        **{key: values.get(key) for key in _CONSTRUCTION_LIMITS}))
     result["advancing_interior_front"] = values.get("advancing_interior_front")
     if result["advancing_interior_front"] is not None:
         boolean(result["advancing_interior_front"], "advancing_interior_front")
+    result["initial_topology_quality"] = values.get("initial_topology_quality")
+    if result["initial_topology_quality"] is not None:
+        boolean(result["initial_topology_quality"], "initial_topology_quality")
+    result["native_source_fallback"] = boolean(values.get("native_source_fallback", False), "native_source_fallback")
+    result["boundary_first"] = boolean(values.get("boundary_first", False), "boundary_first")
+    result["trimmed_ray_witnesses"] = boolean(values.get("trimmed_ray_witnesses", False), "trimmed_ray_witnesses")
+    result["thin_region_ordering"] = boolean(values.get("thin_region_ordering", False), "thin_region_ordering")
     if result["assembly"] not in ("preserve_parts", "conforming"):
         raise ValueError("assembly must be preserve_parts or conforming")
     if result["workers"] > 1024 or result["validation_workers"] > 8:
@@ -255,23 +277,23 @@ def _options(values):
         result[key] = None if values[key] is None else integer(values[key], key)
     result["face_sizes"], result["volume_controls"] = [], []
     seen = set()
-    for control in sequence(values["face_sizes"], "face sizes"):
+    for index, control in enumerate(sequence(values["face_sizes"], "face sizes")):
         if not isinstance(control, dict) or set(control) != {"tag", "size", "growth"}:
-            raise ValueError("Invalid recipe face control")
-        tag = integer(control["tag"], "face tag")
+            raise ValueError(f"face_sizes[{index}] must contain tag, size and growth")
+        tag = integer(control["tag"], f"face_sizes[{index}].tag")
         if tag in seen:
-            raise ValueError("Recipe contains duplicate face sizing controls")
+            raise ValueError(f"Recipe contains duplicate sizing controls for face tag {tag}")
         seen.add(tag)
-        result["face_sizes"].append({"tag": tag, "size": _positive(control["size"], "face size"),
-                                     "growth": None if control["growth"] is None else number(control["growth"], "face growth", minimum=1)})
-    for control in sequence(values["volume_controls"], "volume controls"):
+        result["face_sizes"].append({"tag": tag, "size": _positive(control["size"], f"face tag {tag} size"),
+                                     "growth": None if control["growth"] is None else number(control["growth"], f"face tag {tag} growth", minimum=1)})
+    for index, control in enumerate(sequence(values["volume_controls"], "volume controls")):
         if not isinstance(control, dict) or set(control) != {"lower", "upper", "size", "growth"}:
-            raise ValueError("Invalid recipe box control")
-        lo, hi = bounds([control["lower"], control["upper"]], "box")
+            raise ValueError(f"volume_controls[{index}] must contain lower, upper, size and growth")
+        lo, hi = bounds([control["lower"], control["upper"]], f"volume_controls[{index}]")
         if any(a >= b for a, b in zip(lo, hi)):
-            raise ValueError("Box lower coordinates must be strictly below upper coordinates")
-        result["volume_controls"].append({"lower": lo, "upper": hi, "size": _positive(control["size"], "box size"),
-                                          "growth": None if control["growth"] is None else number(control["growth"], "box growth", minimum=1)})
+            raise ValueError(f"volume_controls[{index}] lower coordinates must be strictly below upper coordinates")
+        result["volume_controls"].append({"lower": lo, "upper": hi, "size": _positive(control["size"], f"volume_controls[{index}] size"),
+                                          "growth": None if control["growth"] is None else number(control["growth"], f"volume_controls[{index}] growth", minimum=1)})
     if result["volume_controls"] and result["native_sizing"] is False:
         raise ValueError("Box controls require native spatial sizing")
     return result
@@ -303,6 +325,12 @@ def _policy(values):
 def create_recipe(model, size, *, face_sizes=(), selected_face_sizes=(), volume_controls=(),
                   min_size=None, growth=1.3, native_sizing=None, assembly="preserve_parts",
                   warning_quality=None, minimum_quality=None, advancing_interior_front=None,
+                  initial_topology_quality=None, native_source_fallback=False, boundary_first=False,
+                  trimmed_ray_witnesses=False, thin_region_ordering=False,
+                  construction_effort=_DEFAULT_CONSTRUCTION_EFFORT, max_surface_points=None,
+                  max_surface_chord_points=None, max_interior_candidates=None, max_interior_sites=None,
+                  resource_policy=_DEFAULT_RESOURCE_POLICY, max_chord_error=None,
+                  max_relative_volume_error=None, curvature_points_per_turn=None,
                   workers=1, validation_workers=1, max_nodes=None, max_cells=None,
                   max_work=None, max_output_bytes=None, max_working_bytes=None, max_audit_bytes=None,
                   allow_advanced=False, finer_factors=(), max_attempts=1, max_seconds=90,
@@ -310,28 +338,23 @@ def create_recipe(model, size, *, face_sizes=(), selected_face_sizes=(), volume_
     """Capture controls, source identity and intent without changing model policy.
 
     selected_face_sizes contains (FaceSelection, size) or (FaceSelection, size,
-    growth) entries. Retry sizes are explicit fractions of the original global
+    growth) entries, matching CadModel.mesh(). None means no optional controls.
+    Retry sizes are explicit fractions of the original global
     size; existing face/box/minimum controls and resource budgets are unchanged.
-    Optional warning and strict quality thresholds remain fixed across retries.
+    Quality thresholds and construction effort/caps remain fixed across retries.
     """
     try:
         if not isinstance(model, CadModel):
             raise ValueError("model must be a CadModel")
         model._assert_identity()
         faces, boxes = [], []
-        for control in sequence(face_sizes, "face_sizes"):
+        for control in sequence(() if face_sizes is None else face_sizes, "face_sizes"):
             if not isinstance(control, _native.FaceSize):
                 raise ValueError("face_sizes must contain FaceSize controls")
             faces.append({"tag": control.tag, "size": control.size, "growth": control.growth})
-        for entry in sequence(selected_face_sizes, "selected_face_sizes"):
-            entry = sequence(entry, "selected face size", maximum=3)
-            if len(entry) not in (2, 3) or not isinstance(entry[0], FaceSelection):
-                raise ValueError("selected_face_sizes entries must contain a FaceSelection and size")
-            selection = model._require_selection(entry[0])
-            selection.validate()
-            for tag in selection.tags:
-                faces.append({"tag": tag, "size": entry[1], "growth": entry[2] if len(entry) == 3 else None})
-        for control in sequence(volume_controls, "volume_controls"):
+        for control in _selected_face_controls(model, selected_face_sizes):
+            faces.append({"tag": control.tag, "size": control.size, "growth": control.growth})
+        for control in sequence(() if volume_controls is None else volume_controls, "volume_controls"):
             if not isinstance(control, _native.BoxSize):
                 raise ValueError("volume_controls must contain BoxSize controls")
             boxes.append({"lower": list(control.lower), "upper": list(control.upper),
@@ -341,6 +364,17 @@ def create_recipe(model, size, *, face_sizes=(), selected_face_sizes=(), volume_
             min_size=min_size, growth=growth, native_sizing=native_sizing,
             warning_quality=warning_quality, minimum_quality=minimum_quality,
             advancing_interior_front=advancing_interior_front,
+            initial_topology_quality=initial_topology_quality,
+            native_source_fallback=native_source_fallback,
+            boundary_first=boundary_first,
+            trimmed_ray_witnesses=trimmed_ray_witnesses,
+            thin_region_ordering=thin_region_ordering,
+            construction_effort=construction_effort, resource_policy=resource_policy,
+            max_chord_error=max_chord_error, max_relative_volume_error=max_relative_volume_error,
+            curvature_points_per_turn=curvature_points_per_turn,
+            max_surface_points=max_surface_points,
+            max_surface_chord_points=max_surface_chord_points,
+            max_interior_candidates=max_interior_candidates, max_interior_sites=max_interior_sites,
             max_nodes=max_nodes, max_cells=max_cells, max_work=max_work,
             max_output_bytes=max_output_bytes, max_working_bytes=max_working_bytes, max_audit_bytes=max_audit_bytes))
         policy = _policy(dict(max_attempts=max_attempts, max_seconds=max_seconds, attempt_seconds=attempt_seconds,
@@ -460,7 +494,7 @@ def _retry_allowed(reason, report, route):
 
 
 def _native_options(options, size, recovery, seconds):
-    result = {key: options[key] for key in ("assembly", "workers", "validation_workers", "min_size", "growth", "native_sizing", *_QUALITY_FIELDS, *_PLACEMENT_FIELDS, *_BUDGETS)}
+    result = {key: options[key] for key in ("assembly", "workers", "validation_workers", "min_size", "growth", "native_sizing", *_QUALITY_FIELDS, *_PLACEMENT_FIELDS, *_EXPERIMENTAL_FIELDS, *_BUDGETS, *_CONSTRUCTION_FIELDS, *_RESOURCE_FIELDS, *_FIDELITY_FIELDS, *_CURVATURE_FIELDS)}
     result.update(size=size, recovery=recovery, max_seconds=seconds,
                   face_sizes=[_native.FaceSize(control["tag"], control["size"], growth=control["growth"])
                               for control in options["face_sizes"]],

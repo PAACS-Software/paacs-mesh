@@ -22,6 +22,53 @@ from ._cad_common import (
 _KINDS = {"faces": 2, "bodies": 3, "edges": 1, "vertices": 0}
 _QUERY_FIELDS = {"tags", "name", "group", "surface", "body", "area", "radius",
                  "centroid_box", "normal", "adjacent_to", "expect", "tolerance"}
+_MAX_FACE_CONTROLS = 10000
+_DEFAULT_CONSTRUCTION_EFFORT = "legacy"
+_DEFAULT_RESOURCE_POLICY = "normal"
+_RESOURCE_POLICIES = ("normal", "bounded")
+_RESOURCE_FIELDS = ("resource_policy",)
+_FIDELITY_FIELDS = ("max_chord_error", "max_relative_volume_error")
+_CURVATURE_FIELDS = ("curvature_points_per_turn",)
+_CONSTRUCTION_LIMITS = ("max_surface_points", "max_surface_chord_points",
+                        "max_interior_candidates", "max_interior_sites")
+_CONSTRUCTION_FIELDS = ("construction_effort", *_CONSTRUCTION_LIMITS)
+
+
+def _resource_policy_value(value):
+    if not isinstance(value, str) or value not in _RESOURCE_POLICIES:
+        raise ValueError("resource_policy must be normal or bounded")
+    return value
+
+
+def _fidelity_options(max_chord_error=None, max_relative_volume_error=None):
+    result = {}
+    for name, value in zip(_FIDELITY_FIELDS, (max_chord_error, max_relative_volume_error)):
+        if value is not None:
+            value = number(value, name, minimum=0)
+            if value == 0 or (name == "max_relative_volume_error" and value >= 1):
+                raise ValueError(f"{name} must be positive" + (" and less than one" if name == "max_relative_volume_error" else ""))
+        result[name] = value
+    return result
+
+
+def _curvature_value(value):
+    if value is not None:
+        value = integer(value, "curvature_points_per_turn", minimum=0)
+        if value > 64:
+            raise ValueError("curvature_points_per_turn must be between zero and 64")
+    return value
+
+
+def _construction_options(construction_effort=_DEFAULT_CONSTRUCTION_EFFORT, *, max_surface_points=None,
+                          max_surface_chord_points=None, max_interior_candidates=None,
+                          max_interior_sites=None):
+    if not isinstance(construction_effort, str) or construction_effort not in ("legacy", "auto", "thorough"):
+        raise ValueError("construction_effort must be legacy, auto or thorough")
+    result = {"construction_effort": construction_effort}
+    for name, value in zip(_CONSTRUCTION_LIMITS, (max_surface_points, max_surface_chord_points,
+                                                max_interior_candidates, max_interior_sites)):
+        result[name] = None if value is None else integer(value, name)
+    return result
 
 
 def _tags(value, name):
@@ -168,6 +215,40 @@ class FaceSelection:
         return iter(self._tags)
 
 
+def _selected_face_controls(model, values):
+    """Validate model-owned selections before expanding bounded native controls."""
+    result = []
+    try:
+        entries = sequence(() if values is None else values, "selected_face_sizes")
+        for index, entry in enumerate(entries):
+            try:
+                entry = sequence(entry, f"selected_face_sizes[{index}]", maximum=3)
+                if len(entry) not in (2, 3) or not isinstance(entry[0], FaceSelection):
+                    raise ValueError("expected (FaceSelection, size) or (FaceSelection, size, growth)")
+                selection = model._require_selection(entry[0])
+                if len(result) + len(selection) > _MAX_FACE_CONTROLS:
+                    raise SelectionError("control_budget", "Selected face sizing exceeds the control budget",
+                                         {"control_limit": _MAX_FACE_CONTROLS,
+                                          "requested_controls": len(result) + len(selection)}, stage="sizing")
+                size = number(entry[1], "selected face size", minimum=0)
+                if size == 0:
+                    raise ValueError("selected face size must be positive")
+                growth = entry[2] if len(entry) == 3 else None
+                growth = None if growth is None else number(growth, "selected face growth", minimum=1)
+                selection.validate()
+                result.extend(_native.FaceSize(tag, size, growth=growth) for tag in selection.tags)
+            except SelectionError:
+                raise
+            except (TypeError, ValueError, OverflowError) as error:
+                raise SelectionError("invalid_argument", f"selected_face_sizes[{index}]: {error}",
+                                     {"control_index": index}, stage="sizing") from error
+        return result
+    except SelectionError:
+        raise
+    except (TypeError, ValueError, OverflowError) as error:
+        raise SelectionError("invalid_argument", str(error), stage="sizing") from error
+
+
 class CadModel:
     """An imported native model with model-local selection and intent helpers."""
 
@@ -229,9 +310,106 @@ class CadModel:
                 self._native.kernel_version != self._kernel):
             raise SelectionError("model_changed", "The native model identity changed")
 
-    def mesh(self, size, **kwargs):
+    def mesh(self, size, *, recovery="standard", assembly="preserve_parts",
+             workers=1, validation_workers=1, max_nodes=None, max_cells=None,
+             max_work=None, max_output_bytes=None, max_working_bytes=None,
+             max_audit_bytes=None, max_seconds=None, face_sizes=None,
+             selected_face_sizes=(), volume_controls=None, min_size=None, growth=1.3,
+             native_sizing=None, warning_quality=None, minimum_quality=None,
+             advancing_interior_front=None, construction_effort=_DEFAULT_CONSTRUCTION_EFFORT,
+             max_surface_points=None, max_surface_chord_points=None,
+             max_interior_candidates=None, max_interior_sites=None,
+             resource_policy=_DEFAULT_RESOURCE_POLICY,
+             max_chord_error=None, max_relative_volume_error=None, curvature_points_per_turn=None,
+             initial_topology_quality=None, native_source_fallback=False, boundary_first=False,
+             trimmed_ray_witnesses=False, thin_region_ordering=False):
+        """Generate an owned, audited Tet4 mesh; lengths and sizes are in mm.
+
+        ``face_sizes`` contains native ``FaceSize`` controls. Alternatively,
+        ``selected_face_sizes`` accepts ``(FaceSelection, size)`` or
+        ``(FaceSelection, size, growth)`` entries, with the same ownership and
+        property guards as saved recipes. ``volume_controls`` contains BoxSize
+        regions. Spatial controls require one solid and an explicit
+        ``assembly="conforming"`` request; this method preserves the default
+        ``preserve_parts`` assembly policy rather than changing it for controls.
+
+        ``resource_policy`` selects normal (the default) or bounded admission.
+        An omitted ``max_work`` uses the selected policy; an explicit positive
+        limit always applies. Other omitted budgets retain native defaults.
+        ``max_seconds`` is
+        cooperative and starts after the native operation gate is acquired.
+        Quality warnings do not replace validity checks. Native refusal reasons
+        and hints remain available on ``MeshingError.report``.
+
+        Construction effort controls bounded construction allowances. ``legacy``
+        retains the established defaults. Optional positive integer caps override
+        individual allowances within the existing global budgets; they do not
+        select a recovery mode or weaken geometry and validity checks.
+        ``native_source_fallback`` opts into a bounded source-provider fallback
+        after a supported chart/wire refusal. It does not force a constructor,
+        bypass explicit local controls, or certify achieved surface sizing.
+        ``boundary_first`` explicitly changes the compatible live constructor's
+        order: recover its boundary before interior insertion. It does not force
+        that constructor or enable a source-provider fallback.
+        ``trimmed_ray_witnesses`` opts into strict serial original-CAD ray
+        certificates during validation. Ambiguous or unsupported queries use
+        the ordinary classifier; geometry limits and source guards still apply.
+        ``thin_region_ordering`` optionally uses bounded source-clearance
+        samples to recover the boundary before interior placement in thin
+        regions. It does not force a constructor or alter sizing or CAD.
+        The selector currently abstains when selected-face sizing would require
+        native projection; the established sizing and construction paths run.
+        """
         self._assert_identity()
-        return self._native.mesh(size, **kwargs)
+        resource_policy = _resource_policy_value(resource_policy)
+        fidelity = _fidelity_options(max_chord_error, max_relative_volume_error)
+        curvature_points_per_turn = _curvature_value(curvature_points_per_turn)
+        if initial_topology_quality is not None:
+            boolean(initial_topology_quality, "initial_topology_quality")
+        boolean(native_source_fallback, "native_source_fallback")
+        boolean(boundary_first, "boundary_first")
+        boolean(trimmed_ray_witnesses, "trimmed_ray_witnesses")
+        boolean(thin_region_ordering, "thin_region_ordering")
+        construction = _construction_options(construction_effort,
+            max_surface_points=max_surface_points, max_surface_chord_points=max_surface_chord_points,
+            max_interior_candidates=max_interior_candidates, max_interior_sites=max_interior_sites)
+        selected = _selected_face_controls(self, selected_face_sizes)
+        if selected:
+            existing = sequence(() if face_sizes is None else face_sizes, "face_sizes")
+            if len(existing) + len(selected) > _MAX_FACE_CONTROLS:
+                raise SelectionError("control_budget", "Combined face sizing exceeds the control budget",
+                                     {"control_limit": _MAX_FACE_CONTROLS,
+                                      "requested_controls": len(existing) + len(selected)}, stage="sizing")
+            face_sizes = existing + selected
+        return self._native.mesh(size, recovery=recovery, assembly=assembly,
+            workers=workers, validation_workers=validation_workers, max_nodes=max_nodes,
+            max_cells=max_cells, max_work=max_work, max_output_bytes=max_output_bytes,
+            max_working_bytes=max_working_bytes, max_audit_bytes=max_audit_bytes,
+            max_seconds=max_seconds, face_sizes=face_sizes, volume_controls=volume_controls,
+            min_size=min_size, growth=growth, native_sizing=native_sizing,
+            warning_quality=warning_quality, minimum_quality=minimum_quality,
+            advancing_interior_front=advancing_interior_front, resource_policy=resource_policy,
+            curvature_points_per_turn=curvature_points_per_turn,
+            initial_topology_quality=initial_topology_quality,
+            native_source_fallback=native_source_fallback,
+            boundary_first=boundary_first,
+            trimmed_ray_witnesses=trimmed_ray_witnesses,
+            thin_region_ordering=thin_region_ordering,
+            **construction, **fidelity)
+
+    def body_relations(self, pairs, *, distance_tolerance=1e-7, max_work=100000,
+                       max_working_bytes=64 * 1024 * 1024, max_seconds=30):
+        """Inspect up to 64 selected body pairs; this does not mesh or join parts.
+
+        Results distinguish disconnected parts, face/edge/point contact,
+        material overlap and unresolved geometry. ``max_seconds`` is
+        cooperative; one native query can run past it. Tracked storage bounds
+        exclude native kernel allocations. Tags and placements belong to this
+        imported model. Near contact is not proof of a shared mesh interface.
+        """
+        from .body_relations import inspect_body_relations
+        return inspect_body_relations(self, pairs, distance_tolerance=distance_tolerance,
+            max_work=max_work, max_working_bytes=max_working_bytes, max_seconds=max_seconds)
 
     def preview(self, selection=None, *, linear_deflection=.02, max_points=50000, max_triangles=100000):
         """Return owned, tagged display geometry for visual selection checks."""

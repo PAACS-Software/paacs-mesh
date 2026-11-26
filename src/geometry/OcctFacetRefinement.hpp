@@ -7,6 +7,8 @@
 // Private CAD-evaluated facet candidates. Native PLC recovery can select these
 // after boundary barriers block completion; final volume admission remains a caller gate.
 #include "OcctStarMesher.hpp"
+#include "../bnd/TetFacetSourcePatch.hpp"
+#include <vector>
 #include "paacs/geometry/OcctModel.hpp"
 #include <span>
 
@@ -21,6 +23,14 @@ struct OcctFacetRefinementOptions {
     std::span<const OcctFacetSelection> selections{};
     double maximumProjectionDistance=0;
     std::uint64_t maximumAddedNodes=1024;
+    // Private route-selection cap on usable canonical patches. Zero keeps
+    // legacy full-batch selection; actual per-body node/resource caps stay hard.
+    std::uint64_t maximumCandidatePatches=0;
+    // Optional candidate selection, not relaxed geometry admission. Locally
+    // unavailable projections may be omitted; every retained proposal still
+    // passes all native/foot checks and the batch embedding certificate.
+    bool skipUnavailableCandidates=false;
+    bool requireGeometricChange=false;
     OcctStarOptions limits{};
 };
 struct OcctFacetRefinementOutcome {
@@ -28,7 +38,9 @@ struct OcctFacetRefinementOutcome {
     const char* diagnostic="internal-error";
     OcctFacetRefinementReason reason=OcctFacetRefinementReason::InternalError;
     std::uint64_t workUsed=0, addedNodes=0, addedTriangles=0, nativeQueries=0;
+    std::uint64_t unavailableCandidates=0,unchangedCandidates=0;
     double maximumDisplacement=0;
+    std::vector<bnd::detail::FacetSourcePatch> committedPatches;
     int failedFaceTag=-1;
     Index failedTriangle=-1;
 };
@@ -39,6 +51,9 @@ struct OcctFacetRefinementOutcome {
 // facets require bitwise matching source triangles in every actual coowner;
 // one point is evaluated once and reused across owners. Exact closure and
 // surface embedding are certified before/after; all publication is atomic.
+// With skipUnavailableCandidates, publication covers the usable candidate
+// subset; omitted projection counts are explicit. requireGeometricChange
+// excludes planar or sub-native-tolerance no-ops. Empty subsets never publish.
 // The caller must audit CAD facet error, material containment and volume.
 // This does not claim curved-patch conformity against continuous CAD, or repair
 // missing trims, source cracks, mismatched shared triangulations or bad pcurves.

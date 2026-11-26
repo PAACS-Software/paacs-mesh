@@ -5,6 +5,7 @@
 
 #include "paacs/algo/MixedMeshQuality.hpp"
 
+#include "paacs/mesh/Quality.hpp"
 #include "paacs/predicates/Predicates.hpp"
 
 #include <algorithm>
@@ -31,7 +32,7 @@ bool volumeType(mesh::CellType t) noexcept {
            t == mesh::CellType::Prism6 || t == mesh::CellType::Hex8;
 }
 double signedTet(const Vec3 &a, const Vec3 &b, const Vec3 &c, const Vec3 &d) noexcept {
-    return (b - a).cross(c - a).dot(d - a) / 6.0;
+    return mesh::tetVolume(a, b, c, d);
 }
 double tetMeanRatio(const Vec3 &a, const Vec3 &b, const Vec3 &c, const Vec3 &d,
                     double volume) noexcept {

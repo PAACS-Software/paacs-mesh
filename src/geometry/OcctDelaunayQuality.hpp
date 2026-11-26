@@ -17,19 +17,31 @@
 
 namespace paacs::geo::detail {
 
+struct OcctDelaunayQualityOptions {
+    double criticalBelowMeanRatio=.01;
+    unsigned maxEdits=1024;
+    // Only the two bounded critical topology passes; never relocate a node
+    // or enter the ordinary edge-quality search. All existing callers retain
+    // their complete optimization policy through the defaults above.
+    bool topologyOnly=false;
+};
+
 // Improve mean ratio without degrading radius ratio in an embedded Tet4 complex.
 // The caller supplies a fixed-vertex mask and original-solid witnesses.
 template<class AdmitCentroid,class AdmitNode>
 void optimizeOcctDelaunayQuality(bnd::detail::BistellarComplex& live,
     std::span<const unsigned char> fixedVertices, AdmitCentroid&& admitCentroid,
-    AdmitNode&& admitNode, unsigned& edits, std::uint64_t maximumTets=UINT64_MAX) {
+    AdmitNode&& admitNode, unsigned& edits, std::uint64_t maximumTets=UINT64_MAX,
+    const OcctDelaunayQualityOptions& options={}) {
     using Complex=bnd::detail::BistellarComplex;
     using Cell=bnd::TetFacetCell;
     using Vertex=bnd::TetFacetVertexId;
     using Sign=predicates::Sign;
     using bnd::tet_facet_detail::outwardFace;
     constexpr double searchBelow=.3;
-    constexpr unsigned maximumEdits=1024;
+    const auto maximumEdits=options.maxEdits;
+    if(!std::isfinite(options.criticalBelowMeanRatio)||options.criticalBelowMeanRatio<=0||
+       options.criticalBelowMeanRatio>1||edits>=maximumEdits)return;
     std::size_t tetCount=0;
     for (const auto alive:live.alive) {
         live.charge();
@@ -54,11 +66,9 @@ void optimizeOcctDelaunayQuality(bnd::detail::BistellarComplex& live,
         return mesh::tetVolume(p[0],p[1],p[2],p[3]);
     };
     const auto meanRatio=[&](const std::array<Vec3,4>& p) {
-        // Match the reported subtet mean ratio, including its determinant
-        // fallback when the ordinary volume of a positive cell cancels.
-        auto volume=(p[1]-p[0]).cross(p[2]-p[0]).dot(p[3]-p[0])/6.;
-        if (std::isfinite(volume) && !(volume>0.))
-            volume=predicates::orient3dDeterminantEstimate(p[0],p[1],p[2],p[3])/6.;
+        // Match the reported subtet mean ratio, including positive volumes
+        // whose magnitude is unreliable because of cancellation.
+        const auto volume=mesh::tetVolume(p[0],p[1],p[2],p[3]);
         double sum=0.;
         for (unsigned i=0;i<4;++i) for (unsigned j=i+1;j<4;++j)
             sum+=(p[j]-p[i]).norm2();
@@ -306,7 +316,7 @@ void optimizeOcctDelaunayQuality(bnd::detail::BistellarComplex& live,
             live.charge();
             if (!live.alive[id]) continue;
             const auto mean=meanRatio(points(live.cells[id]));
-            if (mean<.01) critical.emplace_back(mean,id);
+            if (mean<options.criticalBelowMeanRatio) critical.emplace_back(mean,id);
         }
         std::sort(critical.begin(),critical.end());
         const auto previous=edits;
@@ -314,7 +324,7 @@ void optimizeOcctDelaunayQuality(bnd::detail::BistellarComplex& live,
             (void)mean;
             if (edits>=maximumEdits) break;
             live.charge();
-            if (!live.alive[id] || meanRatio(points(live.cells[id]))>=.01) continue;
+            if (!live.alive[id] || meanRatio(points(live.cells[id]))>=options.criticalBelowMeanRatio) continue;
             bool changed=false;
             for (const auto face:Complex::faceKeys(live.cells[id])) {
                 if (swapFace(face)) {changed=true;break;}
@@ -329,6 +339,7 @@ void optimizeOcctDelaunayQuality(bnd::detail::BistellarComplex& live,
         }
         if (edits==previous) break;
     }
+    if(options.topologyOnly)return;
 
     // Give interior spacing a bounded sweep before the ordinary edge search spends
     // its work allowance. Repeat only after topology changes make new stars.

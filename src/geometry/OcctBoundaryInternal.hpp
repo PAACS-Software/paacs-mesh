@@ -7,6 +7,7 @@
 // Private retained native tessellation; never installed with the public API.
 #include "paacs/geometry/OcctBoundary.hpp"
 #include <limits>
+#include <optional>
 #include <span>
 namespace paacs::geo::detail {
 class OcctSpatialSizing;
@@ -41,9 +42,23 @@ struct OcctBoundaryAliasOptions {
     unsigned curvaturePointsPerTurn=0;
     const OcctSpatialSizing* sizeField=nullptr;
 };
+// One bounded construction witness. Tags identify the entity/use at the
+// actual refusal, not a nearby entity inferred afterwards. Strings are static
+// literals from the relevant private builder; no geometry is retained here.
+struct OcctBoundaryConstructionWitness {
+    const char* stage="not_reported";
+    const char* detail="not_reported";
+    int edgeTag=-1,faceTag=-1;
+    std::optional<std::uint64_t> useId;
+    // Conservative construction classification, not an assertion that the CAD
+    // or an alternate surface is valid. Unknown/resource failures remain false.
+    bool geometricRefusal=false;
+};
 struct OcctBoundaryAliasReceipt {
     std::uint64_t flips=0,maximumWorkingPayloadEstimate=0,rebuiltCharts=0,reusedMidpoints=0,rephasedEdges=0;
     double projectionSeconds=0;
+    std::vector<CadSurfaceSpacingReport> surfaceSpacing;
+    OcctBoundaryConstructionWitness witness;
 };
 // Build one solid from the original CAD curve and face uses. A caller still
 // needs the geometric shell certificate before using it for volume meshing.

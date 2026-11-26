@@ -21,6 +21,7 @@
 #include <span>
 #include <stdexcept>
 #include <tuple>
+#include <type_traits>
 #include <vector>
 
 namespace paacs::geo::detail {
@@ -29,6 +30,9 @@ struct OcctInteriorFrontLimits {
     std::uint64_t work=42'000'000,queries=12'000,nodes=50'000,tets=250'000;
     std::uint64_t workingBytes=256ULL*1024*1024;
     std::size_t maximumSites=1024,maximumCavityCells=64;
+    // Counts actual point/cavity evaluations, including rejected candidates.
+    // Generation, certification and final publication retain their work caps.
+    std::uint64_t maximumCandidates=(std::numeric_limits<std::uint64_t>::max)();
 };
 
 struct OcctInteriorFrontOutcome {
@@ -92,10 +96,13 @@ inline double logarithmicMeanSize(double a,double b) {
 // External callback exceptions propagate with the input mesh unchanged.
 // Internal limits stop between fully admitted edits and return a valid partial
 // construction, explicitly reporting targetsSatisfied=false when unresolved.
+// Optional progress receives the same scalar counters on return or exception.
+// On interruption its sites describe private staged edits; changed stays false
+// until the final mesh swap. Work excludes charges performed inside callbacks.
 template<class SizeField,class AdmitNode,class AdmitCentroid,class Charge>
 OcctInteriorFrontOutcome advanceOcctInteriorFront(mesh::Mesh& mesh,const SizeField& field,
     const OcctInteriorFrontLimits& limits,AdmitNode admitNode,
-    AdmitCentroid admitCentroid,Charge charge) {
+    AdmitCentroid admitCentroid,Charge charge,OcctInteriorFrontOutcome* progress=nullptr) {
     using namespace occt_interior_front_detail;
     using Complex=bnd::detail::BistellarComplex;
     using Cell=bnd::TetFacetCell;
@@ -103,6 +110,11 @@ OcctInteriorFrontOutcome advanceOcctInteriorFront(mesh::Mesh& mesh,const SizeFie
     using Sign=predicates::Sign;
     using bnd::tet_facet_detail::outwardFace;
     OcctInteriorFrontOutcome out;
+    struct Snapshot {
+        const OcctInteriorFrontOutcome& value;OcctInteriorFrontOutcome* target;
+        ~Snapshot() noexcept {if(target)*target=value;}
+    } snapshot{out,progress};
+    static_assert(std::is_nothrow_copy_assignable_v<OcctInteriorFrontOutcome>);
     const auto initialTets=std::size_t(mesh.countCells(mesh::CellType::Tet4));
     const auto originalNodes=std::size_t(mesh.nodeCount());
     const auto maximumSites=std::min<std::size_t>(limits.maximumSites,1024);
@@ -390,7 +402,7 @@ OcctInteriorFrontOutcome advanceOcctInteriorFront(mesh::Mesh& mesh,const SizeFie
         out.initialized=true;
         for (std::size_t id=0;id<live.cells.size();++id) enqueue(id);
 
-        while (out.sites<maximumSites&&live.vertices.size()<maximumNodes) {
+        while (out.sites<maximumSites&&live.vertices.size()<maximumNodes&&out.candidates<limits.maximumCandidates) {
             tick();
             std::size_t ahead=Complex::noCell;
             std::optional<Complex::Face> activeFace;
@@ -567,6 +579,7 @@ OcctInteriorFrontOutcome advanceOcctInteriorFront(mesh::Mesh& mesh,const SizeFie
             struct Plan {Vec3 point;double size,mean,jacobian,error,score;bool sizeAppropriate,fineWitness;Complex::Proposal patch;};
             std::vector<Plan> plans;
             for (const auto candidate:candidates) {
+                if(out.candidates>=limits.maximumCandidates)break;
                 const auto site=candidate.point;
                 tick();++out.candidates;
                 const auto h=sizeAt(site);
@@ -694,7 +707,8 @@ OcctInteriorFrontOutcome advanceOcctInteriorFront(mesh::Mesh& mesh,const SizeFie
         out.minimumScaledJacobian=std::min(out.minimumScaledJacobian,q.jacobian);
     }
     out.targetsSatisfied=out.remainingOversized==0;
-    if (!out.targetsSatisfied&&(out.sites>=maximumSites||live.vertices.size()>=maximumNodes)) out.budgetLimited=true;
+    if (!out.targetsSatisfied&&(out.sites>=maximumSites||live.vertices.size()>=maximumNodes||
+        out.candidates>=limits.maximumCandidates)) out.budgetLimited=true;
     if (!out.sites) return out;
     mesh::Mesh result;
     for (Index i=0;i<mesh.nodeCount();++i) {tick();result.addNode(mesh.node(i),mesh.nodeClass(i));}

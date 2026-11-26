@@ -197,7 +197,8 @@ OcctInteriorFrontLimits testLimits() {
 }
 void outcomeBounds(const OcctInteriorFrontOutcome& out,const OcctInteriorFrontLimits& limits,
     const mesh::Mesh& before,const mesh::Mesh& after,std::uint64_t charged,std::uint64_t queries) {
-    check(out.workUsed==charged&&out.workUsed<=limits.work&&out.nativeQueries==queries&&queries<=limits.queries,
+    check(out.workUsed==charged&&out.workUsed<=limits.work&&out.nativeQueries==queries&&queries<=limits.queries&&
+        out.candidates<=limits.maximumCandidates,
         "front work or native admissions escaped their enclosing accounting");
     check(std::size_t(after.nodeCount()-before.nodeCount())==out.sites&&out.changed==(out.sites!=0)&&
         std::uint64_t(after.nodeCount())<=limits.nodes&&
@@ -486,7 +487,7 @@ void exerciseNativeAndLimits() {
             (refuseNode?centroidCalls==0:centroidCalls>0),"native refusal did not guard the complete prospective cavity");
         sameMesh(before,mesh);
     }
-    for (unsigned mode=0;mode<7;++mode) {
+    for (unsigned mode=0;mode<8;++mode) {
         auto mesh=cubeScaffold();const auto before=mesh;auto bounded=limits;
         if (mode==0) bounded.nodes=std::uint64_t(mesh.nodeCount());
         if (mode==1) bounded.tets=std::uint64_t(mesh.countCells(mesh::CellType::Tet4));
@@ -495,33 +496,41 @@ void exerciseNativeAndLimits() {
         if (mode==4) bounded.workingBytes=1;
         if (mode==5) bounded.maximumSites=0;
         if (mode==6) bounded.maximumCavityCells=0;
+        if (mode==7) bounded.maximumCandidates=0;
         std::uint64_t queries=0;
         const auto out=advanceOcctInteriorFront(mesh,field,bounded,
             [&](Vec3){++queries;return true;},[&](Vec3){++queries;return true;},[](std::uint64_t){});
         check(out.sites==0&&queries==0&&out.workUsed<=bounded.work&&out.nativeQueries<=bounded.queries,
-            "front exceeded a node, tet, query, work, storage or site limit before refusal");
+            "front exceeded a node, tet, query, work, storage, site or candidate limit before refusal");
         sameMesh(before,mesh);
     }
     for (const bool nodeException:{false,true}) {
         auto mesh=cubeScaffold();const auto before=mesh;unsigned nodes=0,centroids=0;bool caught=false;
         struct NativeStop {};
+        OcctInteriorFrontOutcome progress;
         try {
             (void)advanceOcctInteriorFront(mesh,field,limits,
                 [&](Vec3){if (++nodes==2&&nodeException) throw NativeStop{};return true;},
-                [&](Vec3){if (++centroids==2&&!nodeException) throw NativeStop{};return true;},[](std::uint64_t){});
+                [&](Vec3){if (++centroids==2&&!nodeException) throw NativeStop{};return true;},[](std::uint64_t){},&progress);
         } catch (const NativeStop&) {caught=true;}
         check(caught&&(nodeException?nodes==2:centroids==2),"external native exception was swallowed or never exercised");
+        check(progress.initialized&&!progress.changed&&progress.workUsed>0&&progress.candidates>0&&
+            progress.nativeQueries==std::uint64_t(nodes)+centroids,
+            "interrupted front lost attempted work/candidates/admissions or claimed publication");
         sameMesh(before,mesh);
     }
     {
         auto mesh=cubeScaffold();const auto before=mesh;unsigned nodes=0;bool caught=false;
         struct WorkStop {};
+        OcctInteriorFrontOutcome progress;
         try {
             (void)advanceOcctInteriorFront(mesh,field,limits,
                 [&](Vec3){++nodes;return true;},[](Vec3){return true;},
-                [&](std::uint64_t){if (nodes>=1) throw WorkStop{};});
+                [&](std::uint64_t){if (nodes>=1) throw WorkStop{};},&progress);
         } catch (const WorkStop&) {caught=true;}
         check(caught&&nodes==1,"external charged-work interruption was not exercised after staging");
+        check(progress.initialized&&!progress.changed&&progress.workUsed>0&&progress.candidates>0&&
+            progress.nativeQueries==1,"charged-work interruption discarded its scalar progress receipt");
         sameMesh(before,mesh);
     }
     {
@@ -544,6 +553,39 @@ void exerciseNativeAndLimits() {
         }
         sameMesh(before,mesh);
     }
+}
+
+void exerciseCandidateCaps() {
+    const ConstantField field{.45};
+    for(const auto cap:{std::uint64_t(1),std::uint64_t(2)}){
+        auto mesh=cubeScaffold();const auto before=mesh;auto limits=testLimits();
+        limits.maximumCandidates=cap;
+        std::uint64_t charged=0,nodeCalls=0,centroidCalls=0;
+        OcctInteriorFrontOutcome progress;
+        const auto out=advanceOcctInteriorFront(mesh,field,limits,
+            [&](Vec3){++nodeCalls;return false;},[&](Vec3){++centroidCalls;return true;},
+            [&](std::uint64_t n){charged+=n;},&progress);
+        check(out.initialized&&out.candidates==cap&&out.sites==0&&out.budgetLimited&&!out.targetsSatisfied&&
+            nodeCalls<=cap&&centroidCalls==0,"candidate cap did not stop repeated rejected proposals exactly");
+        outcomeBounds(out,limits,before,mesh,charged,nodeCalls);
+        check(progress.initialized==out.initialized&&progress.changed==out.changed&&
+            progress.workUsed==out.workUsed&&progress.candidates==out.candidates&&
+            progress.nativeQueries==out.nativeQueries&&progress.remainingOversized==out.remainingOversized,
+            "normal completion progress differs from the returned outcome");
+        sameMesh(before,mesh);
+    }
+    auto limits=testLimits();limits.maximumSites=1;
+    auto reference=cubeScaffold();
+    const auto ordinary=advanceOcctInteriorFront(reference,field,limits,
+        [](Vec3){return true;},[](Vec3){return true;},[](std::uint64_t){});
+    check(ordinary.sites==1&&ordinary.candidates>0,"candidate-cap fixture did not admit its ordinary first site");
+    limits.maximumCandidates=ordinary.candidates;
+    auto capped=cubeScaffold();const auto before=capped;
+    const auto out=advanceOcctInteriorFront(capped,field,limits,
+        [](Vec3){return true;},[](Vec3){return true;},[](std::uint64_t){});
+    check(out.sites==1&&out.candidates==limits.maximumCandidates,
+        "candidate ceiling discarded already scored admissible plans");
+    sameMesh(reference,capped);fixedBoundary(before,capped);allAddedCones(capped,before.nodeCount());
 }
 
 std::string snapshot(const geo::OcctModel& model) {
@@ -851,6 +893,7 @@ int main(int argc,char** argv) {
         exerciseWholeCavityShape();
         exerciseAllLiveVertexSpacing();
         exerciseNativeAndLimits();
+        exerciseCandidateCaps();
         exerciseNativeFieldBounds();
         if (!pure) {exercisePrePointAutomaticFallback();exercisePublicDefaultInitialFront();exercisePublicNativeFront();}
         std::cout<<"native interior front geometry, enclosed fields, live spacing and transactional admissions passed\n";

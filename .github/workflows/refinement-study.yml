@@ -1,0 +1,43 @@
+# PAACS Mesh
+# Project author: Paul LeDewhurst
+# Copyright PAACS Software Ltd.
+# SPDX-License-Identifier: MPL-2.0
+
+name: RC3 cylinder refinement evidence
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/refinement_diagnostics.py'
+      - '.github/workflows/refinement-study.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: refinement-evidence-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  linux-python312:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Download and identify the published baseline wheel
+        shell: bash
+        run: |
+          python -m pip download --only-binary=:all: --no-deps paacs-mesh==1.2.0rc3 --dest build/refinement-baseline-wheel
+          sha256sum build/refinement-baseline-wheel/*.whl > build/refinement-baseline-wheel/SHA256SUMS
+          python -m pip install --no-index --no-deps build/refinement-baseline-wheel/*.whl
+      - name: Measure all direct and recipe attempts
+        run: python -I benchmarks/refinement_diagnostics.py --output build/refinement-linux312
+      - name: Retain measured evidence including refused attempts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rc3-cylinder-refinement-linux312
+          path: |
+            build/refinement-baseline-wheel/SHA256SUMS
+            build/refinement-linux312
+          if-no-files-found: error

@@ -7,11 +7,15 @@
 #include "../src/geometry/OcctNativeValidation.hpp"
 #include "../src/geometry/OcctModelInternal.hpp"
 #include "../src/geometry/OcctSolidClassifier.hpp"
+#include "../src/geometry/OcctTrimmedRayWitness.hpp"
 #include "paacs/mesh/LinearVolumeAudit.hpp"
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepBuilderAPI_NurbsConvert.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
+#include <BRepPrimAPI_MakeSphere.hxx>
+#include <BRepPrimAPI_MakeCone.hxx>
+#include <BRepPrimAPI_MakeTorus.hxx>
 #include <BRepTools.hxx>
 #include <gp_Trsf.hxx>
 #include <algorithm>
@@ -40,6 +44,28 @@ using namespace paacs;
 using namespace paacs::geo::detail;
 namespace {
 void check(bool value,const char* message){if(!value)throw std::runtime_error(message);}
+void checkProfileUnavailable(const OcctNativeValidationOutcome& outcome){
+    check(!outcome.classificationProfileAvailable&&outcome.rayWitnessAttempts==0&&
+          outcome.classifierSetupSeconds==0&&outcome.nativeQuerySeconds==0&&outcome.rayWitnessSeconds==0,
+          "disabled or unsupported classification profiling reports unavailable zero fields");
+}
+void checkSameClassification(const OcctNativeValidationOutcome& a,const OcctNativeValidationOutcome& b){
+    check(a.completed==b.completed&&a.sourceModelUnmodified==b.sourceModelUnmodified&&a.reason==b.reason&&
+          a.threadsUsed==b.threadsUsed&&a.points==b.points&&a.nativeQueries==b.nativeQueries&&
+          a.originalReferenceQueries==b.originalReferenceQueries&&a.strictAdmissionReuses==b.strictAdmissionReuses&&
+          a.trimmedRayAdmissions==b.trimmedRayAdmissions&&a.copiedGeometryValuePairs==b.copiedGeometryValuePairs&&
+          a.workUsed==b.workUsed&&a.maximumWorkingPayloadEstimate==b.maximumWorkingPayloadEstimate&&
+          a.sourceSnapshotBytes==b.sourceSnapshotBytes&&a.firstFailedPoint==b.firstFailedPoint&&
+          a.pointsWithinDistanceBand==b.pointsWithinDistanceBand&&a.nativeDistanceQueries==b.nativeDistanceQueries&&
+          a.maximumOutsideDistance==b.maximumOutsideDistance,
+          "profiling preserves all classification decisions, work and resource counters");
+}
+void checkProfileTimes(const OcctNativeValidationOutcome& outcome){
+    check(outcome.classificationProfileAvailable&&std::isfinite(outcome.classifierSetupSeconds)&&
+          std::isfinite(outcome.nativeQuerySeconds)&&std::isfinite(outcome.rayWitnessSeconds)&&
+          outcome.classifierSetupSeconds>=0&&outcome.nativeQuerySeconds>=0&&outcome.rayWitnessSeconds>=0,
+          "strict serial profiling reports finite nonnegative wall times");
+}
 
 void exerciseLocalDelaunay(){
     mesh::Mesh source;
@@ -121,16 +147,73 @@ std::vector<Vec3> points(const gp_Trsf& transform){
     for(double z:{0.,3.}){gp_Pnt p(1.5,0,z);p.Transform(transform);result.push_back({p.X(),p.Y(),p.Z()});}
     return result;
 }
+// Independent analytic material oracle; both original and NURBS surfaces
+// represent the same hollow tube. A positive-only witness may decline a point,
+// but must never admit the hole, outside material or an ambiguous boundary.
+void exerciseTrimmedRayPairs(const TopoDS_Shape& shape,const gp_Trsf& transform){
+    auto imported=OcctModelAccess::fromShape(shape);
+    check(imported.imported(),"owned opposite-ray fixture imports");
+    const auto& model=*imported.model;const auto before=snapshot(model);
+    OcctTrimmedRayWitness witness;
+    const auto solid=OcctModelAccess::solid(model,1);
+    check(witness.load(solid,model.tolerance(3,1)),"closed owned tube supports trimmed-ray certificates");
+    std::uint64_t accepted=0,queried=0;
+    const auto query=[&](Vec3 local,bool mayAdmit){
+        gp_Pnt point(local.x,local.y,local.z);point.Transform(transform);
+        const bool admitted=witness.admits(point);
+        ++queried;accepted+=unsigned(admitted);
+        check(!admitted||mayAdmit,"opposite rays admitted a tube hole, exterior or ambiguous boundary");
+    };
+    for(int x=-6;x<=6;++x)for(int y=-6;y<=6;++y)
+        for(const double z:{-.5,0.,.125,1.5,2.875,3.,3.5}){
+            const double px=x*.375,py=y*.375,r2=px*px+py*py;
+            query({px,py,z},r2>1.&&r2<4.&&z>0.&&z<3.);
+        }
+    // Exact seams, trimmed boundaries, near-wall material and both void sides.
+    for(const Vec3 local:std::array{Vec3{2,0,1.5},Vec3{1,0,1.5},Vec3{1.5,0,0},
+            Vec3{1.5,0,3},Vec3{0,0,1.5},Vec3{2.5,0,1.5},Vec3{.999,0,1.5},Vec3{2.001,0,1.5}})
+        query(local,false);
+    query({1.001,0,1.5},true);query({1.999,0,1.5},true);
+    // Straddle the unchanged Native margin at radial trims and endcaps.
+    // The differential replay checks identical decisions within the Native
+    // ON band; the independent oracle rejects voids beyond that same band.
+    const auto tolerance=model.tolerance(3,1);
+    for(const double factor:{-2.,-1.,-.5,.5,1.,2.}){
+        const auto delta=factor*tolerance;
+        query({1.+delta,0,1.5},factor>=-1.);
+        query({2.+delta,0,1.5},factor<=1.);
+        query({1.5,0,delta},factor>=-1.);
+        query({1.5,0,3.+delta},factor<=1.);
+    }
+    // The first fixed ray direction is tangent to the outer cylinder. Its
+    // origin remains within the body AABB but strictly outside the cylinder.
+    const gp_Dir direction(1.,.347,.113);
+    const auto length=std::hypot(direction.X(),direction.Y());
+    const Vec3 tangent{-2*direction.Y()/length,2*direction.X()/length,1.5};
+    query(tangent-Vec3{direction.X(),direction.Y(),direction.Z()}*.2,false);
+    check(queried==1218&&accepted>0,"owned ray grid did not exercise positive and refused certificates");
+    check(!witness.admits(gp_Pnt(std::numeric_limits<double>::quiet_NaN(),0,0)),
+          "nonfinite opposite-ray point was admitted");
+    OcctTrimmedRayWitness invalid;
+    check(!invalid.load(solid,-1.),"negative ray tolerance was accepted");
+    auto reversed=solid;reversed.Reverse();
+    check(!invalid.load(reversed,model.tolerance(3,1)),"reversed material orientation was certified");
+    check(before==snapshot(model),"opposite-ray queries changed original owned CAD bytes");
+}
+
 void exercise(const TopoDS_Shape& shape,const gp_Trsf& transform){
+    exerciseTrimmedRayPairs(shape,transform);
     auto imported=OcctModelAccess::fromShape(shape);check(imported.imported(),"valid tube native snapshot");
     const auto& model=*imported.model;const auto before=snapshot(model);auto input=points(transform);
     for(unsigned threads:{1u,2u,4u,8u}){
         OcctNativeValidationOptions options;options.maximumThreads=threads;
+        options.profileClassification=threads>1;
         const auto result=validateOcctNativeInteriorPoints(model,1,input,options);
         if(!result.completed)std::cerr<<"worker reason "<<occtNativeValidationReasonName(result.reason)<<" threads="<<threads<<'\n';
         check(result.completed&&result.reason==OcctNativeValidationReason::None&&result.sourceModelUnmodified,"all actual tube material points accepted");
         check(result.nativeQueries==input.size()&&result.points==input.size()&&result.threadsUsed==threads,"every point queried exactly once");
         check(result.workUsed<=options.maximumWork&&result.maximumWorkingPayloadEstimate<=options.maximumWorkingBytes,"native query admission measured");
+        checkProfileUnavailable(result);
         if(threads>1)check(result.originalReferenceQueries==input.size()&&result.copiedGeometryValuePairs>0,"entire small fixture independently compared with original classifier");
         check(before==snapshot(model),"native source bytes unchanged after copied query workers");
     }
@@ -154,11 +237,25 @@ void exercise(const TopoDS_Shape& shape,const gp_Trsf& transform){
     std::vector<unsigned char> rayMask;
     OcctNativeStrictAdmissions rayReceipt(4ULL*1024*1024);
     const auto rayResult=classifyOcctNativeInteriorPoints(model,1,rayInput,rayOptions,rayMask,&rayReceipt);
+    checkProfileUnavailable(rayResult);
     check(rayResult.completed&&rayResult.sourceModelUnmodified&&rayMask.size()==rayInput.size()&&
           rayResult.nativeQueries+rayResult.trimmedRayAdmissions==rayInput.size(),
           "opt-in ray witnesses account for every original-solid query");
     for(std::size_t i=0;i<rayMask.size();++i)
         check(rayMask[i]==savedMask[i%savedMask.size()],"ray witnesses preserve the tube material mask");
+    auto profiledRayOptions=rayOptions;profiledRayOptions.profileClassification=true;
+    std::vector<unsigned char> profiledRayMask;
+    OcctNativeStrictAdmissions profiledRayReceipt(4ULL*1024*1024);
+    const auto profiledRay=classifyOcctNativeInteriorPoints(model,1,rayInput,profiledRayOptions,
+                                                         profiledRayMask,&profiledRayReceipt);
+    checkSameClassification(rayResult,profiledRay);
+    checkProfileTimes(profiledRay);
+    check(profiledRayMask==rayMask&&profiledRay.rayWitnessAttempts>=profiledRay.trimmedRayAdmissions&&
+          profiledRay.rayWitnessAttempts<=rayInput.size(),
+          "profiling counts attempted ray witnesses and preserves the complete material mask");
+    if(profiledRay.trimmedRayAdmissions)
+        check(profiledRay.rayWitnessAttempts==rayInput.size()&&profiledRay.rayWitnessSeconds>0,
+              "ray timing includes false witnesses as well as positive admissions");
     if(rayResult.trimmedRayAdmissions){
         const std::array point{input[12]};
         const auto ordinary=validateOcctNativeInteriorPoints(model,1,point,serial,&rayReceipt);
@@ -171,8 +268,18 @@ void exercise(const TopoDS_Shape& shape,const gp_Trsf& transform){
           "failed batch preserves the destination mask");
     OcctNativeStrictAdmissions prior(4ULL*1024*1024);
     const auto captured=classifyOcctNativeInteriorPoints(model,1,input,serial,mask,&prior);
+    checkProfileUnavailable(captured);
     check(captured.completed&&captured.sourceModelUnmodified&&mask==savedMask&&prior.retainedPayloadBytes()>0,
           "only a complete audited serial classification retains strict admissions");
+    auto profiledOptions=serial;profiledOptions.profileClassification=true;
+    OcctNativeStrictAdmissions profiledReceipt(4ULL*1024*1024);
+    std::vector<unsigned char> profiledMask;
+    const auto profiled=classifyOcctNativeInteriorPoints(model,1,input,profiledOptions,profiledMask,&profiledReceipt);
+    checkSameClassification(captured,profiled);
+    checkProfileTimes(profiled);
+    check(profiledMask==mask&&profiled.classifierSetupSeconds>0&&profiled.nativeQuerySeconds>0&&
+          profiled.rayWitnessAttempts==0&&profiled.rayWitnessSeconds==0,
+          "ordinary serial query profiling measures setup and calls without inventing ray work");
     gp_Pnt freshPoint(1.7,0,1.25);freshPoint.Transform(transform);
     const std::array finalPoints{input[12],input[4],Vec3{freshPoint.X(),freshPoint.Y(),freshPoint.Z()}};
     const auto reused=validateOcctNativeInteriorPoints(model,1,finalPoints,serial,&prior);
@@ -195,6 +302,25 @@ void exercise(const TopoDS_Shape& shape,const gp_Trsf& transform){
     check(!strictOutside.completed&&strictOutside.reason==OcctNativeValidationReason::OutsideMaterial&&
           strictOutside.firstFailedPoint==1&&strictOutside.strictAdmissionReuses==1&&strictOutside.nativeQueries==1,
           "earlier outside result does not become a reusable strict admission");
+    const auto profiledOutside=validateOcctNativeInteriorPoints(model,1,outsidePoints,profiledOptions,&prior);
+    checkSameClassification(strictOutside,profiledOutside);
+    checkProfileTimes(profiledOutside);
+    check(profiledOutside.nativeQuerySeconds>0,
+          "an outside-material exception retains the native query time spent before refusal");
+    // The first point and snapshot consume two ticks, then the query loop
+    // consumes the third. Loading the classifier succeeds before tick four
+    // interrupts, so setup time must survive that budget exception.
+    const std::array onePoint{input[12]};
+    auto setupBudget=serial;setupBudget.maximumWork=3;
+    const auto stoppedSetup=validateOcctNativeInteriorPoints(model,1,onePoint,setupBudget);
+    setupBudget.profileClassification=true;
+    const auto profiledStoppedSetup=validateOcctNativeInteriorPoints(model,1,onePoint,setupBudget);
+    checkSameClassification(stoppedSetup,profiledStoppedSetup);
+    checkProfileTimes(profiledStoppedSetup);
+    check(!profiledStoppedSetup.completed&&profiledStoppedSetup.reason==OcctNativeValidationReason::BudgetExceeded&&
+          profiledStoppedSetup.nativeQueries==0&&profiledStoppedSetup.classifierSetupSeconds>0&&
+          profiledStoppedSetup.nativeQuerySeconds==0,
+          "interrupted classifier setup retains its actual timing without claiming a query");
     auto otherModel=OcctModelAccess::fromShape(shape);
     check(otherModel.imported(),"second native model identity fixture");
     const auto uncached=validateOcctNativeInteriorPoints(*otherModel.model,1,finalPoints,serial,&prior);
@@ -206,8 +332,10 @@ void exercise(const TopoDS_Shape& shape,const gp_Trsf& transform){
           distanceBand.pointsWithinDistanceBand==1,"non-strict policy does its ordinary native queries");
     for(unsigned threads:{1u,4u}){
         OcctNativeValidationOptions band;band.maximumThreads=threads;band.maximumOutsideDistance=.02;
+        band.profileClassification=true;
         const auto result=validateOcctNativeInteriorPoints(model,1,input,band);
         check(result.completed&&result.sourceModelUnmodified&&result.pointsWithinDistanceBand==1&&result.nativeDistanceQueries==1,"explicit native distance band records one admitted OUT point");
+        checkProfileUnavailable(result);
         check(std::abs(result.maximumOutsideDistance-.01)<1e-6,"actual distance to the original tube measured");
         band.maximumOutsideDistance=.005;const auto refused=validateOcctNativeInteriorPoints(model,1,input,band);
         check(!refused.completed&&refused.reason==OcctNativeValidationReason::OutsideMaterial&&refused.firstFailedPoint==11,"a point beyond the requested distance still refuses");
@@ -243,9 +371,66 @@ void exercise(const TopoDS_Shape& shape,const gp_Trsf& transform){
     check(!result.completed&&result.reason==OcctNativeValidationReason::AllocationFailed,"snapshot allocation failure remains distinct");
     check(before==snapshot(model),"all failure modes preserve native source bytes");
 }
+enum class OwnedRayPrimitive { Sphere,Cone,Torus };
+// Independent physical material predicates, including the unchanged Native
+// ON band. Element shape quality and requested meshing size are irrelevant.
+void exerciseAnalyticRayPrimitive(const TopoDS_Shape& shape,OwnedRayPrimitive kind){
+    auto imported=OcctModelAccess::fromShape(shape);
+    check(imported.imported(),"owned analytic ray primitive imports");
+    const auto& model=*imported.model;const auto before=snapshot(model);
+    const auto tolerance=model.tolerance(3,1);
+    OcctTrimmedRayWitness witness;
+    check(witness.load(OcctModelAccess::solid(model,1),tolerance),"analytic primitive ray setup");
+    std::uint64_t queried=0,accepted=0;
+    const auto material=[&](Vec3 p){
+        if(kind==OwnedRayPrimitive::Sphere)return p.norm()<=2.+tolerance;
+        if(kind==OwnedRayPrimitive::Cone){
+            const auto radius=2.-p.z/3.;
+            return p.z>=-tolerance&&p.z<=3.+tolerance&&
+                std::hypot(p.x,p.y)-radius<=tolerance*std::sqrt(1.+1./9.);
+        }
+        return std::hypot(std::hypot(p.x,p.y)-3.,p.z)<=1.+tolerance;
+    };
+    const auto query=[&](Vec3 p,bool mustRefuse=false){
+        const bool admitted=witness.admits(gp_Pnt(p.x,p.y,p.z));
+        ++queried;accepted+=unsigned(admitted);
+        check(!admitted||material(p),"analytic primitive rays admitted material beyond the Native ON band");
+        check(!mustRefuse||!admitted,"analytic primitive rays filled a genuine hole or exterior");
+    };
+    if(kind==OwnedRayPrimitive::Sphere){
+        for(int x=-5;x<=5;++x)for(int y=-5;y<=5;++y)for(int z=-5;z<=5;++z)
+            query({x*.5,y*.5,z*.5});
+        for(const Vec3 p:std::array{Vec3{0,0,2},Vec3{0,0,-2},Vec3{2,0,0},Vec3{-2,0,0},
+                Vec3{1.5,0,0},Vec3{0,0,0}})query(p);
+        query({2.25,0,0},true);query({0,0,2.25},true);
+        check(queried==1339,"sphere oracle query population changed");
+    }else if(kind==OwnedRayPrimitive::Cone){
+        for(int x=-5;x<=5;++x)for(int y=-5;y<=5;++y)
+            for(const double z:{-.5,0.,.25,1.5,2.75,3.,3.5})query({x*.5,y*.5,z});
+        for(const Vec3 p:std::array{Vec3{2,0,0},Vec3{1,0,3},Vec3{1.5,0,1.5},
+                Vec3{0,0,0},Vec3{0,0,3},Vec3{.5,0,1.5}})query(p);
+        query({2.25,0,1.5},true);query({0,0,-.25},true);query({0,0,3.25},true);
+        check(queried==856,"cone oracle query population changed");
+    }else{
+        for(int x=-9;x<=9;++x)for(int y=-9;y<=9;++y)
+            for(const double z:{-1.5,-1.,-.5,0.,.5,1.,1.5})query({x*.5,y*.5,z});
+        // Both periodic seams and the inner/outer equators; centerline points
+        // exercise real material while the axis remains a genuine torus hole.
+        for(const Vec3 p:std::array{Vec3{4,0,0},Vec3{2,0,0},Vec3{3,0,1},Vec3{3,0,-1},
+                Vec3{3,0,0},Vec3{0,3,0},Vec3{-3,0,0},Vec3{0,-3,0}})query(p);
+        query({0,0,0},true);query({1.5,0,0},true);query({4.25,0,0},true);query({3,0,1.25},true);
+        check(queried==2539,"torus oracle query population changed");
+    }
+    check(accepted>16,"analytic primitive test did not certify positive material points");
+    check(before==snapshot(model),"analytic primitive ray queries changed original CAD bytes");
+}
+
 }
 int main(int argc,char** argv){try{
     exerciseLocalDelaunay();
+    exerciseAnalyticRayPrimitive(BRepPrimAPI_MakeSphere(2.).Shape(),OwnedRayPrimitive::Sphere);
+    exerciseAnalyticRayPrimitive(BRepPrimAPI_MakeCone(2.,1.,3.).Shape(),OwnedRayPrimitive::Cone);
+    exerciseAnalyticRayPrimitive(BRepPrimAPI_MakeTorus(3.,1.).Shape(),OwnedRayPrimitive::Torus);
     const auto outer=BRepPrimAPI_MakeCylinder(2,3).Shape(),inner=BRepPrimAPI_MakeCylinder(1,3).Shape();
     BRepAlgoAPI_Cut cut(outer,inner);check(cut.IsDone(),"native hollow cylinder fixture");
     gp_Trsf identity;exercise(cut.Shape(),identity);

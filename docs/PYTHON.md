@@ -1,7 +1,7 @@
 # Python STEP interface
 
 The Python distribution calls the C++ STEP importer and Tet4 mesher in process.
-The **1.2.0rc3 release candidate** supports regular, **64-bit CPython 3.12–3.15**
+The **1.2.0rc4 candidate** targets regular, **64-bit CPython 3.12–3.15**
 on these platforms:
 
 | System | Architecture | Compatibility target |
@@ -17,19 +17,20 @@ Installation needs Python and pip, with no compiler, OCCT SDK or `PATH` setup.
 
 The expanded implementation passed 20 wheel builders, 28 clean installations and
 the native regression jobs in [PR #11](https://github.com/PAACS-Software/paacs-mesh/pull/11).
-RC3 is rebuilt and qualified from its own tagged source before publication. See
+RC4 requires qualification from its own tagged source before publication;
+the matching GitHub release carries its publication receipts. See
 the [compatibility evidence and matrix](PYTHON_COMPATIBILITY.md) for exact targets,
 NumPy checks and source identities. Intel macOS, Python 2, PyPy, 32-bit, debug and
 free-threaded Python ABIs are excluded.
 
-Install the exact release candidate:
+Install the exact candidate:
 
 ```sh
-python -m pip install paacs-mesh==1.2.0rc3
+python -m pip install paacs-mesh==1.2.0rc4
 ```
 
-The previous published `1.2.0rc2` release supports CPython 3.12
-on Windows x64, macOS ARM64 and Linux x64 only. Use
+Published RC3 files and their tag remain immutable. The earlier `1.2.0rc2`
+release supports CPython 3.12 on Windows x64, macOS ARM64 and Linux x64 only. Use
 `python -m pip install --pre paacs-mesh` to install the newest available candidate;
 see [package releases](PYPI_RELEASE.md) for the qualification and publication
 process.
@@ -38,10 +39,10 @@ Development wheels are also available from the
 [Python STEP wheel workflow](../.github/workflows/python-wheel.yml). Choose the
 artifact matching the interpreter, system and architecture, check its qualification
 receipts, extract it and install its
-`.whl` file. For example, an RC3 Windows x64 artifact for CPython 3.12 installs with:
+`.whl` file. For example, an RC4 Windows x64 artifact for CPython 3.12 installs with:
 
 ```powershell
-python -m pip install --force-reinstall --only-binary=:all: .\paacs_mesh-1.2.0rc3-cp312-cp312-win_amd64.whl
+python -m pip install --force-reinstall --only-binary=:all: .\paacs_mesh-1.2.0rc4-cp312-cp312-win_amd64.whl
 ```
 
 Development artifacts can share the candidate version; `--force-reinstall`
@@ -79,14 +80,26 @@ python -m paacs_mesh part.step part.vtk --size 0.7
 
 Installed wheels also provide the `paacs-mesh` command with the same arguments.
 
+For RC4 per-element and spatial quality inspection, see
+[mesh inspection](MESH_INSPECTION.md). For Python request discovery and guarded
+selection controls, see [API usability](API_USABILITY.md). These additions are
+part of the RC4 source candidate; published RC3 wheels retain their original
+interface. Development artifacts still require matching source receipts.
+
 For paginated CAD inspection, capability discovery, saved recipe execution and
 human/JSON diagnostic summaries, see [inspection and diagnostics](AGENT_WORKFLOW.md).
 
 ### Initial interior placement
 
-Compatible single-solid Tet4 requests automatically construct wall sites before
-filling interior gaps. The default assembly policy still preserves parts. Multi-part
-assemblies and other specialized routes retain their existing constructors.
+In RC4, Normal AUTO first considers verified whole-body primitive,
+affine-block and linear-sweep capabilities for compatible constant-size requests.
+Other eligible single-solid Tet4 requests construct wall sites before filling
+interior gaps. Face and volume controls retain the size-field front. The default
+assembly policy still preserves parts. Normal Tet4 assemblies resolve AUTO for
+each original part, retaining each child's eligibility checks and route receipt.
+Bounded admission retains historical automatic selection. The wrapper's sizing
+metadata describes the request; `effective_policy.auto_dispatch_scope` and each
+body's `route_resolution` describe the construction selection.
 
 `advancing_interior_front=None` selects this automatic policy. Set it to `False`
 to use the previous initial constructor, or `True` to explicitly request the new
@@ -97,10 +110,140 @@ mesh = model.mesh(.3, advancing_interior_front=False)
 mesh = model.mesh(.3, assembly="conforming", advancing_interior_front=True)
 ```
 
-`native_sizing=False` retains legacy cap sizing and disables automatic interior
-placement. Combining it with `advancing_interior_front=True` is contradictory and
-raises `ValueError`. A saved recipe records the initial-placement choice; older
+`native_sizing=False` retains historical analytic cylinder sizing and disables
+automatic interior placement. Eligible Normal native cap-sweep fallback can
+still apply physical cap spacing; `resource_policy="bounded"` retains historical
+cap dispatch. Combining `native_sizing=False` with
+`advancing_interior_front=True` is contradictory and raises `ValueError`. A saved recipe records the initial-placement choice; older
 recipes without this optional field retain automatic selection.
+
+The additive `route_resolution` receipt reports capability recognition, its
+charged work/time and at most two construction attempts. Recognition does not
+replace the final Native CAD, topology, orientation or quality gates. Failed
+attempts consume the same caller limits; nothing is published before cumulative
+budget and cancellation checks pass.
+
+### Geometry fidelity controls (RC4)
+
+```python
+mesh = model.mesh(.5, max_chord_error=.0025, max_relative_volume_error=.005)
+```
+
+`max_chord_error` is a positive absolute limit in millimeters.
+`max_relative_volume_error` is strictly between zero and one; `.005` means
+0.5 percent. Omitted values retain Native defaults: automatic route-dependent
+chord resolution and a one-percent volume limit. Automatic primitive and general
+routes can choose different chord defaults, so pass explicit common limits for
+a controlled method comparison. Requested size is a separate control.
+
+Recipes preserve both nullable requests and forward them unchanged through every
+retry. Older recipes missing these fields retain the original automatic/default
+meaning. The Python CLI accepts `--max-chord-error` and
+`--max-relative-volume-error`; `run` replays saved settings without overrides.
+`report["fidelity"]` keeps requested and effective volume limits, while body
+`fidelity` records the selected chord limit and its policy. Source retries may
+tighten the effective chord. These limits and observed CAD errors do not certify
+all achieved element sizes or solver accuracy.
+
+`curvature_points_per_turn=None` preserves Native zero (optional curvature
+sampling disabled). Explicit integers from zero through 64 are accepted, for
+example `curvature_points_per_turn=32`. A nonzero request retains a compatible
+general size-field route rather than being ignored by a structured method.
+The CLI flag is `--curvature-points-per-turn`; recipes retain it through retries.
+
+`initial_topology_quality=None` selects the Native policy default: enabled for
+Normal and disabled for Bounded. Explicit `True` or `False` overrides it. This
+controls severe initial numerical-topology cleanup; it does not force an initial
+front, relax validity or quality thresholds, or certify Delaunay topology.
+A structured method may report it as not applicable. The CLI supports
+`--initial-topology-quality` and `--no-initial-topology-quality`. Requested intent
+and the body's actual stage receipt remain separate.
+
+`native_source_fallback=False` is an independent experimental switch. Setting it
+to `True` allows a bounded native tessellation provider only after a remaining
+named geometric chart/wire refusal, while retaining the live Tet4 constructor and all
+CAD, source, orientation, connectivity and resource checks. It does not force
+initial-front placement when that is explicitly disabled, or replace a verified
+primitive/mapped AUTO choice.
+If the live request's source providers refuse, this opt-in does not silently
+replace it with legacy star/partition dispatch. The refusal and provider
+diagnostics remain available; enabling it is not a promise of broader coverage.
+
+```python
+mesh = model.mesh(0.5, native_source_fallback=True)
+print(mesh.report["requested_native_source_fallback"])
+print(mesh.report["bodies"][0]["source_shell"])
+```
+
+The fallback cannot bypass explicit local face/box/spatial/body controls,
+size-ratio requirements or per-face construction caps. Its native source
+tessellation does not certify requested surface sizing. The global volume field
+is retained; inspect actual source providers and achieved sizes separately.
+Curvature requests configure a native angular deflection bounded by
+`min(0.4, 2*pi/curvature_points_per_turn)` radians when nonzero. This is a kernel
+construction request, not a point-count guarantee; independent chord/volume
+acceptance remains required.
+
+Recipes save the Boolean unchanged across retries. Older recipes missing it
+remain disabled. The CLI accepts `--native-source-fallback` and
+`--no-native-source-fallback`. Source attempts report provider, configured
+curvature/angle, whether global source sizing was applied, and a structured
+curve/chart witness when available. `source_fallback_spacing_unverified` is an
+informational diagnostic; it does not change Native acceptance or establish
+solver adequacy.
+
+`boundary_first=False` is a separate experimental construction-order switch.
+With `True`, a compatible live spatial Tet4 route recovers the certified source
+boundary before inserting interior points into the completed material mesh.
+The volume size field, explicit resource limits and final Native checks remain
+active. If initial-front construction is explicitly enabled as well, this is an
+explicit order override; it does not run the pre-recovery point scorer.
+
+```python
+mesh = model.mesh(0.5, advancing_interior_front=True,
+                  native_source_fallback=True, boundary_first=True)
+```
+
+The flags are independent: `boundary_first` does not enable a source fallback
+or force a live constructor when it is disabled or a verified structured method
+is chosen. Default `False` preserves the established order; missing fields in
+older recipes also mean `False`, and every retry retains the saved value.
+The CLI supports `--boundary-first` and `--no-boundary-first`.
+`requested_boundary_first` records intent. A participating body's `initial_front`
+reports `deferred_until_boundary_recovery`; actual subsequent insertion is in
+`interior_front`. A deferred stage is not evidence that filling or insertion
+completed, and a pre-insertion topology-quality request may remain unattempted.
+Body `material_classification` reports cumulative batch requests, attempted
+points, ordinary queries, strict reuses, positive original-CAD ray admissions,
+logical work and seconds; completion/source-guard fields describe the last
+batch. An ordinary query is counted when it starts, so an interrupted attempt
+need not have a classification decision. `profiled_batches` and
+`ray_witness_attempts` identify measured strict serial boundary-first work;
+`classifier_setup_seconds`, `native_query_seconds` and `ray_witness_seconds`
+split that measured cost. Zero profiled batches means unmeasured, not zero cost.
+Boundary-first can use positive witnesses on the actual trimmed CAD in
+strict serial mode, falling back to ordinary classification for ambiguous or
+unadmitted points. This changes no geometric tolerance or final validity gate.
+Progress and nested times remain available on cancellation; they do not certify
+that filling, interior insertion or final publication completed.
+In boundary-first insertion, explicit `max_interior_candidates` and
+`max_interior_sites` remain upper caps. The current post-recovery builder also
+has its existing 1,024-site algorithm ceiling; a larger requested cap does not
+promise that many insertions. Inspect remaining targets and achieved sizes.
+
+`thin_region_ordering=False` is a separate default-off experimental option.
+With `True`, a compatible Normal Tet4 front uses bounded source-clearance advice
+to choose the stage order; it does not force that constructor. Explicit
+`boundary_first=True` takes precedence, and selected-face sizing abstains from
+the unqualified advisory query. Recipes retain the boolean; the CLI supports
+`--thin-region-ordering` and `--no-thin-region-ordering`.
+The body receipt `initial_front.ordering` distinguishes attempted, complete and
+selected advice from actual final mesh validity. Physical native sweep cap
+spacing is a separate Normal-route change, recorded in `native_cap_sizing`.
+See the [owned hollow qualification](THIN_HOLLOW_QUALIFICATION.md) for limits,
+exact receipts and measured quality tails.
+
+### Construction receipts
 
 The report's `requested_advancing_interior_front` records the caller's choice.
 Each body's `initial_front` reports actual wall/gap nodes, work, candidates and
@@ -108,14 +251,42 @@ remaining targets. An automatic fallback is recorded separately in
 `initial_front_fallback`; it does not claim the new constructor ran. The CLI
 provides `--advancing-interior-front` and `--no-advancing-interior-front`.
 
+### Construction effort and limits (RC4)
+
+RC4 bindings expose `construction_effort="legacy"` and four
+optional positive integer caps: `max_surface_points`,
+`max_surface_chord_points`, `max_interior_candidates` and `max_interior_sites`.
+The `auto` and `thorough` effort policies are opt-in. They adjust bounded
+construction effort in the compatible single-solid Tet4 route, within the
+overall work, memory, node, output and time limits. They do not weaken native
+validity checks or guarantee achieved sizing or improved quality.
+
+See [construction effort and caps](CONSTRUCTION_BUDGETS.md) for per-face surface
+scope, native stage receipts, CLI flags and saved-recipe behaviour. These
+controls require RC4 bindings and are not included in published RC3 wheels.
+
+RC4 bindings use `resource_policy="normal"` for new Python
+and direct STEP CLI requests. Use `resource_policy="bounded"` to retain
+historical resource admission. Construction effort remains `"legacy"`.
+An omitted `max_work` uses the policy allowance: 50 million logical units for
+bounded, or no practical logical ceiling for normal. An explicit positive work
+limit applies to either policy. Omitted modeled memory retains 512 MiB. Normal
+does not select experimental construction effort or certify achieved sizing.
+New recipes record the selected policy, defaulting to Normal. Old recipes
+missing the field retain literal Bounded semantics, and the C++ aggregate `NativeCadMeshOptions{}`
+also retains Bounded defaults. C++ callers can use `normalNativeCadMeshOptions()`
+explicitly. The direct STEP CLI exposes `--resource-policy`, `--max-working-bytes`,
+`--max-nodes` and `--max-cells` alongside `--max-work` and `--max-seconds`.
+
 ## Package distribution
 
 The [publishing workflow](../.github/workflows/publish-python.yml) prepares the
 complete wheel set from the [compatibility matrix](PYTHON_COMPATIBILITY.md) and
 requires independent installed-wheel consumers from the same source commit.
-The expanded implementation is qualified; RC3's versioned artifacts must repeat
-those checks before upload through Trusted Publishing. The previous RC2 files
-remain immutable and retain their original CPython 3.12 compatibility. Only the
+Historical expanded-matrix qualification does not qualify RC4. Its versioned
+artifacts must pass the complete checks before upload through Trusted Publishing.
+Previous RC2 and RC3 files remain immutable; RC2 retains its original CPython 3.12
+compatibility. Only the
 version actually installed determines the available platforms and features.
 The [release guide](PYPI_RELEASE.md) records the publication checks.
 
@@ -196,10 +367,10 @@ four requests on the same cylinder, with measured sizes and mesh sections.
 
 ## NumPy mesh arrays
 
-NumPy is optional. Install the `numpy` extra with the release candidate:
+NumPy is optional. Install the `numpy` extra with the exact candidate:
 
 ```powershell
-python -m pip install "paacs-mesh[numpy]==1.2.0rc3"
+python -m pip install "paacs-mesh[numpy]==1.2.0rc4"
 ```
 
 For a wheel in a local directory, add `--find-links .` and use
@@ -284,6 +455,87 @@ volumes. This result does not certify a globally non-overlapping material domain
 Choose `assembly="conforming"` to request the engine's conforming-domain policy;
 unsupported or unresolved interfaces are refused.
 
+With Normal resources and automatic Tet4 construction, independent parts
+resolve their constructors separately. `auto_dispatch_scope="per_original_body"`
+records this dispatch; each body's `route_resolution` records its own decision.
+Uncontrolled analytic plane/cylinder parts with a common straight generator
+can retain the existing legacy constructor. The
+`analytic_generator_legacy_eligibility` receipt is a bounded route hint, not a
+verified sweep or an acceptance certificate. Explicit constructor choices,
+sizing controls and Bounded resources retain their dispatch rules. Every
+selected constructor still runs its original mesh and CAD checks.
+After a named geometric refusal, one original AUTO call can use the remaining
+shared work and deadline. Its `automatic_dispatch` route entry includes the
+entire AUTO call and its internal attempts. Preflight costs are descriptive
+subsets of the parent outcome's total work/time; do not add them to that total.
+Uncontrolled Normal multi-part AUTO can also try the legacy constructor after
+one unverified front refuses geometry. `automatic_front_refused_legacy_retry`
+records this choice and `initial_front_fallback` retains the failed source and
+volume diagnostics. An explicit front request does not acquire this fallback.
+Diagnostic face and edge tags refer to the original model. IDs for edge
+occurrences in extracted parts are `null` when their original mapping is unproved.
+
+`trimmed_ray_witnesses=True` opts into strict serial Original-CAD ray
+certificates during validation:
+
+```python
+mesh = model.mesh(.5, trimmed_ray_witnesses=True, validation_workers=1)
+```
+
+Ambiguous or unsupported queries use the ordinary Native classifier. This
+option changes neither geometry tolerance nor the assembly policy, and does
+not force a construction method. It also applies to the final original-body
+checks after independent part meshing. It defaults to `False`, survives saved
+recipes and retries, and is available as `--trimmed-ray-witnesses` in both
+CLIs. Python's CLI also accepts `--no-trimmed-ray-witnesses`.
+Body reports separate ordinary `native_centroids_checked`, positive
+`native_final_ray_admissions` and `native_centroid_exact_reuses`. A ray
+certificate is a Native geometric check; it is not solver approval.
+Final centroid accounting describes completed checks. A refused assembly can
+retain child or partial-stage receipts; those do not certify a completed
+original-body validation or a published assembly.
+
+Body `region_recovery` reports retain the existing Native search, backtrack,
+candidate and bound-hit counters, with preparation, visibility, search,
+publication and validation timings. These describe recovery calls within the
+last retained front attempt. Nested timers can overlap and do not partition
+total volume time. Material-removal and blocked-candidate counts remain
+separate from source-mismatch ordering evidence; neither certifies a mesh.
+
+Development builds provide an opt-in relation query before meshing:
+
+```python
+relations = model.body_relations([(1, 2)], max_seconds=30)
+for pair in relations["pairs"]:
+    print(pair["relation"], pair["evidence"], pair["issue"])
+```
+
+Supply explicit, distinct unordered pairs of imported body tags, at most 64 per
+call. There is no implicit all-body scan. The query distinguishes disconnected
+parts, face/edge/point contact, material overlap and unresolved relations.
+It uses the original placed bodies and reports the input hash, model identity,
+source guard, measurements and Native query counts. Contact area is in mm²,
+length and distance in mm, and overlap volume in mm³.
+
+`completed=True` means the selected query completed with its source guard;
+individual pairs can still be `unresolved`. A small distance or intersecting
+bounding boxes alone does not prove contact. `distance_tolerance` is a separation
+and ambiguity threshold, not a repair tolerance or permission to close a gap.
+No body is fused, no nodes are welded and no mesh interface is certified.
+Bonded interfaces and separate contact interfaces still need an appropriate
+meshing route and explicit physical interpretation.
+
+The query accepts `max_work`, `max_working_bytes` and cooperative `max_seconds`.
+Tracked storage covers diagnostic records and source snapshots; it does not cap
+OCCT's internal allocations. Boolean and Section queries receive the existing
+cancellation flag through OCCT's cooperative progress channel. Uninstrumented
+parts of a Native call can still overrun the deadline; it is not preemption.
+Source snapshots admit at most one quarter of `max_working_bytes`, capped at
+64 MiB per snapshot; the default admits 16 MiB per snapshot. Query failure
+raises `SelectionError` with `stage="body_relations"` and a bounded receipt in
+`report`; any retained partial measurements are diagnostics, not a completed
+query. Tags remain local to this imported STEP snapshot.
+
 Meshing and validation each default to one worker. Native import and meshing
 calls are serialized within a Python process because the engine uses a shared
 worker dispatcher. The GIL is released during those calls, so other Python work
@@ -304,8 +556,9 @@ mesh = model.mesh(
 ```
 
 Other limits are `max_work`, `max_output_bytes`, `max_working_bytes` and
-`max_audit_bytes`; `read_step` accepts `max_file_bytes`. Unspecified limits retain
-the native defaults. `max_working_bytes` bounds the primitive-route working
+`max_audit_bytes`; `read_step` accepts `max_file_bytes`. Omitted `max_work` is
+resolved by `resource_policy`; other unspecified limits retain native defaults.
+`max_working_bytes` bounds the primitive-route working
 budget. Byte limits cover their named native budgets, not process RSS.
 `max_seconds` requests cooperative cancellation during meshing; an OCCT
 operation can overrun the deadline. The deadline starts after the native
@@ -319,6 +572,34 @@ quality, per-body routes, CAD error and stage timings. Quality warnings remain
 distinct from validity failures. The native default warning threshold is zero
 (disabled); `quality["warning_enabled"]` and `quality["warning_threshold"]` make
 that policy explicit. A false `quality_warning` alone is not a quality guarantee.
+
+`pm.diagnose(mesh)` also supplies automatic shape-review advisories from the
+reported Native subtet mean-ratio summary, even with preferred warnings disabled.
+It recommends review for a minimum at most `0.001`, a median at most `0.1`, or
+the combination of median at most `0.2` and fifth percentile at most `0.05`.
+These informational advisories preserve native validity and configured quality
+thresholds. Thin or intentionally anisotropic cells need solver-specific
+assessment; the advisory does not blindly recommend refinement.
+
+```python
+diagnostics = pm.diagnose(mesh)
+print(diagnostics["shape_review"])  # solver_adequacy remains "unassessed"
+print(pm.format_diagnostics(diagnostics))
+```
+
+Neither `shape_review["status"] == "no_automatic_trigger"` nor a Native pass
+certifies simulation adequacy. Missing or unknown Native metric conventions
+produce an unavailable review. Use `inspect_mesh` for measured per-element
+queries and spatial inspection.
+
+Rebuilt reports expose each body's `source_shell` attempts and `volume_sizing`.
+Normal admission can tighten source chords when a valid source shell misses
+the unchanged CAD volume tolerance, while retaining requested size/min-size
+controls and all resource checks. Bounded recipes retain the historical one-build
+sized-front preparation; existing fallback retry policies stay unchanged.
+Original automatic-fallback surface and volume reasons are preserved
+separately. A geometry-only kernel fan reports volume sizing not applied;
+source acceptance and queue exhaustion are not sizing-completion certificates.
 
 ```python
 mesh = model.mesh(0.3, warning_quality=.25)  # publish valid meshes with warnings

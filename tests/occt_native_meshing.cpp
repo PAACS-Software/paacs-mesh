@@ -19,6 +19,8 @@
 #include <STEPControl_Writer.hxx>
 #include <TopoDS_Compound.hxx>
 #include <gp_Trsf.hxx>
+#include <algorithm>
+#include <array>
 #include <fstream>
 #include <iostream>
 #include <chrono>
@@ -34,6 +36,92 @@ std::string nativeSnapshot(const geo::OcctModel& model) {
     BRepTools::Write(geo::detail::OcctModelAccess::shape(model),stream);
     check(stream.good(),"native snapshot serialization");
     return stream.str();
+}
+void checkResourcePolicyPresets(const geo::OcctModel& model,const std::string& sourceSnapshot) {
+    check(model.solids().size()==1,"resource preset fixture must contain one original body");
+    const auto solidTag=model.solids().front()->tag();
+    const std::array presets{geo::NativeCadMeshOptions{},geo::normalNativeCadMeshOptions()};
+    for(std::size_t i=0;i<presets.size();++i) {
+        auto request=presets[i];request.geometry.targetSize=.7;
+        const bool normal=i==1;
+        const auto expectedPolicy=normal?geo::CadResourcePolicy::Normal:geo::CadResourcePolicy::Bounded;
+        const auto expectedWork=normal?geo::cadNormalWorkAllowance:std::uint64_t{50'000'000};
+        check(request.construction.resourcePolicy==expectedPolicy&&
+              request.maximumValidationWork==expectedWork&&request.geometry.maximumMeshingWork==expectedWork,
+              "aggregate/factory resource policy or inherited work allowance changed");
+        check(request.construction.effort==geo::CadConstructionEffort::Legacy&&
+              request.maximumPrimitiveWorkingBytes==512ULL*1024*1024,
+              "resource preset changed construction effort or inherited working memory");
+        check(!request.useAdvancingInteriorFront.has_value()&&request.advancingInteriorFrontEnabled(1),
+              "resource preset no longer selects automatic Tet4 construction");
+        mesh::Mesh destination;destination.addNode({-10,-10,-10},{3,99});
+        const auto sentinel=mesh::meshHash(destination);
+        const auto accepted=geo::meshNativeCad(model,request,destination);
+        check(accepted.published&&!accepted.destinationUnchanged&&accepted.audit.valid&&accepted.quality.valid&&
+              accepted.bodies.size()==1&&accepted.bodies.front().solidTag==solidTag&&
+              mesh::meshHash(destination)!=sentinel,
+              "resource preset failed native publication or changed original body identity");
+        check(accepted.validationWork>1&&accepted.validationWork<=request.maximumValidationWork&&
+              accepted.validationWork<=request.geometry.maximumMeshingWork,
+              "resource preset did not perform charged work within its effective allowance");
+        if(normal){
+            check(accepted.routeResolution.wholeBodyVerified&&accepted.routeResolution.preflightWork>0&&
+                  std::string_view(accepted.routeResolution.reason)=="verified_whole_body_primitive"&&
+                  std::string_view(accepted.bodies.front().route)=="cylinder"&&
+                  accepted.bodies.front().initialFront.work==0,
+                  "normal constant-field request did not consume a verified whole-body capability");
+            auto forced=request;forced.useAdvancingInteriorFront=true;
+            mesh::Mesh frontDestination;
+            const auto front=geo::meshNativeCad(model,forced,frontDestination);
+            check(front.published&&front.audit.valid&&front.quality.valid&&
+                  front.bodies.front().initialFront.work>0&&
+                  std::string_view(front.routeResolution.reason)=="explicit_front_enabled"&&
+                  nativeSnapshot(model)==sourceSnapshot,
+                  "explicit initial-front mode lost audited construction or source identity");
+        }else check(accepted.bodies.front().initialFront.work>0&&
+                   std::string_view(accepted.bodies.front().initialFront.diagnostic)!="not_attempted",
+                   "bounded resource preset changed historical automatic construction");
+        std::uint64_t tetrahedra=0;
+        for(Index cell=0;cell<destination.cellCount();++cell) {
+            if(destination.cell(cell).type!=mesh::CellType::Tet4)continue;
+            ++tetrahedra;
+            check(destination.cell(cell).onEntity==mesh::Classification{3,solidTag},
+                  "resource preset lost original tetrahedron body ownership");
+        }
+        check(tetrahedra>0&&nativeSnapshot(model)==sourceSnapshot,
+              "resource preset produced no tetrahedra or changed the original native BRep");
+        const auto retained=mesh::meshHash(destination);
+        // Exercise each public work field separately; the other field keeps
+        // the preset's allowance, so either ignored override is observable.
+        for(unsigned field=0;field<2;++field) {
+            auto limited=request;
+            if(field==0)limited.geometry.maximumMeshingWork=1;
+            else limited.maximumValidationWork=1;
+            const auto refused=geo::meshNativeCad(model,limited,destination);
+            check(!refused.published&&refused.destinationUnchanged&&
+                  refused.reason==geo::NativeCadMeshReason::BudgetExceeded&&refused.validationWork<=1&&
+                  mesh::meshHash(destination)==retained&&nativeSnapshot(model)==sourceSnapshot,
+                  "resource preset bypassed explicit work or changed retained mesh/source on refusal");
+        }
+    }
+    auto boundedQuality=geo::NativeCadMeshOptions{};
+    boundedQuality.geometry.targetSize=.7;boundedQuality.useAdvancingInteriorFront=true;
+    boundedQuality.initialTopologyQuality=true;
+    mesh::Mesh qualityDestination;qualityDestination.addNode({-11,-11,-11},{3,99});
+    const auto qualitySentinel=mesh::meshHash(qualityDestination);
+    const auto qualityResult=geo::meshNativeCad(model,boundedQuality,qualityDestination);
+    check(!qualityResult.bodies.empty(),"explicit bounded topology-quality request lost its body receipt");
+    const auto& topology=qualityResult.bodies.front().initialTopologyQuality;
+    const bool explicitNoCarrier=std::string_view(topology.diagnostic)=="no_carrier"||
+        std::string_view(topology.diagnostic)=="not_available"||std::string_view(topology.diagnostic)=="not_applicable";
+    check(topology.attempted||(!qualityResult.published&&qualityResult.reason==geo::NativeCadMeshReason::BudgetExceeded&&explicitNoCarrier),
+          "bounded explicit topology-quality override was silently ignored");
+    if(qualityResult.published)check(qualityResult.audit.valid&&qualityResult.quality.valid&&
+        qualityResult.bodies.front().solidTag==solidTag&&mesh::meshHash(qualityDestination)!=qualitySentinel,
+        "bounded topology-quality mode lost Native validity or body ownership");
+    else check(qualityResult.reason==geo::NativeCadMeshReason::BudgetExceeded&&qualityResult.destinationUnchanged&&
+        mesh::meshHash(qualityDestination)==qualitySentinel,"bounded topology-quality refusal changed its destination");
+    check(nativeSnapshot(model)==sourceSnapshot,"bounded topology-quality mode changed the original BRep");
 }
 }
 int main(int argc,char** argv) {
@@ -74,7 +162,13 @@ int main(int argc,char** argv) {
             auto cad=geo::importOcctCad(path);check(cad.imported(),"native CAD import");
             const auto importedSnapshot=nativeSnapshot(*cad.model);
             check(nativeSnapshot(*cad.model)==importedSnapshot,"native snapshot serialization stable");
+            if(std::string_view(fixture.name)=="cylinder") {
+                checkResourcePolicyPresets(*cad.model,importedSnapshot);++checks;
+            }
             geo::NativeCadMeshOptions options;options.geometry.targetSize=.3;
+            // This compatibility matrix exercises analytic sweeps and established
+            // star/partition routes. The preset tests above cover automatic Tet4 dispatch.
+            options.useAdvancingInteriorFront=false;
             if(!fixture.supported)options.useNativeSurfaceFallback=false;
             mesh::Mesh mesh;mesh.addNode({-10,-10,-10},{3,99});
             const auto before=mesh::meshHash(mesh);
@@ -180,6 +274,10 @@ int main(int argc,char** argv) {
                 check(geo::meshNativeCad(*cad.model,cap,mesh).published,"per-body face-control filtering");++checks;
             }
             if(std::string_view(fixture.name)=="cylinder"){
+                check(result.bodies.size()==1&&std::string_view(result.bodies.front().route)=="cylinder"&&
+                      cad.model->face(result.bodies.front().startFaceTag)!=nullptr&&
+                      result.bodies.front().startFaceTag!=result.bodies.front().endFaceTag,
+                      "profile-cap compatibility requires audited analytic cylinder face tags");++checks;
                 options.faceSizes={{result.bodies.at(0).startFaceTag,.15,1.3}};options.minimumSize=.12;
                 auto refined=geo::meshNativeCad(*cad.model,options,mesh);
                 check(refined.published&&refined.bodies.at(0).primitive.profiledVolume,"imported cap sizing");

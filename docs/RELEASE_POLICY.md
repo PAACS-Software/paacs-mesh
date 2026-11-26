@@ -1,5 +1,9 @@
 # Release scope
 
+The `1.2.0-rc.4` candidate uses the [publication gates](PYPI_RELEASE.md). Its
+matching GitHub release carries the qualification and publication receipts.
+Existing release tags and published files remain immutable.
+
 ## Core library and SDK
 
 The core includes the primitive, mapped, sweep and constrained meshing routes
@@ -12,7 +16,7 @@ threads. Applications can link it directly. OCCT and the debug UI bridge
 are optional targets.
 
 Use `find_package(PAACSMesh 1.2.0 EXACT CONFIG REQUIRED)` for this package.
-The SDK and CLI report `1.2.0-rc.3`. Rebuild C++ consumers with the matching
+The SDK and CLI report `1.2.0-rc.4`. Rebuild C++ consumers with the matching
 headers, libraries and toolchain. The mesh archive remains format v1.
 The `paacs_ui_` C bridge keeps ABI version 1. The Python and JSON examples
 cover the routes listed in [UI integration](UI_INTEGRATION.md).
@@ -34,7 +38,7 @@ Hex27 remain on the [roadmap](ROADMAP.md).
 
 ```sh
 python3 scripts/verify_version.py
-python3 scripts/package_source.py --output out/paacs-mesh-1.2.0-rc.3.zip
+python3 scripts/package_source.py --preserve-source-manifest --output out/paacs-mesh-1.2.0-rc.4.zip
 ```
 
 The source package includes build definitions, tests, shareable fixtures and

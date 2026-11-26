@@ -1,0 +1,434 @@
+{
+  "schema": "paacs-source-mismatch-priority-experiment-v1",
+  "recorded_date": "2026-11-25",
+  "case_id": "CAD27",
+  "source_sha256": "f5aa1abefabb3b42c7ccee50992e159429f0c711cc7072d9ff36a7a833a4cf60",
+  "units": "mm",
+  "scope": "One targeted public-Python attempt per build, followed by one separately instrumented candidate trace. No accepted CAD27 volume, coverage gain, speedup qualification, repeated timing distribution or release qualification follows.",
+  "dispatch": {
+    "default_enabled": false,
+    "recovery_mode": "advanced",
+    "native_source_fallback_required": true,
+    "regional_recovery_must_be_deferred": true,
+    "role": "Rank source-facet recovery proposals using existing Native-refused physical locations and exact parity against the current closed source PLC.",
+    "acceptance": "Original Native CAD projection, trim, material, contact, source embedding and final mesh gates remain mandatory. Source parity and numerical proximity order diagnostic proposals only."
+  },
+  "platform": {
+    "os": "Windows 11",
+    "python": "3.12.6",
+    "architecture": "AMD64",
+    "occt": "8.0.1"
+  },
+  "request": {
+    "target_size_mm": 8.396194419503558,
+    "common_options": {
+      "recovery": "advanced",
+      "assembly": "preserve_parts",
+      "workers": 1,
+      "validation_workers": 1,
+      "max_nodes": 500000,
+      "max_cells": 3000000,
+      "max_working_bytes": 1073741824,
+      "max_output_bytes": 268435456,
+      "max_audit_bytes": 536870912,
+      "max_seconds": 120.0,
+      "resource_policy": "normal",
+      "construction_effort": "legacy",
+      "minimum_quality": 0.0,
+      "max_chord_error": 0.13993657365839265,
+      "max_relative_volume_error": 0.01,
+      "advancing_interior_front": null,
+      "native_source_fallback": true,
+      "boundary_first": true
+    },
+    "cooperative_seconds": 120,
+    "hard_process_seconds": 150,
+    "construction_notes": "Explicit Advanced, explicit chord/volume/minimum-quality controls; AUTO interior options remain unset. Both switches enabled. Source geometry and all validity tolerances retained."
+  },
+  "build_provenance": {
+    "baseline_captured_native_sha256": "0671a3b80dfef3bd0ca6df7f63cb777f7d194635de158f44a4ce6f5cf04ec8e8",
+    "baseline_scope": "Existing compiled Native binary captured at the 129208d development baseline. Python wrapper files match the candidate. The source record is provenance, not an attestation that uncommitted edits were compiled into this older binary.",
+    "candidate_native_sha256": "b8ad89a42af178090bb9788de556f549213c5e46fc67efa7cdefea3c249910f2",
+    "source_base_commit": "129208df1ac49200e5e9f0ff4e550ecbfdfc966f",
+    "candidate_engine_inventory_sha256": "4902d6aed0f4c354477a05c674e665209b8610a23a5f99bf6c46b558973b5ffc",
+    "candidate_engine_file_count": 298,
+    "trace_header_snapshot_count": 190,
+    "trace_static_libraries": {
+      "paacs_occt.lib": "967d9f8eb22036fc0be73ecd934065d526c55bb995202e133ec3d4d503d6d53f",
+      "paacs_mesh.lib": "a62435b17f31cba81210ffe6d64fda58e20643be8dede33f95f30182dc4d6329"
+    },
+    "priority_helper_sha256": "2ffb4cc4f333557eca6f31075cedaaa19e495f0e4b23fa64146b99bffe9b9252",
+    "compiler_release_configuration": {
+      "compiler": "MSVC19.44.35207.1",
+      "cmake_standard": 23,
+      "configuration": "Release",
+      "optimization": "/O2 /Ob2 /DNDEBUG",
+      "runtime": "MultiThreadedDLL",
+      "strict_fp": true,
+      "note": "Existing Windows C++23 compatibility mode, matching the frozen engine build."
+    },
+    "coherence": "Trace imports frozen matching static-library copies and compiles only its observer against the frozen matching header snapshot. Selected SDK DLLs were copied hash-identically into its application directory and guarded before/after. Working production sources subsequently changed; this record remains bound to these artifacts."
+  },
+  "paired_pilot": {
+    "attempts": 2,
+    "repetitions_per_build": 1,
+    "published_meshes": 0,
+    "hard_kills": 0,
+    "rows": [
+      {
+        "side": "baseline",
+        "status": "native_refused",
+        "reason": "cancelled",
+        "native_sha256": "0671a3b80dfef3bd0ca6df7f63cb777f7d194635de158f44a4ce6f5cf04ec8e8",
+        "native_report_sha256": "789e2cfec4d3ba9e461e7f55ba1e456691d38e7d734f1ba8660b8b0eaff658d1",
+        "source_unchanged": true,
+        "stage_unchanged": true,
+        "clocks": {
+          "native_call": 120.06288910005242,
+          "import_mesh_export": 120.52547999983653,
+          "controller_process": 121.62044909992255
+        },
+        "source_facet_nodes": 32,
+        "native_surface_seconds": 14.1351981,
+        "native_volume_seconds": 105.629846,
+        "constraint_recovery": {
+          "diagnostic": "partial_seed",
+          "seed_cells": 11929,
+          "missing_edges_after": 11,
+          "missing_faces_after": 17,
+          "seconds": 2.3613178
+        },
+        "material_classification": {
+          "complete": true,
+          "requested_points": 11929,
+          "native_queries": 73,
+          "ray_admissions": 11856,
+          "seconds": 7.7731123
+        },
+        "source_mismatch_priority": null,
+        "published_mesh": false,
+        "archive_sha256": null,
+        "independent_archive_reaudit_performed": false,
+        "peak_native_worker_memory_bytes": null
+      },
+      {
+        "side": "candidate",
+        "status": "native_refused",
+        "reason": "cancelled",
+        "native_sha256": "b8ad89a42af178090bb9788de556f549213c5e46fc67efa7cdefea3c249910f2",
+        "native_report_sha256": "0f83d6ae23f871097b430933d368c4038925fbf29e738c1dad37757e6a2929b8",
+        "source_unchanged": true,
+        "stage_unchanged": true,
+        "clocks": {
+          "native_call": 120.04894360015169,
+          "import_mesh_export": 120.49868209986016,
+          "controller_process": 121.56027589994483
+        },
+        "source_facet_nodes": 32,
+        "native_surface_seconds": 14.4925776,
+        "native_volume_seconds": 105.2489913,
+        "constraint_recovery": {
+          "diagnostic": "partial_seed",
+          "seed_cells": 11929,
+          "missing_edges_after": 11,
+          "missing_faces_after": 17,
+          "seconds": 2.4349409
+        },
+        "material_classification": {
+          "complete": true,
+          "requested_points": 11929,
+          "native_queries": 73,
+          "ray_admissions": 11856,
+          "seconds": 7.7685863
+        },
+        "source_mismatch_priority": {
+          "attempts": 1,
+          "completed_attempts": 1,
+          "requested_points": 71,
+          "inside_source_outside_cad": 71,
+          "outside_source": 0,
+          "ambiguous_source": 0,
+          "prioritized_facets": 87,
+          "priority_applied": true,
+          "seconds": 0.0291408,
+          "work": 1728136,
+          "maximum_working_payload_estimate": 8934440,
+          "source_generation": 0,
+          "source_mesh_hash_u64": "7149247260009685994"
+        },
+        "published_mesh": false,
+        "archive_sha256": null,
+        "independent_archive_reaudit_performed": false,
+        "peak_native_worker_memory_bytes": null
+      }
+    ],
+    "all_attempt_native_call_seconds": 240.1118327002041,
+    "all_attempt_pipeline_seconds": 241.0241620996967,
+    "all_attempt_controller_seconds": 243.18072499986738,
+    "memory_scope": "UNQUALIFIED: GetProcessMemoryInfo sampled thevenvlauncherPopenhandle, not a verified actualNativeworkerPID. Raw5,259,264-byte observations preserved only in originalcontroller receipts; no actual-worker peak-memory comparison is supported.",
+    "conclusion": "Both requests reached cooperative cancellation near120 seconds. Candidate ranking completed and applied; no coverage or runtime gain was demonstrated. Baseline lacks newer diagnostic counters, so absent values remain unknown.",
+    "absent_baseline_counters": "Unknown rather than zero."
+  },
+  "candidate_trace": {
+    "separate_generation_attempt": true,
+    "returncode": 0,
+    "published_mesh": false,
+    "reason": "cancelled",
+    "native_call_seconds": 120.076414,
+    "process_seconds": 120.70281769987196,
+    "hard_timeout": false,
+    "all_pinned_artifact_hashes_unchanged": true,
+    "frozen_headers_unchanged": true,
+    "native_worker_peak_memory_bytes": null,
+    "memory_scope": "Process memory was not measured by this observer.",
+    "observer_archive_io_seconds": 0.0549747,
+    "observer_snapshot_count": 10,
+    "observer_limits": {
+      "snapshots": 64,
+      "archive_bytes": 134217728,
+      "nodes_per_snapshot": 100000,
+      "cells_per_snapshot": 200000,
+      "stage_events": 4096
+    },
+    "unmatched_stage_events": 0,
+    "unclosed_stage_intervals": 0,
+    "stage_self_seconds": {
+      "cavity_refill": 82.9401679,
+      "source_geometry_validation": 10.668764000000003,
+      "original_cad_centroid_batch": 7.911845,
+      "constraint-recovery": 2.4888034999999977,
+      "source_geometry_refinement": 1.5592793999999977,
+      "refined_source_rebuild": 0.06782870000000685,
+      "source_mismatch_priority": 0.037239599999999484
+    },
+    "region_recovery": {
+      "attempts": 107,
+      "states": 6780,
+      "backtracks": 5888,
+      "candidates": 115145,
+      "patches": 33,
+      "bound_hits": 13,
+      "largest_vertices": 232,
+      "largest_faces": 452,
+      "search_seconds": 70.5222702,
+      "preparation_seconds": 3.3939809,
+      "visibility_seconds": 8.368073199999998,
+      "publication_seconds": 0,
+      "validation_seconds": 0,
+      "local_front_seconds": 0.6411249
+    },
+    "final_expensive_refill": {
+      "start_seconds": 48.3431104,
+      "end_seconds": 120.0220745,
+      "seconds": 71.6789641,
+      "tet4_at_entry": 11846,
+      "tet4_in_final_observer_archive": 11846,
+      "scope": "No archived cell-count progress. Internal trial states can still have been explored and rejected."
+    },
+    "source_priority": {
+      "attempts": 1,
+      "completed_attempts": 1,
+      "requested_points": 71,
+      "inside_source_outside_cad": 71,
+      "outside_source": 0,
+      "ambiguous_source": 0,
+      "prioritized_facets": 87,
+      "work": 1728136,
+      "seconds": 0.037345,
+      "diagnostic": "source-mismatch-priority-only",
+      "fallback_reason": "none"
+    },
+    "source_edit_batch": {
+      "added_nodes": 32,
+      "original_node_coordinate_class_bytes_unchanged": true,
+      "before_source_archive_sha256": "6a0fda09810a83d10e5050c12fc64913b62af643b37bf87f88647beb4a1ff868",
+      "after_source_archive_sha256": "9cb03a2509d5cdeaf5cbe1c8cd6501bb000312b758f33be77a365a3eb14914fb",
+      "selected_parent_face_counts": {
+        "24": 2,
+        "25": 1,
+        "37": 5,
+        "47": 6,
+        "59": 16,
+        "70": 1,
+        "71": 1
+      },
+      "selected_parent_edge_connected_components": 18,
+      "largest_selected_parent_component": 5,
+      "point_displacement_mm": {
+        "minimum": 0.00023738606893931576,
+        "maximum": 0.07201001596755575,
+        "all_inward_relative_to_original_oriented_facet": true
+      }
+    },
+    "archived_topology_progress": [
+      {
+        "event": 1,
+        "stage": "volume_material_input",
+        "observed_seconds": 16.6332235,
+        "mesh_cells": 11929,
+        "source_triangles": 8138,
+        "missing_source_triangles": 21,
+        "exposed_non_source_front_triangles": 31
+      },
+      {
+        "event": 2,
+        "stage": "volume_material_retained",
+        "observed_seconds": 24.568479,
+        "mesh_cells": 11858,
+        "source_triangles": 8138,
+        "missing_source_triangles": 127,
+        "exposed_non_source_front_triangles": 135
+      },
+      {
+        "event": 4,
+        "stage": "cavity_refill_progress",
+        "observed_seconds": 31.2300298,
+        "mesh_cells": 11874,
+        "source_triangles": 8138,
+        "missing_source_triangles": 108,
+        "exposed_non_source_front_triangles": 116
+      },
+      {
+        "event": 6,
+        "stage": "cavity_refill_input",
+        "observed_seconds": 43.6751654,
+        "mesh_cells": 11836,
+        "source_triangles": 8202,
+        "missing_source_triangles": 177,
+        "exposed_non_source_front_triangles": 173
+      },
+      {
+        "event": 7,
+        "stage": "cavity_refill_progress",
+        "observed_seconds": 48.3348972,
+        "mesh_cells": 11846,
+        "source_triangles": 8202,
+        "missing_source_triangles": 169,
+        "exposed_non_source_front_triangles": 165
+      },
+      {
+        "event": 9,
+        "stage": "cavity_refill_progress",
+        "observed_seconds": 120.0221287,
+        "mesh_cells": 11846,
+        "source_triangles": 8202,
+        "missing_source_triangles": 169,
+        "exposed_non_source_front_triangles": 165
+      }
+    ],
+    "timing_scope": "Stage times are nested. The listed internal cavity phase counters are disjoint within cavity time. Include observer I/O in Native elapsed; never add stages to their parent elapsed a second time. This trace is diagnostic rather than a paired performance benchmark."
+  },
+  "file_only_witness_recheck": {
+    "native_execution": false,
+    "recorded_native_refusal_locations": 71,
+    "source_parity_before": {
+      "inside": 71
+    },
+    "source_parity_after": {
+      "inside": 50,
+      "outside": 21
+    },
+    "all_four_exact_binary_rays_agree": true,
+    "owned_cube_controls": [
+      "inside",
+      "outside",
+      "face_contact",
+      "edge_contact",
+      "vertex_contact"
+    ],
+    "work_units": 196939,
+    "work_limit": 2000000,
+    "elapsed_seconds": 1.7041539000347257,
+    "seconds_limit": 12.0,
+    "source_edge_uses_opposite": true,
+    "interpretation": "The32 edits move21 recorded locations outside the source PLC;50 remain inside. Native refusals were already recorded. This diagnoses a continuing source/CAD disagreement; it neither replaces original CAD tests nor proves every remaining point requires a source edit."
+  },
+  "total_generation_attempts_in_this_record": 3,
+  "followup": "Propose smaller connected source batches and recompute recorded physical witness locations against each current source generation before large regional search. No followup policy is implemented or qualified by this record.",
+  "limitations": [
+    "One imported case and one pair; no original51 rerun or unseen qualification.",
+    "No accepted mesh exists for these attempts, so quality, achieved sizing and independent final-volume audit values are unavailable.",
+    "The older successful CAD27 profile remains separate; these explicit Advanced settings do not revoke or reproduce that result.",
+    "Launcher-only process-memory samples are unusable for Native worker memory comparison. Source-priority modeled payload 8,934,440 bytes is not RSS.",
+    "Preparation, failed configure/compilation and diagnostic analysis costs are outside the generation clocks; total developer-iteration elapsed is unknown.",
+    "Raw imported CAD, partial meshes, centroids, images and local absolute paths are excluded from this tracked record."
+  ],
+  "ignored_evidence_artifacts": [
+    {
+      "path": "build/source-mismatch-priority/cad27-advanced-v1/pair-analysis.json",
+      "sha256": "80de687cf7c3e38dbd2f31efe73a910bf7490863b4fbec8dd8f1e83a9269339d"
+    },
+    {
+      "path": "build/source-mismatch-priority/cad27-advanced-v1/executed-runner.json",
+      "sha256": "f76972720dca9fc26346da8985b71ee9edc5fa58bd41a5dd338e50bb081b0bff"
+    },
+    {
+      "path": "build/source-mismatch-priority/cad27-advanced-v1/01-baseline-advanced-r1/native-report.json",
+      "sha256": "789e2cfec4d3ba9e461e7f55ba1e456691d38e7d734f1ba8660b8b0eaff658d1"
+    },
+    {
+      "path": "build/source-mismatch-priority/cad27-advanced-v1/01-baseline-advanced-r1/worker.json",
+      "sha256": "74d42a45b0111cc1c437b5da5a16da88a464ac25f45268e6f19c4a8c532ecb6d"
+    },
+    {
+      "path": "build/source-mismatch-priority/cad27-advanced-v1/01-baseline-advanced-r1/controller.json",
+      "sha256": "7cba741942254bf14b3c12d6ede31ff32a153b2e4f0a529c90ad76a3df0c026c"
+    },
+    {
+      "path": "build/source-mismatch-priority/cad27-advanced-v1/02-candidate-advanced-r1/native-report.json",
+      "sha256": "0f83d6ae23f871097b430933d368c4038925fbf29e738c1dad37757e6a2929b8"
+    },
+    {
+      "path": "build/source-mismatch-priority/cad27-advanced-v1/02-candidate-advanced-r1/worker.json",
+      "sha256": "78ae25cf0ed91fbc88f72021b1a97042d7945fb9f7011f8c3d049824b6e9fa2a"
+    },
+    {
+      "path": "build/source-mismatch-priority/cad27-advanced-v1/02-candidate-advanced-r1/controller.json",
+      "sha256": "9ab14ee6d8445b50f3700874709edb96ec130a9acb7bb1bae8c96ca329b9ce2e"
+    },
+    {
+      "path": "build/source-mismatch-priority/cad27-advanced-trace-v1/result.json",
+      "sha256": "e891e2d4c5f6fae61757b441e052e761eaffb7613825f394d964f74778b240b7"
+    },
+    {
+      "path": "build/source-mismatch-priority/cad27-advanced-trace-v1/events.jsonl",
+      "sha256": "c29ceb38e1157e746cc3f875aedc010042bfe90059b160eca1c797af9169255c"
+    },
+    {
+      "path": "build/source-mismatch-priority/cad27-advanced-trace-v1/stages.jsonl",
+      "sha256": "6cb4885c545e395cf72eca1948b214fc9e74beafd6dcf129f1e823b9e2d6f401"
+    },
+    {
+      "path": "build/source-mismatch-priority/cad27-advanced-trace-v1/trace-analysis.json",
+      "sha256": "3f3ab2642426ba6ee63c59f6f2fc9a113cd8fe5dd08a8674e5f3aa05661b201d"
+    },
+    {
+      "path": "build/source-mismatch-priority/cad27-advanced-trace-v1/source-edit-parity.json",
+      "sha256": "3ecb5539287d4ec737a610ef4c34639a998334c803463ee78bc0b27fb0ebbb1a"
+    },
+    {
+      "path": "build/source-mismatch-priority/cad27-advanced-trace-v1-run.json",
+      "sha256": "a517d4885d9f4f65e8d6ef0a58522fa955cdb4f67223fcf4710019a6630ac18e"
+    },
+    {
+      "path": "build/source-mismatch-priority/advanced-trace/freeze.json",
+      "sha256": "e017db7863f23fa759c5335eb6268b66db83b5bf566cc05b0f1b76bd82a68229"
+    },
+    {
+      "path": "build/source-mismatch-priority/advanced-trace/runtime-sdk.json",
+      "sha256": "323a0f53b7e7be03de781be96804fba03e79ee996766deb34c0bb7b7013b8b15"
+    },
+    {
+      "path": "build/source-mismatch-priority/advanced-trace/run_capture.py",
+      "sha256": "b3425d42604bb1f1eaf887fb7658bc6792d6089f343989d1b89ad0076d5fa366"
+    },
+    {
+      "path": "build/source-mismatch-priority/advanced-trace/probe.cpp",
+      "sha256": "2eb970524c979b6cf975ea0773b507453a572c932ddf2999525b85e9b9e61232"
+    },
+    {
+      "path": "build/source-mismatch-priority/advanced-trace/cmake/probe-build-Release.txt",
+      "sha256": "a8cab6f810957a455cdef9bb6c870db1f090a7124adde5fee22cd6f6dac076c8"
+    }
+  ]
+}

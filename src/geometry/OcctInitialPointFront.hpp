@@ -11,6 +11,7 @@
 #pragma once
 
 #include "../bnd/TetPlcGiftWrapping.hpp"
+#include "../bnd/TetConstructionProbe.hpp"
 #include "OcctInitialDelaunayScorer.hpp"
 #include "PlcVoidGeometry.hpp"
 #include <queue>
@@ -27,6 +28,7 @@
 #include <optional>
 #include <set>
 #include <stdexcept>
+#include <string_view>
 #include <tuple>
 #include <type_traits>
 #include <unordered_map>
@@ -45,6 +47,12 @@ struct OcctInitialPointFrontLimits {
     bool enableAuxiliaryCompaction=true;
     bool requireManifoldFront=false;
     const std::atomic_bool* cancellation=nullptr;
+    std::size_t maximumAuxiliaryCells=65'536;
+    bool balanceSourceAndBulk=false;
+    bool progressiveResources=false;
+    bool cacheGeometryRefusals=false;
+    std::uint64_t reservedBulkCandidates=0,reservedBulkWork=0,reservedBulkQueries=0;
+    std::size_t reservedBulkSites=0;
 };
 struct OcctInitialPointFrontReport {
     bool initialized=false,budgetLimited=false,frontClosed=false,cancelled=false;
@@ -90,10 +98,33 @@ struct OcctInitialPointFrontReport {
     // covering-radius certificate (later closure may repair another cavity).
     double bulkMaximumUnresolvedRatio=0.;
     std::vector<double> effectiveScales;
+    const char* budgetReason="none";
+    std::uint64_t candidateLimit=0,siteLimit=0,queryLimit=0,workLimit=0;
+    std::uint64_t reservedBulkCandidates=0,reservedBulkSites=0,sourceCandidates=0,sourceDeferredFaces=0;
+    bool sourcePhaseDeferred=false;
+    std::uint64_t auxiliaryImportedCells=0,auxiliaryImportWork=0,auxiliaryImportModeledBytes=0;
+    std::uint64_t auxiliaryInitialCapacity=0,auxiliaryHardCapacity=0;
+    std::uint64_t auxiliaryGrowthAttempts=0,auxiliaryGrowths=0,auxiliaryGrowthWork=0;
+    std::uint64_t maximumCombinedModeledBytes=0,maximumHeapCapacity=0,resourceRetries=0;
+    const char* auxiliaryResourceDiagnostic="not_attempted";
+    std::uint64_t geometryRefusalCacheHits=0,cachedGeometryRefusals=0;
 };
 
 namespace occt_initial_point_front_detail {
 inline constexpr double separationFactor=.65, faceGrowth=1.15;
+inline std::uint64_t saturatedAdd(std::uint64_t a,std::uint64_t b) {
+    return b>UINT64_MAX-a?UINT64_MAX:a+b;
+}
+inline std::uint64_t saturatedMultiply(std::uint64_t a,std::uint64_t b) {
+    return a&&b>UINT64_MAX/a?UINT64_MAX:a*b;
+}
+inline std::uint64_t initialFrontStorageBytes(std::uint64_t nodes,std::uint64_t faces,
+    std::uint64_t sites,std::uint64_t cones,std::uint64_t states) {
+    auto bytes=saturatedAdd(8ULL*1024*1024,saturatedMultiply(saturatedAdd(nodes,sites),2048));
+    for(const auto count:std::array{faces,cones,states})bytes=saturatedAdd(bytes,saturatedMultiply(count,4096));
+    if(sites>1024)bytes=saturatedAdd(bytes,saturatedMultiply(sites-1024,512));
+    return bytes;
+}
 inline bool finite(Vec3 p) {
     return std::isfinite(p.x)&&std::isfinite(p.y)&&std::isfinite(p.z);
 }
@@ -123,13 +154,16 @@ template<class SizeField,class AdmitNode,class Charge>
 mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
     const SizeField& field,double baseTarget,mesh::Classification region,
     const OcctInitialPointFrontLimits& limits,AdmitNode admitNode,Charge charge,
-    OcctInitialPointFrontReport* report=nullptr) {
+    OcctInitialPointFrontReport* report=nullptr,
+    bnd::detail::TetNumericalTopology* numericalTopology=nullptr) {
     using namespace occt_initial_point_front_detail;
     using Front=bnd::detail::PlcGiftWrapping;
     using Vertex=bnd::TetFacetVertexId;
     using Face=Front::Face;
     mesh::Mesh result=boundary;
     OcctInitialPointFrontReport out;
+    out.candidateLimit=limits.candidates;out.siteLimit=limits.sites;
+    out.queryLimit=limits.queries;out.workLimit=limits.work;
     static_assert(std::is_nothrow_move_assignable_v<OcctInitialPointFrontReport>);
     const auto done=[&]() -> mesh::Mesh {
         // Moving a Mesh can allocate on supported standard libraries. Deliver
@@ -142,23 +176,39 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
     };
     if(limits.cancellation&&limits.cancellation->load()){out.cancelled=true;return done();}
     if(region.dim!=3||!(baseTarget>0.)||!std::isfinite(baseTarget)||!boundary.nodeCount())return done();
-    const auto siteCap=std::min<std::size_t>(limits.sites,1024);
-    const auto coneCap=std::min<std::size_t>(limits.cones,4096);
+    const auto siteCap=limits.sites;
+    const auto coneCap=limits.cones;
     const auto ns=std::size_t(boundary.nodeCount()),nf=std::size_t(boundary.cellCount());
-    const auto stateCap=std::min<std::size_t>(limits.frontStates,nf+3*coneCap);
+    const auto stateCap=std::min<std::uint64_t>(limits.frontStates,
+        saturatedAdd(nf,saturatedMultiply(3,coneCap)));
     if(!siteCap||!coneCap||!limits.work||!limits.queries||nf>stateCap||
-        ns+siteCap>=bnd::kInvalidTetFacetVertex) {
-        out.budgetLimited=true;return done();
+        ns>=bnd::kInvalidTetFacetVertex||siteCap>=bnd::kInvalidTetFacetVertex-ns) {
+        out.budgetLimited=true;out.budgetReason="initial_limit";return done();
     }
     // Conservative admission for copied source/result, two AABB indices,
     // boundary BVH, node hash/scales (including one exclusion double per node),
     // occupied cones and all queue/front states.
-    const auto payload=8ULL*1024*1024+std::uint64_t(ns+siteCap)*2048+
-        std::uint64_t(nf)*4096+std::uint64_t(coneCap)*4096+
-        std::uint64_t(stateCap)*4096;
-    if(payload>limits.workingBytes){out.budgetLimited=true;return done();}
-    struct Limit {};
+    // The auxiliary's historical fixed mapping reserve covers 1,024 sites.
+    // Admit the extra mapping/vertex envelope when explicit larger clouds are used.
+    const auto initialSites=limits.progressiveResources?std::min<std::size_t>(siteCap,64):siteCap;
+    const auto initialCones=limits.progressiveResources?std::min<std::size_t>(coneCap,64):coneCap;
+    const auto initialStates=limits.progressiveResources?
+        std::min<std::uint64_t>(stateCap,saturatedAdd(nf,saturatedMultiply(3,initialCones))):stateCap;
+    const auto payload=initialFrontStorageBytes(ns,nf,initialSites,initialCones,initialStates);
+    if(payload>limits.workingBytes){out.budgetLimited=true;out.budgetReason="modeled_memory";return done();}
+    struct Limit {const char* reason="work_limit";};
+    struct SourceYield {};
+    struct BulkYield {};
+    bool sourceBudgetActive=false,bulkBudgetActive=false;
+    std::uint64_t sourceWorkStop=limits.work,bulkWorkStop=limits.work;
+    std::uint64_t sourceQueryStop=limits.queries,bulkQueryStop=limits.queries;
+    std::uint64_t sourceCandidateStop=limits.candidates,bulkCandidateStop=limits.candidates;
+    std::size_t sourceSiteStop=siteCap,bulkSiteStop=siteCap;
     const auto account=[&](std::uint64_t n=1) {
+        // A soft source refusal leaves its whole face batch uncommitted. It
+        // must yield before the total guard, including one expensive query.
+        if(sourceBudgetActive&&(out.workUsed>sourceWorkStop||n>sourceWorkStop-out.workUsed))throw SourceYield{};
+        if(bulkBudgetActive&&(out.workUsed>bulkWorkStop||n>bulkWorkStop-out.workUsed))throw BulkYield{};
         if(out.workUsed>limits.work||n>limits.work-out.workUsed)throw Limit{};
         charge(n);out.workUsed+=n;
     };
@@ -175,12 +225,18 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
         return std::min(h,baseTarget);
     };
     const auto native=[&](Vec3 p) {
-        tick();if(out.nativeQueries>=limits.queries)throw Limit{};
+        tick();
+        if(sourceBudgetActive&&out.nativeQueries>=sourceQueryStop)throw SourceYield{};
+        if(bulkBudgetActive&&out.nativeQueries>=bulkQueryStop)throw BulkYield{};
+        if(out.nativeQueries>=limits.queries)throw Limit{"query_limit"};
         ++out.nativeQueries;
         if(!admitNode(p)){++out.nativeRejects;return false;}return true;
     };
     const auto materialWitness=[&](Vec3 p) {
-        tick();if(out.nativeQueries>=limits.queries)throw Limit{};
+        tick();
+        if(sourceBudgetActive&&out.nativeQueries>=sourceQueryStop)throw SourceYield{};
+        if(bulkBudgetActive&&out.nativeQueries>=bulkQueryStop)throw BulkYield{};
+        if(out.nativeQueries>=limits.queries)throw Limit{"query_limit"};
         ++out.nativeQueries;++out.auxiliaryWitnessQueries;
         const auto inside=admitNode(p);
         if(!inside)++out.auxiliaryWitnessOutside;
@@ -195,9 +251,9 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
     front.requireManifoldFront=limits.requireManifoldFront;
     front.useLocalCandidates=true;front.useExactContactShortcut=true;
     front.chargeWork=tick;front.interiorAdmission=native;front.centroidAdmission=native;
-    front.vertices.reserve(ns+siteCap);front.cells.reserve(coneCap);front.cellBoxes.reserve(coneCap);
-    std::vector<std::size_t> depths;depths.reserve(ns+siteCap);
-    std::vector<double> exclusionScales;exclusionScales.reserve(ns+siteCap);
+    front.vertices.reserve(ns+initialSites);front.cells.reserve(initialCones);front.cellBoxes.reserve(initialCones);
+    std::vector<std::size_t> depths;depths.reserve(ns+initialSites);
+    std::vector<double> exclusionScales;exclusionScales.reserve(ns+initialSites);
     std::unordered_map<Key,std::vector<Vertex>,Hash> buckets;
     const auto origin=boundary.node(0);
     const auto width=separationFactor*baseTarget;
@@ -248,6 +304,20 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
     std::set<Face> originalFaceKeys;
     std::map<Face,std::size_t> attemptedAt;
     std::map<Face,std::size_t> compactionRetryAtSite;
+    std::map<Face,std::array<std::uint64_t,3>> resourceRetryAtState;
+    OcctInitialDelaunayScorer auxiliary;
+    struct ObserveFinal {
+        const OcctInitialDelaunayScorer& source;
+        int tag;
+        std::size_t originalNodes;
+        void emit()const noexcept {
+            if(source.initialized())bnd::detail::observeTetConstruction({
+                "initial_scoring_final",tag,&source.complexForDiagnostics(),nullptr,
+                source.relevanceForDiagnostics(),originalNodes,8,0,source.storedCells(),{},true,
+                source.bootstrapOriginalCoordinateRetryUsed});
+        }
+        ~ObserveFinal(){emit();}
+    } observeFinal{auxiliary,region.tag,ns};
     try {
         std::vector<std::vector<double>> incident(ns);
         for(Index i=0;i<boundary.cellCount();++i){
@@ -260,7 +330,7 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
                 incident[ids[j]].push_back(length);incident[ids[(j+1)%3]].push_back(length);
             }front.boundary.push_back(f);originalFaceKeys.insert(Front::key(f));
         }
-        out.effectiveScales.reserve(ns+siteCap);
+        out.effectiveScales.reserve(ns+initialSites);
         for(Index i=0;i<boundary.nodeCount();++i){
             tick();const auto p=boundary.node(i);if(!finite(p)||incident[i].empty())return done();
             auto& edges=incident[i];std::ranges::sort(edges,[&](double a,double b){tick();return a<b;});
@@ -275,19 +345,21 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
         // appended with sequence ID+1 and temporary removals of its last entry.
         front.initialOwnerCanonical=true;
         out.initialized=true;
-        if(limits.workingBytes<=payload+32ULL*1024*1024){out.budgetLimited=true;return done();}
+        if(limits.workingBytes-payload<=32ULL*1024*1024){out.budgetLimited=true;out.budgetReason="auxiliary_memory";return done();}
         const auto availableAuxiliaryBytes=limits.workingBytes-payload;
-        // Reserve the COMPLETE lazy heap at the admitted stored-cell capacity.
-        // It coexists with both compaction complexes; no memory limit is raised.
+        // Bounded reserves the complete lazy heap at its admitted cell ceiling.
+        // Normal grows it by demand, accounting for overlap with compaction.
         constexpr std::uint64_t heapBytesPerCell=128;
-        const auto auxiliaryCells=std::min<std::uint64_t>(65'536,
-            (availableAuxiliaryBytes-32ULL*1024*1024)/(8192+heapBytesPerCell));
-        const auto auxiliaryBytes=availableAuxiliaryBytes-auxiliaryCells*heapBytesPerCell;
-        OcctInitialDelaunayScorer auxiliary;
+        const auto auxiliaryCells=limits.progressiveResources?std::uint64_t(limits.maximumAuxiliaryCells):
+            std::min<std::uint64_t>(limits.maximumAuxiliaryCells,
+                (availableAuxiliaryBytes-32ULL*1024*1024)/(8192+heapBytesPerCell));
+        const auto auxiliaryBytes=limits.progressiveResources?availableAuxiliaryBytes:
+            availableAuxiliaryBytes-auxiliaryCells*heapBytesPerCell;
         bool initialized=false;
         try{
             initialized=auxiliary.initialize(boundary,region,std::size_t(auxiliaryCells),auxiliaryBytes,account,
-                materialWitness,limits.maximumDelaunayCavityCells,limits.work-out.workUsed,limits.cancellation);
+                materialWitness,limits.maximumDelaunayCavityCells,limits.work-out.workUsed,limits.cancellation,
+                limits.progressiveResources);
         }catch(const OcctInitialConstructionCancelled&){
             out.auxiliaryBootstrapWork=auxiliary.bootstrapWork;
             out.auxiliaryBootstrapPeakTemporaryBytes=auxiliary.bootstrapPeakTemporaryBytes;
@@ -296,14 +368,29 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
         out.auxiliaryBootstrapWork=auxiliary.bootstrapWork;
         out.auxiliaryBootstrapPeakTemporaryBytes=auxiliary.bootstrapPeakTemporaryBytes;
         out.cancelled=out.cancelled||auxiliary.cancelled;
+        if(limits.progressiveResources)
+            out.maximumCombinedModeledBytes=saturatedAdd(payload,
+                std::min(auxiliary.maximumResourceModeledBytes,auxiliary.workingBytes()));
         if(!initialized){
-            out.budgetLimited=true;return done();
+            out.budgetLimited=true;out.budgetReason=limits.progressiveResources?
+                auxiliary.resourceDiagnostic:"auxiliary_bootstrap";
+            out.auxiliaryResourceDiagnostic=auxiliary.resourceDiagnostic;
+            out.auxiliaryImportedCells=auxiliary.bootstrapImportedCells;
+            out.auxiliaryImportWork=auxiliary.bootstrapImportWork;
+            out.auxiliaryImportModeledBytes=auxiliary.bootstrapImportModeledBytes;
+            return done();
         }
         auxiliary.compactionEnabled=limits.enableAuxiliaryCompaction;
+        bnd::detail::observeTetConstruction({"initial_scoring_bootstrap",region.tag,
+            &auxiliary.complexForDiagnostics(),nullptr,auxiliary.relevanceForDiagnostics(),ns,8,
+            0,auxiliary.storedCells(),{},true,auxiliary.bootstrapOriginalCoordinateRetryUsed});
         auxiliary.useCertifiedConeCavities=true;
         out.auxiliaryInitialized=true;
+        std::uint64_t currentReservation=payload;
         const auto syncAuxiliary=[&](){
             out.budgetLimited=out.budgetLimited||auxiliary.budgetLimited;
+            if(auxiliary.budgetLimited&&std::string_view(out.budgetReason)=="none")
+                out.budgetReason="auxiliary_storage";
             out.cancelled=out.cancelled||auxiliary.cancelled;
             out.auxiliaryScorerEvaluations=auxiliary.evaluations;
             out.auxiliaryFullCertifications=auxiliary.fullCertifications;
@@ -333,18 +420,69 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
             out.auxiliaryStoredPeak=auxiliary.peakStoredCells;
             out.auxiliaryStoredCells=auxiliary.storedCells();
             out.auxiliaryLiveCells=auxiliary.liveCells();
+            out.auxiliaryImportedCells=auxiliary.bootstrapImportedCells;
+            out.auxiliaryImportWork=auxiliary.bootstrapImportWork;
+            out.auxiliaryImportModeledBytes=auxiliary.bootstrapImportModeledBytes;
+            out.auxiliaryInitialCapacity=auxiliary.initialStorageCapacity;
+            out.auxiliaryHardCapacity=auxiliary.hardStorageLimit();
+            out.auxiliaryGrowthAttempts=auxiliary.capacityGrowthAttempts;
+            out.auxiliaryGrowths=auxiliary.capacityGrowths;
+            out.auxiliaryGrowthWork=auxiliary.growthWork;
+            out.auxiliaryResourceDiagnostic=auxiliary.resourceDiagnostic;
+            if(limits.progressiveResources)
+                out.maximumCombinedModeledBytes=std::max(out.maximumCombinedModeledBytes,
+                    saturatedAdd(currentReservation,std::min(auxiliary.maximumResourceModeledBytes,auxiliary.workingBytes())));
         };
+        std::uint64_t heapSlots=0;
+        const auto refreshWorkingBudget=[&](std::uint64_t peakHeapSlots){
+            if(!limits.progressiveResources)return;
+            const auto cones=std::max<std::uint64_t>(initialCones,saturatedAdd(front.cells.size(),4));
+            const auto states=std::min<std::uint64_t>(stateCap,saturatedAdd(nf,saturatedMultiply(3,cones)));
+            const auto current=initialFrontStorageBytes(ns,nf,
+                std::max<std::uint64_t>(initialSites,saturatedAdd(out.sites,2)),cones,states);
+            const auto heap=saturatedMultiply(peakHeapSlots,heapBytesPerCell);
+            const auto reserved=saturatedAdd(current,heap);
+            if(reserved>=limits.workingBytes||!auxiliary.setWorkingBudget(limits.workingBytes-reserved))
+                throw Limit{"combined_working_memory"};
+            currentReservation=reserved;
+            const auto combined=saturatedAdd(reserved,auxiliary.currentModeledBytes());
+            if(combined>limits.workingBytes)throw Limit{"combined_working_memory"};
+            out.maximumCombinedModeledBytes=std::max(out.maximumCombinedModeledBytes,combined);
+            out.maximumHeapCapacity=std::max(out.maximumHeapCapacity,peakHeapSlots);
+        };
+        refreshWorkingBudget(0);
 
         const auto runBulk=[&](){
+            bulkBudgetActive=limits.balanceSourceAndBulk;
+            try {
             struct Void {double ratio=0.,target=0.;Vec3 point{};std::size_t cell=0;};
             static_assert(sizeof(Void)<=128);
             const auto lower=[&](const Void& a,const Void& b){
                 tick();if(a.ratio!=b.ratio)return a.ratio<b.ratio;
                 return a.cell>b.cell;
             };
-            tick(auxiliary.storageCapacity());
-            std::vector<Void> storage;storage.reserve(auxiliary.storageCapacity());
-            std::priority_queue<Void,std::vector<Void>,decltype(lower)> heap(lower,std::move(storage));
+            using BaseHeap=std::priority_queue<Void,std::vector<Void>,decltype(lower)>;
+            struct VoidHeap:BaseHeap {
+                explicit VoidHeap(decltype(lower) compare,std::vector<Void>&& values):BaseHeap(compare,std::move(values)){}
+                std::size_t capacity()const{return this->c.capacity();}
+                void reserve(std::size_t count){this->c.reserve(count);}
+            };
+            std::vector<Void> storage;
+            if(!limits.progressiveResources){tick(auxiliary.storageCapacity());storage.reserve(auxiliary.storageCapacity());}
+            VoidHeap heap(lower,std::move(storage));
+            heapSlots=heap.capacity();refreshWorkingBudget(heapSlots);
+            const auto pushHeap=[&](Void item){
+                if(limits.progressiveResources&&heap.size()==heap.capacity()){
+                    const auto capacity=std::min<std::uint64_t>(limits.maximumAuxiliaryCells,
+                        std::max<std::uint64_t>(64,saturatedMultiply(heap.capacity(),2)));
+                    if(capacity<=heap.capacity())throw Limit{"auxiliary_heap_limit"};
+                    refreshWorkingBudget(saturatedAdd(heap.capacity(),capacity));
+                    // Charge entries that move, rather than unoccupied future slots.
+                    tick(heap.size());heap.reserve(std::size_t(capacity));
+                    heapSlots=heap.capacity();refreshWorkingBudget(heapSlots);
+                }
+                heap.push(item);
+            };
             PlcVoidGeometry plc(front,tick);
             const auto push=[&](std::size_t id){
                 tick();const auto& live=auxiliary.complexForDiagnostics();
@@ -372,8 +510,8 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
                 if(!(radius>=separationFactor*h)){return;}
                 const auto clipped=plc.clearance(center,radius);
                 if(!(clipped>=separationFactor*h)||!std::isfinite(clipped/h)){return;}
-                if(heap.size()>=auxiliary.storageCapacity())throw Limit{};
-                heap.push({clipped/h,h,center,id});
+                if(!limits.progressiveResources&&heap.size()>=auxiliary.storageCapacity())throw Limit{"auxiliary_heap_limit"};
+                pushHeap({clipped/h,h,center,id});
             };
             const auto rebuildVoids=[&](){
                 while(!heap.empty()){tick();heap.pop();}
@@ -382,10 +520,12 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
             };
             auto compactions=auxiliary.compactions;
             rebuildVoids();
-            while(!heap.empty()&&out.sites<siteCap){
+            while(!heap.empty()&&out.sites<bulkSiteStop){
                 // No Plan survives between batches. Compaction invalidates IDs;
                 // only that storage event causes a whole-heap rebuild.
+                refreshWorkingBudget(heapSlots);
                 try{(void)auxiliary.prepareForBatch();}catch(...){syncAuxiliary();throw;}
+                refreshWorkingBudget(heapSlots);
                 syncAuxiliary();
                 if(auxiliary.compactions!=compactions){
                     compactions=auxiliary.compactions;rebuildVoids();
@@ -395,7 +535,8 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
                 const auto& live=auxiliary.complexForDiagnostics();
                 if(item.cell>=live.alive.size()||!live.alive[item.cell])continue;
                 if(item.ratio<separationFactor)break;
-                if(out.candidates>=limits.candidates)throw Limit{};
+                if(bulkBudgetActive&&out.candidates>=bulkCandidateStop)throw BulkYield{};
+                if(out.candidates>=limits.candidates)throw Limit{"candidate_limit"};
                 ++out.candidates;++out.bulkCandidates;
                 const auto reject=[&](){out.bulkMaximumUnresolvedRatio=std::max(out.bulkMaximumUnresolvedRatio,item.ratio);};
                 if(!separated(item.point,item.target,item.target)){
@@ -415,8 +556,12 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
                 catch(...){syncAuxiliary();front.vertices.pop_back();throw;}
                 front.vertices.pop_back();syncAuxiliary();
                 if(!plan||!plan->valid){
+                    if(limits.progressiveResources&&auxiliary.resourceRetryRequested()){
+                        ++out.resourceRetries;pushHeap(item);continue;
+                    }
+                    if(limits.progressiveResources&&auxiliary.budgetLimited)throw Limit{auxiliary.resourceDiagnostic};
                     ++out.auxiliaryInvalidRejects;reject();
-                    if(auxiliary.compactionRequested())heap.push(item);
+                    if(auxiliary.compactionRequested())pushHeap(item);
                     continue;
                 }
                 if(!plan->available)++out.auxiliaryUnavailable;
@@ -461,15 +606,30 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
             // It is deliberately not a formal covering-radius certificate.
             out.bulkQueueExhausted=heap.empty();
             if(!heap.empty())out.bulkMaximumUnresolvedRatio=std::max(out.bulkMaximumUnresolvedRatio,heap.top().ratio);
+            if(!heap.empty()&&out.sites>=bulkSiteStop&&bulkBudgetActive){
+                out.budgetLimited=true;out.budgetReason="bulk_phase_sites";
+            }
+            }catch(const BulkYield&){
+                // A partially scanned/rebuilt heap cannot bound all remaining
+                // voids. Infinity is serialized as unavailable, never as zero.
+                out.bulkQueueExhausted=false;
+                out.bulkMaximumUnresolvedRatio=std::numeric_limits<double>::infinity();
+                out.budgetLimited=true;out.budgetReason="bulk_phase_allowance";
+            }
+            bulkBudgetActive=false;
             // The points were individually PLC- and native-certified. Treat
             // them as fixed NON-SOURCE occupancy vertices so later wall cones
             // cannot hide them; the prescribed Tri3 set stays exactly unchanged.
             front.fixedVertexCount=Vertex(front.vertices.size());
+            // The heap is destroyed on return; release its modeled allowance
+            // before resuming the source/closure frontier.
+            if(limits.progressiveResources)heapSlots=0;
         };
 
         // Visit an initial snapshot of original source keys once. Newly
         // exposed faces are parked until intrinsic bulk placement has run.
         bool sourcePhase=true,bulkRan=false;
+        bool sourceDeferred=false;
         const auto rebuild=[&](){
             ++out.queueRounds;
             for(const auto& [key,row]:front.front){(void)row;tick();
@@ -481,9 +641,36 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
             }
         };
         rebuild();auto roundStart=front.cells.size();
+        if(limits.balanceSourceAndBulk){
+            // Bootstrap and queue preparation are shared prerequisites. Split
+            // only the remaining actual allowance, with separate closure room.
+            const auto reserve=[&](std::uint64_t total,std::uint64_t requested){
+                return std::min(total-total/8,requested?requested:total/3+(total%3!=0));
+            };
+            const auto workRoom=limits.work-out.workUsed,queryRoom=limits.queries-out.nativeQueries;
+            const auto bulkWork=reserve(workRoom,limits.reservedBulkWork);
+            const auto bulkQueries=reserve(queryRoom,limits.reservedBulkQueries);
+            out.reservedBulkCandidates=reserve(limits.candidates,limits.reservedBulkCandidates);
+            out.reservedBulkSites=reserve(siteCap,limits.reservedBulkSites);
+            bulkWorkStop=limits.work-workRoom/8;sourceWorkStop=bulkWorkStop-bulkWork;
+            bulkQueryStop=limits.queries-queryRoom/8;sourceQueryStop=bulkQueryStop-bulkQueries;
+            bulkCandidateStop=limits.candidates-limits.candidates/8;
+            sourceCandidateStop=bulkCandidateStop-out.reservedBulkCandidates;
+            bulkSiteStop=siteCap-siteCap/8;
+            sourceSiteStop=bulkSiteStop-std::size_t(out.reservedBulkSites);
+            sourceBudgetActive=true;
+        }
         while(!bulkRan||!propagationQueue.empty()||!queue.empty()||front.cells.size()!=roundStart){
-            if(sourcePhase&&queue.empty()){
-                out.sourcePhaseCompleted=true;
+            if(sourcePhase&&limits.balanceSourceAndBulk&&out.sites>=sourceSiteStop)sourceDeferred=true;
+            if(sourcePhase&&(queue.empty()||sourceDeferred)){
+                sourceBudgetActive=false;
+                out.sourcePhaseCompleted=queue.empty();
+                if(sourceDeferred&&!queue.empty()){
+                    out.sourcePhaseDeferred=true;
+                    // Unpolled original source-face queue entries, not a
+                    // statement about missing CAD faces or material coverage.
+                    out.sourceDeferredFaces=queue.size();
+                }
                 const auto beforeBulk=out.sites;
                 runBulk();bulkRan=true;sourcePhase=false;
                 // Bulk changes the point set without adding occupancy cones.
@@ -491,10 +678,14 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
                 if(out.sites!=beforeBulk)attemptedAt.clear();
                 if(front.front.empty())break;
             }
+            std::optional<Face> interruptedSource;
+            try {
             // Prior candidate vectors have been destroyed. Compact only here,
             // before any point/Plan for the next face is staged.
+            refreshWorkingBudget(heapSlots);
             try{(void)auxiliary.prepareForBatch();}
             catch(...){syncAuxiliary();throw;}
+            refreshWorkingBudget(heapSlots);
             syncAuxiliary();
             if(propagationQueue.empty()&&queue.empty()){
                 roundStart=front.cells.size();rebuild();
@@ -505,10 +696,14 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
             tick();const bool propagating=!sourcePhase&&!propagationQueue.empty();
             const auto key=propagating?propagationQueue.front():queue.front();
             if(propagating)propagationQueue.pop_front();else queue.pop_front();
+            if(sourcePhase)interruptedSource=key;
             const auto found=front.front.find(key);
             if(found==front.front.end())continue;
             if(const auto at=attemptedAt.find(key);at!=attemptedAt.end()&&at->second==front.cells.size())continue;
-            if(attemptedAt.size()>=stateCap&&!attemptedAt.contains(key))throw Limit{};
+            if(attemptedAt.size()>=stateCap&&!attemptedAt.contains(key)){
+                if(sourceBudgetActive)throw SourceYield{};
+                throw Limit{"front_state_limit"};
+            }
             attemptedAt[key]=front.cells.size();const auto f=found->second.directed;
             const auto depth=1+std::max({depths[f[0]],depths[f[1]],depths[f[2]]});
             if(depth==1)++out.originalFaceActivations;else ++out.propagatedFaceActivations;
@@ -530,7 +725,9 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
             };
             std::vector<Candidate> candidates;
             const auto offer=[&](Vec3 p,Vertex vertex,bool fresh){
-                tick();if(out.candidates>=limits.candidates)throw Limit{};++out.candidates;
+                if(sourceBudgetActive&&out.candidates>=sourceCandidateStop)throw SourceYield{};
+                tick();if(out.candidates>=limits.candidates)throw Limit{"candidate_limit"};++out.candidates;
+                if(sourcePhase)++out.sourceCandidates;
                 if(!finite(p))return;
                 // Reuse this one field sample for both geometric construction
                 // and persistent interior exclusion; no extra CAD query.
@@ -556,7 +753,12 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
                     catch(...){syncAuxiliary();front.vertices.pop_back();throw;}
                     front.vertices.pop_back();
                     syncAuxiliary();
-                    if(!plan||!plan->valid){++out.auxiliaryInvalidRejects;return;}
+                    if(!plan||!plan->valid){
+                        if(limits.progressiveResources&&auxiliary.budgetLimited&&!auxiliary.resourceRetryRequested())
+                            throw Limit{auxiliary.resourceDiagnostic};
+                        if(!(limits.progressiveResources&&auxiliary.resourceRetryRequested()))++out.auxiliaryInvalidRejects;
+                        return;
+                    }
                     if(!plan->available)++out.auxiliaryUnavailable;
                     if(plan->comparisonAvailable)++out.auxiliaryComparisonPlans;
                     out.auxiliaryRelevantRemoved+=plan->relevantRemoved;
@@ -575,6 +777,18 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
             }
             if(out.sites<siteCap)for(const auto factor:std::array{1.,.85,1.15})
                 offer(center-n*(height*factor/std::sqrt(n2)),Vertex(front.vertices.size()),true);
+            if(limits.progressiveResources&&auxiliary.resourceRetryRequested()){
+                candidates.clear();
+                const std::array<std::uint64_t,3> stamp{out.sites,auxiliary.storageCapacity(),auxiliary.planEpoch()};
+                const auto retried=resourceRetryAtState.find(key);
+                if(retried!=resourceRetryAtState.end()&&retried->second==stamp)
+                    throw Limit{"auxiliary_resource_stalled"};
+                if(resourceRetryAtState.size()>=stateCap&&!resourceRetryAtState.contains(key))throw Limit{"front_state_limit"};
+                resourceRetryAtState[key]=stamp;++out.resourceRetries;
+                attemptedAt.erase(key);
+                if(sourcePhase)queue.push_front(key);else propagationQueue.push_front(key);
+                continue;
+            }
             if(auxiliary.compactionRequested()){
                 // Storage history must not remove a better fresh proposal and
                 // thereby bias this face toward a worse fresh/reused apex.
@@ -586,9 +800,11 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
                     // At most one forced storage retry per face and accepted-
                     // point generation. Genuine live-capacity pressure remains
                     // an explicit budget limit instead of a retry loop.
-                    out.budgetLimited=true;continue;
+                    out.budgetLimited=true;
+                    if(std::string_view(out.budgetReason)=="none")out.budgetReason="auxiliary_storage";
+                    continue;
                 }
-                if(compactionRetryAtSite.size()>=stateCap&&!compactionRetryAtSite.contains(key))throw Limit{};
+                if(compactionRetryAtSite.size()>=stateCap&&!compactionRetryAtSite.contains(key))throw Limit{"front_state_limit"};
                 compactionRetryAtSite[key]=sites;
                 attemptedAt.erase(key);propagationQueue.push_front(key);
                 continue;
@@ -606,19 +822,46 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
             });
             bool accepted=false;
             for(const auto& candidate:candidates){
-                if(front.cells.size()>=coneCap||front.front.size()+3>stateCap)throw Limit{};
+                if(limits.cacheGeometryRefusals&&!candidate.fresh){
+                    tick();
+                    if(found->second.geometryRejected.contains(candidate.vertex)){
+                        ++out.geometryRefusalCacheHits;continue;
+                    }
+                }
+                if(front.cells.size()>=coneCap||front.front.size()+3>stateCap){
+                    if(sourceBudgetActive)throw SourceYield{};
+                    throw Limit{"cone_or_front_limit"};
+                }
                 if(candidate.fresh)front.vertices.push_back({candidate.point,front.vertices.size()+1});
                 bnd::TetFacetCell cone;
                 bool valid=false;
                 try{valid=front.valid(Front::Front{f},candidate.vertex,cone);}
                 catch(...){if(candidate.fresh)front.vertices.pop_back();throw;}
-                if(!valid){if(candidate.fresh)front.vertices.pop_back();++out.geometryRejects;continue;}
+                if(!valid){
+                    if(candidate.fresh)front.vertices.pop_back();
+                    // Stored apices have immutable coordinates. Fixed-vertex,
+                    // original-boundary and occupied-cell witnesses persist.
+                    // Keep this bounded by the per-front-state storage model;
+                    // a full cache merely repeats the original exact checks.
+                    if(limits.cacheGeometryRefusals&&!candidate.fresh&&front.lastGeometryRefusal&&
+                       found->second.geometryRejected.size()<16){
+                        tick();
+                        if(found->second.geometryRejected.insert(candidate.vertex).second)
+                            ++out.cachedGeometryRefusals;
+                    }
+                    ++out.geometryRejects;continue;
+                }
                 if(candidate.fresh){
                     bool committed=false;
+                    const auto firstAdded=auxiliary.storedCells();
                     try{committed=auxiliary.commit(*candidate.auxiliaryPlan,candidate.vertex);}
                     catch(...){syncAuxiliary();front.vertices.pop_back();throw;}
                     syncAuxiliary();
                     if(!committed){front.vertices.pop_back();++out.auxiliaryInvalidRejects;continue;}
+                    bnd::detail::observeTetConstruction({"initial_scoring_commit",region.tag,
+                        &auxiliary.complexForDiagnostics(),nullptr,auxiliary.relevanceForDiagnostics(),ns,8,
+                        firstAdded,auxiliary.storedCells()-firstAdded,candidate.auxiliaryPlan->patch.removed,false,
+                        auxiliary.bootstrapOriginalCoordinateRetryUsed});
                     ++out.auxiliaryCommits;
                     if(candidate.auxiliaryPlan->available){
                         ++out.auxiliaryRankedCommits;
@@ -653,13 +896,31 @@ mesh::Mesh appendOcctInitialPointFrontSites(const mesh::Mesh& boundary,
             }
             (void)accepted;
             if(front.front.empty()&&!sourcePhase)break;
+            }catch(const SourceYield&){
+                // Every charged auxiliary commit check precedes apply; the
+                // front insert has no charged interruption after that commit.
+                // Existing point/Plan guards have therefore restored staging.
+                if(interruptedSource&&front.front.contains(*interruptedSource)){
+                    queue.push_front(*interruptedSource);attemptedAt.erase(*interruptedSource);
+                }
+                sourceBudgetActive=false;sourceDeferred=true;
+            }
         }
         out.frontClosed=front.front.empty();
         checkCancellation();
     }catch(const OcctInitialConstructionCancelled&){out.cancelled=true;
-    }catch(const Limit&){out.budgetLimited=true;}
+    }catch(const Limit& limit){out.budgetLimited=true;out.budgetReason=limit.reason;}
+    if(numericalTopology&&auxiliary.initialized()&&!out.cancelled){
+        // A valid budget-limited placement is still useful. The move itself
+        // neither allocates nor consumes further construction work; the later
+        // bounded remap/import accounts all of its linear work and peak storage.
+        observeFinal.emit();
+        try{auxiliary.releaseNumericalTopology(*numericalTopology,region);}
+        catch(const OcctInitialConstructionCancelled&){out.cancelled=true;}
+    }
     out.remainingFrontFaces=front.front.size();
-    if(out.sites>=siteCap&&!out.frontClosed)out.budgetLimited=true;
+    if(out.sites>=siteCap&&!out.frontClosed){out.budgetLimited=true;
+        if(std::string_view(out.budgetReason)=="none")out.budgetReason="site_limit";}
     return done();
 }
 

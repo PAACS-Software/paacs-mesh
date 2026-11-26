@@ -5,6 +5,7 @@
 
 #pragma once
 #include "paacs/geometry/OcctModel.hpp"
+#include "paacs/geometry/CadConstructionBudget.hpp"
 #include "paacs/mesh/Mesh.hpp"
 #include <atomic>
 #include <compare>
@@ -26,6 +27,7 @@ struct OcctBoundaryOptions {
     std::uint64_t maximumOutputBytes = 256ULL * 1024 * 1024;
     std::uint64_t maximumWork = 20'000'000;
     const std::atomic<bool>* cancellation = nullptr;
+    CadConstructionBudget construction;
 };
 struct OcctBoundaryNodeKey {
     int dimension = -1, tag = -1;

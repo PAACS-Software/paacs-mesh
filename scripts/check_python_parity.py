@@ -44,6 +44,7 @@ def main():
     common = ["--native-cad", "--report-json", "--recovery-mode", "standard",
               "--threads", "1", "--native-validation-threads", "1"]
     cases = [
+        # These cases omit policy on both interfaces to qualify new-call defaults.
         ("cylinder", "cylinder.step", .3, {}, ["--independent-parts"]),
         ("assembly", "assembly.step", .3, {}, ["--independent-parts"]),
         ("combined-sizing", "cylinder.step", .7, {
@@ -54,6 +55,22 @@ def main():
         }, ["--native-sizing", "--growth", "1.55", "--face-size", "1", ".16",
             "--size-box", "-.3", "-.3", ".7", ".3", ".3", "1.3", ".15",
             "--min-size", ".12", "--max-work", "100000000"]),
+        ("construction-caps", "cylinder.step", .5, {
+            "assembly": "conforming", "construction_effort": "thorough",
+            "max_surface_points": 400, "max_surface_chord_points": 128,
+            "max_interior_candidates": 20000, "max_interior_sites": 256,
+            "max_work": 100_000_000,
+        }, ["--construction-effort", "thorough", "--max-surface-points", "400",
+            "--max-surface-chord-points", "128", "--max-interior-candidates", "20000",
+            "--max-interior-sites", "256", "--max-work", "100000000"]),
+        ("normal-resources", "cylinder.step", .7, {
+            "assembly": "conforming", "resource_policy": "normal",
+        }, ["--resource-policy", "normal"]),
+        ("normal-explicit-resources", "cylinder.step", .7, {
+            "assembly": "conforming", "resource_policy": "normal", "max_work": 100_000_000,
+            "max_working_bytes": 1024**3, "max_nodes": 50_000, "max_cells": 250_000,
+        }, ["--max-work", "100000000", "--resource-policy", "normal", "--max-working-bytes", str(1024**3),
+            "--max-nodes", "50000", "--max-cells", "250000"]),
     ]
     results = []
     with tempfile.TemporaryDirectory(prefix="paacs-native-parity-") as directory:
@@ -79,6 +96,37 @@ def main():
             python_hash, native_hash = digest(python_archive), digest(native_archive)
             if python_hash != native_hash:
                 raise RuntimeError(f"Python and native CLI archives differ for {name}")
+            native_reports = []
+            for line in child.stdout.splitlines():
+                try:
+                    value = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(value, dict) and value.get("schema") == "paacs-native-cad-report-v1":
+                    native_reports.append(value)
+            if len(native_reports) != 1:
+                raise RuntimeError(f"Expected one native CLI report for {name}")
+            resource_keys = ("policy", "requested_max_work", "effective_max_work",
+                             "logical_work_cap_disabled", "max_working_bytes")
+            expected_resources = {key: report["resources"][key] for key in resource_keys}
+            if name in {"cylinder", "assembly"} and (
+                    expected_resources["policy"] != "normal"
+                    or expected_resources["requested_max_work"] is not None
+                    or expected_resources["logical_work_cap_disabled"] is not True
+                    or expected_resources["effective_max_work"] < 2**60
+                    or expected_resources["max_working_bytes"] != 512 * 1024**2
+                    or report["construction"]["effort"] != "legacy"):
+                raise RuntimeError(f"New-call defaults did not retain Normal/Legacy resource intent for {name}")
+            native_resources = native_reports[0].get("resources")
+            if not isinstance(native_resources, dict) or not set(resource_keys) <= native_resources.keys():
+                raise RuntimeError(f"Native CLI resource receipt is incomplete for {name}")
+            actual_resources = {key: native_resources[key] for key in resource_keys}
+            if actual_resources != expected_resources:
+                raise RuntimeError(f"Python and native CLI resource receipts differ for {name}")
+            if name == "construction-caps":
+                requested = {key: value for key, value in report["construction"].items() if key != "scope"}
+                if native_reports[0].get("construction") != requested:
+                    raise RuntimeError("Python and native CLI construction receipts differ")
             results.append({
                 "case": name, "source": filename, "source_sha256": digest(step),
                 "archives_identical": True, "archive_sha256": python_hash,
@@ -87,8 +135,9 @@ def main():
                 "face_tags": mesh.face_tags, "body_tags": mesh.body_tags,
                 "volume": report["quality"]["total_volume"],
                 "mesh_scope": report["mesh_scope"],
+                "resource_receipts_identical": True, "resources": expected_resources,
             })
-    receipt = {"schema": "paacs-python-native-parity-v1", "status": "passed",
+    receipt = {"schema": "paacs-python-native-parity-v2", "status": "passed",
                "platform": sys.platform, "engine_version": pm.native_version,
                "workers": 1, "validation_workers": 1, "cases": results}
     args.output.parent.mkdir(parents=True, exist_ok=True)

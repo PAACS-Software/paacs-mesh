@@ -1,5 +1,51 @@
 # Changelog
 
+## Unreleased
+
+## 1.2.0-rc.4
+
+- Default new Python, saved-recipe and direct STEP CLI requests to Normal
+  resource admission, growing live construction storage on demand. Omitted work
+  has no practical logical ceiling; explicit work, memory, count, output,
+  cancellation and time limits remain authoritative. Preserve Bounded C++
+  aggregates and old recipes, Legacy effort and the inherited 512 MiB modeled
+  working allowance. Require named resource-policy native/Python parity.
+- Add bounded surface/interior construction caps with per-stage limits,
+  termination receipts and opt-in adaptive effort. Distinguish construction
+  ceilings, achieved sizing, measured quality and geometric validity.
+- Resolve compatible Normal AUTO methods through verified primitive, block and
+  sweep capabilities and per original assembly part. Preserve audited analytic
+  routes and guarded legacy fallback; retain all failed attempt costs.
+- Preserve checked interior topology during recovery, add bounded local sliver
+  edits, regularize curve sizing and retain native knot/pcurve correspondence.
+  Recover crossing trim chords and local source facets, cache bounded immutable
+  trim/refusal queries and retain source-provider recovery evidence.
+- Add explicit bounded CAD body-relation inspection, optional original-CAD ray
+  validation for assemblies, Native Boolean/Section cancellation and committed
+  child/stage receipts on cancellation. Keep part preservation as the default.
+- Add independent Tet4 shape metrics, guarded mixed-cell volume quality, bounded
+  native-ID mesh inspection, spatial quality distributions, trimmed-CAD centroid
+  distances and quality-field VTK export. Add deterministic SVG whole-element
+  cuts and common-region comparisons with original mesh IDs.
+- Expose Python request signatures and guarded selection sizing. Harden
+  diagnostic budgets, high-cardinality body summaries and CAD identity pairing;
+  distinguish bare archive tags, requested policy and actual body routes.
+- Apply physical spacing to eligible Normal native sweep cap sources, preserving
+  a bounded historical fallback and reporting applied sizing and complete cap
+  attempt costs. Bounded admission retains historical cap dispatch.
+- Add default-off experimental thin-region phase ordering, independent of cap
+  sizing and explicit boundary-first selection. Keep source fallback, ray
+  witnesses, advanced recovery and adaptive effort within their opt-in scope.
+- Record paired resource, construction, source-recovery and assembly studies and
+  the separate 22-model owned hollow qualification. Preserve the original
+  51-model historical score and measured quality limitations. Keep explicit
+  CAD repair/defeaturing in a separate preparation prototype; invalid-CAD repair
+  and STEP-reimport history remain unqualified.
+- Prepare a new immutable RC4 release with the existing 20-wheel/28-consumer
+  matrix. Retain native validity gates, archive v1 and C bridge ABI v1; rebuild
+  C++ consumers after public request/report layout changes. No solver accuracy
+  or general arbitrary-CAD completion claim is added.
+
 ## 1.2.0-rc.3
 
 - Add capability discovery, paginated CAD inspection, saved-recipe execution and

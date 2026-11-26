@@ -15,15 +15,73 @@ The preview JSON contains display triangles and original CAD face tags.
 The mesher uses the STEP geometry and topology directly. STEP coordinates,
 sizes and geometric error limits are in millimetres.
 
-Single-solid Tet4 requests use native wall and gap point placement by default
-when the request supports that route. Hex requests, assemblies and explicit
-strategy or body controls retain their existing routing. A single body meshed
-with `--independent-parts` uses the new placement inside its audited part wrapper;
-multiple parts retain their existing construction and interference reports.
+Normal automatic Tet4 selection first considers verified whole-body primitives,
+affine blocks and linear sweeps for compatible constant-size requests. Local
+face/volume sizing and other eligible requests use native wall and gap point
+placement. Bounded selection retains its historical dispatch. Hex requests and
+conforming multi-body requests retain their existing routing. Normal Tet4
+`--independent-parts` requests resolve AUTO separately inside each conforming
+child, so verified primitives keep their established method and other eligible
+parts can select the native front. Original body/face controls are mapped and
+checked per part; they are not bypassed. Global work uses the smaller of the
+meshing and validation ceilings before any child work is divided. Body identities,
+interference reports and original-source/final Native audits remain mandatory.
+Inspect `auto_dispatch_scope` and each body's `route_resolution`; wrapper sizing
+metadata does not imply that every part used the same method. Explicit false,
+explicit true and Bounded requests retain their existing eligibility and refusal
+behavior. A child success does not qualify an incomplete assembly.
+Uncontrolled analytic plane/cylinder parts with a common straight generator
+may prefer the existing constructor. This bounded eligibility hint does not
+certify sweepability. A named geometric refusal can admit one original AUTO
+call with the remaining shared work and deadline, after source-integrity
+checks. `automatic_dispatch` records that complete AUTO call, including its
+internal attempts; preflight fields are already included in the parent
+outcome's total work/time. Cancellation,
+allocation, source-integrity and requested quality/size failures remain terminal.
+Conversely, an uncontrolled Normal independent-part AUTO request can retry
+legacy after one unverified front refuses geometry. It retains both charged
+attempts and the discarded front's source/volume diagnostics. Explicit front
+requests and already attempted two-method routes do not gain another retry.
+See [assembly qualification and remaining failures](ASSEMBLY_DIAGNOSTICS.md)
+for measured scope, diagnostics and limitations.
 `--no-advancing-interior-front` selects the previous placement and recognized
 primitive, planar or swept routes.
 Check `archive_published`, `audit_valid` and each body's `route` in the JSON
 receipt. A refusal leaves an existing output archive intact.
+
+`--native-source-fallback` opts into an experimental provider switch after a
+remaining named geometric chart/wire refusal. The existing live Tet4 construction and
+all Native checks remain active; `--no-native-source-fallback` retains the default
+disabled policy. It does not force the initial front or replace verified
+primitive/mapped routing. Explicit local surface controls and construction caps
+are not bypassed. Inspect each source attempt's provider, witness and configured
+angle in `source_shell`; native tessellation is not an achieved-size certificate.
+An explicit front request that refuses its source stays refused. Automatic
+independent-part routing can use the reported, bounded method fallback above.
+The three-attempt source bound includes provider and chord retries together
+(Bounded explicit opt-in uses at most two; default Bounded retains one).
+
+`--boundary-first` separately opts into recovering the source boundary before
+interior insertion in a compatible live spatial Tet4 route. It explicitly
+overrides the order of an enabled initial front; default `--no-boundary-first`
+keeps the existing order. It does not enable the source fallback, force the front
+on, or change verified primitive/mapped choices. Inspect
+`requested_boundary_first`, `initial_front` and `interior_front` for the request
+and actual stages rather than inferring success from the flag.
+`material_classification` reports returned-batch attempts even when a later
+stage is interrupted. A Native query is counted when started; an interrupted
+attempt need not yield a decision. `profiled_batches` and `ray_witness_attempts`
+identify measured strict serial boundary-first work. The setup, Native-query
+and ray-witness seconds are nested within material/volume time; zero profiled
+batches means unmeasured, not zero classification cost.
+Positive original trimmed-CAD ray witnesses are available
+for strict serial boundary-first classification; ambiguous points still use the
+ordinary native classifier. Inspect actual admission/query counters, and retain
+all final checks. These nested phase times are part of volume/total time.
+See [source preparation qualification](SOURCE_PREPARATION.md) for the corrected
+sampling/correspondence rules and the current limits of the experimental routes.
+Explicit interior site/candidate caps remain upper bounds for boundary-first
+insertion; its current post-recovery builder also retains a 1,024-site ceiling.
 
 ## Native size controls
 
@@ -62,6 +120,7 @@ The `plot` command uses exact intersections of the stored Tet4 cells.
 | `--local-partition-recovery`, `--adaptive-tet-recovery` | Enable optional bounded recovery routes. |
 | `--curvature-points-per-turn N` | Enable curvature-based surface sizing on eligible native routes. |
 | `--improve-tet-quality` | Try bounded quality improvement on native pieces and after spatial sizing, keeping the prescribed surface fixed. |
+| `--initial-topology-quality`, `--no-initial-topology-quality` | Explicitly enable or disable severe numerical-topology cleanup before recovery; unset follows Normal enabled / Bounded disabled. This does not force the front or certify Delaunay topology. |
 | `--advancing-interior-front` | Force wall and gap initial point construction for one supported native Tet4 solid. Unsupported combinations return a diagnostic. |
 | `--no-advancing-interior-front` | Disable the new default and use the previous construction and route selection. |
 | `--independent-parts` | Mesh supported bodies separately and report material interference. The result certifies each part individually. |
@@ -69,8 +128,8 @@ The `plot` command uses exact intersections of the stored Tet4 cells.
 | `--warning-quality`, `--min-quality` | Report a weak mesh or require a strict quality floor. |
 | `--trace-native-stages` | Record active stages and diagnostics on standard error. |
 
-The default logical work allowance is 50 million units for both construction
-and validation. `--max-work` sets both ceilings; an explicit limit is retained
+Normal disables the practical logical work cap; Bounded retains 50 million
+units for construction and validation. `--max-work` sets both ceilings; an explicit limit is retained
 across automatic fallback attempts. Work units measure bounded operations,
 not elapsed seconds.
 
@@ -96,13 +155,23 @@ attempts count toward work and time. Trace stages include `interior_sites`,
 `interior_seed_fallback` when needed, and `volume_quality`. Inspect the achieved
 size and quality distributions, since bounded runs can leave weak cells unresolved.
 
-Automatic initial placement selects the native size-field route for an eligible
-single Tet4 solid. `--advancing-interior-front` forces this selection;
+Automatic method selection records its capability proof and charged attempts in
+`route_resolution`. It never selects a structured method that ignores face,
+box or spatial controls. The original Native gates still certify the output;
+failed methods and any fallback share the caller's remaining budgets.
+`--advancing-interior-front` forces the native size-field route;
 `--no-advancing-interior-front` disables it. The last explicit flag wins.
 In C++, `NativeCadMeshOptions::useAdvancingInteriorFront` is `std::nullopt` for
 automatic selection, `true` to force it and `false` for the previous route.
 Automatic selection respects disabled native fallback, requested geometry
 strategies, body controls and other unsupported construction contracts.
+
+For method comparisons, set `--max-chord-error` and
+`--max-relative-volume-error` explicitly (`--max-volume-error` is retained as
+an alias). Automatic chord defaults differ by construction method; inspect the
+body `fidelity` receipt and measured CAD errors. A source retry may use a tighter
+chord but never a looser requested volume bound. A structured fallback to the
+general front retains the primitive chord limit rather than silently increasing it.
 If the automatic route refuses a surface before initial point construction has
 started, it can try the previous route within the remaining work allowance.
 The receipt records this in `initial_front_fallback`, including the first

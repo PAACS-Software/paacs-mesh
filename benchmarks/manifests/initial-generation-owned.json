@@ -1,0 +1,163 @@
+{
+  "schema": "paacs-initial-generation-owned-manifest-v1",
+  "description": "Fourteen STEP requests using checked-in, project-generated CAD fixtures.",
+  "baseline_action": "fresh_run_no_frozen_baseline",
+  "units": "mm",
+  "resource_policy": "normal",
+  "construction_effort": "legacy",
+  "recovery": "standard",
+  "growth": 1.3,
+  "limits": {
+    "max_nodes": 500000,
+    "max_cells": 3000000,
+    "max_work": null,
+    "max_working_bytes": 1073741824,
+    "max_output_bytes": 268435456,
+    "max_audit_bytes": 536870912,
+    "max_seconds": 600.0,
+    "workers": 1,
+    "validation_workers": 1
+  },
+  "hard_process_seconds": 720.0,
+  "quality_thresholds": "Omitted; retain native defaults and report the measured shape distributions.",
+  "fidelity": {
+    "max_chord_error": null,
+    "max_relative_volume_error": null,
+    "curvature_points_per_turn": null,
+    "initial_topology_quality": null,
+    "advancing_interior_front": null
+  },
+  "fixture_provenance": {
+    "controlled_cad": "tests/occt_corpus.cpp and tests/fixtures/cad/README.md",
+    "plate_hole": "examples/elasticity_plate_hole/make_step.cpp",
+    "rotated_torus": "tests/primitive_cad_reference.cpp and tests/fixtures/curved-reference/README.md",
+    "hash_scope": "SHA256 of the checked-in STEP bytes. Regenerating STEP timestamps can change hashes; review and repin regenerated fixtures explicitly."
+  },
+  "cases": [
+    {
+      "case_id": "thin-plate-025",
+      "kind": "owned",
+      "fixture": "tests/fixtures/cad/thin_plate.step",
+      "source_sha256": "5cf8ac4351360f0fa25d6be84b25a01fed3d071c3c1753b89730450f795c6362",
+      "size": 0.25,
+      "thickness": 0.002,
+      "baseline_action": "fresh_run_no_frozen_baseline"
+    },
+    {
+      "case_id": "thin-plate-020",
+      "kind": "owned",
+      "fixture": "tests/fixtures/cad/thin_plate.step",
+      "source_sha256": "5cf8ac4351360f0fa25d6be84b25a01fed3d071c3c1753b89730450f795c6362",
+      "size": 0.2,
+      "thickness": 0.002,
+      "baseline_action": "fresh_run_no_frozen_baseline"
+    },
+    {
+      "case_id": "thin-plate-015",
+      "kind": "owned",
+      "fixture": "tests/fixtures/cad/thin_plate.step",
+      "source_sha256": "5cf8ac4351360f0fa25d6be84b25a01fed3d071c3c1753b89730450f795c6362",
+      "size": 0.15,
+      "thickness": 0.002,
+      "baseline_action": "fresh_run_no_frozen_baseline"
+    },
+    {
+      "case_id": "thin-plate-010",
+      "kind": "owned",
+      "fixture": "tests/fixtures/cad/thin_plate.step",
+      "source_sha256": "5cf8ac4351360f0fa25d6be84b25a01fed3d071c3c1753b89730450f795c6362",
+      "size": 0.1,
+      "thickness": 0.002,
+      "baseline_action": "fresh_run_no_frozen_baseline"
+    },
+    {
+      "case_id": "box-05",
+      "kind": "owned",
+      "fixture": "tests/fixtures/cad/box.step",
+      "source_sha256": "9e5ea54b9c3856d55878682d8f31508812b75d888bf4f5f7758bcd53c072cdcd",
+      "size": 0.5,
+      "baseline_action": "fresh_run_no_frozen_baseline"
+    },
+    {
+      "case_id": "through-hole-05",
+      "kind": "owned",
+      "fixture": "tests/fixtures/cad/through_hole.step",
+      "source_sha256": "c22df5ac8b5fc42392ec94757077fa293c3495e5c855604280314c02c4ac1256",
+      "size": 0.5,
+      "baseline_action": "fresh_run_no_frozen_baseline"
+    },
+    {
+      "case_id": "oblique-05",
+      "kind": "owned",
+      "fixture": "tests/fixtures/cad/oblique_l.step",
+      "source_sha256": "7f9baa5b382e08a669f620679a04700b09b549a0eaaa1da730cb116e646267b0",
+      "size": 0.5,
+      "baseline_action": "fresh_run_no_frozen_baseline"
+    },
+    {
+      "case_id": "cylinder-global-05",
+      "kind": "owned",
+      "fixture": "tests/fixtures/cad/cylinder.step",
+      "source_sha256": "a05d283e8c8cecee8e0917147db2e359689f3e5d8312a5f051010f002ba42988",
+      "size": 0.5,
+      "baseline_action": "fresh_run_no_frozen_baseline"
+    },
+    {
+      "case_id": "cylinder-wall-015",
+      "kind": "owned",
+      "fixture": "tests/fixtures/cad/cylinder.step",
+      "source_sha256": "a05d283e8c8cecee8e0917147db2e359689f3e5d8312a5f051010f002ba42988",
+      "size": 0.5,
+      "radius": 1.0,
+      "face_size": 0.15,
+      "baseline_action": "fresh_run_no_frozen_baseline"
+    },
+    {
+      "case_id": "plate-hole-4-bore-1",
+      "kind": "owned",
+      "fixture": "examples/elasticity_plate_hole/plate-hole.step",
+      "source_sha256": "b861ea770079feb3cb80a26a7f4e0e8c883da2290357757981131445459793ef",
+      "size": 4.0,
+      "radius": 5.0,
+      "face_size": 1.0,
+      "thickness": 2.0,
+      "baseline_action": "fresh_run_no_frozen_baseline"
+    },
+    {
+      "case_id": "plate-hole-2-bore-05",
+      "kind": "owned",
+      "fixture": "examples/elasticity_plate_hole/plate-hole.step",
+      "source_sha256": "b861ea770079feb3cb80a26a7f4e0e8c883da2290357757981131445459793ef",
+      "size": 2.0,
+      "radius": 5.0,
+      "face_size": 0.5,
+      "thickness": 2.0,
+      "baseline_action": "fresh_run_no_frozen_baseline"
+    },
+    {
+      "case_id": "sphere-05",
+      "kind": "owned",
+      "fixture": "tests/fixtures/cad/sphere.step",
+      "source_sha256": "3e604a0c85bad9deca50f786cba3e4fdcda880e45fc98ae1e8373d3e3069d24f",
+      "size": 0.5,
+      "baseline_action": "fresh_run_no_frozen_baseline"
+    },
+    {
+      "case_id": "sphere-025",
+      "kind": "owned",
+      "fixture": "tests/fixtures/cad/sphere.step",
+      "source_sha256": "3e604a0c85bad9deca50f786cba3e4fdcda880e45fc98ae1e8373d3e3069d24f",
+      "size": 0.25,
+      "baseline_action": "fresh_run_no_frozen_baseline"
+    },
+    {
+      "case_id": "torus-rotated-05",
+      "kind": "owned",
+      "fixture": "tests/fixtures/curved-reference/torus_rotated.step",
+      "source_sha256": "4338a7afa00883455542695fe9cd0babfb2a672d2a9489879e19c21c24682f5c",
+      "size": 0.5,
+      "baseline_action": "fresh_run_no_frozen_baseline"
+    }
+  ],
+  "scope": "Fresh development qualification, with no bundled timing baseline. Shape quality, geometry capture, sizing and solver adequacy are distinct. The thin fixtures do not certify a suitable three-dimensional simulation discretization."
+}

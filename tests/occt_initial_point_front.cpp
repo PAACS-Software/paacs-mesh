@@ -743,6 +743,58 @@ void exerciseCertificateTransactions(){
         if(failure==2)check(scorer.cancelled,"certificate cancellation observation was not sticky");
     });
 }
+void exerciseGeometryRefusalWitnesses(){
+    auto front=sourceFront(tetraSurface());
+    const auto face=front.boundary.front();
+    Scorer::Vertex opposite=0;
+    while(std::ranges::find(face,opposite)!=face.end())++opposite;
+    Scorer::Cell cell;
+    unsigned queries=0;
+    front.centroidAdmission=[&](Vec3){++queries;return false;};
+    check(!front.valid(Front::Front{face},opposite,cell)&&queries==1&&
+          !front.lastGeometryRefusal&&!front.lastTopologyRefusal,
+          "external centroid refusal was mislabeled as immutable geometry");
+    auto reversed=face;std::swap(reversed[1],reversed[2]);
+    check(!front.valid(Front::Front{reversed},opposite,cell)&&queries==1&&front.lastGeometryRefusal,
+          "exact nonpositive cone did not supply a geometry witness");
+    front.centroidAdmission=[&](Vec3){++queries;return true;};
+    check(front.valid(Front::Front{face},opposite,cell)&&!front.lastGeometryRefusal,
+          "a prior geometry refusal leaked into a later valid cone");
+}
+void exerciseGeometryRefusalCache(){
+    const auto source=cubeSurface();
+    std::uint64_t totalHits=0;
+    for(const double size:std::array{.45,.8}){
+        const UniformField field{size};
+        OcctInitialPointFrontLimits limits;
+        limits.progressiveResources=true;limits.sites=512;limits.cones=4096;
+        limits.frontStates=16'384;limits.workingBytes=256ULL*1024*1024;
+        limits.work=200'000'000;limits.queries=100'000;limits.candidates=100'000;
+        const auto run=[&](bool cache,OcctInitialPointFrontReport& report){
+            auto capped=limits;capped.cacheGeometryRefusals=cache;
+            std::uint64_t work=0;
+            auto result=appendOcctInitialPointFrontSites(source,field,size,{3,7},capped,
+                [](Vec3 p){return std::abs(p.x)<1&&std::abs(p.y)<1&&std::abs(p.z)<1;},
+                [&](std::uint64_t n){work+=n;},&report);
+            check(work==report.workUsed&&work<=limits.work,"refusal cache escaped work accounting");
+            originalPrefix(source,result);return result;
+        };
+        OcctInitialPointFrontReport oldReport,newReport;
+        const auto oldMesh=run(false,oldReport),newMesh=run(true,newReport);
+        check(!oldReport.budgetLimited&&!newReport.budgetLimited,
+              "refusal cache equivalence fixture stopped before completing construction");
+        check(oldMesh.nodeCount()==newMesh.nodeCount()&&oldReport.seedCones==newReport.seedCones,
+              "immutable geometry cache changed admitted geometry");
+        for(Index id=0;id<oldMesh.nodeCount();++id)
+            check(bits(oldMesh.node(id))==bits(newMesh.node(id)),"refusal cache changed point placement");
+        check(newReport.cachedGeometryRefusals<=48*newReport.seedCones+16*source.cellCount(),
+              "refusal cache exceeded its bounded per-face storage");
+        totalHits+=newReport.geometryRefusalCacheHits;
+        std::cout<<"geometry cache h="<<size<<" hits="<<newReport.geometryRefusalCacheHits
+                 <<" work="<<oldReport.workUsed<<"->"<<newReport.workUsed<<'\n';
+    }
+    check(totalHits>0,"refusal-cache equivalence fixtures never reused a geometric witness");
+}
 }
 int main(){try{
     exerciseDefaultPolicy();
@@ -752,5 +804,6 @@ int main(){try{
     exerciseBoundedBootstrapAndCancellation();
     exerciseCertificateDegeneracies();exerciseActualPatchCertification();
     exerciseTouchedIncidenceFallback();exerciseCertificateTransactions();
+    exerciseGeometryRefusalWitnesses();exerciseGeometryRefusalCache();
     std::cout<<"initial volume points, complete conflict cavities and transactional guards passed\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

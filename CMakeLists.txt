@@ -6,7 +6,7 @@
 cmake_minimum_required(VERSION 3.30...4.4)
 project(PAACSMesh VERSION 1.2.0 LANGUAGES C CXX)
 
-set(PAACS_RELEASE_VERSION "1.2.0-rc.3")
+set(PAACS_RELEASE_VERSION "1.2.0-rc.4")
 set(PAACS_CXX_STANDARD 26 CACHE STRING "C++ language level: 26 or compatibility mode 23")
 set_property(CACHE PAACS_CXX_STANDARD PROPERTY STRINGS 26 23)
 if(NOT PAACS_CXX_STANDARD MATCHES "^(23|26)$")
@@ -140,7 +140,8 @@ if(PAACS_WITH_OCCT)
         src/geometry/OcctBoxContact.cpp src/geometry/OcctNativeValidation.cpp src/geometry/OcctQueryContext.cpp
         src/geometry/OcctContactAssembly.cpp src/geometry/OcctContactComponents.cpp src/geometry/OcctNativeSweep.cpp
         src/geometry/OcctPairedShell.cpp src/geometry/OcctRecoveryMesher.cpp src/geometry/OcctPlcFrontRecovery.cpp src/geometry/OcctFrontMesher.cpp
-        src/geometry/OcctWireRefinement.cpp src/geometry/OcctFacetRefinement.cpp)
+        src/geometry/OcctWireRefinement.cpp src/geometry/OcctFacetRefinement.cpp
+        src/geometry/OcctBodyRelations.cpp)
     add_library(PAACS::occt ALIAS paacs_occt)
     # Target-name compatibility only; the older V1 CAD APIs are not restored.
     add_library(PAACS::MeshOCCT ALIAS paacs_occt)

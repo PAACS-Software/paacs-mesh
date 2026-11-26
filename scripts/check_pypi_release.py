@@ -67,15 +67,22 @@ def main():
     shutil.copyfile(args.fixture, fixture)
     code = """import json, paacs_mesh as pm
 model = pm.read_step('cylinder.step')
+def validate(mesh):
+    r = mesh.report
+    assert r['audit']['complete'] and r['audit']['valid'] and r['quality']['valid']
+    assert r['quality']['inverted_cells'] == 0 and mesh.body_tags == [1]
+    assert mesh.face_tags == [1, 2, 3]
+    return r
 mesh = model.mesh(.3)
-r = mesh.report
-assert r['audit']['complete'] and r['audit']['valid'] and r['quality']['valid']
-assert r['quality']['inverted_cells'] == 0 and mesh.body_tags == [1]
-assert mesh.face_tags == [1, 2, 3]
-assert r['bodies'][0]['initial_front']['nodes'] > 0
+r = validate(mesh)
+front = model.mesh(.3, assembly='conforming', advancing_interior_front=True)
+front_report = validate(front)
+assert front_report['bodies'][0]['initial_front']['nodes'] > 0
 mesh.write('cylinder.paacsmesh')
 mesh.write('cylinder.vtk')
-print(json.dumps({'version': pm.__version__, 'nodes': mesh.node_count, 'tet4': mesh.tetrahedron_count, 'audit': r['audit']}))
+front.write('cylinder-initial-front.paacsmesh')
+front.write('cylinder-initial-front.vtk')
+print(json.dumps({'version': pm.__version__, 'nodes': mesh.node_count, 'tet4': mesh.tetrahedron_count, 'audit': r['audit'], 'explicit_front_nodes': front_report['bodies'][0]['initial_front']['nodes']}))
 """
     subprocess.run([str(python), "-I", "-c", code], check=True, cwd=environment, env=clean)
     console = environment / ("Scripts/paacs-mesh.exe" if sys.platform == "win32" else "bin/paacs-mesh")

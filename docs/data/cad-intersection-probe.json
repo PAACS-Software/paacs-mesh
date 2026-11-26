@@ -1,0 +1,163 @@
+{
+  "schema": "paacs-cad-intersection-probe-v1",
+  "date": "2026-11-25",
+  "scope": "Private original-corpus CAD14, original solid pair [3, 7]; query-only Boolean diagnostic, not an assembly meshing qualification.",
+  "source_sha256": "7c7190f868acd93951fd6302313d1f818828f44da6a5716b7434c0059e0802b0",
+  "pair": [
+    3,
+    7
+  ],
+  "kernel_version": "8.0.1",
+  "policy": {
+    "cooperative_seconds": 30,
+    "hard_process_seconds": 90,
+    "serial_boolean": true,
+    "non_destructive": true,
+    "input_copies": true,
+    "default_fuzzy_and_inverted_checks_unchanged": true,
+    "automatic_retry": false,
+    "only_changed_boolean_option": "SetUseOBB"
+  },
+  "infrastructure_failure": {
+    "status": "no_native_receipt",
+    "exit_code_hex": "0xC0000139",
+    "process_seconds": 1.0706768000964075,
+    "native_boolean_calls": 0,
+    "entered_main": false,
+    "native_receipt_available": false,
+    "cause": "Stale application-directory geometry-kernel DLLs took precedence over the matching SDK runtime on PATH.",
+    "correction": "Preserved the old runtime and receipt; staged the complete matching 24-DLL SDK runtime set; checked native PE imports/exports and pinned the actual application-directory DLLs in a new manifest before the two query attempts.",
+    "controller_sha256": "29e95e084074c52d8cbe946ff3f333342dcd785bdca993924f05b6c6fc1916eb",
+    "original_manifest_sha256": "7e829580ae6200532f0e6f46b4a67af50d249b44f86523a67c846efd73e5a023",
+    "loader_correction_evidence_sha256": "425612a2da021b459c2ae32457360465bd47120f2cac8470c52b7c464a11f2ff"
+  },
+  "attempts": [
+    {
+      "use_obb": false,
+      "status": "cancelled",
+      "native_common_seconds": 71.7327281,
+      "process_seconds": 74.22766399988905,
+      "import_seconds": 1.6400932,
+      "copy_seconds": 0.0202981,
+      "native_total_seconds": 73.5445704,
+      "progress_polls": 769,
+      "progress_events_total": 239,
+      "first_observed_user_break_seconds": 71.733536,
+      "largest_retained_progress_gap": {
+        "seconds": 70.86232940000001,
+        "start": {
+          "seconds": 0.8711998,
+          "position": 0.2757737100812771,
+          "scope": "Performing Edge-Face intersection / Performing intersection of shapes / Performing COMMON operation"
+        },
+        "end": {
+          "seconds": 71.7335292,
+          "position": 0.2771648402030794,
+          "scope": "Performing Edge-Face intersection / Performing intersection of shapes / Performing COMMON operation"
+        }
+      },
+      "native_boolean_calls": 1,
+      "source_brep_unchanged": true,
+      "copy_breps_unchanged": true,
+      "result_checked": false,
+      "material_relation": "unresolved",
+      "peak_worker_working_set_bytes": 61517824,
+      "worker_pid_verified": true,
+      "shutdown_verified": true,
+      "inputs_unchanged": true,
+      "hard_timeout": false,
+      "controller_sha256": "ba92f04b9cab1173fbb3751853774dbeac508edca639ce40c191f20206b822b5",
+      "native_receipt_sha256": "f50368872bd4886aff63b0ae546d07691951c6e105f4d68f45fa36d6a6d86aee",
+      "controller_runner_sha256": "44c7811b840f0d3e831e40975444bab6b746d94ef79854558892a54522f4da4d"
+    },
+    {
+      "use_obb": true,
+      "status": "cancelled",
+      "native_common_seconds": 71.5083368,
+      "process_seconds": 74.101924699964,
+      "import_seconds": 1.6394932,
+      "copy_seconds": 0.0240354,
+      "native_total_seconds": 73.3751257,
+      "progress_polls": 753,
+      "progress_events_total": 235,
+      "first_observed_user_break_seconds": 71.51000690000001,
+      "largest_retained_progress_gap": {
+        "seconds": 70.61793809999999,
+        "start": {
+          "seconds": 0.8920599,
+          "position": 0.2745711861927749,
+          "scope": "Performing Edge-Face intersection / Performing intersection of shapes / Performing COMMON operation"
+        },
+        "end": {
+          "seconds": 71.509998,
+          "position": 0.2759718004972944,
+          "scope": "Performing Edge-Face intersection / Performing intersection of shapes / Performing COMMON operation"
+        }
+      },
+      "native_boolean_calls": 1,
+      "source_brep_unchanged": true,
+      "copy_breps_unchanged": true,
+      "result_checked": false,
+      "material_relation": "unresolved",
+      "peak_worker_working_set_bytes": 61927424,
+      "worker_pid_verified": true,
+      "shutdown_verified": true,
+      "inputs_unchanged": true,
+      "hard_timeout": false,
+      "controller_sha256": "fc3ee3266514c04c856bbc04a74dcd2d29c56d8c923af73ca378b1571bf4f370",
+      "native_receipt_sha256": "9c3ebd86f7f9b4d27641d482b4ed6a9afa9ebd88c77a7ca4de8ac22980ac5ce9",
+      "controller_runner_sha256": "44c7811b840f0d3e831e40975444bab6b746d94ef79854558892a54522f4da4d"
+    }
+  ],
+  "all_costs": {
+    "process_seconds": 149.40026549994946,
+    "native_common_seconds": 143.2410649,
+    "infrastructure_launches": 1,
+    "native_boolean_attempts": 2,
+    "unknown_native_common_seconds": 0,
+    "geometry_results": 0
+  },
+  "findings": [
+    "Both native queries returned cancelled with source and copied-body BREP guards intact; neither established overlap, non-overlap or contact.",
+    "The OBB broad-phase switch did not remove the approximately 71-second inner-kernel delay; one attempt per setting is insufficient for a small runtime-effect claim.",
+    "The retained native scope identifies Edge-Face intersection. This corrects the earlier unconfirmed Face-Face hypothesis for this pair.",
+    "The first observed true UserBreak was after 71 seconds even though the atomic deadline was set to 30 seconds. Cooperative kernel progress is not a strict wall-time cap; process isolation remains necessary for a hard bound.",
+    "No production geometry, tolerance, validity gate or default Boolean option changed as a result of this probe."
+  ],
+  "primary_source": [
+    {
+      "kernel_source_relative_path": "BOPAlgo/BOPAlgo_PaveFiller_5.cxx",
+      "lines": [
+        105,
+        130
+      ],
+      "source_sha256": "e942ebf6ed6689a68c3df1dd7d071aace54c0a7a5d50b71cb79ac416e0825e99",
+      "fact": "The per-edge/face worker checks UserBreak before calling IntTools_EdgeFace::Perform without a progress argument."
+    },
+    {
+      "kernel_source_relative_path": "IntTools/IntTools_EdgeFace.cxx",
+      "lines": [
+        504,
+        570
+      ],
+      "source_sha256": "3778e884998604d3cc8422440a167076a125da8bda0bb32389070b1a6a053664",
+      "fact": "The edge/face routine calls IntTools_BeanFaceIntersector::Perform without a progress argument."
+    },
+    {
+      "kernel_source_relative_path": "IntTools/IntTools_BeanFaceIntersector.cxx",
+      "lines": [
+        288,
+        325
+      ],
+      "source_sha256": "585ed9079978c0be48ed2e9a0924e430ae1090a8c04003f4991609365d6599ae",
+      "fact": "The inner Perform routine has no progress-range parameter; the observed scope does not identify which inner operation or CAD entity was slow."
+    }
+  ],
+  "private_provenance": {
+    "frozen_manifest_sha256": "640d1142fd90ee6fee36adb1933ea648b5de854c1d1bc7244cd2ccf2502a2323",
+    "actual_compile_dependency_and_binary_pin_count": 418,
+    "raw_dependencies_retained_privately": true,
+    "probe_source_sha256": "6e50be125b53c8daedf256160e6de57bda3b111919edd601f57cdd5f1dd6538f",
+    "raw_dependency_paths_omitted": true
+  }
+}

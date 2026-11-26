@@ -55,13 +55,13 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
     load_cache("${PAACS_NATIVE_BUILD}" READ_WITH_PREFIX PAACS_NATIVE_
         PAACS_APPLE_EXPERIMENTAL_STOP_TOKEN)
 endif()
+get_filename_component(paacs_occt_prefix "${OpenCASCADE_DIR}/../../.." ABSOLUTE)
 if(WIN32)
-    get_filename_component(paacs_occt_prefix "${OpenCASCADE_DIR}/../../.." ABSOLUTE)
     file(GLOB paacs_crt_dlls "${PAACS_NATIVE_RUNTIME_DIR}/*140*.dll")
 endif()
 
 enable_testing()
-foreach(name IN ITEMS delaunay_cavity delaunay_quality delaunay_recone interior_sites interior_front initial_point_front tet_candidate_limits)
+foreach(name IN ITEMS delaunay_cavity delaunay_quality delaunay_recone interior_sites interior_front initial_point_front native_sweep thin_region_ordering tet_candidate_limits)
     if(name STREQUAL "tet_candidate_limits")
         add_executable(${name} "${paacs_source}/tests/${name}.cpp")
     else()
@@ -88,6 +88,12 @@ foreach(name IN ITEMS delaunay_cavity delaunay_quality delaunay_recone interior_
             TKernel TKMath TKG2d TKG3d TKGeomBase TKBRep TKGeomAlgo TKTopAlgo TKPrim TKBO TKBool TKMesh TKXSBase TKDESTEP)
         add_test(NAME paacs.occt.${name} COMMAND ${name})
         set_tests_properties(paacs.occt.${name} PROPERTIES TIMEOUT 120 LABELS "occt;quality;regression")
+        if(name STREQUAL "native_sweep")
+            # The owned cap regression writes and reopens STEP. Bind its
+            # translation resources to the same SDK as the imported libraries.
+            set_tests_properties(paacs.occt.${name} PROPERTIES ENVIRONMENT
+                "CSF_STEPDefaults=${OpenCASCADE_RESOURCE_DIR}/XSTEPResource;CSF_XSMessage=${OpenCASCADE_RESOURCE_DIR}/XSMessage;CSF_SHMessage=${OpenCASCADE_RESOURCE_DIR}/SHMessage")
+        endif()
     endif()
     if(WIN32)
         if(NOT name STREQUAL "tet_candidate_limits")

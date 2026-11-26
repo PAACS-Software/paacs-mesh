@@ -4,9 +4,10 @@ PAACS Mesh imports STEP geometry, builds audited Tet4 volume meshes and exports
 tagged VTK or native mesh archives. The Python package calls the C++ engine in
 process and bundles its CAD runtime.
 
-The **1.2.0rc3 release candidate** supports regular, **64-bit CPython 3.12–3.15**
-on Windows x64 and Windows 11 ARM64, Linux x64/ARM64 with glibc 2.28 or newer, and macOS ARM64
-with a minimum of macOS 15. The macOS wheels are tested on macOS 15, 26 and 27.
+The **1.2.0rc4 candidate** targets regular, **64-bit CPython 3.12–3.15**
+on Windows x64 and Windows 11 ARM64, Linux x64/ARM64 with glibc 2.28 or newer,
+and macOS ARM64 with a minimum of macOS 15. The macOS wheels must pass
+installation on macOS 15, 26 and 27.
 Wheel installations need no C++ compiler, separate OCCT installation or
 loader-path configuration. NumPy is optional. Intel macOS, Python 2, PyPy, debug
 interpreters and free-threaded Python ABIs are excluded.
@@ -17,14 +18,17 @@ and the native regression jobs in
 The [compatibility guide](https://github.com/PAACS-Software/paacs-mesh/blob/main/docs/PYTHON_COMPATIBILITY.md)
 records that evidence and the required release checks. Official releases are
 built and qualified from their own immutable tagged source before publication.
+RC4 requires its own complete qualification; the matching GitHub release carries
+the publication receipts. The historical PR result does not qualify this candidate.
 
-Install the pinned release candidate:
+Install the pinned candidate:
 
 ```sh
-python -m pip install paacs-mesh==1.2.0rc3
+python -m pip install paacs-mesh==1.2.0rc4
 ```
 
-The previous published `1.2.0rc2` release supports CPython 3.12 on Windows x64,
+The published RC3 files and tag remain immutable. The earlier `1.2.0rc2` release
+supports CPython 3.12 on Windows x64,
 macOS ARM64 and Linux x64 only; its files remain unchanged. Use
 `python -m pip install --pre paacs-mesh` to select the newest available candidate.
 Stable releases use `python -m pip install paacs-mesh`.
@@ -49,8 +53,11 @@ The same operation is available from a terminal:
 paacs-mesh part.step part.vtk --size 0.7
 ```
 
-RC3 and the qualified development wheels provide discovery and CAD inspection
-before selecting controls:
+RC4 includes bounded mesh quality inspection, SVG views, comparisons, Normal
+resource admission and default-off experimental thin-region ordering. The
+[release notes](https://github.com/PAACS-Software/paacs-mesh/blob/main/RELEASE_NOTES.md)
+record their scope and the required qualification. Capability discovery and
+CAD inspection are available before selecting controls:
 
 ```sh
 paacs-mesh capabilities --json

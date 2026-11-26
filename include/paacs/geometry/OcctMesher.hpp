@@ -5,8 +5,10 @@
 
 #pragma once
 #include "paacs/geometry/OcctModel.hpp"
+#include "paacs/geometry/CadConstructionBudget.hpp"
 #include "paacs/algo/GeometryMesher.hpp"
 #include "paacs/algo/PrimitiveMesher.hpp"
+#include <array>
 #include <cstddef>
 #include <optional>
 #include <string>
@@ -147,6 +149,9 @@ struct NativeCadMeshOptions {
     // Experimental positive-only original CAD ray witnesses in the serial
     // strict live Tet4 route. Other routes use ordinary validation.
     bool useTrimmedRayWitnesses = false;
+    // Experimental source-clearance advice for the compatible Tet4 front.
+    // Does not force a constructor or modify CAD, sizing or validity limits.
+    bool useThinRegionOrdering = false;
     // Try local interior-point insertion on a recovered Tet4 mesh in the
     // strict live material recovery trial.
     bool useLocalDelaunayRefinement = false;
@@ -169,7 +174,32 @@ struct NativeCadMeshOptions {
     [[nodiscard]] bool regularMeshQualityEnabled() const noexcept {
         return improveRegularMeshQuality.value_or(recoveryMode==NativeCadRecoveryMode::Advanced);
     }
+    CadConstructionBudget construction;
+    // Finalize numerical slivers after point insertion without moving nodes.
+    // Unset enables the bounded stage for Normal admission only.
+    std::optional<bool> initialTopologyQuality;
+    // Experimental provider substitution after a named geometric chart/wire
+    // refusal. Retains the live constructor and all Native validity checks.
+    // Explicit local surface controls/caps are not bypassed.
+    // A source refusal remains on this pipeline rather than retrying a legacy
+    // whole-method constructor. This toggle does not force initial-front ON.
+    bool allowNativeSourceFallback=false;
+    // Experimental order within the live size-field constructor: recover the
+    // boundary before placing interior sites. Does not force that constructor.
+    // A failed source is not replaced by legacy whole-method retry in AUTO.
+    bool recoverBoundaryBeforeInteriorSites=false;
 };
+
+// Existing aggregate options retain their bounded defaults. This preset opts
+// into progressive construction; explicit work fields assigned afterwards
+// remain authoritative, including a caller's deliberately small limit.
+inline NativeCadMeshOptions normalNativeCadMeshOptions() {
+    NativeCadMeshOptions options;
+    options.construction.resourcePolicy=CadResourcePolicy::Normal;
+    options.geometry.maximumMeshingWork=cadNormalWorkAllowance;
+    options.maximumValidationWork=cadNormalWorkAllowance;
+    return options;
+}
 struct NativeCadConstraintRecoveryReport {
     const char* diagnostic="not_attempted";
     std::uint64_t candidateCells=0,missingEdgesBefore=0,missingFacesBefore=0;
@@ -178,6 +208,9 @@ struct NativeCadConstraintRecoveryReport {
     std::uint64_t edgeWalks=0,facetWalks=0,walkFallbacks=0;
     std::uint64_t steinerAttempts=0,steinerWork=0,steinerNodes=0,retainedSteinerNodes=0;
     std::uint64_t piercingPatches=0;
+    bool initialTopologyUsed=false;
+    const char* initialTopologyDiagnostic="not_available";
+    std::uint64_t initialTopologyCells=0,initialTopologyImportWork=0,initialTopologyPeakModeledBytes=0;
 };
 struct NativeCadRegionRecoveryReport {
     std::uint64_t attempts=0,states=0,backtracks=0,candidates=0,pairCacheHits=0,patches=0,boundHits=0;
@@ -205,16 +238,133 @@ struct NativeCadInitialFrontReport {
     // Modeled auxiliary payload during compaction, not peak process RSS.
     std::uint64_t compactionPeakModeledBytes=0,auxiliaryWorkingBytes=0;
     double seconds=0;
+    const char* budgetReason="none";
+    std::uint64_t candidateLimit=0,siteLimit=0,queryLimit=0,workLimit=0;
+    std::uint64_t reservedBulkCandidates=0,reservedBulkSites=0;
+    std::uint64_t sourceCandidates=0,sourceDeferredFaces=0;
+    bool sourcePhaseDeferred=false;
+    std::uint64_t auxiliaryImportedCells=0,auxiliaryImportWork=0,auxiliaryImportModeledBytes=0;
+    std::uint64_t auxiliaryInitialCapacity=0,auxiliaryHardCapacity=0;
+    std::uint64_t auxiliaryGrowthAttempts=0,auxiliaryGrowths=0,auxiliaryGrowthWork=0;
+    std::uint64_t maximumCombinedModeledBytes=0,maximumHeapCapacity=0,resourceRetries=0;
+    const char* auxiliaryResourceDiagnostic="not_attempted";
+    std::uint64_t geometryRefusalCacheHits=0,cachedGeometryRefusals=0;
+    std::uint64_t spacingRejects=0,shapeRejects=0,geometryRejects=0,nativeRejects=0;
+    std::uint64_t auxiliaryInvalidRejects=0,auxiliaryQualityRejects=0;
+    // Opt-in advisory phase ordering. It changes no CAD or validity
+    // limit; unresolved source queries retain the established ordering.
+    bool orderingAttempted=false,orderingComplete=false,automaticBoundaryFirst=false;
+    const char* orderingDiagnostic="not_requested";
+    std::uint64_t orderingWork=0,orderingSamples=0,orderingBlocked=0,orderingUnknown=0;
+    std::uint64_t orderingDistinctSamples=0;
+    std::uint64_t orderingMaximumModeledBytes=0;
+    double orderingSeconds=0,orderingProposalFactor=0;
+    double orderingMinimumClearanceRatio=std::numeric_limits<double>::infinity();
 };
-// AUTO may retry the legacy route only after a bounded source-stage refusal,
-// before any initial point construction. This records the discarded trial;
-// it is separate from the initial-front report for the published route.
+struct NativeCadInitialTopologyQualityReport {
+    bool attempted=false,completed=false,changed=false,cancelled=false,budgetLimited=false;
+    bool summaryAvailable=false,candidateListTruncated=false;
+    const char* diagnostic="not_attempted";
+    std::uint64_t work=0,maximumModeledBytes=0,candidates=0,proposals=0,certifications=0;
+    std::uint64_t stagedEdits=0,edits=0,flips23=0,flips32=0,flips44=0;
+    std::uint64_t liveBefore=0,liveAfter=0,severeBefore=0,severeAfter=0;
+    std::uint64_t protectedSourceFaces=0,protectedSourceEdges=0;
+    double minimumMeanRatioBefore=1,minimumMeanRatioAfter=1;
+    double minimumScaledJacobianBefore=1,minimumScaledJacobianAfter=1;
+    double seconds=0;
+    double searchBelowMeanRatio=1e-6;
+    std::uint64_t workLimit=0;
+};
+struct NativeCadSourceConstructionWitness {
+    const char* stage="not_reported";
+    const char* detail="not_reported";
+    int edgeTag=-1,faceTag=-1;
+    std::optional<std::uint64_t> useId;
+    bool geometricRefusal=false;
+};
+struct NativeCadSourceShellAttempt {
+    double chordErrorLimit=0,seconds=0;
+    double signedVolume=0,cadVolume=0,relativeVolumeError=0;
+    std::uint64_t work=0,nodes=0,triangles=0;
+    bool published=false,sourceModelUnmodified=false,volumeCriterionMet=false;
+    bool constructionBudgetLimited=false,constructionStalled=false;
+    const char* surfaceDiagnostic="not_attempted";
+    const char* provider="not_reported";
+    // Configuration evidence, not achieved spacing or a point-count certificate.
+    bool globalSizingApplied=false;
+    unsigned curvaturePointsPerTurn=0;
+    double angularDeflection=0;
+    NativeCadSourceConstructionWitness witness;
+};
+struct NativeCadSourceShellReport {
+    // Source geometry retries are bounded independently of volume recovery.
+    // Queue exhaustion is not a requested element-size certificate.
+    std::array<NativeCadSourceShellAttempt,3> attempts{};
+    unsigned count=0;
+    double requestedGlobalSize=0,requestedChordError=0,maximumRelativeVolumeError=0;
+    bool accepted=false;
+    const char* diagnostic="not_attempted";
+    bool nativeFallbackRequested=false,nativeFallbackAttempted=false;
+    const char* nativeFallbackDiagnostic="disabled";
+};
+// Single-body AUTO may retry legacy after a bounded source-stage refusal,
+// before initial point construction. Uncontrolled Normal multi-part AUTO
+// can also retain a failed front before one guarded legacy retry. This is
+// the discarded trial, separate from the published route's initial front.
 struct NativeCadInitialFrontFallbackReport {
     bool attempted=false;
     NativeCadMeshReason reason=NativeCadMeshReason::None;
     std::uint64_t work=0;
     double seconds=0;
     const char* surfaceDiagnostic="not_attempted";
+    const char* volumeDiagnostic="not_attempted";
+    NativeCadSourceShellReport sourceShell;
+};
+struct NativeCadRouteAttemptReport {
+    const char* method="not_attempted";
+    NativeCadMeshReason reason=NativeCadMeshReason::None;
+    bool published=false;
+    std::uint64_t work=0;
+    double seconds=0;
+};
+struct NativeCadRouteResolutionReport {
+    const char* reason="not_reported";
+    const char* candidate="none";
+    bool preflightAttempted=false,wholeBodyVerified=false;
+    std::uint64_t preflightWork=0;
+    double preflightSeconds=0;
+    std::optional<double> fallbackChordLimit;
+    std::array<NativeCadRouteAttemptReport,2> attempts{};
+    unsigned count=0;
+};
+// Cumulative material-admission batches within one live volume attempt. The
+// completion/source flags describe the last batch, not publication of a mesh.
+struct NativeCadMaterialClassificationReport {
+    const char* diagnostic="not_attempted";
+    bool completed=false,sourceModelUnmodified=false;
+    // A native query is counted when started; interruption need not yield a
+    // decision. These attempts never stand in for the completed batch mask.
+    std::uint64_t attempts=0,requestedPoints=0,attemptedPoints=0;
+    std::uint64_t nativeQueries=0,strictReuses=0,rayAdmissions=0,work=0;
+    double seconds=0;
+    // Only explicitly profiled strict serial batches contribute these fields.
+    // Zero profiledBatches means unavailable, not zero classification cost.
+    std::uint64_t profiledBatches=0,rayWitnessAttempts=0;
+    double classifierSetupSeconds=0,nativeQuerySeconds=0,rayWitnessSeconds=0;
+};
+// Experimental recovery ordering evidence. Source-PLC inclusion never admits
+// an original-CAD rejection. Counts accumulate across private route attempts;
+// an interrupted attempt may contain only partial diagnostic measurements.
+struct NativeCadSourceMismatchPriorityReport {
+    const char* diagnostic="not_attempted";
+    const char* fallbackReason="not_attempted";
+    std::uint64_t attempts=0,completedAttempts=0,requestedPoints=0;
+    std::uint64_t insideSourceOutsideCad=0,outsideSource=0,ambiguousSource=0;
+    std::uint64_t prioritizedFacets=0,insideWitnessesNearMissingFacets=0;
+    std::uint64_t work=0,maximumWorkingPayloadEstimate=0;
+    std::uint64_t sourceGeneration=0,sourceMeshHash=0;
+    bool priorityApplied=false;
+    double seconds=0;
 };
 struct NativeCadBodyMeshReport {
     int solidTag = -1;
@@ -230,6 +380,13 @@ struct NativeCadBodyMeshReport {
     const char* nativeSurfaceReason = "not_attempted";
     const char* nativeVolumeReason = "not_attempted";
     double surfaceDeflection = 0, surfaceChordErrorLimit = 0;
+    NativeCadSourceShellReport sourceShell;
+    NativeCadMaterialClassificationReport materialClassification;
+    NativeCadSourceMismatchPriorityReport sourceMismatchPriority;
+    // An absent value means this route has not supplied construction evidence.
+    // True records use of a volume size field, not verification of every cell.
+    std::optional<bool> volumeSizingApplied;
+    const char* volumeSizingDiagnostic="not_reported";
     std::uint64_t surfaceTriangles = 0, surfaceAttempts = 0, rebuiltSurfaceCharts = 0;
     std::uint64_t nativeSurfaceWork = 0, nativeVolumeWork = 0;
     double nativeSurfaceSeconds = 0, nativeVolumeSeconds = 0;
@@ -270,17 +427,30 @@ struct NativeCadBodyMeshReport {
     std::uint64_t liveMaterialInitialRejects=0,liveMaterialRemainingRejects=0,liveMaterialPatches=0;
     std::uint64_t localDelaunaySupportNodes=0,localDelaunayRefinementNodes=0;
     unsigned localDelaunayQualityEdits=0;
+    double nativeCapRequestedSize=0,nativeCapSizingSeconds=0,nativeCapMaximumEdgeLength=0;
+    bool nativeCapSizingApplied=false;
+    const char* nativeCapSizingDiagnostic="not_attempted";
+    std::uint64_t nativeCapSizingAttempts=0,nativeCapSizingWork=0;
+    std::uint64_t nativeCapNodes=0,nativeCapTriangles=0;
     NativeCadInitialFrontReport initialFront;
+    NativeCadInitialTopologyQualityReport initialTopologyQuality;
     NativeCadInitialFrontFallbackReport initialFrontFallback;
     const char* interiorFrontDiagnostic="not_attempted";
     std::uint64_t interiorFrontNodes=0,interiorFrontCandidates=0;
     std::uint64_t interiorFrontWork=0,interiorFrontQueries=0;
     std::uint64_t interiorFrontRemainingOversized=0;
     std::uint64_t interiorFrontActivations=0,interiorVoidActivations=0,interiorFrontAdvances=0;
+    std::uint64_t interiorSpacingRejects=0,interiorShapeRejects=0,interiorCavityRejects=0;
+    std::uint64_t interiorValidityRejects=0,interiorNativeRejects=0;
     double interiorFrontSeconds=0;
     bool localDelaunayUsedGlobalFallback=false;
     NativeCadRegionRecoveryReport recoveryRegions;
     NativeCadConstraintRecoveryReport constraintRecovery;
+    std::vector<CadSurfaceSpacingReport> surfaceSpacing;
+    bool planarAttempted=false;
+    std::optional<double> effectiveMaximumChordError;
+    const char* chordErrorPolicy="not_reported";
+    NativeCadRouteResolutionReport routeResolution;
 };
 struct NativeCadMeshOutcome {
     bool published = false, destinationUnchanged = true;
@@ -307,6 +477,7 @@ struct NativeCadMeshOutcome {
     std::uint64_t nativeContactPieces = 0, nativeContactPlanes = 0;
     std::uint64_t matchedNativeContactTriangles = 0;
     std::uint64_t nativeContactMaximumWorkingPayloadEstimate = 0;
+    NativeCadRouteResolutionReport routeResolution;
 };
 // Native BRep remains the geometric authority. Existing planar/analytic routes
 // run first. The optional surface fallback retains native trim/edge identities

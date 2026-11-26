@@ -56,6 +56,11 @@ from .workflow import (  # noqa: E402
     run_recipe, run_saved_recipe, save_recipe,
 )
 from .diagnostics import capabilities, diagnose, format_diagnostics  # noqa: E402
+from .mesh_inspection import MeshInspection, inspect_mesh, open_mesh  # noqa: E402
+from .mesh_archive import InspectionError  # noqa: E402
+from .mesh_comparison import compare_meshes  # noqa: E402
+from .mesh_visualization import visualize_mesh  # noqa: E402
+from .cad_proximity import query_facial_proximity  # noqa: E402
 
 __all__ = [
     "BoxSize", "CadImportError", "CadModel", "ExportError", "FaceSize", "Mesh", "MeshingError", "read_step",
@@ -63,6 +68,9 @@ __all__ = [
     "CadPreview", "WorkflowError", "WorkflowResult", "create_recipe", "load_recipe",
     "publish_result", "run_recipe", "run_saved_recipe", "save_recipe",
     "capabilities", "diagnose", "format_diagnostics",
+    "MeshInspection", "InspectionError", "inspect_mesh", "open_mesh",
+    "compare_meshes", "visualize_mesh",
+    "query_facial_proximity",
 ]
 
 try:

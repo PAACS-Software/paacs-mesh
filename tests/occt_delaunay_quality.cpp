@@ -103,11 +103,11 @@ void requireUnchanged(const Complex& live,std::uint64_t before,unsigned edits) {
 struct NativeStop {};
 struct WorkStop {};
 
-Complex capBipyramid() {
+Complex capBipyramid(double epsilon=std::ldexp(1.,-45),double scale=1.) {
     Complex live;
     live.walkConstraints=true;
-    for (const auto p:std::array{Vec3{0,0,0},Vec3{1,0,0},Vec3{0,1,0},
-                                Vec3{.3,.3,std::ldexp(1.,-45)},Vec3{.3,.3,-1}})
+    for (const auto p:std::array{Vec3{0,0,0},Vec3{scale,0,0},Vec3{0,scale,0},
+                                Vec3{.3*scale,.3*scale,epsilon},Vec3{.3*scale,.3*scale,-scale}})
         live.vertices.push_back({p,live.vertices.size()+1});
     for (const auto vertices:std::array<std::array<Vertex,4>,2>{{{0,1,2,3},{0,2,1,4}}}) {
         bnd::TetFacetCell cell{vertices,0,{3,17}};
@@ -278,10 +278,79 @@ void exerciseCriticalFaceRepair() {
             "postfill transaction must publish the fully admitted fixed-boundary cap repair");
     sameCapBoundary(source,transaction);
 }
+
+void exerciseSevereTopologyOnly() {
+    constexpr geo::detail::OcctDelaunayQualityOptions options{1e-6,64,true};
+    constexpr std::array<unsigned char,5> allFixed{1,1,1,1,1};
+    auto live=capBipyramid(1e-9,2.);
+    const auto source=asCapMesh(live);
+    const auto faces=live.protectedFaces;
+    const auto edges=live.protectedEdges;
+    const auto before=algo::analyzeMixedMeshQuality(source);
+    const auto poor=poorCounts(live);
+    require(before.complete&&before.valid&&before.minimumQuality<options.criticalBelowMeanRatio&&
+            mesh::auditLinearVolumeBoundary(source).valid,
+            "owned severe cap must start below the numeric-cleanup threshold inside a valid shell");
+    unsigned edits=0,nodeQueries=0,centroidQueries=0;
+    geo::detail::optimizeOcctDelaunayQuality(live,allFixed,
+        [&](Vec3){++centroidQueries;return true;},[&](Vec3){++nodeQueries;return false;},edits,3,options);
+    const auto result=asCapMesh(live);
+    const auto after=algo::analyzeMixedMeshQuality(result);
+    require(edits==1&&edits<=options.maxEdits&&nodeQueries==0&&centroidQueries==3&&
+            after.complete&&after.valid&&after.minimumQuality>.25,
+            "severe-only mode must repair the fixed cap through admitted topology without node moves");
+    require(live.protectedFaces==faces&&live.protectedEdges==edges&&
+            mesh::auditLinearVolumeBoundary(result).valid&&
+            std::abs(after.totalVolume-before.totalVolume)<=before.totalVolume*1e-12,
+            "severe-only cleanup changed the protected material domain");
+    sameCapBoundary(source,result);
+    const auto nextPoor=poorCounts(live);
+    require(nextPoor[0]<=poor[0]&&nextPoor[1]<=poor[1],
+            "severe-only cleanup increased the low-quality population");
+
+    // This movable interior star is improved by the ordinary default policy.
+    // The numeric-only policy must return before that relocation/search stage.
+    auto movable=closedStar();const auto original=signature(movable);
+    unsigned skipped=0,moveQueries=0;
+    geo::detail::optimizeOcctDelaunayQuality(movable,fixed,[](Vec3){return true;},
+        [&](Vec3){++moveQueries;return true;},skipped,4,options);
+    requireUnchanged(movable,original,skipped);
+    require(moveQueries==0,"severe-only policy queried an ordinary smoothing proposal");
+
+    const auto small=asCapMesh(capBipyramid(1e-9,2.));
+    for(unsigned refusal=0;refusal<4;++refusal){
+        auto transaction=small;const auto signatureBefore=mesh::meshHash(transaction);
+        auto bounded=options;if(refusal==3)bounded.maxEdits=0;
+        const auto changed=geo::detail::improveOcctDelaunayMeshQuality(transaction,
+            refusal==0?1:200000,refusal==1?2:3,3,64*1024*1024,
+            [](Vec3){throw std::runtime_error("numeric cleanup attempted a node move");return false;},
+            [&](Vec3){return refusal!=2;},[](std::uint64_t){},bounded);
+        require(changed==0&&mesh::meshHash(transaction)==signatureBefore,
+                "numeric-only resource, Native or edit-cap refusal published a partial transaction");
+    }
+    auto transaction=small;
+    const auto changed=geo::detail::improveOcctDelaunayMeshQuality(transaction,
+        200000,3,3,64*1024*1024,[](Vec3){return false;},[](Vec3){return true;},
+        [](std::uint64_t){},options);
+    require(changed==1&&mesh::auditLinearVolumeBoundary(transaction).valid&&
+            algo::analyzeMixedMeshQuality(transaction).minimumQuality>.25,
+            "numeric-only mesh wrapper did not publish the complete admitted topology repair");
+    sameCapBoundary(small,transaction);
+
+    auto defaultPolicy=closedStar(),explicitDefault=closedStar();
+    unsigned first=0,second=0;
+    geo::detail::optimizeOcctDelaunayQuality(defaultPolicy,fixed,[](Vec3){return true;},
+        [](Vec3){return true;},first,4);
+    geo::detail::optimizeOcctDelaunayQuality(explicitDefault,fixed,[](Vec3){return true;},
+        [](Vec3){return true;},second,4,{});
+    require(first==second&&signature(defaultPolicy)==signature(explicitDefault),
+            "explicit default options changed the established optimization policy");
+}
 }
 int main() {
     try {
         exerciseCriticalFaceRepair();
+        exerciseSevereTopologyOnly();
         auto live=closedStar();
         const auto before=algo::analyzeMixedMeshQuality(asMesh(live));
         const auto beforePoor=poorCounts(live);

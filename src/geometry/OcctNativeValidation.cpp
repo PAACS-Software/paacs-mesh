@@ -18,6 +18,7 @@
 #include <TopoDS.hxx>
 #include <algorithm>
 #include <bit>
+#include <chrono>
 #include <cmath>
 #include <exception>
 #include <ostream>
@@ -31,6 +32,23 @@ namespace paacs::geo::detail {
 namespace {
 using Reason=OcctNativeValidationReason;
 struct Stop { Reason reason; };
+// Each scope closes before the outcome is returned, including exception paths.
+// A null destination performs no clock reads and does not allocate storage.
+class ClassificationTimer final {
+public:
+    explicit ClassificationTimer(double* destination) noexcept : destination_(destination) {
+        if(destination_)started_=std::chrono::steady_clock::now();
+    }
+    ~ClassificationTimer() {
+        if(destination_)*destination_+=std::chrono::duration<double>(
+            std::chrono::steady_clock::now()-started_).count();
+    }
+    ClassificationTimer(const ClassificationTimer&)=delete;
+    ClassificationTimer& operator=(const ClassificationTimer&)=delete;
+private:
+    double* destination_;
+    std::chrono::steady_clock::time_point started_{};
+};
 void require(bool condition,Reason reason){if(!condition)throw Stop{reason};}
 bool finite(Vec3 p){return std::isfinite(p.x)&&std::isfinite(p.y)&&std::isfinite(p.z);}
 bool identical(double a,double b){return std::bit_cast<std::uint64_t>(a)==std::bit_cast<std::uint64_t>(b);}
@@ -141,12 +159,14 @@ OcctNativeValidationOutcome OcctNativeInteriorCheck::run(const OcctModel& model,
         out.threadsUsed=std::min<unsigned>(options.maximumThreads,static_cast<unsigned>(points.size()));
         const auto toleranceBits=std::bit_cast<std::uint64_t>(tolerance);
         const bool strictSerial=options.maximumThreads==1&&options.maximumOutsideDistance==0;
+        out.classificationProfileAvailable=options.profileClassification&&strictSerial;
         const bool useRayWitnesses=strictSerial&&options.useTrimmedRayWitnesses;
         const bool reuse=strictSerial&&prior&&!prior->admitted_.empty()&&prior->model_==&model&&prior->solidTag_==tag&&
             prior->tolerance_==toleranceBits&&prior->source_==before&&
             (!prior->includesRayAdmissions_||useRayWitnesses);
         OcctSolidClassifier originalClassifier;
         const auto loadClassifier=[&]{
+            ClassificationTimer timer(out.classificationProfileAvailable?&out.classifierSetupSeconds:nullptr);
             originalClassifier.Load(OcctModelAccess::solid(model,tag));
             context.tick();
         };
@@ -171,9 +191,13 @@ OcctNativeValidationOutcome OcctNativeInteriorCheck::run(const OcctModel& model,
         if(out.threadsUsed==1){
             OcctTrimmedRayWitness witness;
             constexpr std::uint64_t witnessBytes=128*1024;
+            const auto loadWitness=[&]{
+                ClassificationTimer timer(out.classificationProfileAvailable?&out.classifierSetupSeconds:nullptr);
+                return witness.load(OcctModelAccess::solid(model,tag),tolerance);
+            };
             const bool rayReady=useRayWitnesses&&points.size()>(reuse?prior->admitted_.size():0)+32&&
                 witnessBytes<=options.maximumWorkingBytes-workingBytes&&
-                witness.load(OcctModelAccess::solid(model,tag),tolerance);
+                loadWitness();
             if(rayReady){
                 activeWorkingBytes+=witnessBytes;
                 context.working(activeWorkingBytes);
@@ -187,7 +211,13 @@ OcctNativeValidationOutcome OcctNativeInteriorCheck::run(const OcctModel& model,
                 const gp_Pnt nativePoint(p.x,p.y,p.z);
                 if(rayReady){
                     context.tick();
-                    if(witness.admits(nativePoint)){
+                    bool rayAdmitted;
+                    {
+                        ClassificationTimer timer(out.classificationProfileAvailable?&out.rayWitnessSeconds:nullptr);
+                        if(out.classificationProfileAvailable)++out.rayWitnessAttempts;
+                        rayAdmitted=witness.admits(nativePoint);
+                    }
+                    if(rayAdmitted){
                         if(mask)admittedPoints[i]=1;
                         ++out.trimmedRayAdmissions;
                         continue;
@@ -195,6 +225,7 @@ OcctNativeValidationOutcome OcctNativeInteriorCheck::run(const OcctModel& model,
                 }
                 if(!out.nativeQueries)loadClassifier();
                 ++out.nativeQueries;
+                ClassificationTimer timer(out.classificationProfileAvailable?&out.nativeQuerySeconds:nullptr);
                 originalClassifier.Perform(nativePoint,tolerance);
                 record(i,originalClassifier.State());}
         }else{

@@ -28,6 +28,9 @@ from python_compatibility import PLATFORM_TAGS, REQUIRES_PYTHON, consumers as co
 TARGETS = {row["id"]: row for row in targets()}
 CONSUMERS = {row["id"]: row for row in compatibility_consumers()}
 ARTIFACTS = {name: row["artifact"] for name, row in TARGETS.items()}
+LEGACY_PARITY_CASES = frozenset(("cylinder", "assembly", "combined-sizing"))
+RESOURCE_PARITY_CASES = frozenset(("normal-resources", "normal-explicit-resources"))
+CURRENT_PARITY_CASES = LEGACY_PARITY_CASES | RESOURCE_PARITY_CASES | {"construction-caps"}
 
 
 def load(path: Path):
@@ -86,6 +89,65 @@ def tests_passed(receipt: dict):
     if (any(type(v) is not int or v < 0 for v in fields) or fields[1] == 0
             or fields[0] != fields[1] + fields[2]):
         raise RuntimeError("The artifact lacks a nonempty successful installed-test result")
+
+
+def native_parity_passed(receipt: dict, *, require_resources=False):
+    """Validate named cases; preserve historical v1 receipts without a fixed count.
+
+    Published v1 evidence predates resource policy and contains the three base
+    cases. Its optional construction-caps extension also remains valid. New v2
+    evidence requires all six current cases and matching resource receipts.
+    """
+    if not isinstance(receipt, dict) or receipt.get("status") != "passed":
+        raise RuntimeError("Native/Python parity qualification did not pass")
+    schema = receipt.get("schema")
+    if schema not in ("paacs-python-native-parity-v1", "paacs-python-native-parity-v2"):
+        raise RuntimeError("Native/Python parity evidence uses an unsupported schema")
+    if require_resources and schema != "paacs-python-native-parity-v2":
+        raise RuntimeError("Current release qualification requires v2 resource parity evidence")
+    rows = receipt.get("cases")
+    if not isinstance(rows, list) or not rows or any(not isinstance(row, dict) for row in rows):
+        raise RuntimeError("Native/Python parity cases are missing")
+    names = [row.get("case") for row in rows]
+    if (any(not isinstance(name, str) or not name for name in names)
+            or len(set(names)) != len(names)):
+        raise RuntimeError("Native/Python parity case names must be unique and nonempty")
+    required = LEGACY_PARITY_CASES if schema.endswith("-v1") else CURRENT_PARITY_CASES
+    if not required <= set(names):
+        raise RuntimeError("Required named Native/Python parity cases are missing")
+    if schema.endswith("-v1") and RESOURCE_PARITY_CASES & set(names):
+        raise RuntimeError("Resource policy parity requires v2 evidence")
+    for row in rows:
+        if (row.get("archives_identical") is not True
+                or any(not isinstance(row.get(key), str) or not re.fullmatch(r"[0-9a-f]{64}", row[key])
+                       for key in ("source_sha256", "archive_sha256"))):
+            raise RuntimeError("Parity cases need identical archives and valid source/archive hashes")
+        if schema.endswith("-v1"):
+            continue
+        resource = row.get("resources")
+        required_fields = {"policy", "requested_max_work", "effective_max_work",
+                           "max_working_bytes", "logical_work_cap_disabled"}
+        if (row.get("resource_receipts_identical") is not True or not isinstance(resource, dict)
+                or not required_fields <= resource.keys()):
+            raise RuntimeError("V2 parity cases require matching Native/Python resource receipts")
+        policy, requested = resource.get("policy"), resource.get("requested_max_work")
+        effective, memory = resource.get("effective_max_work"), resource.get("max_working_bytes")
+        disabled = resource.get("logical_work_cap_disabled")
+        positive = lambda value: type(value) is int and 0 < value <= 2**64 - 1
+        if (policy not in ("normal", "bounded") or not positive(effective) or not positive(memory)
+                or requested is not None and not positive(requested) or type(disabled) is not bool
+                or disabled != (policy == "normal" and requested is None)
+                or requested is not None and effective != requested
+                or policy == "bounded" and requested is None and effective != 50_000_000
+                or disabled and effective < 2**60):
+            raise RuntimeError("V2 parity resource limits or explicit-work precedence are inconsistent")
+        if row["case"] in RESOURCE_PARITY_CASES and policy != "normal":
+            raise RuntimeError("Normal resource cases did not select Normal admission")
+        if row["case"] == "normal-resources" and (requested is not None or disabled is not True):
+            raise RuntimeError("Inherited Normal resource parity did not exercise uncapped logical work")
+        if row["case"] == "normal-explicit-resources" and (
+                requested != 100_000_000 or disabled is not False or memory != 1024**3):
+            raise RuntimeError("Explicit Normal resource parity did not exercise its recorded limits")
 
 
 def numpy_passed(rows: list, expected):
@@ -264,8 +326,7 @@ def assemble(source: Path, builders: Path, consumers: Path, expected: str, outpu
         audit = checked_file(directory, {"file": receipt["repair"]["audit"], "sha256": receipt["repair"]["audit_sha256"]})
         parity = checked_file(directory, receipt["native_parity"])
         parity_result = load(parity)
-        if parity_result.get("status") != "passed" or len(parity_result.get("cases", [])) != 3:
-            raise RuntimeError("Native/Python parity qualification is missing")
+        native_parity_passed(parity_result, require_resources=True)
         evidence[identifier] = {"builder": receipt_path, "parity": parity, "dependencies": audit,
                                 "native-build-info": build_info}
         for consumer_id, consumer_path in consumer_evidence.items():

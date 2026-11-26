@@ -11,13 +11,115 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import prepare_python_release as release
 import check_pypi_release as index_release
+
+
+def parity_receipt(schema="paacs-python-native-parity-v1", *, construction=False):
+    """Synthetic qualification metadata; no real archive or meshing is simulated."""
+    names = ["cylinder", "assembly", "combined-sizing"]
+    if schema.endswith("-v2"):
+        names += ["construction-caps", "normal-resources", "normal-explicit-resources"]
+    elif construction:
+        names += ["construction-caps"]
+    rows = []
+    for name in names:
+        row = {"case": name, "archives_identical": True,
+               "source_sha256": hashlib.sha256(("source-" + name).encode()).hexdigest(),
+               "archive_sha256": hashlib.sha256(("archive-" + name).encode()).hexdigest()}
+        if schema.endswith("-v2"):
+            resource = {"policy": "bounded", "requested_max_work": None, "effective_max_work": 50_000_000,
+                        "max_working_bytes": 512 * 1024**2, "logical_work_cap_disabled": False}
+            if name == "normal-resources":
+                resource.update(policy="normal", effective_max_work=2**62 - 1, logical_work_cap_disabled=True)
+            if name == "normal-explicit-resources":
+                resource.update(policy="normal", requested_max_work=100_000_000,
+                                effective_max_work=100_000_000, max_working_bytes=1024**3)
+            row.update(resource_receipts_identical=True, resources=resource)
+        rows.append(row)
+    return {"schema": schema, "status": "passed", "cases": rows}
+
+
+class NativeParityReceiptTests(unittest.TestCase):
+    def test_named_historical_receipts_and_construction_extension_remain_valid(self):
+        release.native_parity_passed(parity_receipt())
+        release.native_parity_passed(parity_receipt(construction=True))
+
+    def test_current_resource_receipt_accepts_six_unique_named_cases(self):
+        receipt = parity_receipt("paacs-python-native-parity-v2")
+        release.native_parity_passed(receipt)
+        receipt["cases"].reverse()
+        release.native_parity_passed(receipt)
+
+    def test_historical_receipts_remain_readable_but_cannot_qualify_a_new_release(self):
+        legacy = parity_receipt()
+        release.native_parity_passed(legacy)
+        with self.assertRaises(RuntimeError):
+            release.native_parity_passed(legacy, require_resources=True)
+        release.native_parity_passed(parity_receipt("paacs-python-native-parity-v2"), require_resources=True)
+
+    def test_duplicate_or_missing_required_names_cannot_replace_a_case_count(self):
+        for schema in ("paacs-python-native-parity-v1", "paacs-python-native-parity-v2"):
+            for change in (lambda rows: rows.pop(),
+                           lambda rows: rows[1].update(case=rows[0]["case"]),
+                           lambda rows: rows[0].update(case="unrelated")):
+                with self.subTest(schema=schema, change=change):
+                    receipt = parity_receipt(schema)
+                    change(receipt["cases"])
+                    with self.assertRaises(RuntimeError):
+                        release.native_parity_passed(receipt)
+
+    def test_missing_or_failed_archive_evidence_is_refused(self):
+        for field, value in (("archives_identical", False), ("archive_sha256", "invalid"),
+                             ("source_sha256", None)):
+            with self.subTest(field=field):
+                receipt = parity_receipt()
+                receipt["cases"][0][field] = value
+                with self.assertRaises(RuntimeError):
+                    release.native_parity_passed(receipt)
+
+    def test_resource_evidence_needs_matching_receipts_and_complete_fields(self):
+        for field in ("resources", "resource_receipts_identical"):
+            with self.subTest(field=field):
+                receipt = parity_receipt("paacs-python-native-parity-v2")
+                del receipt["cases"][0][field]
+                with self.assertRaises(RuntimeError):
+                    release.native_parity_passed(receipt)
+        receipt = parity_receipt("paacs-python-native-parity-v2")
+        del receipt["cases"][-2]["resources"]["requested_max_work"]
+        with self.assertRaises(RuntimeError):
+            release.native_parity_passed(receipt)
+
+    def test_explicit_limit_precedence_and_unlimited_claims_are_checked(self):
+        for case_name, field, value in (
+                ("normal-explicit-resources", "effective_max_work", 1),
+                ("normal-explicit-resources", "logical_work_cap_disabled", True),
+                ("normal-explicit-resources", "max_working_bytes", 512 * 1024**2),
+                ("normal-resources", "effective_max_work", 50_000_000),
+                ("normal-resources", "policy", "bounded"),
+                ("normal-resources", "max_working_bytes", True)):
+            with self.subTest(case=case_name, field=field):
+                receipt = parity_receipt("paacs-python-native-parity-v2")
+                next(row for row in receipt["cases"] if row["case"] == case_name)["resources"][field] = value
+                with self.assertRaises(RuntimeError):
+                    release.native_parity_passed(receipt)
+
+    def test_unknown_failed_and_mislabelled_resource_schemas_are_refused(self):
+        receipt = parity_receipt("paacs-python-native-parity-v2")
+        receipt["schema"] = "paacs-python-native-parity-v1"
+        with self.assertRaises(RuntimeError):
+            release.native_parity_passed(receipt)
+        for key, value in (("schema", "unknown"), ("status", "failed"), ("cases", None)):
+            receipt = parity_receipt()
+            receipt[key] = value
+            with self.subTest(key=key), self.assertRaises(RuntimeError):
+                release.native_parity_passed(receipt)
 
 
 class PythonReleaseTests(unittest.TestCase):
@@ -49,7 +151,7 @@ class PythonReleaseTests(unittest.TestCase):
             (directory / "native-build-info.txt").write_text(
                 "release=1.2.0-rc.2\ncompiler=" + compiler + "\ncmake=4.4.3\nstandard=23\n"
                 "configuration=Release\nflags=\nstrict_fp=ON\nipo=OFF\nnative=OFF\nsanitizer=none\n")
-            release.write(directory / "native-parity.json", {"status": "passed", "cases": [{}, {}, {}]})
+            release.write(directory / "native-parity.json", parity_receipt("paacs-python-native-parity-v2"))
             record = {"source_revision": {"commit": self.sha, "clean": True}, "platform": platform,
                 "target_id": identifier, "python_version": row["python"], "python_tag": row["python_tag"],
                 "host": self.host(platform),
@@ -193,6 +295,49 @@ class PythonReleaseTests(unittest.TestCase):
         release.verify(manifest, self.output / "dist", self.sha)
         with self.assertRaises(RuntimeError):
             self.assemble()
+
+    def test_six_named_resource_parity_cases_allow_complete_release_assembly(self):
+        for row in release.TARGETS.values():
+            directory = self.builders / row["artifact"]
+            parity_path = directory / "native-parity.json"
+            release.write(parity_path, parity_receipt("paacs-python-native-parity-v2"))
+            receipt_path = directory / "wheel-validation.json"
+            receipt = release.load(receipt_path)
+            receipt["native_parity"]["sha256"] = release.sha256(parity_path)
+            release.write(receipt_path, receipt)
+        manifest = self.assemble()
+        self.assertEqual(len(manifest["wheels"]), len(release.TARGETS))
+        release.verify(manifest, self.output / "dist", self.sha)
+
+    def test_duplicate_named_parity_blocks_staging_even_with_matching_receipt_hash(self):
+        directory = self.builders / next(iter(release.ARTIFACTS.values()))
+        parity_path = directory / "native-parity.json"
+        parity = parity_receipt("paacs-python-native-parity-v2")
+        parity["cases"][1]["case"] = parity["cases"][0]["case"]
+        release.write(parity_path, parity)
+        receipt_path = directory / "wheel-validation.json"
+        receipt = release.load(receipt_path)
+        receipt["native_parity"]["sha256"] = release.sha256(parity_path)
+        release.write(receipt_path, receipt)
+        self.assert_gate_refuses()
+
+    def test_substituted_parity_file_cannot_reuse_the_qualified_receipt_hash(self):
+        directory = self.builders / next(iter(release.ARTIFACTS.values()))
+        parity_path = directory / "native-parity.json"
+        substituted = parity_receipt("paacs-python-native-parity-v2")
+        substituted["cases"][0]["archive_sha256"] = "f" * 64
+        release.write(parity_path, substituted)
+        self.assert_gate_refuses()
+
+    def test_historical_parity_receipt_cannot_qualify_current_release_assembly(self):
+        directory = self.builders / next(iter(release.ARTIFACTS.values()))
+        parity_path = directory / "native-parity.json"
+        release.write(parity_path, parity_receipt())
+        receipt_path = directory / "wheel-validation.json"
+        receipt = release.load(receipt_path)
+        receipt["native_parity"]["sha256"] = release.sha256(parity_path)
+        release.write(receipt_path, receipt)
+        self.assert_gate_refuses()
 
     def test_release_tag_and_workflow_revision_must_match(self):
         current = {"commit": self.sha, "tree": "c" * 40, "clean": True}
@@ -406,6 +551,74 @@ class PythonReleaseTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 release.publish_sources(assets, "v1.2.0-rc.2", self.sha)
             self.assertEqual(calls.call_count, 1)
+
+    def index_install_smoke_code(self):
+        manifest = self.assemble()
+        fixture = self.root / "cylinder.step"
+        fixture.write_bytes(b"owned fixture; meshing subprocess is controlled")
+        response = {"urls": [{"filename": name, "packagetype": "bdist_wheel",
+                              "digests": {"sha256": digest}}
+                             for name, digest in manifest["wheels"].items()]}
+        with patch.object(sys, "argv", ["check_pypi_release.py", "--manifest",
+                str(self.output / "release-manifest.json"), "--fixture", str(fixture),
+                "--output", str(self.root / "index-smoke")]), \
+                patch.object(index_release, "urlopen", return_value=io.BytesIO(json.dumps(response).encode())), \
+                patch.object(index_release.venv, "EnvBuilder") as builder, \
+                patch.object(index_release.subprocess, "run") as processes, \
+                patch.object(sys, "stdout", new=io.StringIO()):
+            builder.return_value.create.side_effect = lambda path: Path(path).mkdir(parents=True)
+            index_release.main()
+        commands = [call.args[0] for call in processes.call_args_list
+                    if call.args[0][1:3] == ["-I", "-c"]]
+        self.assertEqual(len(commands), 1)
+        return commands[0][3]
+
+    @staticmethod
+    def index_smoke_mesh(front_nodes):
+        """Independent API responses; no native mesh or geometry is simulated."""
+        return SimpleNamespace(report={
+            "audit": {"complete": True, "valid": True},
+            "quality": {"valid": True, "inverted_cells": 0},
+            "bodies": [{"initial_front": {"nodes": front_nodes}}]},
+            body_tags=[1], face_tags=[1, 2, 3], node_count=12,
+            tetrahedron_count=20, write=Mock())
+
+    @staticmethod
+    def execute_index_smoke(code, meshes):
+        model = SimpleNamespace(mesh=Mock(side_effect=meshes))
+        module = SimpleNamespace(__version__="test-index-wheel", read_step=Mock(return_value=model))
+        with patch.dict(sys.modules, {"paacs_mesh": module}), \
+                patch.object(sys, "stdout", new=io.StringIO()):
+            exec(compile(code, "<index-install-smoke>", "exec"), {})
+        module.read_step.assert_called_once_with("cylinder.step")
+        return model
+
+    def test_index_smoke_accepts_verified_auto_and_validates_explicit_initial_front(self):
+        code = self.index_install_smoke_code()
+        automatic, front = self.index_smoke_mesh(0), self.index_smoke_mesh(8)
+        model = self.execute_index_smoke(code, [automatic, front])
+        self.assertEqual([(call.args, call.kwargs) for call in model.mesh.call_args_list],
+                         [((.3,), {}), ((.3,), {"assembly": "conforming", "advancing_interior_front": True})])
+        self.assertEqual([call.args for call in automatic.write.call_args_list],
+                         [("cylinder.paacsmesh",), ("cylinder.vtk",)])
+        self.assertEqual([call.args for call in front.write.call_args_list],
+                         [("cylinder-initial-front.paacsmesh",), ("cylinder-initial-front.vtk",)])
+
+    def test_index_smoke_rejects_invalid_evidence_for_either_mesh_and_an_empty_explicit_front(self):
+        code = self.index_install_smoke_code()
+        for route in (0, 1):
+            for group, key, value in (("audit", "complete", False), ("audit", "valid", False),
+                                      ("quality", "valid", False), ("quality", "inverted_cells", 1),
+                                      (None, "body_tags", [2]), (None, "face_tags", [1, 2])):
+                meshes = [self.index_smoke_mesh(0), self.index_smoke_mesh(8)]
+                if group:
+                    meshes[route].report[group][key] = value
+                else:
+                    setattr(meshes[route], key, value)
+                with self.subTest(route=route, group=group, key=key), self.assertRaises(AssertionError):
+                    self.execute_index_smoke(code, meshes)
+        with self.assertRaises(AssertionError):
+            self.execute_index_smoke(code, [self.index_smoke_mesh(0), self.index_smoke_mesh(0)])
 
     def test_index_install_resolves_relative_output_before_changing_child_cwd(self):
         manifest = self.assemble()

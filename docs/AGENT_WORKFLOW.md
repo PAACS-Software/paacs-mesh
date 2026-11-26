@@ -93,7 +93,29 @@ with `assembly="conforming"`. Multiple independent parts retain their body
 identities under the default `preserve_parts` policy. Material interference is
 reported; overlapping part meshes do not become one non-overlapping domain.
 
+RC4 candidate bindings provide opt-in [construction effort and stage
+caps](CONSTRUCTION_BUDGETS.md) for the compatible single-solid Tet4 route.
+`construction_effort="legacy"` remains the default; `auto` and `thorough` can
+allocate more effort and reserve a share for bulk interior placement. Optional
+positive integer caps control surface points per rebuilt face chart, chord
+points, interior proposals and admitted sites. The overall work, memory, node,
+output and time budgets still apply. This is separate from sizing controls and
+recovery policy, and does not extend assembly support.
+
+Direct requests and `create_recipe()` accept the same construction options.
+Saved recipes preserve those options through replay and retries; older recipes
+without them resolve to `legacy` with automatic stage caps. A bounded retry
+does not silently increase them. Use `capabilities()["controls"]` to discover
+the effort names, default and cap names supported by the installed build.
+
 ## What a diagnostic means
+
+The RC4 candidate interface adds [per-element mesh inspection](MESH_INSPECTION.md)
+and [explicit Python request signatures](API_USABILITY.md). Those operations
+are opt-in and separate from the report-only `diagnose()` operation below.
+See the [schema and issue-code reference](DIAGNOSTIC_SCHEMAS.md) for machine
+contracts. RC4 uses the complete release qualification gates; published RC3
+wheels retain their original interface.
 
 `pm.diagnose(mesh_or_report, max_issues=32)` accepts a native mesh or its report,
 or a bounded workflow report. It returns copied JSON data using
@@ -130,6 +152,14 @@ cannot establish a valid result. For assemblies, read the mesh scope and
 interference information alongside the status: independently valid overlapping
 parts are unsuitable as one non-overlapping material domain without further
 modelling decisions.
+
+Development reports can also produce `construction_budget_limited`, with the
+limited stage's body and available face tags. Review its stop reason and actual
+size/quality measurements before increasing limits. A blocked candidate need
+not be fixed by more effort. Pending triangle-entry counts can rise under
+subdivision; neither those counts nor queue exhaustion certify sizing, CAD
+fidelity or element quality. Existing native failures retain their refusal
+status regardless of this warning.
 
 Current native reports provide aggregate quality quantiles and body-level CAD
 errors. They do not identify which individual cells caused a global quality

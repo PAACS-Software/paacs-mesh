@@ -46,6 +46,11 @@ struct OcctNativeSweepOptions {
     double minimumQuality = 0, warningQuality = .25;
     mesh::LinearVolumeAuditLimits auditLimits{};
     const std::atomic_bool *cancellation = nullptr;
+    // Opt-in physical cap source sizing through the shared regular curve/face
+    // builder. Zero retains the historical native tangential triangulation.
+    // Positive requests use boundary.construction's unchanged admission policy;
+    // they are not an achieved edge-length or simulation certificate.
+    double maximumCapSize = 0;
 };
 struct OcctNativeSweepOutcome {
     bool published = false, destinationUnchanged = true;
@@ -70,11 +75,18 @@ struct OcctNativeSweepOutcome {
     algo::MixedMeshQualityReport quality;
     double recognitionSeconds = 0, surfaceSeconds = 0, sweepSeconds = 0;
     double validationSeconds = 0, totalSeconds = 0;
+    double requestedCapSize = 0, maximumCapEdgeLength = 0;
+    bool capSizingApplied = false;
+    const char *capSourceProvider = "native_tessellation";
+    const char *capSizingDiagnostic = "not_requested";
+    // Subsets of surfaceWork/surfaceSeconds, never additional phase costs.
+    std::uint64_t capSizingWork = 0;
+    double capSizingSeconds = 0;
 };
 // Two parallel planar caps, straight parallel side geometry, and a native
 // trimmed-cap prism whose stable span-aware mass and non-destructive Common
 // agree with the entire original solid are mandatory. Holes remain present.
-// A native cap triangulation feeds the retained planar layered sweep and
+// A native cap triangulation (or the opt-in physically sized source) feeds the retained planar layered sweep and
 // conforming pulling Tet4 conversion. Original topology supplies every tag;
 // there is no coordinate identity merge. Exact exterior embedding, all original
 // face coverage, original-CAD node/facet distances and every Tet4 centroid are

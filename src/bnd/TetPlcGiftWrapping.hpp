@@ -46,6 +46,9 @@ public:
     bool useIncrementalFrontQueue=true;
     bool manifoldIndexValid=false;
     bool lastTopologyRefusal=false;
+    // Only these witnesses remain false as immutable geometry is occupied.
+    // Native callbacks, cancellation and changing front topology are excluded.
+    bool lastGeometryRefusal=false;
     bool retryTopologyRequired=false;
     std::map<TetFacetVertexId,std::set<Face>> frontVertexFaces;
     std::set<std::vector<Face>> exhaustedKernels;
@@ -154,9 +157,10 @@ public:
     bool valid(const Front& row,TetFacetVertexId apex,TetFacetCell& cell){
         charge();
         lastTopologyRefusal=false;
+        lastGeometryRefusal=false;
         if(cancellation.stop_requested())return false;
         ++metrics.apexTests;const auto f=row.directed;cell={{f[0],f[2],f[1],apex},cells.size()+1,{3,0}};
-        if(predicates::orient3d(vertices[cell.vertices[0]].position,vertices[cell.vertices[1]].position,vertices[cell.vertices[2]].position,vertices[apex].position)!=predicates::Sign::Positive)return false;
+        if(predicates::orient3d(vertices[cell.vertices[0]].position,vertices[cell.vertices[1]].position,vertices[cell.vertices[2]].position,vertices[apex].position)!=predicates::Sign::Positive){lastGeometryRefusal=true;return false;}
         if(requireManifoldFront&&!manifoldAfter(cell)){lastTopologyRefusal=true;++metrics.nonmanifoldProposals;return false;}
         TetFacetComplexView view{vertices,cells,{}, {},{}, {3,0}};
         for(unsigned side=0;side<4;++side){const auto directed=tet_facet_detail::outwardFace(cell,side);const auto k=key(directed);
@@ -177,10 +181,10 @@ public:
                 return false;
             }
             return !tet_facet_detail::pointStrictlyInsideTet(vertices[i].position,corners);
-        }))return false;
-        if(!boundaryAccepts(cell,bounds,0))return false;
+        })){lastGeometryRefusal=true;return false;}
+        if(!boundaryAccepts(cell,bounds,0)){lastGeometryRefusal=true;return false;}
         const auto occupiedBounds=[&](std::size_t i){return PlcGrowingAabbIndex::Box{cellBoxes[i].lo,cellBoxes[i].hi};};
-        if(!occupiedIndex.all(cells.size(),query,occupiedBounds,work,[&](std::size_t i){++metrics.pairTests;return !cellsConflict(view,cell,cells[i]);}))return false;
+        if(!occupiedIndex.all(cells.size(),query,occupiedBounds,work,[&](std::size_t i){++metrics.pairTests;return !cellsConflict(view,cell,cells[i]);})){lastGeometryRefusal=true;return false;}
         if(interiorAdmission){
             if(apex>=fixedVertexCount&&!interiorAdmission(vertices[apex].position))return false;
         }

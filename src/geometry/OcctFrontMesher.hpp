@@ -26,11 +26,17 @@ struct OcctFrontOutcome {
     std::uint64_t localDelaunaySupportNodes=0,localDelaunayRefinementNodes=0;
     unsigned localDelaunayQualityEdits=0;
     NativeCadInitialFrontReport initialFront;
+    NativeCadInitialTopologyQualityReport initialTopologyQuality;
+    NativeCadSourceShellReport sourceShell;
+    NativeCadMaterialClassificationReport materialClassification;
+    NativeCadSourceMismatchPriorityReport sourceMismatchPriority;
     const char* interiorFrontDiagnostic="not_attempted";
     std::uint64_t interiorFrontNodes=0,interiorFrontCandidates=0;
     std::uint64_t interiorFrontWork=0,interiorFrontQueries=0;
     std::uint64_t interiorFrontRemainingOversized=0;
     std::uint64_t interiorFrontActivations=0,interiorVoidActivations=0,interiorFrontAdvances=0;
+    std::uint64_t interiorSpacingRejects=0,interiorShapeRejects=0,interiorCavityRejects=0;
+    std::uint64_t interiorValidityRejects=0,interiorNativeRejects=0;
     double interiorFrontSeconds=0;
     bool localDelaunayUsedGlobalFallback=false;
     double surfaceSeconds=0,volumeSeconds=0,meshVolume=0,chord=0;
@@ -38,6 +44,7 @@ struct OcctFrontOutcome {
     std::uint64_t surfaceTriangles=0,rebuiltSurfaceCharts=0;
     OcctNativeValidationOutcome nativeValidation;
     OcctNativeValidationOutcome chordSampleValidation;
+    std::vector<CadSurfaceSpacingReport> surfaceSpacing;
 };
 OcctFrontOutcome buildOcctFrontVolume(const OcctModel&,int solidTag,
     const NativeCadMeshOptions&,std::uint64_t maximumWork,mesh::Mesh&,
