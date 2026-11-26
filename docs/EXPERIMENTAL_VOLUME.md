@@ -6,7 +6,7 @@ An experiment must pin its development source revision and wheel hash; matching
 the package version alone does not identify an experimental build. No learned
 interior model is included in this interface.
 
-The first scope is one imported solid, uniform sizing, conforming Tet4, Standard
+The first Python scope is one imported solid, uniform sizing, conforming Tet4, Standard
 recovery and the Normal advancing interior constructor. Assemblies, local face
 or box sizing, boundary-first ordering and other unsupported controls refuse.
 The normal `CadModel.mesh()` entry point and its routing defaults are unchanged.
@@ -73,8 +73,11 @@ except pm.MeshingError as error:
     print(error.report)
     # Available only if the initial cloud was captured before the refusal.
     # An unavailable cloud is distinct from an intentionally empty cloud.
-    if error.report["experimental_boundary_volume"].get("initial_points_available"):
-        failed_points = experimental.initial_points(error, max_bytes=16 * 1024**2)
+    if getattr(error, "initial_points_bytes", None) is not None:
+        try:
+            failed_points = experimental.initial_points(error, max_bytes=16 * 1024**2)
+        except ValueError as copy_limit:
+            print("Initial cloud copy refused:", copy_limit)
 ```
 
 Initial clouds on failures use a separately bounded immutable binary attachment,
@@ -92,9 +95,11 @@ sampling, inference, exports and every failed attempt must be charged separately
 when reporting a complete CAD-to-mesh workflow.
 
 Resource allowances are explicit and frozen with the prepared boundary.
-`max_seconds` is a cooperative deadline for each native call after the operation
-gate is acquired, not a hard process deadline or a global retry budget. A study
-must supervise processes and enforce its aggregate allowance across calls and
+`max_seconds` is a cooperative deadline for native boundary preparation,
+rebinding and volume replay after the operation gate is acquired. It does not
+cover fresh STEP import, fingerprint inspection or Python bundle work, and is
+not a hard process deadline or a global retry budget. A study must supervise
+processes and enforce its aggregate allowance across all those stages and
 retries. Modeled memory/output limits do not bound all OCCT/Python allocations
 or process RSS.
 
