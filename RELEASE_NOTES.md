@@ -11,6 +11,11 @@ publication. The matching GitHub release carries its source and publication
 receipts. Earlier local studies retain their own source, platform and settings;
 they do not substitute for the stable release checks.
 
+The [stable qualification protocol](docs/STABLE_1.2.0_QUALIFICATION.md) fixes the
+installed-Python engineering and 51-file STEP checks. Measured aggregate results
+and provenance are attached to the matching release, separately from historical
+studies and private local artifacts.
+
 ## Python installation and compatibility
 
 Install the exact release with:

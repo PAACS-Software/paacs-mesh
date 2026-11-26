@@ -10,7 +10,7 @@ the C++ standard library and platform threads. The STEP adapter, CLI tools and
 debug UI bridge are optional.
 
 **Release line** · [1.2.0](RELEASE_NOTES.md) ·
-[Validation](docs/RELEASE_READINESS.md) · [Roadmap](docs/ROADMAP.md)
+[Release qualification](docs/STABLE_1.2.0_QUALIFICATION.md) · [Roadmap](docs/ROADMAP.md)
 
 ## Build a first mesh
 
