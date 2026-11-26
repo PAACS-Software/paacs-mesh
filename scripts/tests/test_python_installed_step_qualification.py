@@ -28,6 +28,17 @@ spec.loader.exec_module(runner)
 
 
 class InstalledStepQualificationTests(unittest.TestCase):
+    def test_development_versions_remain_distinct_from_release_and_rc_pins(self):
+        self.assertEqual(runner.normalized_version("1.3.0-dev.0"), "1.3.0.dev0")
+        self.assertEqual(runner.normalized_version("1.3.0.dev0"), "1.3.0.dev0")
+        self.assertEqual(runner.normalized_version("1.2.0-rc.4"), "1.2.0rc4")
+        self.assertEqual(runner.normalized_version("1.2.0"), "1.2.0")
+        self.assertNotEqual(runner.normalized_version("1.3.0.dev0"), runner.normalized_version("1.3.0"))
+        self.assertNotEqual(runner.normalized_version("1.3.0.dev0"), runner.normalized_version("1.3.0rc0"))
+        for invalid in ("1.3.0-dev", "1.3.0.dev0+untracked", "1.3.0-dev.0ignored", "1.3.0.dev0rc1"):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                runner.normalized_version(invalid)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

@@ -5,7 +5,7 @@
 
 cmake_minimum_required(VERSION 3.30...4.4)
 project(PAACSConsumer LANGUAGES C CXX)
-find_package(PAACSMesh 1.2.0 EXACT CONFIG REQUIRED OPTIONAL_COMPONENTS OCCT)
+find_package(PAACSMesh 1.3.0 EXACT CONFIG REQUIRED OPTIONAL_COMPONENTS OCCT)
 add_executable(cpp-consumer main.cpp)
 target_link_libraries(cpp-consumer PRIVATE PAACS::mesh)
 add_executable(c-consumer main.c)

@@ -166,10 +166,12 @@ def finite_tree(value):
 
 
 def normalized_version(value):
-    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:-?rc\.?([0-9]+))?", value)
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:-?rc\.?([0-9]+)|[-.]dev\.?([0-9]+))?", value)
     if not match:
-        raise ValueError("Expected a stable or RC PAACS version")
-    return ".".join(match.group(i) for i in (1, 2, 3)) + ("rc" + match.group(4) if match.group(4) else "")
+        raise ValueError("Expected a stable, RC or development PAACS version")
+    suffix = "rc" + match.group(4) if match.group(4) is not None else (
+        ".dev" + match.group(5) if match.group(5) is not None else "")
+    return ".".join(match.group(i) for i in (1, 2, 3)) + suffix
 
 
 def inside(root, relative):

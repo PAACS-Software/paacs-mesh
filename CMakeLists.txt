@@ -4,9 +4,9 @@
 # SPDX-License-Identifier: MPL-2.0
 
 cmake_minimum_required(VERSION 3.30...4.4)
-project(PAACSMesh VERSION 1.2.0 LANGUAGES C CXX)
+project(PAACSMesh VERSION 1.3.0 LANGUAGES C CXX)
 
-set(PAACS_RELEASE_VERSION "1.2.0")
+set(PAACS_RELEASE_VERSION "1.3.0-dev.0")
 set(PAACS_CXX_STANDARD 26 CACHE STRING "C++ language level: 26 or compatibility mode 23")
 set_property(CACHE PAACS_CXX_STANDARD PROPERTY STRINGS 26 23)
 if(NOT PAACS_CXX_STANDARD MATCHES "^(23|26)$")
@@ -134,7 +134,7 @@ if(PAACS_WITH_OCCT)
     if(OpenCASCADE_MAJOR_VERSION LESS 8)
         message(FATAL_ERROR "PAACS_WITH_OCCT requires Open CASCADE 8 or newer")
     endif()
-    add_library(paacs_occt STATIC src/geometry/OcctImport.cpp
+    add_library(paacs_occt STATIC src/geometry/OcctImport.cpp src/geometry/ExperimentalCadVolume.cpp
         src/geometry/OcctModel.cpp src/geometry/OcctPreview.cpp src/geometry/OcctMesher.cpp src/geometry/OcctBoundary.cpp src/geometry/OcctStarMesher.cpp
         src/geometry/OcctPartition.cpp src/geometry/OcctTrimTolerance.cpp src/geometry/OcctPartitionMesher.cpp src/geometry/OcctContactCylinder.cpp
         src/geometry/OcctBoxContact.cpp src/geometry/OcctNativeValidation.cpp src/geometry/OcctQueryContext.cpp

@@ -6,9 +6,17 @@
 #pragma once
 // Last native fallback: immutable PLC front construction and bounded recovery.
 #include "paacs/geometry/OcctMesher.hpp"
+#include "paacs/geometry/ExperimentalCadVolume.hpp"
 #include "OcctNativeValidation.hpp"
 namespace paacs::geo::detail {
 enum class OcctFrontSurface { Standard, Spaced, Regular, RegularQuality, Curvature, SpatialSizing };
+struct OcctFrontReplayContext {
+    bool prepareOnly=false, prepared=false, supplied=false;
+    const mesh::Mesh* replayBoundary=nullptr;
+    mesh::Mesh* capturedBoundary=nullptr;
+    std::span<const Vec3> initialPoints;
+    ExperimentalCadVolumeReport* report=nullptr;
+};
 struct OcctFrontOutcome {
     bool published=false;
     bool originalFacetCentersCertified=false;
@@ -49,5 +57,10 @@ struct OcctFrontOutcome {
 OcctFrontOutcome buildOcctFrontVolume(const OcctModel&,int solidTag,
     const NativeCadMeshOptions&,std::uint64_t maximumWork,mesh::Mesh&,
     std::uint64_t earlyConstraintWork=0,OcctFrontSurface surface=OcctFrontSurface::Standard,
-    bool liveMaterialTrial=false) noexcept;
+    bool liveMaterialTrial=false,OcctFrontReplayContext* experimental=nullptr) noexcept;
+ExperimentalCadBoundaryOutcome prepareExperimentalCadBoundaryImpl(
+    const OcctModel&,const mesh::Mesh*,const NativeCadMeshOptions&,ExperimentalCadBoundary&) noexcept;
+ExperimentalCadVolumeOutcome replayExperimentalCadVolumeImpl(
+    const OcctModel&,const ExperimentalCadBoundary&,const NativeCadMeshOptions&,
+    ExperimentalInteriorMode,std::span<const Vec3>,mesh::Mesh&) noexcept;
 }

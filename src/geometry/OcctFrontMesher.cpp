@@ -54,10 +54,23 @@ namespace {
 using Clock=std::chrono::steady_clock;
 struct Stop{NativeCadMeshReason reason;const char* diagnostic;};
 void need(bool ok,NativeCadMeshReason reason,const char* why){if(!ok)throw Stop{reason,why};}
+struct ExperimentalPhaseSeconds {
+    double* target;Clock::time_point started;
+    explicit ExperimentalPhaseSeconds(double* value):target(value),started(value?Clock::now():Clock::time_point{}){}
+    void finish(){if(target){*target+=std::chrono::duration<double>(Clock::now()-started).count();target=nullptr;}}
+    ~ExperimentalPhaseSeconds(){finish();}
+};
+struct ExperimentalPhaseWork {
+    std::uint64_t* target;const std::uint64_t& total;std::uint64_t began;
+    ExperimentalPhaseWork(std::uint64_t* value,const std::uint64_t& source):target(value),total(source),began(source){}
+    void finish(){if(target){*target+=total-began;target=nullptr;}}
+    ~ExperimentalPhaseWork(){finish();}
+};
 }
 OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
     const NativeCadMeshOptions& options,std::uint64_t maximumWork,mesh::Mesh& destination,
-    std::uint64_t earlyConstraintWork,OcctFrontSurface surfaceMode,bool liveTrial) noexcept {
+    std::uint64_t earlyConstraintWork,OcctFrontSurface surfaceMode,bool liveTrial,
+    OcctFrontReplayContext* experimental) noexcept {
     // Public dispatch resolves AUTO once; direct private callers opt in explicitly.
     const bool advancingInteriorFront=options.useAdvancingInteriorFront.value_or(false);
     const bool spaceSurface=surfaceMode!=OcctFrontSurface::Standard;
@@ -72,7 +85,9 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
     const bool customConstruction=progressiveResources||options.construction.effort!=CadConstructionEffort::Legacy||
         options.construction.surfacePointsPerFace||options.construction.surfaceChordPointsPerFace||
         options.construction.interiorCandidates||options.construction.interiorSites;
-    const char* stage="surface";OcctStageTrace trace(stage,tag);OcctFrontOutcome out;const auto began=Clock::now();const auto& o=options.geometry;std::stop_source stop;
+    const char* stage="surface";OcctStageTrace trace(stage,tag);OcctFrontOutcome out;const auto began=Clock::now();const auto& o=options.geometry;std::stop_source stop{std::nostopstate};
+    ExperimentalPhaseSeconds experimentalSource(experimental&&experimental->report?&experimental->report->sourceSeconds:nullptr);
+    ExperimentalPhaseWork experimentalSourceWork(experimental&&experimental->report?&experimental->report->sourceWork:nullptr,out.workUsed);
     const auto account=[&](std::uint64_t n){
         need(out.workUsed<=maximumWork&&n<=maximumWork-out.workUsed,NativeCadMeshReason::BudgetExceeded,"native-plc-work-budget");out.workUsed+=n;};
     const auto tick=[&](std::uint64_t n=1){if(o.cancellation&&o.cancellation->load()){stop.request_stop();throw Stop{NativeCadMeshReason::Cancelled,"cancelled"};}
@@ -83,6 +98,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
     const auto accountCompleted=[&](std::uint64_t n){account(n);tick(0);};
     const auto remaining=[&](){tick(0);need(out.workUsed<maximumWork,NativeCadMeshReason::BudgetExceeded,"native-plc-work-budget");return maximumWork-out.workUsed;};
     try {
+        stop=std::stop_source{};
         tick();need(model.solid(tag)&&maximumWork>0&&options.maximumRecoveryRandomRetries<=4&&options.maximumRecoveryPatchStates<=65536,NativeCadMeshReason::InvalidRequest,"native-plc-invalid-request");Vec3 lo,hi;model.solid(tag)->bbox(lo,hi);
         std::optional<OcctSpatialSizing> sizeField;
         if(spatialSizing){
@@ -131,6 +147,26 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
         const unsigned sourceAttempts=progressiveResources?unsigned(out.sourceShell.attempts.size()):
             options.allowNativeSourceFallback?2:1;
         bool nativeProvider=false;
+        if(experimental&&experimental->replayBoundary){
+            const auto& saved=*experimental->replayBoundary;
+            need(saved.nodeCount()>0&&saved.cellCount()>0&&std::uint64_t(saved.nodeCount())<=bo.maximumNodes&&
+                 std::uint64_t(saved.cellCount())<=bo.maximumTriangles,
+                 NativeCadMeshReason::BudgetExceeded,"experimental-boundary-count-budget");
+            boundary=saved;
+            const auto checked=auditOcctBoundaryFacets(model,tag,boundary,bo,
+                std::min<std::uint64_t>(64ULL*1024*1024,options.maximumPrimitiveWorkingBytes/8));
+            accountCompleted(checked.work);
+            need(checked.reason!=OcctBoundaryReason::Cancelled,NativeCadMeshReason::Cancelled,"cancelled");
+            need(checked.reason!=OcctBoundaryReason::BudgetExceeded,NativeCadMeshReason::BudgetExceeded,"experimental-boundary-audit-budget");
+            need(checked.reason!=OcctBoundaryReason::AllocationFailed,NativeCadMeshReason::AllocationFailed,"allocation-failed");
+            need(checked.completed&&checked.sourceModelUnmodified,NativeCadMeshReason::GeometryError,"experimental-boundary-cad-audit-refused");
+            surface.published=true;surface.sourceModelUnmodified=true;surface.nodes=boundary.nodeCount();
+            surface.triangles=boundary.cellCount();surface.reason=OcctBoundaryReason::None;
+            out.surfaceWork=checked.work;out.surfaceTriangles=surface.triangles;
+            out.maximumFacetError=checked.maximumFacetSampleError;
+            out.surfaceDiagnostic="experimental_boundary_revalidated";
+            if(experimental->report)experimental->report->boundaryRevalidated=true;
+        }else{
         try {
         for(unsigned attempt=0;attempt<sourceAttempts;++attempt){
             bo.maximumWork=remaining();
@@ -244,6 +280,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             out.chord=tighter;
         }
         }catch(const Stop& failure){out.sourceShell.diagnostic=failure.diagnostic;throw;}
+        }
         OcctStarOptions certificateOptions;certificateOptions.maximumWork=remaining();certificateOptions.maximumWorkingBytes=options.maximumPrimitiveWorkingBytes;certificateOptions.cancellation=o.cancellation;certificateOptions.maximumBoundaryNodes=bo.maximumNodes;certificateOptions.maximumBoundaryTriangles=bo.maximumTriangles;certificateOptions.maximumNodes=o.maximumNodes;certificateOptions.maximumCells=o.maximumCells;certificateOptions.maximumOutputBytes=o.maximumOutputBytes;
         OcctStageTrace shellCheck("exact_shell_certificate",tag);
         auto certificate=certifyOcctBoundarySurface(boundary,certificateOptions);
@@ -254,9 +291,35 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             out.sourceShell.nativeFallbackDiagnostic="native_source_not_certified";
         need(certificate.reason!=OcctStarReason::WorkBudget&&certificate.reason!=OcctStarReason::OutputBudget,NativeCadMeshReason::BudgetExceeded,"native-plc-source-certificate-budget");need(certificate.reason!=OcctStarReason::Cancelled,NativeCadMeshReason::Cancelled,"cancelled");need(certificate.reason!=OcctStarReason::AllocationFailed,NativeCadMeshReason::AllocationFailed,"allocation-failed");need(certificate.certified,NativeCadMeshReason::GeometryError,"native-plc-source-not-embedded");
         out.sourceShell.accepted=true;
+        if(experimental){
+            need(model.volume(tag)>0.&&std::isfinite(model.volume(tag))&&
+                 std::abs(certificate.signedVolume-model.volume(tag))<=model.volume(tag)*options.maximumRelativeVolumeError,
+                 NativeCadMeshReason::GeometryError,"experimental-boundary-volume-error");
+        }
+        experimentalSource.finish();experimentalSourceWork.finish();
+        if(experimental){
+            if(experimental->prepareOnly){
+                need(experimental->capturedBoundary!=nullptr,NativeCadMeshReason::InvalidRequest,"experimental-capture-missing");
+                experimental->capturedBoundary->swap(boundary);experimental->prepared=true;
+                out.reason=NativeCadMeshReason::None;out.diagnostic="boundary_prepared";
+                out.surfaceSeconds=std::chrono::duration<double>(Clock::now()-began).count();
+                trace.finish(out.diagnostic);return out;
+            }
+        }
         if(nativeProvider)out.sourceShell.nativeFallbackDiagnostic="accepted_geometry_driven_source";
         stage="seeds";trace.next(stage);out.surfaceSeconds=std::chrono::duration<double>(Clock::now()-began).count();
         const auto ns=boundary.nodeCount(),nf=boundary.cellCount();
+        const auto captureInitialPoints=[&](const mesh::Mesh& sites){
+            if(!experimental||!experimental->report)return;
+            auto& points=experimental->report->initialPoints;
+            experimental->report->initialPointsAvailable=false;points.clear();
+            const auto count=sites.nodeCount()>ns?std::uint64_t(sites.nodeCount()-ns):0;
+            need(count<=options.maximumPrimitiveWorkingBytes/(8*sizeof(Vec3)),
+                 NativeCadMeshReason::BudgetExceeded,"experimental-initial-point-report-budget");
+            points.reserve(std::size_t(count));
+            for(Index i=ns;i<sites.nodeCount();++i){tick();points.push_back(sites.node(i));}
+            experimental->report->initialPointsAvailable=true;
+        };
         auto frontCells=std::min<std::uint64_t>(o.maximumCells-nf,
             progressiveResources?std::uint64_t(UINT_MAX):std::uint64_t(nf)*16);
         const auto apexStorage=completeDiscreteSeed?0:
@@ -385,10 +448,39 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
         OcctSolidClassifier classifier(OcctModelAccess::solid(model,tag));
         const auto tol=model.tolerance(3,tag);
         if(boundaryFirst)out.initialFront.diagnostic="deferred_until_boundary_recovery";
-        if(spatialSizing&&(options.improveNativeTetQuality||advancingInteriorFront)&&!boundaryFirst){
+        if(experimental&&experimental->supplied){
+            mesh::Mesh sites;
+            {
+            ExperimentalPhaseSeconds placementPhase(experimental->report?&experimental->report->placementSeconds:nullptr);
+            ExperimentalPhaseWork placementWork(experimental->report?&experimental->report->placementWork:nullptr,out.workUsed);
+            need(experimental->initialPoints.size()<=o.maximumNodes-std::uint64_t(ns),
+                 NativeCadMeshReason::BudgetExceeded,"experimental-supplied-node-budget");
+            need(experimental->initialPoints.size()<=options.maximumPrimitiveWorkingBytes/(8*(sizeof(Vec3)+64)),
+                 NativeCadMeshReason::BudgetExceeded,"experimental-supplied-storage-budget");
+            sites=boundary;
+            std::set<std::tuple<double,double,double>> unique;
+            for(const auto point:experimental->initialPoints){
+                tick();
+                need(std::isfinite(point.x)&&std::isfinite(point.y)&&std::isfinite(point.z),
+                     NativeCadMeshReason::InvalidRequest,"experimental-supplied-point-nonfinite");
+                need(unique.emplace(point.x,point.y,point.z).second,
+                     NativeCadMeshReason::InvalidRequest,"experimental-supplied-point-duplicate");
+                ++out.nativeQueries;classifier.Perform(gp_Pnt(point.x,point.y,point.z),tol);
+                need(classifier.State()==TopAbs_IN,NativeCadMeshReason::GeometryError,"experimental-supplied-point-not-strictly-inside");
+                sites.addNode(point,{3,tag});
+                if(experimental->report)++experimental->report->admittedPoints;
+            }
+            captureInitialPoints(sites);
+            }
+            // Explicit sites replace the sampler. A refused seed never retries
+            // without them; ordinary recovery below keeps the same constraints.
+            buildConstraintSeed(sites,pendingRecovery);
+        }else if(spatialSizing&&(options.improveNativeTetQuality||advancingInteriorFront)&&!boundaryFirst){
             // Construct the first interior point set before constraint recovery.
             // The prescribed surface remains the same input constraint complex.
             OcctStageTrace placement("interior_sites",tag);
+            ExperimentalPhaseSeconds placementPhase(experimental&&experimental->report?&experimental->report->placementSeconds:nullptr);
+            ExperimentalPhaseWork placementWork(experimental&&experimental->report?&experimental->report->placementWork:nullptr,out.workUsed);
             const auto placementStarted=Clock::now();
             struct SiteLimit {};
             mesh::Mesh sites;
@@ -629,6 +721,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                 out.initialFront.seconds=std::chrono::duration<double>(Clock::now()-placementStarted).count();
             }
             placement.finish(sites.nodeCount()>ns?"seeded":"unchanged");
+            placementPhase.finish();placementWork.finish();
             if(initialTopology.available&&options.initialTopologyQuality.value_or(progressiveResources)){
                 OcctStageTrace finalizing("initial_topology_quality",tag);
                 const auto qualityStarted=Clock::now();
@@ -661,6 +754,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                     nullptr,{},std::size_t(ns),8,0,initialTopology.complex.cells.size(),{},true,
                     initialTopology.originalCoordinateRetryUsed});
             }
+            captureInitialPoints(sites.nodeCount()?sites:boundary);
             if(sites.nodeCount()>ns){
                 const auto siteBytes=std::uint64_t(sites.nodeCount())*nodeBytes+
                     std::uint64_t(nf)*(sizeof(mesh::Cell)+3*sizeof(Index));
@@ -708,6 +802,7 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                  NativeCadMeshReason::BudgetExceeded,"native-plc-constraint-construction-budget");
         }
         need(!spaceSurface||usesConstraintSeed,NativeCadMeshReason::MeshingFailed,"spaced-surface-constraint-seed-refused");
+        ExperimentalPhaseSeconds experimentalFill(experimental&&experimental->report?&experimental->report->fillSeconds:nullptr);
         const bool reuseStrictAdmissions=(options.useAdaptiveTetRecovery||spaceSurface)&&usesConstraintSeed&&
             options.maximumNativeValidationThreads==1&&!options.allowCentroidsWithinChordTolerance;
         OcctNativeStrictAdmissions strictAdmissions(std::min<std::uint64_t>(
@@ -1642,6 +1737,8 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
             optimization.finish(out.localDelaunayQualityEdits?"improved":"unchanged");
         }
         bnd::detail::observeTetMesh("volume_before_cad_validation",tag,completed);
+        experimentalFill.finish();
+        ExperimentalPhaseSeconds experimentalValidation(experimental&&experimental->report?&experimental->report->validationSeconds:nullptr);
         trace.next("cad_validation");
         for(Index i=0;i<completed.nodeCount();++i)if(completed.nodeClass(i).dim==3)need(native(completed.node(i)),NativeCadMeshReason::GeometryError,"native-plc-final-interior-node-outside");
         for(Index i=0;i<completed.cellCount();++i)if(completed.cell(i).type==mesh::CellType::Tet4){const auto* p=completed.cellNodes(i);Vec3 center{};for(unsigned j=0;j<4;++j)center=center+completed.node(p[j])*.25;need(nativeCentroid(center),NativeCadMeshReason::GeometryError,"native-plc-final-centroid-outside");}
@@ -1698,6 +1795,11 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
         need(std::uint64_t(completed.nodeCount())<=o.maximumNodes&&std::uint64_t(completed.cellCount())<=o.maximumCells,NativeCadMeshReason::BudgetExceeded,"native-plc-final-count-budget");tick(0);out.meshVolume=quality.totalVolume;destination.swap(completed);out.published=true;out.reason=NativeCadMeshReason::None;out.diagnostic="none";
     }catch(const Stop& s){out.reason=s.reason;out.diagnostic=s.diagnostic;}catch(const Standard_OutOfMemory&){out.reason=NativeCadMeshReason::AllocationFailed;out.diagnostic="allocation-failed";}catch(const std::bad_alloc&){out.reason=NativeCadMeshReason::AllocationFailed;out.diagnostic="allocation-failed";}catch(const Standard_Failure&){out.reason=NativeCadMeshReason::GeometryError;out.diagnostic="native-plc-query-failed";}catch(...){out.reason=NativeCadMeshReason::InternalError;out.diagnostic="native-plc-internal-error";}
     trace.finish(out.diagnostic);
-    out.volumeSeconds=std::max(0.,std::chrono::duration<double>(Clock::now()-began).count()-out.surfaceSeconds);return out;
+    out.volumeSeconds=std::max(0.,std::chrono::duration<double>(Clock::now()-began).count()-out.surfaceSeconds);
+    if(experimental&&experimental->report){
+        auto& report=*experimental->report;
+        report.recoveryWork=out.constraintRecovery.work;report.recoverySeconds=out.constraintRecovery.seconds;
+    }
+    return out;
 }
 }

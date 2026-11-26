@@ -7,6 +7,27 @@ find_package(Python 3.12 REQUIRED COMPONENTS Interpreter Development.Module)
 set(PYBIND11_FINDPYTHON ON)
 find_package(pybind11 3.1 CONFIG REQUIRED)
 pybind11_add_module(_native MODULE NO_EXTRAS bindings.cpp)
+# Keep experimental artifacts identifiable independently of package versions.
+set(paacs_python_source_revision "unversioned")
+set(paacs_python_source_dirty 1)
+find_package(Git QUIET)
+if(Git_FOUND)
+    execute_process(COMMAND "${GIT_EXECUTABLE}" -C "${PROJECT_SOURCE_DIR}" rev-parse HEAD
+        RESULT_VARIABLE paacs_python_git_result OUTPUT_VARIABLE paacs_python_git_revision
+        OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    if(paacs_python_git_result EQUAL 0 AND paacs_python_git_revision MATCHES "^[0-9a-f]+$")
+        set(paacs_python_source_revision "${paacs_python_git_revision}")
+        execute_process(COMMAND "${GIT_EXECUTABLE}" -C "${PROJECT_SOURCE_DIR}" status --porcelain --untracked-files=normal
+            RESULT_VARIABLE paacs_python_status_result OUTPUT_VARIABLE paacs_python_git_status
+            OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+        if(paacs_python_status_result EQUAL 0 AND paacs_python_git_status STREQUAL "")
+            set(paacs_python_source_dirty 0)
+        endif()
+    endif()
+endif()
+target_compile_definitions(_native PRIVATE
+    PAACS_PYTHON_SOURCE_REVISION="${paacs_python_source_revision}"
+    PAACS_PYTHON_SOURCE_DIRTY=${paacs_python_source_dirty})
 target_link_libraries(_native PRIVATE PAACS::occt)
 install(TARGETS _native
     LIBRARY DESTINATION paacs_mesh COMPONENT Python
