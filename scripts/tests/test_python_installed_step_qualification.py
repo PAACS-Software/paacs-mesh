@@ -7,6 +7,7 @@ import base64
 from copy import deepcopy
 import hashlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -124,6 +125,36 @@ class InstalledStepQualificationTests(unittest.TestCase):
             self.assertEqual(Path(job["source"]), inside.resolve())
         finally:
             os.chdir(previous)
+
+    def test_python_invocation_validates_resolved_target_but_preserves_selected_path(self):
+        physical = self.root / "base-python"
+        physical.write_bytes(b"controlled interpreter target")
+        selected = self.root / "selected-venv-python"
+        # Simulate a different resolution without requiring Windows link rights.
+        with patch.object(Path, "resolve", return_value=physical) as resolution:
+            invocation = runner.python_invocation(selected)
+        self.assertEqual(invocation, selected.absolute())
+        resolution.assert_called_once_with(strict=True)
+        self.assertNotEqual(invocation, physical)
+
+    def test_cli_plan_only_preserves_symlinked_selected_interpreter(self):
+        physical = self.root / "base-python"
+        physical.write_bytes(b"controlled interpreter target; never executed")
+        selected = self.root / "venv/bin/python"
+        selected.parent.mkdir(parents=True)
+        try:
+            selected.symlink_to(physical)
+        except (OSError, NotImplementedError) as error:
+            self.skipTest("Filesystem symlink privilege unavailable: " + str(error))
+        runner.save(self.plan_path, self.plan)
+        output = self.root / "plan-only"
+        with patch.object(sys, "argv", ["qualify_installed_step.py", "--python", str(selected),
+                "--plan", str(self.plan_path), "--root", str(self.root), "--output", str(output), "--plan-only"]), \
+                patch.object(sys, "stdout", new=io.StringIO()), patch.object(runner.subprocess, "Popen") as launched:
+            self.assertEqual(runner.main(), 0)
+        launched.assert_not_called()
+        self.assertEqual(runner.load(output / "plan.json")["python"], str(selected.absolute()))
+        self.assertNotEqual(selected.absolute(), selected.resolve())
 
     def test_union_diagonal_sizing_paginates_and_includes_separated_bodies(self):
         pages = {0: {"offset": 0, "total": 2, "next_offset": 1, "entities": [{"tag": 1,

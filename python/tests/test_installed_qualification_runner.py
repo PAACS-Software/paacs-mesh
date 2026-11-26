@@ -14,6 +14,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import paacs_mesh as pm
 
@@ -58,12 +59,15 @@ class InstalledQualificationRunnerTests(unittest.TestCase):
                 "expected_original_solids": 1,
                 "allowances": {"native_seconds": 120., "hard_seconds": 300., "inspection_seconds": 120.}}]})
             output = root / "results"
-            output.mkdir()
-            job, = runner.read_plan(plan, root)
-            # Run the controller in this test process, and the real Native worker
-            # through sys.executable. An extra outer Windows redirector would
-            # itself need containment if the test's outer timeout fired.
-            runner.run_attempt(Path(sys.executable), job, output / "owned-cylinder")
+            # Exercise the actual CLI parsing/path-admission route and real worker.
+            # Keeping the controller here avoids an uncontained outer redirector;
+            # argv is the only mocked input, never PAACS or its Native execution.
+            invocation = Path(sys.executable).absolute()
+            with patch.object(sys, "argv", [str(RUNNER), "--python", str(invocation), "--plan", str(plan),
+                    "--root", str(root), "--output", str(output)]):
+                self.assertEqual(runner.main(), 0)
+            admitted = runner.load(output / "plan.json")
+            self.assertEqual(admitted["python"], str(invocation))
             controller = runner.load(output / "owned-cylinder/controller.json")
             self.assertEqual(controller["status"], "succeeded", json.dumps(controller, indent=2)[-16000:])
             self.assertTrue(controller["worker_acknowledged"])
@@ -72,6 +76,9 @@ class InstalledQualificationRunnerTests(unittest.TestCase):
             self.assertEqual(controller["memory_measurement_pid"], controller["worker_pid"])
             self.assertEqual(controller["process_exit_code"], 0)
             self.assertEqual(controller["cleanup_errors"], [])
+            self.assertEqual(controller["command"][0], str(invocation))
+            self.assertEqual(Path(controller["worker"]["package"]["prefix"]).resolve(), Path(sys.prefix).resolve())
+            self.assertTrue(Path(controller["worker"]["package"]["package_path"]).resolve().is_relative_to(Path(sys.prefix).resolve()))
             if os.name == "nt":
                 self.assertTrue(controller["worker_identity"]["kill_on_close_job"])
                 self.assertTrue(controller["process_memory_limit_enforced"])

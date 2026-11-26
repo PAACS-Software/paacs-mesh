@@ -938,6 +938,18 @@ def disk_bytes(root):
     return total
 
 
+def python_invocation(value):
+    """Validate the executable target without changing the venv invocation path.
+
+    On POSIX, venv/bin/python commonly symlinks to a base interpreter. Executing
+    the resolved base path loses pyvenv.cfg discovery and selects another prefix.
+    """
+    invocation = Path(value).absolute()
+    if not invocation.resolve(strict=True).is_file():
+        raise ValueError("Selected Python target must be a regular executable file")
+    return invocation
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--python", type=Path)
@@ -951,7 +963,7 @@ def main():
         return worker(args.worker)
     if not all((args.python, args.plan, args.root, args.output)):
         parser.error("Supply --python, --plan, --root and --output")
-    python, root = args.python.resolve(strict=True), args.root.resolve(strict=True)
+    python, root = python_invocation(args.python), args.root.resolve(strict=True)
     if not python.is_file() or not root.is_dir() or args.output.exists():
         parser.error("Use an existing interpreter/CAD directory and a fresh output directory")
     jobs = read_plan(args.plan, root)
