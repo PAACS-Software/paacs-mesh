@@ -38,6 +38,7 @@
 #include <TopoDS.hxx>
 #include <gp_Ax2.hxx>
 #include <algorithm>
+#include <bit>
 #include <array>
 #include <chrono>
 #include <cmath>
@@ -46,6 +47,7 @@
 #include <limits>
 #include <set>
 #include <type_traits>
+#include <tuple>
 
 namespace paacs::geo {
 namespace {
@@ -1037,6 +1039,281 @@ bool accumulateInitialFrontTrial(NativeCadMeshOutcome& result,const NativeCadMes
     return true;
 }
 }
+namespace detail {
+namespace {
+struct ExperimentalWorkClock {
+    std::uint64_t& target;const Work& source;std::uint64_t began;
+    ExperimentalWorkClock(std::uint64_t& value,const Work& work):target(value),source(work),began(work.count){}
+    ~ExperimentalWorkClock(){target+=source.count-began;}
+};
+struct ExperimentalFinalValidationClock {
+    double& native;double& combined;Clock::time_point began=Clock::now();
+    ExperimentalFinalValidationClock(double& value,double& all):native(value),combined(all){}
+    ~ExperimentalFinalValidationClock(){const auto seconds=elapsed(began);native+=seconds;combined+=seconds;}
+};
+void experimentalRequest(const OcctModel& model,const NativeCadMeshOptions& o) {
+    need(model.solids().size()==1,NativeCadMeshReason::UnsupportedBody);
+    need(o.elements==algo::PrimitiveElements::Tet4&&
+         o.assemblyPolicy==NativeCadAssemblyPolicy::ConformingDomain&&
+         o.geometry.strategy==algo::GeometryStrategy::Auto&&o.geometry.bodyControls.empty()&&
+         !o.geometry.spatialField&&o.geometry.maximumElementSizeRatio==0&&o.geometry.warningElementSizeRatio==0&&
+         o.faceSizes.empty()&&o.sizeBoxes.empty()&&o.minimumSize==0&&
+         !o.allowCentroidsWithinChordTolerance&&!o.recoverBoundaryBeforeInteriorSites&&!o.useThinRegionOrdering&&
+         !o.separateMatchedNativeFaceContacts&&!o.separateMatchedBoxFaceContacts&&!o.separateLowerDimensionalContacts&&
+         !o.useLongitudinalRecovery&&!o.optimizeProfileInterior&&!o.useLocalDelaunayRefinement&&
+         !o.improveNativeTetQuality&&!o.useLiveMaterialRecovery&&o.curvaturePointsPerTurn==0&&
+         o.geometry.fullBoundaryAudit&&o.useAdvancingInteriorFront.value_or(true),
+         NativeCadMeshReason::UnsupportedControl);
+    need(finite(o.geometry.targetSize)&&o.geometry.targetSize>0&&finite(o.maximumChordError)&&o.maximumChordError>=0&&
+         finite(o.maximumRelativeVolumeError)&&o.maximumRelativeVolumeError>0&&o.maximumRelativeVolumeError<1&&
+         finite(o.geometry.minimumElementQuality)&&o.geometry.minimumElementQuality>=0&&o.geometry.minimumElementQuality<=1&&
+         finite(o.geometry.warningElementQuality)&&o.geometry.warningElementQuality>=0&&o.geometry.warningElementQuality<=1&&
+         o.geometry.threads>=0&&o.geometry.threads<=1024&&o.maximumNativeValidationThreads>=1&&o.maximumNativeValidationThreads<=8,
+         NativeCadMeshReason::InvalidRequest);
+    need(o.geometry.maximumNodes>=4&&o.geometry.maximumCells>=4&&o.geometry.maximumOutputBytes&&
+         o.maximumPrimitiveWorkingBytes&&o.maximumValidationWork&&o.geometry.maximumMeshingWork&&
+         o.geometry.maximumAuditTemporaryBytes&&o.geometry.maximumAuditFaceUses,
+         NativeCadMeshReason::BudgetExceeded);
+}
+NativeCadMeshOptions experimentalOptions(const NativeCadMeshOptions& o) {
+    auto result=o;result.useSpatialSizing=true;result.useAdvancingInteriorFront=true;
+    return result;
+}
+void experimentalShellNodes(const OcctModel& model,const mesh::Mesh& shell,
+    NativeCadBodyMeshReport& report,Work& work) {
+    const auto* solid=model.solids().front();View view(model,solid);
+    need(shell.nodeCount()>=4&&shell.cellCount()>=4,NativeCadMeshReason::GeometryError);
+    need(std::uint64_t(shell.nodeCount())<=work.o.geometry.maximumNodes&&
+         std::uint64_t(shell.cellCount())<=work.o.geometry.maximumCells/2,
+         NativeCadMeshReason::BudgetExceeded);
+    const auto bytes=payload(shell.nodeCount(),shell.cellCount(),shell.connectivityCount());
+    need(bytes<=work.o.geometry.maximumOutputBytes&&bytes<=work.o.maximumPrimitiveWorkingBytes/8,
+         NativeCadMeshReason::BudgetExceeded);
+    std::set<int> faces,edges,vertices,usedFaces;
+    std::map<int,std::set<int>> faceEdges,faceVertices;
+    std::map<int,int> faceSenses;
+    for(auto entity:view.fs)faces.insert(entity->tag());
+    for(auto entity:view.es)edges.insert(entity->tag());
+    for(auto entity:view.vs)vertices.insert(entity->tag());
+    for(const auto& use:model.faceUses(solid->tag())){
+        work.tick();need(use.sense==1||use.sense==-1,NativeCadMeshReason::GeometryError);
+        const auto [where,inserted]=faceSenses.emplace(use.faceTag,use.sense);
+        need(inserted||where->second==use.sense,NativeCadMeshReason::GeometryError);
+    }
+    for(const auto face:faces){
+        work.tick();need(faceSenses.contains(face),NativeCadMeshReason::GeometryError);
+        for(const auto& wire:model.boundaryUses(face))for(const auto& use:wire.edges){
+            work.tick();faceEdges[face].insert(use.edgeTag);
+            if(use.startVertexTag>=0)faceVertices[face].insert(use.startVertexTag);
+            if(use.endVertexTag>=0)faceVertices[face].insert(use.endVertexTag);
+        }
+    }
+    for(Index i=0;i<shell.nodeCount();++i){
+        work.tick();const auto c=shell.nodeClass(i);
+        need(finite(shell.node(i))&&((c.dim==0&&vertices.contains(c.tag))||
+             (c.dim==1&&edges.contains(c.tag))||(c.dim==2&&faces.contains(c.tag))),NativeCadMeshReason::GeometryError);
+    }
+    for(Index i=0;i<shell.cellCount();++i){
+        work.tick();const auto& cell=shell.cell(i);
+        need(cell.type==mesh::CellType::Tri3&&cell.onEntity.dim==2&&faces.contains(cell.onEntity.tag),
+             NativeCadMeshReason::GeometryError);
+        need(cell.first>=0&&shell.connectivityCount()>=3&&cell.first<=shell.connectivityCount()-3,
+             NativeCadMeshReason::GeometryError);
+        const auto* ids=shell.cellNodes(i);
+        for(unsigned j=0;j<3;++j){
+            need(ids[j]>=0&&ids[j]<shell.nodeCount(),NativeCadMeshReason::GeometryError);
+            const auto c=shell.nodeClass(ids[j]);const auto face=cell.onEntity.tag;
+            need((c.dim==2&&c.tag==face)||(c.dim==1&&faceEdges[face].contains(c.tag))||
+                 (c.dim==0&&faceVertices[face].contains(c.tag)),NativeCadMeshReason::GeometryError);
+        }
+        const auto a=shell.node(ids[0]),b=shell.node(ids[1]),c=shell.node(ids[2]);
+        const auto normal=(b-a).cross(c-a);const auto center=(a+b+c)/3.;
+        Vec2 uv;Vec3 projected;const auto* face=model.face(cell.onEntity.tag);work.tick(2);
+        bool located=face->projectPoint(center,uv,projected);
+        if(!located){
+            Vec3 closest;
+            located=closestPointOnOcctFace(model,cell.onEntity.tag,center,closest)&&
+                    face->projectPoint(closest,uv,projected);
+        }
+        need(located,NativeCadMeshReason::GeometryError);
+        const auto outward=face->normalAt(uv)*double(faceSenses.at(cell.onEntity.tag));
+        const auto n2=normal.norm2(),o2=outward.norm2(),alignment=normal.dot(outward);
+        need(finite(normal)&&finite(outward)&&finite(n2)&&finite(o2)&&finite(alignment)&&n2>0&&o2>0&&
+             alignment>1e-12*std::sqrt(n2)*std::sqrt(o2),NativeCadMeshReason::GeometryError);
+        usedFaces.insert(cell.onEntity.tag);
+    }
+    need(usedFaces==faces,NativeCadMeshReason::GeometryError);
+    // Reuse the ordinary assembly node and trimmed-face checks. The exact
+    // shell and all four facet samples are checked by the shared front next.
+    mesh::Mesh checked;append(model,view,Recognition{},shell,checked,report,work,true,false);
+}
+using ExperimentalNodeKey=std::tuple<std::uint64_t,std::uint64_t,std::uint64_t,int,int>;
+ExperimentalNodeKey experimentalNodeKey(Vec3 p,mesh::Classification c) {
+    return {std::bit_cast<std::uint64_t>(p.x),std::bit_cast<std::uint64_t>(p.y),
+            std::bit_cast<std::uint64_t>(p.z),c.dim,c.tag};
+}
+bool exactExperimentalBoundary(const mesh::Mesh& source,const mesh::Mesh& candidate,Work& work) {
+    std::map<ExperimentalNodeKey,Index> sourceNodes;
+    std::vector<Index> remap(std::size_t(candidate.nodeCount()),kInvalidIndex);
+    std::vector<bool> found(std::size_t(source.nodeCount()));
+    for(Index i=0;i<source.nodeCount();++i){work.tick();
+        if(!sourceNodes.emplace(experimentalNodeKey(source.node(i),source.nodeClass(i)),i).second)return false;}
+    for(Index i=0;i<candidate.nodeCount();++i){work.tick();
+        if(candidate.nodeClass(i).dim==3)continue;
+        const auto it=sourceNodes.find(experimentalNodeKey(candidate.node(i),candidate.nodeClass(i)));
+        if(it==sourceNodes.end()||found[it->second])return false;
+        found[it->second]=true;remap[i]=it->second;
+    }
+    if(std::ranges::any_of(found,[](bool value){return !value;}))return false;
+    using Facet=std::tuple<int,std::array<Index,3>>;
+    const auto facets=[&](const mesh::Mesh& value,bool mapped,std::set<Facet>& result){
+        for(Index i=0;i<value.cellCount();++i){work.tick();const auto& cell=value.cell(i);
+            if(cell.onEntity.dim==3)continue;
+            if(cell.type!=mesh::CellType::Tri3||cell.onEntity.dim!=2)return false;
+            const auto* ids=value.cellNodes(i);std::array<Index,3> f;
+            for(unsigned j=0;j<3;++j){if(ids[j]<0||ids[j]>=value.nodeCount())return false;
+                f[j]=mapped?remap[ids[j]]:ids[j];if(f[j]==kInvalidIndex)return false;}
+            const auto first=std::min_element(f.begin(),f.end())-f.begin();
+            const std::array<Index,3> cycle{f[first],f[(first+1)%3],f[(first+2)%3]};
+            if(!result.emplace(cell.onEntity.tag,cycle).second)return false;
+        }
+        return true;
+    };
+    std::set<Facet> original,final;
+    return facets(source,false,original)&&facets(candidate,true,final)&&original==final;
+}
+std::uint64_t retainedExperimentalPoints(const mesh::Mesh& mesh,int tag,std::span<const Vec3> points,Work& work) {
+    std::map<ExperimentalNodeKey,std::size_t> requested;
+    for(std::size_t i=0;i<points.size();++i){work.tick();requested.emplace(experimentalNodeKey(points[i],{3,tag}),i);}
+    std::vector<bool> used(points.size());
+    for(Index i=0;i<mesh.cellCount();++i){work.tick();if(mesh.cell(i).type!=mesh::CellType::Tet4)continue;
+        const auto* ids=mesh.cellNodes(i);for(unsigned j=0;j<4;++j){
+            const auto it=requested.find(experimentalNodeKey(mesh.node(ids[j]),mesh.nodeClass(ids[j])));
+            if(it!=requested.end())used[it->second]=true;}}
+    return std::count(used.begin(),used.end(),true);
+}
+void experimentalBodyReport(NativeCadBodyMeshReport& report,const OcctFrontOutcome& built) {
+    report.route="native_spatial_sizing";report.reason=built.reason;report.nativeSurfaceReason=built.surfaceDiagnostic;
+    report.nativeVolumeReason=built.diagnostic;report.meshVolume=built.meshVolume;report.surfaceChordErrorLimit=built.chord;
+    report.effectiveMaximumChordError=built.chord;report.chordErrorPolicy="experimental_fixed_source_chord";
+    report.sourceShell=built.sourceShell;report.initialFront=built.initialFront;report.initialTopologyQuality=built.initialTopologyQuality;
+    report.constraintRecovery=built.constraintRecovery;report.recoveryRegions=built.regionRecovery;
+    report.nativeSurfaceWork=built.surfaceWork;report.nativeVolumeWork=built.workUsed-built.surfaceWork;
+    report.nativeSurfaceSeconds=built.surfaceSeconds;report.nativeVolumeSeconds=built.volumeSeconds;
+    report.surfaceTriangles=built.surfaceTriangles;report.maximumBoundaryNodeError=std::max(report.maximumBoundaryNodeError,built.maximumNodeError);
+    report.maximumBoundarySampleError=built.maximumFacetError;report.boundaryEmbeddingCertified=built.sourceShell.accepted;
+    report.materialClassification=built.materialClassification;report.sourceMismatchPriority=built.sourceMismatchPriority;
+    report.nativeCandidateQueries=built.nativeQueries;report.nativeCentroidThreads=built.nativeValidation.threadsUsed;
+    report.nativeCentroidsChecked=built.nativeValidation.points;report.nativeCentroidSourceGuard=built.nativeValidation.sourceModelUnmodified;
+    report.nativeCentroidReferenceQueries=built.nativeValidation.originalReferenceQueries;
+    report.nativeCentroidGeometryPairs=built.nativeValidation.copiedGeometryValuePairs;
+    report.nativeCentroidExactReuses=built.nativeValidation.strictAdmissionReuses;
+    report.surfaceSpacing=built.surfaceSpacing;
+}
+} // namespace
+
+ExperimentalCadBoundaryOutcome prepareExperimentalCadBoundaryImpl(const OcctModel& model,const mesh::Mesh* supplied,
+    const NativeCadMeshOptions& input,ExperimentalCadBoundary& destination) noexcept {
+    ExperimentalCadBoundaryOutcome result;const auto started=Clock::now();NativeCadMeshOptions o;Work work{o};
+    try {
+        o=experimentalOptions(input);
+        experimentalRequest(model,input);work.tick();
+        NativeCadBodyMeshReport checked;
+        if(supplied)experimentalShellNodes(model,*supplied,checked,work);
+        mesh::Mesh boundary,unused;OcctFrontReplayContext context;
+        context.prepareOnly=true;context.replayBoundary=supplied;context.capturedBoundary=&boundary;
+        const auto built=buildOcctFrontVolume(model,model.solids().front()->tag(),o,
+            std::min(o.maximumValidationWork-work.count,o.geometry.maximumMeshingWork),unused,0,
+            OcctFrontSurface::SpatialSizing,false,&context);
+        result.reason=built.reason;result.diagnostic=built.diagnostic;result.sourceShell=built.sourceShell;
+        result.maximumNodeError=std::max(checked.maximumBoundaryNodeError,built.maximumNodeError);
+        result.maximumFacetError=built.maximumFacetError;work.tick(built.workUsed);
+        if(context.prepared){
+            ExperimentalCadBoundary prepared;prepared.solidTag=model.solids().front()->tag();prepared.modelIdentity=model.identity();
+            prepared.targetSize=o.geometry.targetSize;prepared.maximumChordError=built.chord;
+            prepared.maximumRelativeVolumeError=o.maximumRelativeVolumeError;prepared.boundary.swap(boundary);
+            result.nodes=prepared.boundary.nodeCount();result.triangles=prepared.boundary.cellCount();
+            destination.boundary.swap(prepared.boundary);destination.solidTag=prepared.solidTag;
+            destination.targetSize=prepared.targetSize;destination.maximumChordError=prepared.maximumChordError;
+            destination.maximumRelativeVolumeError=prepared.maximumRelativeVolumeError;destination.modelIdentity=prepared.modelIdentity;
+            result.prepared=true;result.destinationUnchanged=false;result.rebound=supplied!=nullptr;
+        }
+    }catch(const Stop& stopped){result.reason=stopped.reason;result.diagnostic=nativeCadMeshReasonName(stopped.reason);}
+     catch(const Standard_OutOfMemory&){result.reason=NativeCadMeshReason::AllocationFailed;result.diagnostic="allocation_failed";}
+     catch(const std::bad_alloc&){result.reason=NativeCadMeshReason::AllocationFailed;result.diagnostic="allocation_failed";}
+     catch(const Standard_Failure&){result.reason=NativeCadMeshReason::GeometryError;result.diagnostic="experimental_boundary_native_query_failed";}
+     catch(...){result.reason=NativeCadMeshReason::InternalError;result.diagnostic="experimental_boundary_internal_error";}
+    result.work=work.count;result.seconds=elapsed(started);return result;
+}
+
+ExperimentalCadVolumeOutcome replayExperimentalCadVolumeImpl(const OcctModel& model,const ExperimentalCadBoundary& snapshot,
+    const NativeCadMeshOptions& input,ExperimentalInteriorMode mode,std::span<const Vec3> points,mesh::Mesh& destination) noexcept {
+    ExperimentalCadVolumeOutcome result;const auto started=Clock::now();NativeCadMeshOptions o;Work work{o};
+    auto& out=result.native;auto& extra=result.experimental;extra.mode=mode;extra.suppliedPoints=points.size();
+    try {
+        o=experimentalOptions(input);
+        experimentalRequest(model,input);work.tick();
+        need(mode==ExperimentalInteriorMode::Classical||mode==ExperimentalInteriorMode::Supplied,NativeCadMeshReason::InvalidRequest);
+        need(mode==ExperimentalInteriorMode::Supplied||points.empty(),NativeCadMeshReason::InvalidRequest);
+        need(snapshot.solidTag==model.solids().front()->tag()&&finite(snapshot.maximumChordError)&&snapshot.maximumChordError>0&&
+             snapshot.targetSize==o.geometry.targetSize&&snapshot.maximumRelativeVolumeError==o.maximumRelativeVolumeError&&
+             (o.maximumChordError==0||o.maximumChordError==snapshot.maximumChordError),NativeCadMeshReason::InvalidRequest);
+        o.maximumChordError=snapshot.maximumChordError;
+        out.bodies.emplace_back();auto& bodyReport=out.bodies.back();bodyReport.solidTag=snapshot.solidTag;
+        bodyReport.cadVolume=model.volume(snapshot.solidTag);
+        {PhaseTimer sourceTimer(extra.sourceSeconds);ExperimentalWorkClock sourceWork(extra.sourceWork,work);
+         experimentalShellNodes(model,snapshot.boundary,bodyReport,work);}
+        const auto sourceAdmissionSeconds=extra.sourceSeconds;
+        mesh::Mesh body;OcctFrontReplayContext context;context.replayBoundary=&snapshot.boundary;
+        context.supplied=mode==ExperimentalInteriorMode::Supplied;context.initialPoints=points;context.report=&extra;
+        const auto built=buildOcctFrontVolume(model,snapshot.solidTag,o,
+            std::min(o.maximumValidationWork-work.count,o.geometry.maximumMeshingWork),body,0,
+            OcctFrontSurface::SpatialSizing,false,&context);
+        experimentalBodyReport(bodyReport,built);extra.diagnostic=built.diagnostic;
+        out.generationSeconds=built.volumeSeconds;
+        out.preparationSeconds=sourceAdmissionSeconds+built.surfaceSeconds;work.tick(built.workUsed);
+        need(built.published,built.reason);
+        mesh::Mesh local;
+        {
+        ExperimentalFinalValidationClock validating(out.validationSeconds,extra.validationSeconds);
+        const View view(model,model.solid(snapshot.solidTag));
+        append(model,view,Recognition{},body,local,bodyReport,work,true,false);
+        extra.boundaryUnchanged=exactExperimentalBoundary(snapshot.boundary,local,work);
+        if(!extra.boundaryUnchanged)extra.diagnostic="experimental_boundary_changed";
+        need(extra.boundaryUnchanged,NativeCadMeshReason::GeometryError);
+        if(mode==ExperimentalInteriorMode::Supplied){
+            extra.retainedPoints=retainedExperimentalPoints(local,snapshot.solidTag,points,work);
+            extra.allSuppliedPointsRetained=extra.retainedPoints==points.size();
+            if(!extra.allSuppliedPointsRetained)extra.diagnostic="experimental_supplied_point_not_retained";
+            need(extra.allSuppliedPointsRetained,NativeCadMeshReason::MeshingFailed);
+        }
+        bodyReport.relativeVolumeError=std::abs(bodyReport.meshVolume-bodyReport.cadVolume)/bodyReport.cadVolume;
+        need(bodyReport.relativeVolumeError<=o.maximumRelativeVolumeError,NativeCadMeshReason::GeometryError);
+        need(bodyReport.maximumBoundarySampleError<=std::max(built.chord*1.01,1e-7),NativeCadMeshReason::GeometryError);
+        }
+        mesh::LinearVolumeAuditLimits limits;limits.maximumTemporaryBytes=o.geometry.maximumAuditTemporaryBytes;
+        limits.maximumFaceUses=o.geometry.maximumAuditFaceUses;limits.cancellation=o.geometry.cancellation;
+        const auto auditStarted=Clock::now();out.audit=mesh::auditLinearVolumeBoundary(local,limits);out.auditSeconds=elapsed(auditStarted);
+        need(!out.audit.cancelled,NativeCadMeshReason::Cancelled);need(!out.audit.budgetExceeded,NativeCadMeshReason::BudgetExceeded);
+        need(!out.audit.allocationFailed,NativeCadMeshReason::AllocationFailed);need(out.audit.valid,NativeCadMeshReason::MeshingFailed);
+        const auto qualityStarted=Clock::now();out.quality=algo::analyzeMixedMeshQuality(local);out.qualitySeconds=elapsed(qualityStarted);
+        need(!out.quality.allocationFailed,NativeCadMeshReason::AllocationFailed);need(out.quality.valid,NativeCadMeshReason::MeshingFailed);
+        need(out.quality.minimumQuality>=o.geometry.minimumElementQuality,NativeCadMeshReason::QualityRequirementNotMet);
+        out.qualityWarning=out.quality.minimumQuality<o.geometry.warningElementQuality;
+        work.tick();bodyReport.reason=NativeCadMeshReason::None;out.validatedParts=1;
+        destination.swap(local);out.published=true;out.destinationUnchanged=false;out.reason=NativeCadMeshReason::None;
+        extra.diagnostic="none";
+    }catch(const Stop& stopped){out.reason=stopped.reason;if(std::string_view(extra.diagnostic)=="not_started"||std::string_view(extra.diagnostic)=="none")extra.diagnostic=nativeCadMeshReasonName(stopped.reason);}
+     catch(const Standard_OutOfMemory&){out.reason=NativeCadMeshReason::AllocationFailed;extra.diagnostic="allocation_failed";}
+     catch(const std::bad_alloc&){out.reason=NativeCadMeshReason::AllocationFailed;extra.diagnostic="allocation_failed";}
+     catch(const Standard_Failure&){out.reason=NativeCadMeshReason::GeometryError;extra.diagnostic="experimental_replay_native_query_failed";}
+     catch(...){out.reason=NativeCadMeshReason::InternalError;extra.diagnostic="experimental_replay_internal_error";}
+    if(!out.published&&!out.bodies.empty())out.bodies.back().reason=out.reason;
+    out.preparationSeconds=extra.sourceSeconds;
+    out.validationWork=work.count;out.totalSeconds=elapsed(started);extra.totalSeconds=out.totalSeconds;
+    return result;
+}
+} // namespace detail
 NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOptions& o,mesh::Mesh& destination) noexcept {
     // A positive allowance too small for even a snapshot header is resource
     // exhaustion. Do not turn it into an invalid derived zero-sized snapshot.
