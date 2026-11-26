@@ -12,9 +12,11 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 import sys
+import subprocess
 import tempfile
+import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -197,22 +199,53 @@ class InstalledStepQualificationTests(unittest.TestCase):
         self.assertEqual(runner.refusal_kind(RuntimeError("boundary failed"), {"reason": "boundary_recovery_failed"}),
             ("native_refused", "refused"))
 
+    class ControlledProcesses:
+        def __init__(self, launcher):
+            self.launcher, self.worker = launcher, None
+            self.closed = self.stopped = False
+        def contain_launcher(self):
+            pass
+        def establish(self, pid):
+            if pid != self.launcher.pid:
+                raise ValueError("controlled fixture rejects unknown PID")
+            self.worker = self.launcher
+            return {"worker_pid": pid, "launcher_pid": pid, "chain": [pid], "kind": "controlled direct fixture"}
+        def alive(self):
+            return self.launcher.poll() is None
+        def exit_code(self):
+            return self.launcher.poll()
+        def cleanup(self, stop=False):
+            self.stopped = stop
+            if stop:
+                self.launcher.kill()
+            return []
+        def close(self):
+            self.closed = True
+
     def controlled_child(self, command, **kwargs):
         self.assertEqual(command[1], "-I")
         output = kwargs["cwd"]
         self.assertEqual(kwargs["env"]["TEMP"], str(output / "scratch"))
+        job = runner.load(command[-1])
+        runner.save(output / "worker-hello.json", {"schema": "paacs-installed-worker-hello-v1", "pid": 8123,
+            "parent_pid": job["controller_pid"], "token": job["handshake_token"], "job_sha256": runner.sha(command[-1])})
         for name in ("mesh.paacsmesh", "mesh.vtk", "native-report.json", "quality-summary.json", "inspection/inspection.json"):
             target = output / name
             target.parent.mkdir(exist_ok=True)
             target.write_bytes(b"controlled fixture output")
         runner.save(output / "worker.json", {"pid": 8123, "status": "succeeded", "native_status": "qualified"})
-        return SimpleNamespace(pid=8123, returncode=0, poll=lambda: 0, wait=lambda: 0)
+        child = SimpleNamespace(pid=8123, forced=False, returncode=None)
+        child.poll = lambda: 1 if child.forced else 0 if (output / "controller-ack.json").is_file() else None
+        child.wait = lambda timeout=None: child.poll()
+        child.kill = lambda: setattr(child, "forced", True)
+        return child
 
     def test_controller_checks_final_disk_even_for_immediately_completed_worker(self):
         job, = self.jobs()
         job["allowances"]["max_disk_bytes"] = 1
         with patch.object(runner.subprocess, "Popen", side_effect=self.controlled_child), \
-                patch.object(runner, "WindowsMemory", return_value=SimpleNamespace(sample=lambda child: None)):
+                patch.object(runner, "WindowsMemory", return_value=SimpleNamespace(sample=lambda child: None)), \
+                patch.object(runner, "ProcessControl", self.ControlledProcesses):
             result = runner.run_attempt(Path(sys.executable), job, self.root / "attempt")
         self.assertEqual(result["status"], "output_disk_stop_native_outcome_not_recertified")
         self.assertGreater(result["durable_output_bytes"], 1)
@@ -229,7 +262,8 @@ class InstalledStepQualificationTests(unittest.TestCase):
             runner.save(kwargs["cwd"] / "worker.json", {"status": "succeeded", "native_status": "qualified"})
             return child
         with patch.object(runner.subprocess, "Popen", side_effect=missing_pid), \
-                patch.object(runner, "WindowsMemory", return_value=SimpleNamespace(sample=lambda child: None)):
+                patch.object(runner, "WindowsMemory", return_value=SimpleNamespace(sample=lambda child: None)), \
+                patch.object(runner, "ProcessControl", self.ControlledProcesses):
             result = runner.run_attempt(Path(sys.executable), job, self.root / "missing-pid")
         self.assertEqual(result["status"], "input_or_worker_identity_failed")
 
@@ -238,6 +272,166 @@ class InstalledStepQualificationTests(unittest.TestCase):
         present = SimpleNamespace(is_file=lambda: True, stat=lambda: SimpleNamespace(st_size=17))
         root = SimpleNamespace(rglob=lambda pattern: [gone, present])
         self.assertEqual(runner.disk_bytes(root), 17)
+
+    def test_creator_chain_rejects_foreign_cycles_and_reused_process_ids(self):
+        chain = runner.ancestry_chain({30: 20, 20: 10}, 30, 10)
+        self.assertEqual(chain, [30, 20, 10])
+        runner.validate_creation_chain(chain, {10: (100, 500), 20: (200, 0), 30: (300, 0)})
+        for parents in ({30: 99, 99: 0}, {30: 20, 20: 30}, {}):
+            with self.subTest(parents=parents), self.assertRaises(ValueError):
+                runner.ancestry_chain(parents, 30, 10)
+        for times in ({10: (100, 500), 20: (200, 250), 30: (300, 0)},
+                      {10: (400, 0), 20: (200, 0), 30: (300, 0)}):
+            with self.subTest(times=times), self.assertRaises(ValueError):
+                runner.validate_creation_chain(chain, times)
+
+    def test_worker_handle_has_job_assignment_and_monitoring_rights(self):
+        open_process = Mock(return_value=987)
+        api = SimpleNamespace(kernel=SimpleNamespace(OpenProcess=open_process, CloseHandle=Mock()),
+            checked=lambda value: value, lifetime=lambda handle: (100, 0))
+        reference = runner.WindowsProcess(api, 8123)
+        mask, inherit, pid = open_process.call_args.args
+        self.assertEqual(pid, 8123)
+        self.assertFalse(inherit)
+        self.assertEqual(mask & 0x0101, 0x0101)  # SET_QUOTA + TERMINATE for job assignment.
+        self.assertEqual(mask & 0x00100010, 0x00100010)  # SYNCHRONIZE + VM_READ.
+        reference.close()
+        api.kernel.CloseHandle.assert_called_once_with(987)
+
+    def test_windows_creator_check_refreshes_exited_launcher_identity_before_assignment(self):
+        control = runner.ProcessControl.__new__(runner.ProcessControl)
+        control.api = SimpleNamespace(parents=lambda: {30: 10}, lifetime=lambda handle: (100, 150))
+        control.root = SimpleNamespace(_handle=110, lifetime=(100, 0))  # Cached while originally alive.
+        control.launcher = SimpleNamespace(pid=10)
+        control.worker = None
+        control.job = SimpleNamespace(assign=Mock())
+        candidate = SimpleNamespace(pid=30, _handle=330, lifetime=(200, 0), alive=lambda: True, close=Mock())
+        with patch.object(runner, "WindowsProcess", return_value=candidate):
+            with self.assertRaisesRegex(ValueError, "reused PID"):
+                control.establish(30)
+        control.job.assign.assert_not_called()
+        candidate.close.assert_called_once()
+
+    def test_handshake_requires_matching_token_job_hash_and_pid(self):
+        job = {"handshake_token": "controlled-token"}
+        hello = {"schema": "paacs-installed-worker-hello-v1", "token": "controlled-token", "pid": 8123, "job_sha256": "a"*64}
+        runner.validate_hello(hello, job, "a"*64)
+        for change in ({"token": "foreign-token"}, {"job_sha256": "b"*64}, {"pid": True}, {"pid": 0}, {"schema": "foreign"}):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                runner.validate_hello({**hello, **change}, job, "a"*64)
+
+    def test_worker_acknowledgement_is_a_barrier_before_any_paacs_work(self):
+        job, = self.jobs()
+        output = self.root / "no-ack"
+        output.mkdir()
+        job.update(output=str(output), handshake_token="controlled", controller_pid=os.getpid())
+        path = output / "job.json"
+        runner.save(path, job)
+        pm = SimpleNamespace(read_step=Mock(side_effect=AssertionError("Native must never run before acknowledgement")))
+        with patch.dict(sys.modules, {"paacs_mesh": pm}), patch.object(runner, "package_identity") as identity, \
+                patch.object(runner.time, "monotonic", side_effect=[0, 31]):
+            self.assertEqual(runner.worker(path), 1)
+        pm.read_step.assert_not_called()
+        identity.assert_not_called()
+        self.assertTrue((output / "worker-hello.json").is_file())
+        self.assertEqual(runner.load(output / "worker.json")["native_status"], "not_attempted")
+
+    def test_cleanup_uses_owned_job_and_retained_worker_if_launcher_exits(self):
+        control = runner.ProcessControl.__new__(runner.ProcessControl)
+        control.api = True
+        control.job = SimpleNamespace(terminate=Mock(), close=Mock())
+        control.worker = SimpleNamespace(terminate=Mock(), wait=Mock(), close=Mock())
+        control.cleanup_members = []
+        control.contain_pending_descendants = Mock(return_value=[])
+        control.launcher = SimpleNamespace(pid=10, poll=lambda: 0, kill=Mock())
+        with patch.object(runner.subprocess, "run") as taskkill:
+            self.assertEqual(control.cleanup(stop=True), [])
+        taskkill.assert_not_called()  # Never target a dead/reusable launcher PID.
+        control.job.terminate.assert_called_once()
+        control.worker.terminate.assert_called_once()
+        control.worker.wait.assert_called_once()
+        control.close()
+        control.job.close.assert_called_once()
+        control.worker.close.assert_called_once()
+
+    @unittest.skipUnless(os.name == "nt", "Real Windows process/job startup-cleanup regression")
+    def test_real_pre_handshake_child_is_contained_and_terminated_without_native_import(self):
+        pid_file = self.root / "sleeping-child.json"
+        sleeper_code = "import json,os,sys,time; from pathlib import Path; Path(sys.argv[1]).write_text(json.dumps({'pid':os.getpid()})); time.sleep(60)"
+        parent_code = "import subprocess,sys; child=subprocess.Popen([sys.executable,'-I','-c',sys.argv[1],sys.argv[2]],creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0)); child.wait()"
+        launcher = subprocess.Popen([sys.executable, "-I", "-c", parent_code, sleeper_code, str(pid_file)],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW)
+        control = reference = None
+        try:
+            deadline = time.monotonic() + 10
+            while not pid_file.is_file() and time.monotonic() < deadline:
+                self.assertIsNone(launcher.poll(), "Controlled stand-in launcher exited unexpectedly")
+                time.sleep(.02)
+            self.assertTrue(pid_file.is_file(), "Controlled child did not start")
+            pid = json.loads(pid_file.read_text())["pid"]
+            # Deliberately assign the root only AFTER its child exists, and never
+            # emit a worker hello. This reproduces the venv startup cleanup race.
+            control = runner.ProcessControl(launcher)
+            reference = runner.WindowsProcess(control.api, pid)
+            control.contain_launcher()
+            present = control.api.w.BOOL()
+            control.api.checked(control.api.kernel.IsProcessInJob(reference._handle, control.job._handle, runner.ctypes.byref(present)))
+            self.assertFalse(present.value, "Pre-existing stand-in child must begin outside the new job")
+            self.assertIsNone(control.worker)
+            warnings = control.cleanup(stop=True)
+            self.assertTrue(all(message.startswith("Descendant capture refused:") for message in warnings), warnings)
+            self.assertFalse(reference.alive(), "Pre-hello child survived controlled cleanup")
+            self.assertIsNotNone(launcher.poll())
+            self.assertTrue(control.cleanup_members, "No verified pre-existing descendants were captured")
+            self.assertTrue(all(not child.alive() for child in control.cleanup_members), "A verified captured process survived")
+        finally:
+            if control is not None:
+                try:
+                    control.cleanup(stop=True)
+                finally:
+                    control.close()
+            else:
+                runner.terminate_launcher(launcher)
+            if reference is not None:
+                try:
+                    reference.terminate()
+                    reference.wait()
+                finally:
+                    reference.close()
+
+    def test_controller_cleans_up_when_handshake_never_arrives(self):
+        job, = self.jobs()
+        controls = []
+        def start(command, **kwargs):
+            child = SimpleNamespace(pid=8123, forced=False)
+            child.poll = lambda: 1 if child.forced else None
+            child.kill = lambda: setattr(child, "forced", True)
+            return child
+        def supervise(child):
+            control = self.ControlledProcesses(child)
+            controls.append(control)
+            return control
+        ticks = iter(range(0, 1000, 31))
+        with patch.object(runner.subprocess, "Popen", side_effect=start), \
+                patch.object(runner, "WindowsMemory", return_value=SimpleNamespace(sample=lambda child: None)), \
+                patch.object(runner, "ProcessControl", side_effect=supervise), \
+                patch.object(runner.time, "perf_counter", side_effect=lambda: next(ticks)):
+            result = runner.run_attempt(Path(sys.executable), job, self.root / "never-hello")
+        self.assertEqual(result["stop"], "worker_handshake_timeout")
+        self.assertFalse(result["worker_acknowledged"])
+        self.assertTrue(controls[0].stopped)
+        self.assertTrue(controls[0].closed)
+
+    def test_completed_worker_after_hard_deadline_is_not_recertified(self):
+        job, = self.jobs()
+        job["allowances"]["hard_seconds"] = 1
+        ticks = iter((0, .1, 1.5))
+        with patch.object(runner.subprocess, "Popen", side_effect=self.controlled_child), \
+                patch.object(runner, "WindowsMemory", return_value=SimpleNamespace(sample=lambda child: None)), \
+                patch.object(runner, "ProcessControl", self.ControlledProcesses), \
+                patch.object(runner.time, "perf_counter", side_effect=lambda: next(ticks)):
+            result = runner.run_attempt(Path(sys.executable), job, self.root / "late")
+        self.assertEqual(result["status"], "hard_timeout_native_outcome_not_recertified")
 
     def test_worker_executes_public_contract_and_retains_native_refusal(self):
         job, = self.jobs()
@@ -257,7 +451,7 @@ class InstalledStepQualificationTests(unittest.TestCase):
                 path.mkdir()
                 (path / "inspection.json").write_text("{}")
         pm = SimpleNamespace(read_step=lambda source: model, diagnose=lambda report: {}, inspect_mesh=lambda *a, **k: Inspection())
-        with patch.dict(sys.modules, {"paacs_mesh": pm}), patch.object(runner, "package_identity", return_value={"native_path": str(self.cad), "native_sha256": runner.sha(self.cad), "runtime_contents_sha256": "0"*64}):
+        with patch.dict(sys.modules, {"paacs_mesh": pm}), patch.object(runner, "await_controller"), patch.object(runner, "package_identity", return_value={"native_path": str(self.cad), "native_sha256": runner.sha(self.cad), "runtime_contents_sha256": "0"*64}):
             self.assertEqual(runner.worker(path), 0)
             self.assertEqual(runner.load(output / "worker.json")["status"], "succeeded")
             error = RuntimeError("controlled geometry refusal")

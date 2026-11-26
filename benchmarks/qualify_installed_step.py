@@ -23,13 +23,18 @@ import os
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import platform
 import re
+import signal
 import subprocess
 import sys
 import time
+import uuid
 
 
 SCHEMA = "paacs-installed-step-plan-v1"
 MAX_JSON = 32 * 1024**2
+# SYNCHRONIZE, QUERY(_LIMITED)_INFORMATION, VM_READ, SET_QUOTA and TERMINATE.
+# SET_QUOTA + TERMINATE are required to assign an existing redirector child to our job.
+WINDOWS_WORKER_RIGHTS = 0x00101511
 DEFAULT_OPTIONS = {
     "workers": 1, "validation_workers": 1, "assembly": "preserve_parts",
     "resource_policy": "normal", "construction_effort": "legacy", "recovery": "standard",
@@ -323,7 +328,7 @@ def worker(job_path):
     job, began = load(job_path), time.perf_counter()
     output = Path(job["output"])
     record = {"schema": "paacs-installed-step-attempt-v1", "id": job["id"], "pid": os.getpid(),
-        "started_utc": now(), "phase": "package_import", "status": "running", "native_status": "not_attempted",
+        "started_utc": now(), "phase": "controller_handshake", "status": "running", "native_status": "not_attempted",
         "source_sha256": job["source_sha256"], "relative_path": job["relative_path"], "profile": job["profile"],
         "size_mm": job["size_mm"], "size_factor": job["size_factor"], "options": job["options"],
         "allowances": job["allowances"], "external_retry_count": 0,
@@ -335,6 +340,8 @@ def worker(job_path):
         save(output / "worker.json", record)
     checkpoint()
     try:
+        await_controller(job_path, job)
+        checkpoint("package_import")
         import paacs_mesh as pm
         record["package"] = package_identity(pm, job["package_version"])
         if sha(job["source"]) != job["source_sha256"]:
@@ -416,6 +423,315 @@ def worker(job_path):
         checkpoint()
 
 
+def await_controller(job_path, job):
+    """Do not import PAACS until our live process identity is acknowledged."""
+    output = Path(job["output"])
+    identity = {"schema": "paacs-installed-worker-hello-v1", "pid": os.getpid(), "parent_pid": os.getppid(),
+        "token": job["handshake_token"], "job_sha256": sha(job_path)}
+    save(output / "worker-hello.json", identity)
+    deadline = time.monotonic() + min(30., job["allowances"]["hard_seconds"])
+    while time.monotonic() < deadline:
+        path = output / "controller-ack.json"
+        if path.is_file():
+            ack = load(path)
+            if (ack.get("schema") != "paacs-installed-controller-ack-v1" or ack.get("worker_pid") != os.getpid()
+                    or ack.get("controller_pid") != job["controller_pid"] or ack.get("token") != identity["token"]
+                    or ack.get("job_sha256") != identity["job_sha256"]):
+                raise ValueError("Controller acknowledgement does not match this worker/job")
+            return
+        time.sleep(.02)
+    raise TimeoutError("Controller did not verify/acknowledge this worker before startup deadline")
+
+
+def ancestry_chain(parents, worker_pid, launcher_pid):
+    """Resolve only a finite creator chain ending at the controlled launcher."""
+    chain = [worker_pid]
+    while chain[-1] != launcher_pid:
+        parent = parents.get(chain[-1])
+        if type(parent) is not int or parent <= 0 or parent in chain or len(chain) >= 32:
+            raise ValueError("Worker PID is not a verified descendant of the controlled launcher")
+        chain.append(parent)
+    return chain
+
+
+def validate_creation_chain(chain, lifetimes):
+    for child, parent in zip(chain, chain[1:]):
+        created = lifetimes[child][0]
+        start, end = lifetimes[parent]
+        if created < start or (end and created > end):
+            raise ValueError("Process creator chain contains a reused PID or inconsistent lifetime")
+
+
+class WindowsAPI:
+    """Narrow process/job API; process handles remain owned until cleanup."""
+    def __init__(self):
+        from ctypes import wintypes as w
+        self.w = w
+        self.kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        declarations = {
+            "OpenProcess": ([w.DWORD, w.BOOL, w.DWORD], w.HANDLE),
+            "CloseHandle": ([w.HANDLE], w.BOOL),
+            "GetProcessTimes": ([w.HANDLE, ctypes.POINTER(w.FILETIME), ctypes.POINTER(w.FILETIME), ctypes.POINTER(w.FILETIME), ctypes.POINTER(w.FILETIME)], w.BOOL),
+            "WaitForSingleObject": ([w.HANDLE, w.DWORD], w.DWORD),
+            "TerminateProcess": ([w.HANDLE, w.UINT], w.BOOL),
+            "GetExitCodeProcess": ([w.HANDLE, ctypes.POINTER(w.DWORD)], w.BOOL),
+            "CreateToolhelp32Snapshot": ([w.DWORD, w.DWORD], w.HANDLE),
+            "CreateJobObjectW": ([ctypes.c_void_p, w.LPCWSTR], w.HANDLE),
+            "SetInformationJobObject": ([w.HANDLE, ctypes.c_int, ctypes.c_void_p, w.DWORD], w.BOOL),
+            "AssignProcessToJobObject": ([w.HANDLE, w.HANDLE], w.BOOL),
+            "IsProcessInJob": ([w.HANDLE, w.HANDLE, ctypes.POINTER(w.BOOL)], w.BOOL),
+            "TerminateJobObject": ([w.HANDLE, w.UINT], w.BOOL),
+        }
+        for name, (args, result) in declarations.items():
+            function = getattr(self.kernel, name)
+            function.argtypes, function.restype = args, result
+
+    def checked(self, value):
+        if not value:
+            raise ctypes.WinError(ctypes.get_last_error())
+        return value
+
+    def lifetime(self, handle):
+        values = [self.w.FILETIME() for _ in range(4)]
+        self.checked(self.kernel.GetProcessTimes(handle, *(ctypes.byref(value) for value in values)))
+        return tuple((value.dwHighDateTime << 32) | value.dwLowDateTime for value in values[:2])
+
+    def parents(self):
+        w = self.w
+        class Entry(ctypes.Structure):
+            _fields_ = [("dwSize", w.DWORD), ("cntUsage", w.DWORD), ("pid", w.DWORD),
+                ("heap", ctypes.c_size_t), ("module", w.DWORD), ("threads", w.DWORD),
+                ("parent", w.DWORD), ("priority", w.LONG), ("flags", w.DWORD), ("name", w.WCHAR * 260)]
+        first, next_entry = self.kernel.Process32FirstW, self.kernel.Process32NextW
+        for function in (first, next_entry):
+            function.argtypes, function.restype = [w.HANDLE, ctypes.POINTER(Entry)], w.BOOL
+        handle = self.kernel.CreateToolhelp32Snapshot(2, 0)
+        if handle == ctypes.c_void_p(-1).value:
+            raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            entry, result = Entry(), {}
+            entry.dwSize = ctypes.sizeof(entry)
+            present = first(handle, ctypes.byref(entry))
+            while present:
+                result[int(entry.pid)] = int(entry.parent)
+                present = next_entry(handle, ctypes.byref(entry))
+            return result
+        finally:
+            self.kernel.CloseHandle(handle)
+
+
+class WindowsProcess:
+    def __init__(self, api, pid, handle=None):
+        self.api, self.pid, self.owned = api, pid, handle is None
+        self._handle = api.checked(api.kernel.OpenProcess(WINDOWS_WORKER_RIGHTS, False, pid)) if handle is None else int(handle)
+        self.lifetime = api.lifetime(self._handle)
+
+    def alive(self):
+        result = self.api.kernel.WaitForSingleObject(self._handle, 0)
+        if result not in (0, 258):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return result == 258
+
+    def terminate(self):
+        if self.alive():
+            if not self.api.kernel.TerminateProcess(self._handle, 1):
+                error = ctypes.get_last_error()
+                # Taskkill/job termination can already be completing on another
+                # thread. Windows then reports ACCESS_DENIED before the process
+                # handle becomes signalled; accept only observed termination.
+                if self.api.kernel.WaitForSingleObject(self._handle, 1000) != 0:
+                    raise ctypes.WinError(error)
+
+    def wait(self, milliseconds=5000):
+        if self.api.kernel.WaitForSingleObject(self._handle, milliseconds) != 0:
+            raise TimeoutError("Verified worker did not terminate within cleanup deadline")
+
+    def close(self):
+        if self.owned and self._handle:
+            self.api.kernel.CloseHandle(self._handle)
+            self._handle = None
+
+    def exit_code(self):
+        if self.alive():
+            return None
+        code = self.api.w.DWORD()
+        self.api.checked(self.api.kernel.GetExitCodeProcess(self._handle, ctypes.byref(code)))
+        return int(code.value)
+
+
+class WindowsJob:
+    def __init__(self, api):
+        self.api, self._handle = api, api.checked(api.kernel.CreateJobObjectW(None, None))
+        w = api.w
+        class Basic(ctypes.Structure):
+            _fields_ = [("process_time", ctypes.c_int64), ("job_time", ctypes.c_int64), ("flags", w.DWORD),
+                ("minimum", ctypes.c_size_t), ("maximum", ctypes.c_size_t), ("active", w.DWORD),
+                ("affinity", ctypes.c_size_t), ("priority", w.DWORD), ("scheduling", w.DWORD)]
+        class IO(ctypes.Structure):
+            _fields_ = [(name, ctypes.c_uint64) for name in ("read_ops", "write_ops", "other_ops", "read", "write", "other")]
+        class Extended(ctypes.Structure):
+            _fields_ = [("basic", Basic), ("io", IO), ("process_memory", ctypes.c_size_t), ("job_memory", ctypes.c_size_t),
+                ("peak_process", ctypes.c_size_t), ("peak_job", ctypes.c_size_t)]
+        info = Extended()
+        info.basic.flags = 0x2000  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, non-inherited controller handle.
+        try:
+            api.checked(api.kernel.SetInformationJobObject(self._handle, 9, ctypes.byref(info), ctypes.sizeof(info)))
+        except BaseException:
+            self.close()
+            raise
+
+    def assign(self, process):
+        present = self.api.w.BOOL()
+        self.api.checked(self.api.kernel.IsProcessInJob(process._handle, self._handle, ctypes.byref(present)))
+        if not present.value:
+            self.api.checked(self.api.kernel.AssignProcessToJobObject(self._handle, process._handle))
+
+    def terminate(self):
+        self.api.checked(self.api.kernel.TerminateJobObject(self._handle, 1))
+
+    def close(self):
+        if self._handle:
+            self.api.kernel.CloseHandle(self._handle)
+            self._handle = None
+
+
+class ProcessControl:
+    def __init__(self, launcher):
+        self.launcher, self.worker, self.chain, self.job = launcher, None, None, None
+        self.cleanup_members = []
+        self.api = WindowsAPI() if os.name == "nt" else None
+        self.root = WindowsProcess(self.api, launcher.pid, launcher._handle) if self.api else None
+        if self.api:
+            self.job = WindowsJob(self.api)
+
+    def contain_launcher(self):
+        if self.job:
+            self.job.assign(self.root)
+
+    def establish(self, pid):
+        if type(pid) is not int or pid <= 0:
+            raise ValueError("Worker handshake has no valid PID")
+        if not self.api:
+            if pid != self.launcher.pid:
+                raise ValueError("Non-Windows worker PID differs from controlled launcher")
+            self.worker, self.chain = self.launcher, [pid]
+            return {"worker_pid": pid, "launcher_pid": pid, "chain": [pid], "kind": "direct_pid"}
+        candidate, intermediates = WindowsProcess(self.api, pid), []
+        try:
+            if not candidate.alive():
+                raise ValueError("Worker terminated before identity verification")
+            chain = ancestry_chain(self.api.parents(), pid, self.launcher.pid)
+            # Refresh the retained root handle: a cached live (exit=0) stamp
+            # must not authenticate a child created after a reused launcher PID.
+            self.root.lifetime = self.api.lifetime(self.root._handle)
+            lifetimes = {pid: candidate.lifetime, self.launcher.pid: self.root.lifetime}
+            for parent in chain[1:-1]:
+                reference = WindowsProcess(self.api, parent)
+                intermediates.append(reference)
+                lifetimes[parent] = reference.lifetime
+            validate_creation_chain(chain, lifetimes)
+            if ancestry_chain(self.api.parents(), pid, self.launcher.pid) != chain:
+                raise ValueError("Worker ancestry changed during verification")
+            self.worker, self.chain = candidate, chain
+            self.job.assign(candidate)  # Required before acknowledgement; no uncontained Native work.
+            return {"worker_pid": pid, "launcher_pid": self.launcher.pid, "chain": chain,
+                "creation_and_exit_filetimes": {str(key): list(value) for key, value in lifetimes.items()},
+                "kind": "windows_verified_process_handles", "kill_on_close_job": True}
+        except BaseException:
+            if self.worker is not candidate:
+                candidate.close()
+            raise
+        finally:
+            for reference in intermediates:
+                reference.close()
+
+    def alive(self):
+        return self.worker.alive() if self.api and self.worker else self.launcher.poll() is None
+
+    def exit_code(self):
+        return self.worker.exit_code() if self.api and self.worker else self.launcher.poll()
+
+    def contain_pending_descendants(self):
+        """Capture pre-job redirector children even when no hello ever arrived.
+
+        Parents are contained before children, so later children inherit our
+        job. Extra bounded snapshots cover children born during that capture.
+        Every accepted handle passes the same creator/lifetime checks as the
+        acknowledged worker; unrelated or reused PIDs are never assigned/killed.
+        """
+        failures, deadline = [], time.monotonic() + 5
+        for _ in range(3):
+            parents = self.api.parents()
+            scoped = []
+            for pid in parents:
+                if pid == self.launcher.pid:
+                    continue
+                try:
+                    chain = ancestry_chain(parents, pid, self.launcher.pid)
+                except ValueError:
+                    continue
+                scoped.append((len(chain), pid))
+            for _, pid in sorted(scoped):
+                if len(self.cleanup_members) >= 384 or time.monotonic() >= deadline:
+                    return failures + ["Bounded descendant capture exhausted; controlled tree/job fallback remains active"]
+                previous, previous_chain = self.worker, self.chain
+                try:
+                    self.establish(pid)
+                except (OSError, ValueError) as error:
+                    failures.append("Descendant capture refused: " + str(error)[:1024])
+                finally:
+                    if self.worker is not None and self.worker is not previous:
+                        self.cleanup_members.append(self.worker)
+                    self.worker, self.chain = previous, previous_chain
+        return failures
+
+    def cleanup(self, stop=False):
+        """Terminate only the owned job/group and opened, verified worker handle."""
+        errors = []
+        if stop:
+            if self.api:
+                try:
+                    errors.extend(self.contain_pending_descendants())
+                except OSError as error:
+                    errors.append(str(error))
+            if self.api and self.launcher.poll() is None:
+                # Controlled Popen root only. The job and retained handle avoid orphaning a redirector child.
+                try:
+                    subprocess.run([str(Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32/taskkill.exe"),
+                        "/PID", str(self.launcher.pid), "/T", "/F"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=10, check=False)
+                except (OSError, subprocess.TimeoutExpired) as error:
+                    errors.append(str(error))
+            elif not self.api and self.launcher.poll() is None:
+                try:
+                    os.killpg(self.launcher.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            if self.job:
+                try:
+                    self.job.terminate()
+                except OSError as error:
+                    errors.append(str(error))
+            for reference in self.cleanup_members:
+                reference.terminate()
+                reference.wait()
+            if self.api and self.worker:
+                self.worker.terminate()
+                self.worker.wait()
+            if self.launcher.poll() is None:
+                self.launcher.kill()
+        if self.launcher.poll() is None:
+            self.launcher.wait(timeout=5)
+        return errors
+
+    def close(self):
+        if self.job:
+            self.job.close()  # Also protects against interrupted controller cleanup.
+        if self.api and self.worker:
+            self.worker.close()
+        for reference in self.cleanup_members:
+            reference.close()
+
+
 class WindowsMemory:
     def __init__(self):
         self.query = None
@@ -451,18 +767,46 @@ def final_status(receipt, returncode, stop, output):
     return "succeeded"
 
 
+def validate_hello(hello, job, job_digest):
+    if (hello.get("schema") != "paacs-installed-worker-hello-v1" or hello.get("token") != job["handshake_token"]
+            or hello.get("job_sha256") != job_digest or type(hello.get("pid")) is not int or hello["pid"] <= 0):
+        raise ValueError("Worker handshake token/job/PID differs from the controlled request")
+
+
+def terminate_launcher(launcher):
+    """Startup fallback targets only the Popen-owned launcher and its tree."""
+    if launcher.poll() is None:
+        if os.name == "nt":
+            try:
+                subprocess.run([str(Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32/taskkill.exe"),
+                    "/PID", str(launcher.pid), "/T", "/F"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=10, check=False)
+            finally:
+                if launcher.poll() is None:
+                    launcher.kill()
+        else:
+            try:
+                os.killpg(launcher.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+    launcher.wait(timeout=5)
+
+
 def run_attempt(python, job, output):
     output.mkdir()
     scratch = output / "scratch"
     scratch.mkdir()
-    job = {**job, "output": str(output)}
-    save(output / "job.json", job)
-    command = [str(python), "-I", str(Path(__file__).resolve()), "--worker", str(output / "job.json")]
+    job = {**job, "output": str(output), "handshake_token": uuid.uuid4().hex, "controller_pid": os.getpid()}
+    job_path = output / "job.json"
+    save(job_path, job)
+    job_digest = sha(job_path)
+    command = [str(python), "-I", str(Path(__file__).resolve()), "--worker", str(job_path)]
     began, memory, peak, stop = time.perf_counter(), WindowsMemory(), None, None
+    control, process, acknowledged, pending_exception = None, None, False, None
+    worker_exit, cleanup_errors = None, []
     receipt = {"schema": "paacs-installed-step-controller-v1", "id": job["id"], "job": job,
         "command": command, "runner_sha256": sha(__file__), "started_utc": now(), "status": "running",
-        "process_memory_limit_enforced": os.name == "nt",
-        "memory_scope": "modeled native memory is enforced by mesher; sampled peak process working-set watchdog is Windows-only; unavailable process memory is null",
+        "process_memory_limit_enforced": False,
+        "memory_scope": "modeled native memory is enforced by mesher; sampled actual-worker peak working-set watchdog is Windows-only; unavailable process memory is null",
         "vtk_validation_scope": "native export and byte hash; VTK tags are not independently parsed"}
     save(output / "controller.json", receipt)
     environment = clean_environment(python)
@@ -470,39 +814,84 @@ def run_attempt(python, job, output):
     with (output / "worker.log").open("wb") as stream:
         try:
             process = subprocess.Popen(command, cwd=output, env=environment, stdout=stream, stderr=subprocess.STDOUT,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), start_new_session=os.name != "nt")
         except OSError as error:
             receipt.update(status="process_start_failed", error=str(error)[:4096], process_seconds=time.perf_counter()-began, finished_utc=now())
             save(output / "controller.json", receipt)
             return receipt
-        receipt["pid"] = process.pid
+        receipt.update(pid=process.pid, launcher_pid=process.pid)
         save(output / "controller.json", receipt)
         try:
+            control = ProcessControl(process)
+            control.contain_launcher()
             last_disk = began
-            while process.poll() is None:
-                sampled = memory.sample(process)
+            while True:
+                hello_path = output / "worker-hello.json"
+                if not acknowledged and hello_path.is_file():
+                    hello = load(hello_path)
+                    validate_hello(hello, job, job_digest)
+                    identity = control.establish(hello["pid"])
+                    peak = None  # The benchmark RSS belongs to the verified worker, not a venv redirector.
+                    expected_parent = identity["chain"][1] if len(identity["chain"]) > 1 else job["controller_pid"]
+                    if hello.get("parent_pid") != expected_parent:
+                        raise ValueError("Worker handshake creator differs from verified process chain")
+                    receipt.update(worker_identity=identity, worker_pid=hello["pid"], memory_measurement_pid=hello["pid"])
+                    save(output / "controller.json", receipt)
+                    if process.poll() is not None:
+                        stop = "launcher_exited_before_acknowledgement"
+                        break
+                    save(output / "controller-ack.json", {"schema": "paacs-installed-controller-ack-v1",
+                        "controller_pid": job["controller_pid"], "worker_pid": hello["pid"],
+                        "token": job["handshake_token"], "job_sha256": job_digest})
+                    acknowledged = True
+                reference = control.worker if control.worker is not None else process
+                sampled = memory.sample(reference)
                 peak = max(peak or 0, sampled) if sampled is not None else peak
-                elapsed = time.perf_counter() - began
-                if elapsed > job["allowances"]["hard_seconds"]:
+                elapsed = time.perf_counter()-began
+                if acknowledged and not control.alive():
+                    worker_exit = control.exit_code()
+                    process.wait(timeout=5)
+                    break
+                if process.poll() is not None:
+                    stop = "launcher_exited_before_worker" if acknowledged else "launcher_exited_before_handshake"
+                elif not acknowledged and elapsed > min(30., job["allowances"]["hard_seconds"]):
+                    stop = "worker_handshake_timeout"
+                elif elapsed > job["allowances"]["hard_seconds"]:
                     stop = "hard_timeout"
                 elif peak is not None and peak > job["allowances"]["max_process_bytes"]:
                     stop = "process_memory_stop"
-                if time.perf_counter() - last_disk >= 2:
+                if time.perf_counter()-last_disk >= 2:
                     if disk_bytes(output) > job["allowances"]["max_disk_bytes"]:
                         stop = "output_disk_stop"
                     last_disk = time.perf_counter()
                 if stop:
-                    process.kill()
                     break
-                time.sleep(.1)
-            process.wait()
+                time.sleep(.02 if not acknowledged else .1)
+        except BaseException as error:
+            stop = "controller_exception"
+            receipt.update(controller_error_type=type(error).__name__, controller_error=str(error)[:4096])
+            if isinstance(error, (KeyboardInterrupt, SystemExit)):
+                pending_exception = error
         finally:
-            if process.poll() is None:
-                process.kill()
-                process.wait()
-    sampled = memory.sample(process)
-    peak = max(peak or 0, sampled) if sampled is not None else peak
+            try:
+                if control is not None:
+                    cleanup_errors.extend(control.cleanup(stop=stop is not None))
+                    if control.worker is not None:
+                        sampled = memory.sample(control.worker)
+                        peak = max(peak or 0, sampled) if sampled is not None else peak
+                        worker_exit = control.exit_code()
+                else:
+                    terminate_launcher(process)
+            except BaseException as error:
+                cleanup_errors.append(type(error).__name__ + ": " + str(error)[:4096])
+                stop = stop or "process_cleanup_failed"
+            finally:
+                if control is not None:
+                    control.close()  # Windows KILL_ON_JOB_CLOSE contains abrupt controller cancellation too.
     final_disk = disk_bytes(output)
+    final_elapsed = time.perf_counter()-began
+    if final_elapsed > job["allowances"]["hard_seconds"]:
+        stop = stop or "hard_timeout"
     if final_disk > job["allowances"]["max_disk_bytes"]:
         stop = stop or "output_disk_stop"
     if peak is not None and peak > job["allowances"]["max_process_bytes"]:
@@ -511,14 +900,21 @@ def run_attempt(python, job, output):
         observed = load(output / "worker.json") if (output / "worker.json").is_file() else {}
     except (OSError, ValueError) as error:
         observed = {"status": "malformed_worker_receipt", "error": str(error)[:4096]}
-    receipt.update(worker=observed, worker_pid_verified=observed.get("pid") == process.pid,
-        process_exit_code=process.returncode, process_seconds=time.perf_counter()-began,
-        peak_process_working_set_bytes=peak, durable_output_bytes=final_disk, stop=stop, finished_utc=now())
+    receipt.update(worker=observed, worker_pid_verified=acknowledged and observed.get("pid") == receipt.get("worker_pid"),
+        worker_acknowledged=acknowledged, launcher_exit_code=process.poll(), process_exit_code=worker_exit,
+        process_seconds=final_elapsed, peak_process_working_set_bytes=peak,
+        durable_output_bytes=final_disk, stop=stop, cleanup_errors=cleanup_errors, finished_utc=now())
     receipt["process_memory_limit_enforced"] = os.name == "nt" and peak is not None
-    receipt["status"] = final_status(observed, process.returncode, stop, output)
-    if (observed and not receipt["worker_pid_verified"]) or sha(job["source"]) != job["source_sha256"]:
+    receipt["status"] = final_status(observed, worker_exit, stop, output)
+    try:
+        source_unchanged = sha(job["source"]) == job["source_sha256"]
+    except OSError:
+        source_unchanged = False
+    if (observed and not receipt["worker_pid_verified"]) or not source_unchanged:
         receipt["status"] = "input_or_worker_identity_failed"
     save(output / "controller.json", receipt)
+    if pending_exception is not None:
+        raise pending_exception
     return receipt
 
 
