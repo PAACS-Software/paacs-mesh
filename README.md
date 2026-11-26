@@ -9,8 +9,8 @@ Applications can link the core library directly through `PAACS::mesh`. It uses
 the C++ standard library and platform threads. The STEP adapter, CLI tools and
 debug UI bridge are optional.
 
-**Current candidate** · [1.2.0-rc.4](RELEASE_NOTES.md) ·
-[Validation](docs/RELEASE_READINESS.md) · [Roadmap](docs/ROADMAP.md)
+**Release line** · [1.2.0](RELEASE_NOTES.md) ·
+[Release qualification](docs/STABLE_1.2.0_QUALIFICATION.md) · [Roadmap](docs/ROADMAP.md)
 
 ## Build a first mesh
 
@@ -72,7 +72,7 @@ box.
 ## Python
 
 The [Python STEP interface](docs/PYTHON.md) imports STEP, generates audited Tet4
-meshes and exports tagged VTK or native archives. The **1.2.0-rc.4 candidate**
+meshes and exports tagged VTK or native archives. Version **1.2.0**
 targets regular, 64-bit CPython 3.12–3.15 on Windows x64/ARM64, Linux x64/ARM64
 with glibc 2.28 or newer, and macOS ARM64 with a minimum of macOS 15. The same
 macOS wheels must pass installation on macOS 15, 26 and 27. CAD libraries are
@@ -81,10 +81,10 @@ bundled; wheel users need no compiler or separate OCCT installation.
 The expanded implementation passed its
 [20-wheel and 28-consumer qualification](docs/PYTHON_COMPATIBILITY.md#qualification-evidence).
 Official releases pass the [publication gates](docs/PYPI_RELEASE.md) from their
-own immutable tagged source. The matching GitHub release carries RC4 publication
-receipts. Install the candidate with `python -m pip install paacs-mesh==1.2.0rc4`.
-The published RC3 files and tag remain immutable. The earlier `1.2.0rc2` release
-supports CPython 3.12 on Windows x64, Linux x64 and macOS ARM64 only.
+own immutable tagged source. The matching GitHub release carries its publication
+receipts. Install the exact release with `python -m pip install paacs-mesh==1.2.0`.
+Published release-candidate files and tags remain immutable. The earlier
+`1.2.0rc2` release supports CPython 3.12 on Windows x64, Linux x64 and macOS ARM64 only.
 
 The [sizing guide](docs/PYTHON.md#face-sizing-volume-regions-and-growth) covers
 selected-face refinement, volume boxes, minimum size and growth controls.
@@ -103,7 +103,7 @@ If you use PAACS Mesh in your work, please cite the software using
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the source layout and test commands.
-The [release policy](docs/RELEASE_POLICY.md) describes what this candidate
+The [release policy](docs/RELEASE_POLICY.md) describes what this release line
 supports.
 
 Paul LeDewhurst is the project author. PAACS Software Ltd licenses the

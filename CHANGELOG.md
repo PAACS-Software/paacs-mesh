@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 1.2.0
+
+- Promote the RC4 engine and Python interfaces to the 1.2.0 release line without
+  changing meshing algorithms, defaults or native validity checks.
+- Document the supported API, resource policies, diagnostics and geometry routes.
+  Native STEP meshing retains its preview scope and measured limitations;
+  a stable package version does not imply arbitrary-CAD or solver qualification.
+- Require fresh native and full Python compatibility qualification for the final
+  versioned source, followed by immutable tagged-source publication and PyPI
+  installation checks. Retain historical corpus results separately from new
+  release qualification evidence.
+
 ## 1.2.0-rc.4
 
 - Default new Python, saved-recipe and direct STEP CLI requests to Normal

@@ -1,6 +1,6 @@
 # Mesh inspection and comparison
 
-**RC4 candidate APIs.** These additions require RC4 bindings; published
+**1.2.0 APIs.** These operations were introduced in RC4; published
 `1.2.0rc3` wheels retain their original interface. Development wheels require
 matching source receipts. Inspection itself does not change meshing algorithms
 or recertify a supplied report.
@@ -332,7 +332,7 @@ from this report alone.
 
 ## Command line
 
-The RC4 interface provides these commands through `paacs-mesh` or
+The 1.2.0 interface provides these commands through `paacs-mesh` or
 `python -m paacs_mesh`:
 
 ```sh

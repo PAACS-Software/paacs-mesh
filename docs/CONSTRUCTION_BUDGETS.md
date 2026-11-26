@@ -1,8 +1,7 @@
 # Construction effort and caps
 
-These controls are part of the RC4 source candidate and require matching native
-bindings. The matching release uses the complete qualification gates; published
-RC3 wheels retain their original interface.
+These controls are included in 1.2.0 and were introduced in RC4. Use matching
+native bindings; published RC3 wheels retain their original interface.
 The default remains `construction_effort="legacy"` while the alternative
 policies are qualified against geometry, quality and runtime tests.
 
@@ -69,7 +68,7 @@ advancing interior front. Use the separate `advancing_interior_front` and
 
 `resource_policy` is independent of construction effort and recovery. New
 Python meshing calls, newly created recipes and direct STEP CLI requests in
-RC4 default to `normal`. Explicit `bounded` retains
+1.2.0 default to `normal`. Explicit `bounded` retains
 historical admission. Saved recipes use their recorded policy; an older recipe
 without this field retains literal `bounded` semantics.
 

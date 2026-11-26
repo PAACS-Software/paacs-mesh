@@ -1,6 +1,6 @@
 # Python package releases
 
-The `1.2.0-rc.4` candidate uses PyPI version `1.2.0rc4` and the release
+Version `1.2.0` uses the same source and PyPI version and the release
 qualification gates below. Its matching GitHub release carries the publication
 receipts. It targets regular,
 64-bit CPython 3.12–3.15 on Windows x64/ARM64, Linux x64/ARM64 with glibc 2.28 or
@@ -11,9 +11,9 @@ OCCT source archive and build recipes remain available with the GitHub release.
 
 The previous published `1.2.0rc2` release supports CPython 3.12 on Windows x64,
 macOS ARM64 and Linux x64 only, with metadata `>=3.12,<3.13`. Its tag and files
-remain immutable, as do the later published RC3 tag and files. RC4 requires a
-new version and a fresh tagged-source qualification; development artifacts are
-never relabelled as a different release.
+remain immutable, as do the later published RC3 and RC4 tags and files. Stable
+1.2.0 requires its own versioned build and fresh tagged-source qualification;
+development artifacts are never relabelled as a different release.
 
 ## Expanded qualification matrix
 
@@ -29,7 +29,7 @@ The implementation passed all 55 compatibility jobs and seven native jobs in
 assembly of all 48 builder/consumer artifacts and strict Twine checks on all 20
 wheels. The [compatibility evidence](PYTHON_COMPATIBILITY.md#qualification-evidence)
 records those historical source identities and workflow runs. They do not
-qualify RC4; it must repeat qualification from its own versioned source before
+qualify stable 1.2.0; it must repeat qualification from its own versioned source before
 publication. All required combinations and native regression checks remain
 mandatory; a passing development PR does not
 replace release qualification. See [Python compatibility](PYTHON_COMPATIBILITY.md)
@@ -58,15 +58,16 @@ reserve its name beforehand. See [PyPI's setup instructions](https://docs.pypi.o
 ## Prepare a release
 
 1. Merge and qualify the release source. Update the version consistently using
-   `scripts/verify_version.py` as the check. Keep existing release tags immutable.
+   `scripts/verify_version.py --final` for a stable release. Keep existing release
+   tags immutable.
    Before tagging, record successful runs for all seven native qualification jobs
    and all 55 Python qualification jobs. Check that the tested checkout tree
    matches the tag target and merged main tree; a pull-request run can check out
    a virtual merge rather than its reported head commit. The publication workflow
    repeats the wheel matrix; it does not replace this native regression gate.
 2. Create the new version tag and publish its GitHub release. For example,
-   `VERSION.txt` containing `1.2.0-rc.4` requires tag `v1.2.0-rc.4` and publishes
-   the normalized PyPI version `1.2.0rc4`.
+   `VERSION.txt` containing `1.2.0` requires tag `v1.2.0` and publishes PyPI
+   version `1.2.0`. Publish its GitHub release with `prerelease=false`.
 3. Run **Publish Python package** from `main`, providing that release tag. The
    annotated tag must identify a commit on the history of the selected main
    revision. The tagged `VERSION.txt` determines the package version. Keep
@@ -76,7 +77,7 @@ For the separately checksummed PAACS source ZIP, run the following from the clea
 qualified tag checkout. The flag preserves the tracked source manifest:
 
 ```sh
-python scripts/package_source.py --preserve-source-manifest --output out/paacs-mesh-1.2.0-rc.4.zip
+python scripts/package_source.py --preserve-source-manifest --output out/paacs-mesh-1.2.0.zip
 ```
 
 Attach that ZIP and its `.sha256` file to the matching public GitHub release.
@@ -129,13 +130,13 @@ this resume option does not retry or overwrite published package files.
 
 ## Installation
 
-Install the pinned candidate:
+Install the pinned stable release:
 
 ```sh
-python -m pip install paacs-mesh==1.2.0rc4
+python -m pip install paacs-mesh==1.2.0
 ```
 
-For the newest available release candidate:
+To allow prereleases when selecting the newest available version:
 
 ```sh
 python -m pip install --pre paacs-mesh
