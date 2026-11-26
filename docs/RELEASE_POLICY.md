@@ -1,8 +1,14 @@
 # Release scope
 
-The `1.2.0-rc.4` candidate uses the [publication gates](PYPI_RELEASE.md). Its
+Version `1.2.0` uses the [publication gates](PYPI_RELEASE.md). Its
 matching GitHub release carries the qualification and publication receipts.
 Existing release tags and published files remain immutable.
+
+The package uses stable version numbering for its documented interfaces and
+supported routes. Native STEP meshing retains its preview scope, and the Python
+package is classified as Beta. Unsupported CAD, quality tails and unqualified
+solver workflows remain explicit limitations. This release does not promise
+completion for arbitrary geometry.
 
 ## Core library and SDK
 
@@ -16,7 +22,7 @@ threads. Applications can link it directly. OCCT and the debug UI bridge
 are optional targets.
 
 Use `find_package(PAACSMesh 1.2.0 EXACT CONFIG REQUIRED)` for this package.
-The SDK and CLI report `1.2.0-rc.4`. Rebuild C++ consumers with the matching
+The SDK and CLI report `1.2.0`. Rebuild C++ consumers with the matching
 headers, libraries and toolchain. The mesh archive remains format v1.
 The `paacs_ui_` C bridge keeps ABI version 1. The Python and JSON examples
 cover the routes listed in [UI integration](UI_INTEGRATION.md).
@@ -27,7 +33,7 @@ The optional OCCT adapter handles supported STEP and BRep models. It retains
 native CAD face and body tags and validates geometry before publishing an
 archive. Joint face and box sizing is available for a single Tet4 solid.
 The [native CAD guide](NATIVE_CAD.md) describes recovery options and assembly
-policies. The [candidate validation](RELEASE_READINESS.md) records measured
+policies. The [historical validation](RELEASE_READINESS.md) records measured
 coverage and open cases.
 
 Straight-sided Tet10, mapped or swept Hex8 and prepared Prism6 layers have
@@ -37,8 +43,8 @@ Hex27 remain on the [roadmap](ROADMAP.md).
 ## Source package
 
 ```sh
-python3 scripts/verify_version.py
-python3 scripts/package_source.py --preserve-source-manifest --output out/paacs-mesh-1.2.0-rc.4.zip
+python3 scripts/verify_version.py --final
+python3 scripts/package_source.py --preserve-source-manifest --output out/paacs-mesh-1.2.0.zip
 ```
 
 The source package includes build definitions, tests, shareable fixtures and

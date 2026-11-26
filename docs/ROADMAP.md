@@ -21,7 +21,7 @@ and [archive format](ARCHIVE_FORMAT.md).
 
 ## Diagnostic development milestone
 
-The unreleased [inspection interface](MESH_INSPECTION.md) adds opt-in Tet4 mean
+The [inspection interface](MESH_INSPECTION.md) in 1.2.0 provides opt-in Tet4 mean
 ratio, interior dihedral and signed scaled-Jacobian measurements; pagination of
 every native cell; spatial distributions; exact trimmed-CAD centroid distances;
 quality-field VTK; and deterministic whole-element cutaways and x-ray views.
@@ -197,7 +197,7 @@ the solver's quantity of interest.
 
 The first [Python interface](PYTHON.md) wraps native STEP import, audited Tet4
 meshing and tagged export, with combined face and box sizing, minimum size and
-growth on the supported single-solid route. Published RC3 wheels support
+growth on the supported single-solid route. The 1.2.0 wheel matrix covers
 CPython 3.12–3.15 on Windows and Linux x64/ARM64 and macOS ARM64, with macOS 15
 as the deployment floor. See the [compatibility matrix](PYTHON_COMPATIBILITY.md)
 for independent build and installation qualification. Optional NumPy

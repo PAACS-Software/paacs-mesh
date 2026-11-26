@@ -1,16 +1,16 @@
 # Python compatibility
 
-The **1.2.0-rc.4 source candidate** targets the expanded matrix below: regular,
+Version **1.2.0** targets the expanded matrix below: regular,
 64-bit CPython 3.12–3.15 on five native platforms. Wheels bundle the CAD runtime and
 install without a compiler or a separate OCCT SDK. Package metadata restricts
 Python to `>=3.12,<3.16`; each interpreter still needs its matching binary wheel.
 
-RC4 requires its own complete qualification. Its matching GitHub release carries
+Stable 1.2.0 requires its own complete qualification. Its matching GitHub release carries
 the publication receipts. The expanded distribution implementation passed the
 historical qualification recorded below; that evidence does not qualify the
-current engine changes.
+current versioned release.
 Official releases pass the release gates from their own immutable tagged source
-before publication. Published RC3 files and their tag remain immutable. The
+before publication. Published release-candidate files and tags remain immutable. The
 earlier `1.2.0rc2` release remains limited to
 CPython 3.12 on Windows x64, macOS ARM64 and Linux x64; its files are unchanged.
 
@@ -33,10 +33,27 @@ The qualified workflow checkout was clean virtual merge
 `3d79164059bfe274d20c810e8c8255296c5fbc7c`, with source tree
 `eca306ca6e2d9b623f9f58af48832749c3a7187f`. That tree matched the reviewed candidate.
 These implementation artifacts used the earlier development version; they are
-evidence for the expanded matrix, not published RC3 or RC4 files. RC3
-subsequently repeated its own release qualification. RC4 changes native
-construction and resource admission and requires fresh complete qualification
-from its own versioned source; these historical runs establish no RC4 result.
+evidence for the expanded matrix, not published RC3, RC4 or stable files. RC3
+and RC4 subsequently repeated qualification from their own versioned sources.
+These historical runs do not establish a stable 1.2.0 result.
+
+### RC4 publication evidence
+
+RC4 used source commit `7aa215890268a64d63760b2497d82ffd7544ba29`, whose tree
+`670c0df9976d3fbe20965aab120308973511d17c` matched the pre-tag qualified tree.
+
+- [Native qualification](https://github.com/PAACS-Software/paacs-mesh/actions/runs/45752886648)
+  passed all seven jobs.
+- [Python qualification](https://github.com/PAACS-Software/paacs-mesh/actions/runs/45752886693)
+  passed all 55 jobs.
+- [Tagged-source publication](https://github.com/PAACS-Software/paacs-mesh/actions/runs/45762427424)
+  passed all 60 jobs, including a fresh complete wheel/consumer matrix, assembly,
+  source assets, Trusted Publishing and the package-index installation check.
+
+The [RC4 release](https://github.com/PAACS-Software/paacs-mesh/releases/tag/v1.2.0-rc.4)
+retains source and qualification receipts, including the independent Windows
+PyPI installation record. These receipts qualify RC4 only; stable 1.2.0 must
+repeat the required checks with its own versioned artifacts.
 
 ## Required artifacts
 
@@ -142,7 +159,7 @@ their existing toolchain selection.
 
 ## Publication gate
 
-RC4 publication requires all 20 wheels and 28 independent consumers to pass from one
+Stable publication requires all 20 wheels and 28 independent consumers to pass from one
 clean immutable source revision, along with the native regression checks and
 release assembly checks. Before tagging, record all seven native and all 55 Python
 jobs and verify their tested tree matches merged main and the tag target. Assembly

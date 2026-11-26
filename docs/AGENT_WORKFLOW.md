@@ -93,7 +93,7 @@ with `assembly="conforming"`. Multiple independent parts retain their body
 identities under the default `preserve_parts` policy. Material interference is
 reported; overlapping part meshes do not become one non-overlapping domain.
 
-RC4 candidate bindings provide opt-in [construction effort and stage
+The 1.2.0 bindings provide opt-in [construction effort and stage
 caps](CONSTRUCTION_BUDGETS.md) for the compatible single-solid Tet4 route.
 `construction_effort="legacy"` remains the default; `auto` and `thorough` can
 allocate more effort and reserve a share for bulk interior placement. Optional
@@ -110,11 +110,11 @@ the effort names, default and cap names supported by the installed build.
 
 ## What a diagnostic means
 
-The RC4 candidate interface adds [per-element mesh inspection](MESH_INSPECTION.md)
+The 1.2.0 interface provides [per-element mesh inspection](MESH_INSPECTION.md)
 and [explicit Python request signatures](API_USABILITY.md). Those operations
 are opt-in and separate from the report-only `diagnose()` operation below.
 See the [schema and issue-code reference](DIAGNOSTIC_SCHEMAS.md) for machine
-contracts. RC4 uses the complete release qualification gates; published RC3
+contracts. These interfaces were introduced in RC4; published RC3
 wheels retain their original interface.
 
 `pm.diagnose(mesh_or_report, max_issues=32)` accepts a native mesh or its report,

@@ -18,7 +18,7 @@ license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "Paul LeDewhurst" }]
 maintainers = [{ name = "PAACS Software Ltd." }]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
     "Programming Language :: C++",
     "Programming Language :: Python :: 3",

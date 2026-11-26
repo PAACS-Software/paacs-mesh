@@ -1,6 +1,6 @@
 # Diagnostic contracts and issue codes
 
-This reference includes RC4 candidate interfaces. Published RC3 wheels retain
+This reference describes 1.2.0 interfaces introduced in RC4. Published RC3 wheels retain
 their original interface. Discover an installed
 build with `paacs-mesh capabilities --json`; package version alone does not
 identify a locally built development artifact. Preserve its source commit too.
@@ -12,9 +12,9 @@ versions when they cannot interpret the evidence safely.
 `pm.capabilities()` and the CLI return `paacs-mesh-capabilities-v1`. The object
 contains `package_version`, `engine_version`, `units`, `operations`,
 `cli_commands`, formats, selection predicates, controls, recovery and assembly
-restrictions, diagnostic limits and explicit limitations. RC4 bindings
+restrictions, diagnostic limits and explicit limitations. The 1.2.0 bindings
 also describe `mesh_inspection`, `cad_proximity`, `mesh_visualization` and
-`mesh_comparison`. The RC4 `controls` object additionally lists
+`mesh_comparison`. The `controls` object additionally lists
 `construction_efforts`, `construction_default`, `construction_stage_caps` and
 `construction_caps_override_overall_resources=False`. For example:
 
@@ -265,7 +265,7 @@ than inventing a policy or completion certificate. Capability discovery adds
 `resources.policies`, `default`, `explicit_limits_override_policy`,
 `logical_work_is_cpu_instructions` and `modeled_memory_is_OS_hard_limit`.
 
-New RC4 Python meshing calls, new recipes and direct STEP CLI requests
+New 1.2.0 Python meshing calls, new recipes and direct STEP CLI requests
 default to `normal`. Saved recipes retain their policy; missing-policy older
 recipes and the C++ options aggregate retain literal `bounded` defaults.
 Normal with omitted work retains the native 512 MiB modeled allowance unless

@@ -1,7 +1,7 @@
 # Python STEP interface
 
 The Python distribution calls the C++ STEP importer and Tet4 mesher in process.
-The **1.2.0rc4 candidate** targets regular, **64-bit CPython 3.12–3.15**
+Version **1.2.0** targets regular, **64-bit CPython 3.12–3.15**
 on these platforms:
 
 | System | Architecture | Compatibility target |
@@ -17,21 +17,21 @@ Installation needs Python and pip, with no compiler, OCCT SDK or `PATH` setup.
 
 The expanded implementation passed 20 wheel builders, 28 clean installations and
 the native regression jobs in [PR #11](https://github.com/PAACS-Software/paacs-mesh/pull/11).
-RC4 requires qualification from its own tagged source before publication;
+Stable 1.2.0 requires qualification from its own tagged source before publication;
 the matching GitHub release carries its publication receipts. See
 the [compatibility evidence and matrix](PYTHON_COMPATIBILITY.md) for exact targets,
 NumPy checks and source identities. Intel macOS, Python 2, PyPy, 32-bit, debug and
 free-threaded Python ABIs are excluded.
 
-Install the exact candidate:
+Install the exact release:
 
 ```sh
-python -m pip install paacs-mesh==1.2.0rc4
+python -m pip install paacs-mesh==1.2.0
 ```
 
-Published RC3 files and their tag remain immutable. The earlier `1.2.0rc2`
+Published release-candidate files and tags remain immutable. The earlier `1.2.0rc2`
 release supports CPython 3.12 on Windows x64, macOS ARM64 and Linux x64 only. Use
-`python -m pip install --pre paacs-mesh` to install the newest available candidate;
+`python -m pip install --pre paacs-mesh` to allow prereleases when selecting a version;
 see [package releases](PYPI_RELEASE.md) for the qualification and publication
 process.
 
@@ -39,13 +39,13 @@ Development wheels are also available from the
 [Python STEP wheel workflow](../.github/workflows/python-wheel.yml). Choose the
 artifact matching the interpreter, system and architecture, check its qualification
 receipts, extract it and install its
-`.whl` file. For example, an RC4 Windows x64 artifact for CPython 3.12 installs with:
+`.whl` file. For example, a 1.2.0 Windows x64 artifact for CPython 3.12 installs with:
 
 ```powershell
-python -m pip install --force-reinstall --only-binary=:all: .\paacs_mesh-1.2.0rc4-cp312-cp312-win_amd64.whl
+python -m pip install --force-reinstall --only-binary=:all: .\paacs_mesh-1.2.0-cp312-cp312-win_amd64.whl
 ```
 
-Development artifacts can share the candidate version; `--force-reinstall`
+Development artifacts can share a version string; `--force-reinstall`
 ensures an updated wheel replaces an earlier artifact with that version.
 
 ## Import, mesh and export
@@ -80,18 +80,18 @@ python -m paacs_mesh part.step part.vtk --size 0.7
 
 Installed wheels also provide the `paacs-mesh` command with the same arguments.
 
-For RC4 per-element and spatial quality inspection, see
+For per-element and spatial quality inspection in 1.2.0, see
 [mesh inspection](MESH_INSPECTION.md). For Python request discovery and guarded
 selection controls, see [API usability](API_USABILITY.md). These additions are
-part of the RC4 source candidate; published RC3 wheels retain their original
-interface. Development artifacts still require matching source receipts.
+included in 1.2.0 and were introduced in RC4; published RC3 wheels retain their
+original interface. Development artifacts still require matching source receipts.
 
 For paginated CAD inspection, capability discovery, saved recipe execution and
 human/JSON diagnostic summaries, see [inspection and diagnostics](AGENT_WORKFLOW.md).
 
 ### Initial interior placement
 
-In RC4, Normal AUTO first considers verified whole-body primitive,
+In 1.2.0, Normal AUTO first considers verified whole-body primitive,
 affine-block and linear-sweep capabilities for compatible constant-size requests.
 Other eligible single-solid Tet4 requests construct wall sites before filling
 interior gaps. Face and volume controls retain the size-field front. The default
@@ -253,7 +253,7 @@ provides `--advancing-interior-front` and `--no-advancing-interior-front`.
 
 ### Construction effort and limits (RC4)
 
-RC4 bindings expose `construction_effort="legacy"` and four
+The 1.2.0 bindings expose `construction_effort="legacy"` and four
 optional positive integer caps: `max_surface_points`,
 `max_surface_chord_points`, `max_interior_candidates` and `max_interior_sites`.
 The `auto` and `thorough` effort policies are opt-in. They adjust bounded
@@ -263,9 +263,9 @@ validity checks or guarantee achieved sizing or improved quality.
 
 See [construction effort and caps](CONSTRUCTION_BUDGETS.md) for per-face surface
 scope, native stage receipts, CLI flags and saved-recipe behaviour. These
-controls require RC4 bindings and are not included in published RC3 wheels.
+controls are included in 1.2.0 and RC4 bindings, and are absent from RC3 wheels.
 
-RC4 bindings use `resource_policy="normal"` for new Python
+The 1.2.0 bindings use `resource_policy="normal"` for new Python
 and direct STEP CLI requests. Use `resource_policy="bounded"` to retain
 historical resource admission. Construction effort remains `"legacy"`.
 An omitted `max_work` uses the policy allowance: 50 million logical units for
@@ -283,9 +283,10 @@ explicitly. The direct STEP CLI exposes `--resource-policy`, `--max-working-byte
 The [publishing workflow](../.github/workflows/publish-python.yml) prepares the
 complete wheel set from the [compatibility matrix](PYTHON_COMPATIBILITY.md) and
 requires independent installed-wheel consumers from the same source commit.
-Historical expanded-matrix qualification does not qualify RC4. Its versioned
+Historical expanded-matrix or release-candidate qualification does not qualify
+stable 1.2.0. Its versioned
 artifacts must pass the complete checks before upload through Trusted Publishing.
-Previous RC2 and RC3 files remain immutable; RC2 retains its original CPython 3.12
+Previous release-candidate files remain immutable; RC2 retains its original CPython 3.12
 compatibility. Only the
 version actually installed determines the available platforms and features.
 The [release guide](PYPI_RELEASE.md) records the publication checks.
@@ -367,10 +368,10 @@ four requests on the same cylinder, with measured sizes and mesh sections.
 
 ## NumPy mesh arrays
 
-NumPy is optional. Install the `numpy` extra with the exact candidate:
+NumPy is optional. Install the `numpy` extra with the exact release:
 
 ```powershell
-python -m pip install "paacs-mesh[numpy]==1.2.0rc4"
+python -m pip install "paacs-mesh[numpy]==1.2.0"
 ```
 
 For a wheel in a local directory, add `--find-links .` and use

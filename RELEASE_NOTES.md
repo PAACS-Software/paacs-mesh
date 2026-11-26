@@ -1,21 +1,27 @@
-# PAACS Mesh 1.2.0-rc.4
+# PAACS Mesh 1.2.0
 
-This candidate changes native Tet4 construction and resource admission, adds
-bounded mesh inspection and comparison, and improves supported STEP routes.
-Release qualification uses the gates below. Local studies identify their own
-source, platform and settings; they do not replace the complete release gates.
-The matching GitHub release carries the publication receipts.
+Version 1.2.0 retains the RC4 meshing algorithms, defaults and Python interfaces.
+It provides a versioned baseline for external applications and reproducible
+research. Stable package numbering describes the documented release scope;
+native STEP meshing remains a preview with explicit unsupported cases and
+quality limitations. Packaging maturity is classified as Beta.
+
+The final versioned source must pass the qualification gates below before
+publication. The matching GitHub release carries its source and publication
+receipts. Earlier local studies retain their own source, platform and settings;
+they do not substitute for the stable release checks.
 
 ## Python installation and compatibility
 
-Install the exact candidate with:
+Install the exact release with:
 
 ```sh
-python -m pip install paacs-mesh==1.2.0rc4
+python -m pip install paacs-mesh==1.2.0
 ```
 
-The source version is `1.2.0-rc.4`; Python package tools normalize it to
-`1.2.0rc4`. The existing RC3 tag and published files remain immutable.
+The source and Python package version are both `1.2.0`. Existing release-candidate
+tags and published files remain immutable; stable wheels require their own build
+and qualification.
 
 The required matrix remains regular 64-bit CPython 3.12–3.15 on Windows x64 and
 Windows 11 ARM64, Linux x64/ARM64 with glibc 2.28 or newer, and macOS ARM64 with
@@ -109,9 +115,10 @@ models locally on Windows with the final experimental setting, preserving all
 20 baseline successes and their CAD tags; 14 archives stayed byte-identical.
 Its rounded profiles retain poor quality tails. This is a separate owned-model
 study, not a rerun or a new score for the original 51 downloaded CAD models.
-The [51-file qualification](docs/RELEASE_READINESS.md) remains its historical
-32-published-mesh baseline. Paired construction, source-recovery and resource
-studies retain their complete attempts and limitations.
+The [historical 51-file qualification](docs/RELEASE_READINESS.md) records its
+32-published-mesh baseline. Stable-release corpus results must identify their own
+package, options, validation and timing scope. Paired construction, source-recovery
+and resource studies retain their complete attempts and limitations.
 
 A separate benchmark preparation prototype qualifies guarded copying of valid
 owned CAD and explicit selected-fillets defeaturing. Invalid-CAD repair and
@@ -134,11 +141,12 @@ and performs a fresh hash-pinned pip install, import, mesh, export and CLI check
 See [compatibility](docs/PYTHON_COMPATIBILITY.md) and
 [publication](docs/PYPI_RELEASE.md) for the required process.
 
-The CMake package version remains `1.2.0`; SDK and CLI report `1.2.0-rc.4`.
+The CMake package, SDK and CLI report `1.2.0`.
 Public C++ request/report layouts changed: rebuild C++ consumers with matching
 headers, libraries and toolchain. Mesh archive format v1 and C bridge ABI version
 1 remain unchanged. The C++ core builds independently of OCCT. The project remains
 MPL 2.0, copyright PAACS Software Ltd.
 
-Earlier distribution changes are in the [RC3 notes](docs/RELEASE_NOTES_1.2.0-rc.3.md)
-and [changelog](CHANGELOG.md).
+The [RC4 notes](https://github.com/PAACS-Software/paacs-mesh/blob/v1.2.0-rc.4/RELEASE_NOTES.md),
+[RC3 notes](docs/RELEASE_NOTES_1.2.0-rc.3.md) and [changelog](CHANGELOG.md)
+retain the earlier release history.

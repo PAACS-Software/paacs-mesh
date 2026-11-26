@@ -1,7 +1,7 @@
 # Python requests and failure diagnostics
 
-This guide describes RC4 candidate additions. Use matching bindings; published
-RC3 wheels retain their original interface. A development artifact's version
+This guide describes the 1.2.0 API, including additions introduced in RC4.
+Published RC3 wheels retain their original interface. A development artifact's version
 number alone does not identify its Python features.
 
 `CadModel.mesh()` exposes its supported keyword arguments and defaults through
