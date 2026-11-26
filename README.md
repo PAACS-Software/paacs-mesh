@@ -12,6 +12,11 @@ debug UI bridge are optional.
 **Release line** · [1.2.0](RELEASE_NOTES.md) ·
 [Release qualification](docs/STABLE_1.2.0_QUALIFICATION.md) · [Roadmap](docs/ROADMAP.md)
 
+The source tree is on the unpublished 1.3 development line. Its opt-in
+[boundary-to-volume research interface](docs/EXPERIMENTAL_VOLUME.md) saves a
+checked CAD boundary before filling and accepts prescribed interior points.
+Published 1.2.0 wheels remain the released reference.
+
 ## Build a first mesh
 
 The reference build uses GCC 16, C++26, CMake 3.30 or newer and Ninja.
