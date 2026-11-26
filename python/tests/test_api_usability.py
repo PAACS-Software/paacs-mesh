@@ -48,7 +48,7 @@ class ApiUsabilityTests(unittest.TestCase):
             resource_policy=cad._DEFAULT_RESOURCE_POLICY,
             max_chord_error=None, max_relative_volume_error=None, curvature_points_per_turn=None,
             initial_topology_quality=None, native_source_fallback=False, boundary_first=False,
-            trimmed_ray_witnesses=False)
+            trimmed_ray_witnesses=False, thin_region_ordering=False)
         self.assertEqual(set(signature.parameters), {"self", "size", *expected})
         for name, default in expected.items():
             self.assertEqual(signature.parameters[name].default, default)
