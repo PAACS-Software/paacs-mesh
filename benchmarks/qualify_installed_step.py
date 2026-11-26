@@ -32,6 +32,12 @@ import uuid
 
 SCHEMA = "paacs-installed-step-plan-v1"
 MAX_JSON = 32 * 1024**2
+SAVE_RETRY_DELAYS = (.02, .04, .08, .16)  # Five attempts; at most .30 s programmed backoff.
+RECEIPT_SCHEMAS = {"paacs-installed-step-attempt-v1", "paacs-installed-step-controller-v1", "paacs-installed-step-results-v1"}
+IO_METRICS = {"save_calls": 0, "write_attempts": 0, "sharing_retries": 0,
+    "retry_requested_wait_seconds": 0., "retry_wait_seconds": 0., "sharing_exhaustions": 0,
+    "successful_save_calls": 0, "failed_save_calls": 0, "failed_io_calls": 0,
+    "completed_save_seconds": 0., "last_io_failure": None}
 # SYNCHRONIZE, QUERY(_LIMITED)_INFORMATION, VM_READ, SET_QUOTA and TERMINATE.
 # SET_QUOTA + TERMINATE are required to assign an existing redirector child to our job.
 WINDOWS_WORKER_RIGHTS = 0x00101511
@@ -56,14 +62,76 @@ def sha(path):
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
-def save(path, value):
-    data = (json.dumps(value, indent=2, allow_nan=False) + "\n").encode("utf-8")
-    if len(data) > MAX_JSON:
-        raise ValueError("JSON output exceeds 32 MiB allowance")
+def io_snapshot(current_started=None):
+    return {**IO_METRICS, "current_save_elapsed_seconds": 0. if current_started is None else time.perf_counter()-current_started,
+        "scope": "process cumulative; receipt snapshot precedes its own atomic publication; every retry wait is included before the next attempt"}
+
+
+def sharing_error(error):
+    return getattr(error, "winerror", None) in (5, 32, 33) or (os.name == "nt" and isinstance(error, PermissionError))
+
+
+def save(path, value, *, elapsed=None):
+    """Atomically retain JSON; retry only bounded Windows sharing failures.
+
+    Receipt payloads are re-encoded after a retry so even a final write records
+    its own preceding retry/wait costs. Completed-call counters necessarily
+    exclude the publication being described; controller process time includes
+    worker final writes, and returned attempt totals include controller writes.
+    """
+    started, failed = time.perf_counter(), True
+    IO_METRICS["save_calls"] += 1
     path = Path(path)
     temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_bytes(data)
-    temporary.replace(path)
+    try:
+        for attempt in range(len(SAVE_RETRY_DELAYS)+1):
+            IO_METRICS["write_attempts"] += 1
+            if isinstance(value, dict) and value.get("schema") in RECEIPT_SCHEMAS:
+                value["io"] = io_snapshot(started)
+                if elapsed is not None:
+                    value[elapsed[0]] = time.perf_counter()-elapsed[1]
+            data = (json.dumps(value, indent=2, allow_nan=False) + "\n").encode("utf-8")
+            if len(data) > MAX_JSON:
+                raise ValueError("JSON output exceeds 32 MiB allowance")
+            try:
+                temporary.write_bytes(data)
+                temporary.replace(path)
+                IO_METRICS["successful_save_calls"] += 1
+                failed = False
+                return
+            except OSError as error:
+                retryable = sharing_error(error)
+                if not retryable or attempt == len(SAVE_RETRY_DELAYS):
+                    if retryable:
+                        IO_METRICS["sharing_exhaustions"] += 1
+                    error.paacs_atomic_io = {"path": str(path), "attempts": attempt+1, "retryable_windows_sharing": retryable,
+                        "errno": error.errno, "winerror": getattr(error, "winerror", None)}
+                    IO_METRICS["failed_io_calls"] += 1
+                    IO_METRICS["last_io_failure"] = error.paacs_atomic_io
+                    raise
+                delay = SAVE_RETRY_DELAYS[attempt]
+                IO_METRICS["sharing_retries"] += 1
+                IO_METRICS["retry_requested_wait_seconds"] += delay
+                at = time.perf_counter()
+                time.sleep(delay)
+                IO_METRICS["retry_wait_seconds"] += time.perf_counter()-at
+    finally:
+        IO_METRICS["completed_save_seconds"] += time.perf_counter()-started
+        if failed:
+            IO_METRICS["failed_save_calls"] += 1
+
+
+def retain_final(path, value, *, elapsed=None):
+    """A locked primary receipt gets a distinct, bounded final fallback file."""
+    try:
+        save(path, value, elapsed=elapsed)
+        return path
+    except OSError as error:
+        value.update(status="infrastructure_failed", infrastructure_error_type=type(error).__name__,
+            infrastructure_error=str(error)[:4096], io_failure=getattr(error, "paacs_atomic_io", None))
+        fallback = path.with_name(path.stem + "-final.json")
+        save(fallback, value, elapsed=elapsed)
+        return fallback
 
 
 def load(path):
@@ -337,6 +405,7 @@ def worker(job_path):
     output = Path(job["output"])
     record = {"schema": "paacs-installed-step-attempt-v1", "id": job["id"], "pid": os.getpid(),
         "started_utc": now(), "phase": "controller_handshake", "status": "running", "native_status": "not_attempted",
+        "mesh_call_started": False, "io_start": io_snapshot(),
         "source_sha256": job["source_sha256"], "relative_path": job["relative_path"], "profile": job["profile"],
         "size_mm": job["size_mm"], "size_factor": job["size_factor"], "options": job["options"],
         "allowances": job["allowances"], "external_retry_count": 0,
@@ -345,9 +414,9 @@ def worker(job_path):
         if phase:
             record["phase"] = phase
         record["worker_seconds"] = time.perf_counter() - began
-        save(output / "worker.json", record)
-    checkpoint()
+        save(output / "worker.json", record, elapsed=("worker_seconds", began))
     try:
+        checkpoint()
         await_controller(job_path, job)
         checkpoint("package_import")
         import paacs_mesh as pm
@@ -371,6 +440,9 @@ def worker(job_path):
         checkpoint("meshing")
         at = time.perf_counter()
         try:
+            # No fallible receipt write separates this marker from API entry.
+            # A failed pre-call checkpoint therefore remains not_attempted.
+            record.update(mesh_call_started=True, native_status="running")
             mesh = model.mesh(size, **job["options"])
         except Exception as error:
             record["mesh_call_seconds"] = time.perf_counter() - at
@@ -424,11 +496,26 @@ def worker(job_path):
             record.update(status="import_refused", reason=getattr(error, "reason", report.get("reason")),
                 error_type=type(error).__name__, error=str(error)[:4096])
             return 0
-        record.update(status="qualification_failed", error_type=type(error).__name__, error=str(error)[:4096])
+        record.update(status="infrastructure_failed" if isinstance(error, OSError) else "qualification_failed",
+            error_type=type(error).__name__, error=str(error)[:4096], io_failure=getattr(error, "paacs_atomic_io", None))
         return 1
     finally:
         record["finished_utc"] = now()
-        checkpoint()
+        if IO_METRICS["failed_io_calls"] > record["io_start"]["failed_io_calls"]:
+            record.update(status="infrastructure_failed", io_failure=IO_METRICS["last_io_failure"])
+        try:
+            retain_final(output / "worker.json", record, elapsed=("worker_seconds", began))
+        except OSError as error:
+            # Both receipt names may be unavailable (e.g. a read-only directory).
+            # The controller's already-open log retains a bounded final signal.
+            signal_record = {"schema": "paacs-installed-worker-terminal-io-failure-v1", "pid": os.getpid(),
+                "status": "infrastructure_failed", "phase": record["phase"], "native_status": record["native_status"],
+                "mesh_call_started": record["mesh_call_started"], "source_sha256": record["source_sha256"],
+                "token": job["handshake_token"],
+                "error_type": type(error).__name__, "error": str(error)[:4096], "io": io_snapshot(),
+                "io_failure": getattr(error, "paacs_atomic_io", None)}
+            print(json.dumps(signal_record, allow_nan=False), file=sys.stderr, flush=True)
+            raise
 
 
 def await_controller(job_path, job):
@@ -763,6 +850,8 @@ class WindowsMemory:
 
 
 def final_status(receipt, returncode, stop, output):
+    if receipt.get("status") == "infrastructure_failed":
+        return "infrastructure_failed"
     if stop:
         return stop + "_native_outcome_not_recertified"
     if returncode != 0:
@@ -773,6 +862,36 @@ def final_status(receipt, returncode, stop, output):
     if receipt.get("status") != "succeeded" or receipt.get("native_status") != "qualified" or not all((output / name).is_file() for name in required):
         return "incomplete_result"
     return "succeeded"
+
+
+def worker_receipt(output, expected_pid, job=None):
+    # A terminal log signal is used only for the verified process and only when
+    # both final receipt publications failed. Never parse an unbounded log.
+    log = output / "worker.log"
+    if log.is_file():
+        with log.open("rb") as stream:
+            stream.seek(0, 2)
+            stream.seek(max(0, stream.tell()-64*1024))
+            lines = stream.read(64*1024).decode("utf-8", errors="replace").splitlines()
+        for line in reversed(lines):
+            try:
+                item = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(item, dict) or item.get("schema") != "paacs-installed-worker-terminal-io-failure-v1":
+                continue
+            matches_job = (job is not None and item.get("token") == job["handshake_token"]
+                and item.get("source_sha256") == job["source_sha256"] and type(item.get("pid")) is int)
+            authenticated = matches_job and expected_pid is not None and item.get("pid") == expected_pid
+            startup_failure = matches_job and expected_pid is None and item.get("mesh_call_started") is False
+            if authenticated or startup_failure:
+                finite_tree(item)
+                return item
+    for name in ("worker-final.json", "worker.json"):
+        path = output / name
+        if path.is_file():
+            return load(path)
+    return {}
 
 
 def validate_hello(hello, job, job_digest):
@@ -800,6 +919,7 @@ def terminate_launcher(launcher):
 
 
 def run_attempt(python, job, output):
+    began, attempt_io_start = time.perf_counter(), io_snapshot()
     output.mkdir()
     scratch = output / "scratch"
     scratch.mkdir()
@@ -808,11 +928,12 @@ def run_attempt(python, job, output):
     save(job_path, job)
     job_digest = sha(job_path)
     command = [str(python), "-I", str(Path(__file__).resolve()), "--worker", str(job_path)]
-    began, memory, peak, stop = time.perf_counter(), WindowsMemory(), None, None
+    memory, peak, stop = WindowsMemory(), None, None
     control, process, acknowledged, pending_exception = None, None, False, None
     worker_exit, cleanup_errors = None, []
     receipt = {"schema": "paacs-installed-step-controller-v1", "id": job["id"], "job": job,
         "command": command, "runner_sha256": sha(__file__), "started_utc": now(), "status": "running",
+        "io_start": attempt_io_start,
         "process_memory_limit_enforced": False,
         "memory_scope": "modeled native memory is enforced by mesher; sampled actual-worker peak working-set watchdog is Windows-only; unavailable process memory is null",
         "vtk_validation_scope": "native export and byte hash; VTK tags are not independently parsed"}
@@ -828,10 +949,10 @@ def run_attempt(python, job, output):
             save(output / "controller.json", receipt)
             return receipt
         receipt.update(pid=process.pid, launcher_pid=process.pid)
-        save(output / "controller.json", receipt)
         try:
             control = ProcessControl(process)
             control.contain_launcher()
+            save(output / "controller.json", receipt)
             last_disk = began
             while True:
                 hello_path = output / "worker-hello.json"
@@ -876,8 +997,10 @@ def run_attempt(python, job, output):
                     break
                 time.sleep(.02 if not acknowledged else .1)
         except BaseException as error:
-            stop = "controller_exception"
+            stop = "infrastructure_error" if isinstance(error, OSError) else "controller_exception"
             receipt.update(controller_error_type=type(error).__name__, controller_error=str(error)[:4096])
+            if isinstance(error, OSError):
+                receipt["io_failure"] = getattr(error, "paacs_atomic_io", None)
             if isinstance(error, (KeyboardInterrupt, SystemExit)):
                 pending_exception = error
         finally:
@@ -905,7 +1028,7 @@ def run_attempt(python, job, output):
     if peak is not None and peak > job["allowances"]["max_process_bytes"]:
         stop = stop or "process_memory_stop"
     try:
-        observed = load(output / "worker.json") if (output / "worker.json").is_file() else {}
+        observed = worker_receipt(output, receipt.get("worker_pid"), job)
     except (OSError, ValueError) as error:
         observed = {"status": "malformed_worker_receipt", "error": str(error)[:4096]}
     receipt.update(worker=observed, worker_pid_verified=acknowledged and observed.get("pid") == receipt.get("worker_pid"),
@@ -914,13 +1037,24 @@ def run_attempt(python, job, output):
         durable_output_bytes=final_disk, stop=stop, cleanup_errors=cleanup_errors, finished_utc=now())
     receipt["process_memory_limit_enforced"] = os.name == "nt" and peak is not None
     receipt["status"] = final_status(observed, worker_exit, stop, output)
+    if stop == "infrastructure_error":
+        receipt["status"] = "infrastructure_failed"
     try:
         source_unchanged = sha(job["source"]) == job["source_sha256"]
     except OSError:
         source_unchanged = False
     if (observed and not receipt["worker_pid_verified"]) or not source_unchanged:
         receipt["status"] = "input_or_worker_identity_failed"
-    save(output / "controller.json", receipt)
+        if (source_unchanged and not acknowledged and observed.get("status") == "infrastructure_failed"
+                and observed.get("mesh_call_started") is False):
+            receipt["status"] = "startup_infrastructure_failed"
+    if source_unchanged and stop == "infrastructure_error":
+        receipt["status"] = "infrastructure_failed" if acknowledged else "startup_infrastructure_failed"
+    retain_final(output / "controller.json", receipt, elapsed=("process_seconds", began))
+    # The campaign ledger receives costs through final receipt publication;
+    # that receipt itself explicitly declares its pre-publication snapshot.
+    receipt["process_seconds"] = time.perf_counter()-began
+    receipt["io"] = io_snapshot()
     if pending_exception is not None:
         raise pending_exception
     return receipt
@@ -976,7 +1110,18 @@ def main():
         return 0
     rows = []
     for job in jobs:
-        result = run_attempt(python, job, output / job["id"])
+        started, io_start = time.perf_counter(), io_snapshot()
+        try:
+            result = run_attempt(python, job, output / job["id"])
+        except OSError as error:
+            # Startup or both final receipt names may be unavailable. Preserve
+            # an explicit infrastructure record in the campaign ledger; never
+            # recast an unobserved Native outcome as geometric meshing failure.
+            result = {"schema": "paacs-installed-step-controller-v1", "id": job["id"], "job": job,
+                "status": "infrastructure_failed", "native_status": "unknown_not_recertified",
+                "error_type": type(error).__name__, "error": str(error)[:4096],
+                "io_failure": getattr(error, "paacs_atomic_io", None), "io_start": io_start, "io": io_snapshot(),
+                "process_seconds": time.perf_counter()-started}
         rows.append(result)
         save(output / "results.json", {"schema": "paacs-installed-step-results-v1", "attempts": rows,
             "attempt_count": len(rows), "complete": len(rows) == len(jobs)})

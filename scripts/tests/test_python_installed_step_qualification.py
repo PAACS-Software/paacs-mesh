@@ -6,6 +6,7 @@
 import base64
 from copy import deepcopy
 import hashlib
+import errno
 import importlib.util
 import io
 import json
@@ -59,6 +60,93 @@ class InstalledStepQualificationTests(unittest.TestCase):
             "body_tet4_counts": {"1": 1}, "sizing": {"achieved": {"boundary_faces": {"2": {}, "3": {}}}},
             "quality": {"mean_ratio": {"minimum": .5}}, "metric_conventions": {"reference": "independent controlled test"},
             "bounds": [[0, 0, 0], [1, 1, 1]]}
+
+    @staticmethod
+    def sharing_failure():
+        error = PermissionError(errno.EACCES, "controlled Windows sharing failure")
+        error.winerror = 32
+        return error
+
+    def test_atomic_save_retries_transient_sharing_and_preserves_exact_contents(self):
+        target = self.root / "receipt.json"
+        prior = b'{"prior":true}\n'
+        target.write_bytes(prior)
+        value, calls, clock = {"complete": True, "values": [1, 2, 3]}, [], [100.]
+        replace, before = Path.replace, runner.io_snapshot()
+        def replacing(source, destination):
+            calls.append(destination)
+            if len(calls) == 1:
+                self.assertEqual(target.read_bytes(), prior)
+                raise self.sharing_failure()
+            return replace(source, destination)
+        with patch.object(Path, "replace", new=replacing), patch.object(runner.time, "perf_counter", side_effect=lambda: clock[0]), \
+                patch.object(runner.time, "sleep", side_effect=lambda delay: clock.__setitem__(0, clock[0]+delay)):
+            runner.save(target, value)
+        self.assertEqual(target.read_bytes(), (json.dumps(value, indent=2)+"\n").encode())
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(runner.IO_METRICS["sharing_retries"]-before["sharing_retries"], 1)
+        self.assertAlmostEqual(runner.IO_METRICS["retry_wait_seconds"]-before["retry_wait_seconds"], .02)
+
+    def test_atomic_save_exhaustion_is_bounded_and_nonsharing_errors_are_not_retried(self):
+        target = self.root / "receipt.json"
+        prior = b'{"prior":true}\n'
+        target.write_bytes(prior)
+        before = runner.io_snapshot()
+        with patch.object(Path, "replace", side_effect=self.sharing_failure()) as replace, patch.object(runner.time, "sleep") as sleep:
+            with self.assertRaises(PermissionError) as caught:
+                runner.save(target, {"new": True})
+        self.assertEqual(replace.call_count, 5)
+        self.assertEqual([item.args[0] for item in sleep.call_args_list], list(runner.SAVE_RETRY_DELAYS))
+        self.assertLess(sum(runner.SAVE_RETRY_DELAYS), 1)
+        self.assertEqual(caught.exception.paacs_atomic_io["attempts"], 5)
+        self.assertEqual(target.read_bytes(), prior)
+        self.assertEqual(runner.IO_METRICS["sharing_exhaustions"]-before["sharing_exhaustions"], 1)
+        with patch.object(Path, "replace", side_effect=OSError(errno.EIO, "controlled disk failure")) as replace, \
+                patch.object(runner.time, "sleep") as sleep:
+            with self.assertRaises(OSError):
+                runner.save(target, {"new": True})
+        self.assertEqual(replace.call_count, 1)
+        sleep.assert_not_called()
+        self.assertEqual(target.read_bytes(), prior)
+
+    def test_receipt_retains_its_own_retry_wait_and_final_exhaustion_cost(self):
+        target = self.root / "worker.json"
+        prior = b'{"prior":true}\n'
+        target.write_bytes(prior)
+        replace, before = Path.replace, runner.io_snapshot()
+        clock = [100.]
+        def replacing(source, destination):
+            if destination == target:
+                raise self.sharing_failure()
+            return replace(source, destination)
+        value = {"schema": "paacs-installed-step-attempt-v1", "status": "succeeded", "pid": 1}
+        with patch.object(Path, "replace", new=replacing), patch.object(runner.time, "perf_counter", side_effect=lambda: clock[0]), \
+                patch.object(runner.time, "sleep", side_effect=lambda delay: clock.__setitem__(0, clock[0]+delay)):
+            final = runner.retain_final(target, value)
+        self.assertEqual(target.read_bytes(), prior)
+        self.assertEqual(final.name, "worker-final.json")
+        retained = runner.load(final)
+        self.assertEqual(retained["status"], "infrastructure_failed")
+        self.assertEqual(retained["io"]["sharing_exhaustions"]-before["sharing_exhaustions"], 1)
+        self.assertEqual(retained["io"]["failed_io_calls"]-before["failed_io_calls"], 1)
+        self.assertAlmostEqual(retained["io"]["retry_wait_seconds"]-before["retry_wait_seconds"], .3)
+
+    def test_successful_final_receipt_includes_its_own_transient_retry(self):
+        target, clock, before = self.root / "worker.json", [100.], runner.io_snapshot()
+        replace, attempts = Path.replace, []
+        def replacing(source, destination):
+            attempts.append(destination)
+            if len(attempts) == 1:
+                raise self.sharing_failure()
+            return replace(source, destination)
+        value = {"schema": "paacs-installed-step-attempt-v1", "status": "succeeded"}
+        with patch.object(Path, "replace", new=replacing), patch.object(runner.time, "perf_counter", side_effect=lambda: clock[0]), \
+                patch.object(runner.time, "sleep", side_effect=lambda delay: clock.__setitem__(0, clock[0]+delay)):
+            runner.retain_final(target, value)
+        retained = runner.load(target)
+        self.assertEqual(retained["status"], "succeeded")
+        self.assertEqual(retained["io"]["sharing_retries"]-before["sharing_retries"], 1)
+        self.assertAlmostEqual(retained["io"]["retry_wait_seconds"]-before["retry_wait_seconds"], .02)
 
     def test_explicit_plan_is_finite_pinned_and_serial(self):
         job, = self.jobs()
@@ -340,6 +428,75 @@ class InstalledStepQualificationTests(unittest.TestCase):
             result = runner.run_attempt(Path(sys.executable), job, self.root / "missing-pid")
         self.assertEqual(result["status"], "input_or_worker_identity_failed")
 
+    def test_post_spawn_receipt_exhaustion_cleans_up_controlled_process(self):
+        job, = self.jobs()
+        replace, controls = Path.replace, []
+        def replacing(source, destination):
+            if destination.name == "controller.json" and json.loads(source.read_text()).get("pid") is not None:
+                raise self.sharing_failure()
+            return replace(source, destination)
+        def supervise(child):
+            control = self.ControlledProcesses(child)
+            controls.append(control)
+            return control
+        with patch.object(Path, "replace", new=replacing), patch.object(runner.time, "sleep"), \
+                patch.object(runner.subprocess, "Popen", side_effect=self.controlled_child), \
+                patch.object(runner, "WindowsMemory", return_value=SimpleNamespace(sample=lambda child: None)), \
+                patch.object(runner, "ProcessControl", side_effect=supervise):
+            result = runner.run_attempt(Path(sys.executable), job, self.root / "locked-controller")
+        self.assertTrue(controls[0].stopped)
+        self.assertTrue(controls[0].closed)
+        self.assertFalse(result["worker_acknowledged"])
+        self.assertEqual(result["status"], "infrastructure_failed")
+        self.assertTrue((self.root / "locked-controller/controller-final.json").is_file())
+
+    def test_post_spawn_io_failure_stays_infrastructure_when_final_primary_write_recovers(self):
+        job, = self.jobs()
+        replace, failures = Path.replace, [0]
+        def replacing(source, destination):
+            if destination.name == "controller.json" and json.loads(source.read_text()).get("pid") is not None and failures[0] < 5:
+                failures[0] += 1
+                raise self.sharing_failure()
+            return replace(source, destination)
+        with patch.object(Path, "replace", new=replacing), patch.object(runner.time, "sleep"), \
+                patch.object(runner.subprocess, "Popen", side_effect=self.controlled_child), \
+                patch.object(runner, "WindowsMemory", return_value=SimpleNamespace(sample=lambda child: None)), \
+                patch.object(runner, "ProcessControl", self.ControlledProcesses):
+            result = runner.run_attempt(Path(sys.executable), job, self.root / "controller-recovers")
+        self.assertEqual(result["status"], "startup_infrastructure_failed")
+        self.assertFalse(result["worker_acknowledged"])
+        self.assertEqual(runner.load(self.root / "controller-recovers/controller.json")["status"], "startup_infrastructure_failed")
+
+    def test_worker_checkpoint_exhaustion_is_infrastructure_before_mesh_entry(self):
+        for phase in ("controller_handshake", "meshing"):
+            with self.subTest(phase=phase):
+                job, = self.jobs()
+                output = self.root / ("locked-" + phase)
+                output.mkdir()
+                job["output"] = str(output)
+                path = output / "job.json"
+                runner.save(path, job)
+                model = SimpleNamespace(body_tags=[1], face_tags=[2, 3], info={}, source_sha256=self.row["sha256"], mesh=Mock())
+                pm = SimpleNamespace(read_step=Mock(return_value=model))
+                replace = Path.replace
+                def replacing(source, destination):
+                    value = json.loads(source.read_text())
+                    if destination.name == "worker.json" and value.get("phase") == phase and value.get("status") == "running":
+                        raise self.sharing_failure()
+                    return replace(source, destination)
+                with patch.object(Path, "replace", new=replacing), patch.object(runner.time, "sleep"), \
+                        patch.dict(sys.modules, {"paacs_mesh": pm}), patch.object(runner, "await_controller"), \
+                        patch.object(runner, "package_identity", return_value={}) as identity:
+                    self.assertEqual(runner.worker(path), 1)
+                retained = runner.load(output / "worker.json")
+                self.assertEqual(retained["status"], "infrastructure_failed")
+                self.assertEqual(retained["native_status"], "not_attempted")
+                self.assertFalse(retained["mesh_call_started"])
+                self.assertEqual(retained["io_failure"]["attempts"], 5)
+                model.mesh.assert_not_called()
+                if phase == "controller_handshake":
+                    identity.assert_not_called()
+
     def test_disk_sampling_tolerates_atomic_temporary_bundle_rename(self):
         gone = SimpleNamespace(is_file=lambda: True, stat=lambda: (_ for _ in ()).throw(FileNotFoundError()))
         present = SimpleNamespace(is_file=lambda: True, stat=lambda: SimpleNamespace(st_size=17))
@@ -498,13 +655,56 @@ class InstalledStepQualificationTests(unittest.TestCase):
     def test_completed_worker_after_hard_deadline_is_not_recertified(self):
         job, = self.jobs()
         job["allowances"]["hard_seconds"] = 1
-        ticks = iter((0, .1, 1.5))
+        clock = [0.]
+        class LateCleanup(self.ControlledProcesses):
+            def cleanup(inner, stop=False):
+                result = super().cleanup(stop=stop)
+                clock[0] = 1.5
+                return result
         with patch.object(runner.subprocess, "Popen", side_effect=self.controlled_child), \
                 patch.object(runner, "WindowsMemory", return_value=SimpleNamespace(sample=lambda child: None)), \
-                patch.object(runner, "ProcessControl", self.ControlledProcesses), \
-                patch.object(runner.time, "perf_counter", side_effect=lambda: next(ticks)):
+                patch.object(runner, "ProcessControl", LateCleanup), \
+                patch.object(runner.time, "perf_counter", side_effect=lambda: clock[0]):
             result = runner.run_attempt(Path(sys.executable), job, self.root / "late")
         self.assertEqual(result["status"], "hard_timeout_native_outcome_not_recertified")
+
+    def test_startup_final_write_exhaustion_retains_bounded_log_infrastructure_signal(self):
+        job, = self.jobs()
+        output = self.root / "all-worker-receipts-locked"
+        output.mkdir()
+        job.update(output=str(output), handshake_token="controlled-startup-token", controller_pid=os.getpid())
+        path = output / "job.json"
+        runner.save(path, job)
+        replace, before, stream = Path.replace, runner.io_snapshot(), io.StringIO()
+        def replacing(source, destination):
+            if destination.name in ("worker.json", "worker-final.json"):
+                raise self.sharing_failure()
+            return replace(source, destination)
+        with patch.object(Path, "replace", new=replacing), patch.object(runner.time, "sleep"), \
+                patch.object(sys, "stderr", new=stream), patch.object(runner, "package_identity") as identity:
+            with self.assertRaises(PermissionError):
+                runner.worker(path)
+        identity.assert_not_called()
+        (output / "worker.log").write_text(stream.getvalue(), encoding="utf-8")
+        retained = runner.worker_receipt(output, None, job)
+        self.assertEqual(retained["status"], "infrastructure_failed")
+        self.assertFalse(retained["mesh_call_started"])
+        self.assertEqual(retained["native_status"], "not_attempted")
+        self.assertEqual(retained["io"]["sharing_exhaustions"]-before["sharing_exhaustions"], 3)
+
+    def test_terminal_log_requires_exact_job_token_source_and_owned_pid(self):
+        output = self.root / "terminal-auth"
+        output.mkdir()
+        job = {"handshake_token": "owned-token", "source_sha256": "a"*64}
+        signal = {"schema": "paacs-installed-worker-terminal-io-failure-v1", "pid": 8123,
+            "status": "infrastructure_failed", "mesh_call_started": True, "token": "owned-token", "source_sha256": "a"*64}
+        fallback = {"pid": 8123, "status": "running"}
+        runner.save(output / "worker.json", fallback)
+        for changes in ({"token": "foreign"}, {"source_sha256": "b"*64}, {"pid": 9999}):
+            (output / "worker.log").write_text(json.dumps({**signal, **changes})+"\n")
+            self.assertEqual(runner.worker_receipt(output, 8123, job), fallback)
+        (output / "worker.log").write_text(json.dumps(signal)+"\n")
+        self.assertEqual(runner.worker_receipt(output, 8123, job), signal)
 
     def test_worker_executes_public_contract_and_retains_native_refusal(self):
         job, = self.jobs()
