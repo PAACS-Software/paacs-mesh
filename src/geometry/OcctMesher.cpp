@@ -1654,7 +1654,8 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
                         nativeSurface=nativePartitionFallback(model,view,o,body,report,work,NativePartitionPass::Midplanes);
                     if(!nativeSurface&&(o.useNativePartitionFallback||o.useNativeKernelAdmission)){
                         detail::OcctNativeSweepOptions sweep;
-                        sweep.maximumWork=std::min(o.geometry.maximumMeshingWork,o.maximumValidationWork-work.count);
+                        const auto capWorkCeiling=std::min(o.geometry.maximumMeshingWork,o.maximumValidationWork);
+                        sweep.maximumWork=work.count<capWorkCeiling?capWorkCeiling-work.count:0;
                         sweep.maximumLayerThickness=o.geometry.targetSize;
                         sweep.maximumNodes=o.geometry.maximumNodes;sweep.maximumCells=o.geometry.maximumCells;
                         sweep.maximumOutputBytes=o.geometry.maximumOutputBytes;sweep.maximumWorkingBytes=o.maximumPrimitiveWorkingBytes;
@@ -1668,10 +1669,52 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
                         sweep.boundary.maximumNodes=o.geometry.maximumNodes;sweep.boundary.maximumTriangles=o.geometry.maximumCells/2;
                         sweep.boundary.maximumOutputBytes=o.geometry.maximumOutputBytes;sweep.boundary.maximumWork=sweep.maximumWork;
                         sweep.boundary.cancellation=o.geometry.cancellation;
-                        detail::OcctStageTrace sweepTrace("cap_sweep",solid->tag());
-                        const auto swept=detail::buildOcctNativeSweepVolume(model,solid->tag(),sweep,body);
-                        sweepTrace.finish(swept.diagnostic);
-                        work.tick(swept.workUsed);
+                        const auto historicalConstruction=sweep.boundary.construction;
+                        if(o.construction.resourcePolicy==CadResourcePolicy::Normal&&solids.size()==1&&
+                           controls.empty()&&faceControls.empty()&&o.sizeBoxes.empty()&&!o.geometry.spatialField){
+                            sweep.maximumCapSize=o.geometry.targetSize;
+                            sweep.boundary.construction=o.construction;
+                        }
+                        report.nativeCapRequestedSize=sweep.maximumCapSize;
+                        const auto tryCap=[&](){
+                            detail::OcctStageTrace trial(sweep.maximumCapSize>0?"sized_cap_sweep":"cap_sweep",solid->tag());
+                            const auto result=detail::buildOcctNativeSweepVolume(model,solid->tag(),sweep,body);
+                            trial.finish(result.diagnostic);
+                            if(!report.nativeCapSizingAttempts)report.nativeCapSizingDiagnostic=result.diagnostic;
+                            ++report.nativeCapSizingAttempts;
+                            report.nativeCapSizingWork+=result.workUsed;
+                            report.nativeCapSizingSeconds+=result.totalSeconds;
+                            report.nativeSurfaceWork+=result.surfaceWork;
+                            report.nativeVolumeWork+=result.workUsed-result.surfaceWork;
+                            report.nativeSurfaceSeconds+=result.surfaceSeconds;
+                            report.nativeVolumeSeconds+=result.totalSeconds-result.surfaceSeconds;
+                            work.tick(result.workUsed);
+                            return result;
+                        };
+                        auto swept=tryCap();
+                        // A sized source is a separate bounded trial. Keep the
+                        // established validated cap route if it refuses, and
+                        // charge both complete attempts to the same request.
+                        if(!swept.published&&sweep.maximumCapSize>0&&
+                           swept.reason!=detail::OcctNativeSweepReason::Cancelled&&
+                           swept.reason!=detail::OcctNativeSweepReason::AllocationFailed&&
+                           swept.reason!=detail::OcctNativeSweepReason::SourceMutation&&
+                           swept.reason!=detail::OcctNativeSweepReason::InternalError&&
+                           swept.reason!=detail::OcctNativeSweepReason::InvalidRequest&&
+                           swept.reason!=detail::OcctNativeSweepReason::KernelFailure&&
+                           work.count<capWorkCeiling){
+                            sweep.maximumCapSize=0;
+                            sweep.boundary.construction=historicalConstruction;
+                            sweep.maximumWork=capWorkCeiling-work.count;
+                            sweep.boundary.maximumWork=sweep.maximumWork;
+                            swept=tryCap();
+                        }
+                        report.nativeCapSizingApplied=swept.published&&sweep.maximumCapSize>0;
+                        report.nativeCapNodes=swept.capNodes;report.nativeCapTriangles=swept.capTriangles;
+                        report.nativeCapMaximumEdgeLength=swept.maximumCapEdgeLength;
+                        if(swept.reason==detail::OcctNativeSweepReason::InternalError)throw Stop{NativeCadMeshReason::InternalError};
+                        if(swept.reason==detail::OcctNativeSweepReason::InvalidRequest)throw Stop{NativeCadMeshReason::InvalidRequest};
+                        if(swept.reason==detail::OcctNativeSweepReason::KernelFailure)throw Stop{NativeCadMeshReason::MeshingFailed};
                         if(swept.reason==detail::OcctNativeSweepReason::Cancelled)throw Stop{NativeCadMeshReason::Cancelled};
                         if(swept.reason==detail::OcctNativeSweepReason::AllocationFailed)throw Stop{NativeCadMeshReason::AllocationFailed};
                         if(swept.reason==detail::OcctNativeSweepReason::BudgetExceeded)throw Stop{NativeCadMeshReason::BudgetExceeded};
@@ -1681,8 +1724,6 @@ NativeCadMeshOutcome meshNativeCad(const OcctModel& model,const NativeCadMeshOpt
                             report.nativeVolumeReason=swept.diagnostic;report.cadVolume=swept.cadVolume;report.meshVolume=swept.meshVolume;
                             report.startFaceTag=swept.baseCapTag;report.endFaceTag=swept.targetCapTag;
                             report.maximumBoundaryNodeError=swept.maximumBoundaryNodeError;report.maximumBoundarySampleError=swept.maximumBoundarySampleError;
-                            report.nativeSurfaceWork+=swept.surfaceWork;report.nativeVolumeWork+=swept.workUsed-swept.surfaceWork;
-                            report.nativeSurfaceSeconds+=swept.surfaceSeconds;report.nativeVolumeSeconds+=swept.totalSeconds-swept.surfaceSeconds;
                             report.boundaryEmbeddingCertified=swept.exteriorCertificate.certified;
                         }
                         if(!nativeSurface){

@@ -5,6 +5,7 @@
 
 #include "OcctNativeSweep.hpp"
 #include "OcctModelInternal.hpp"
+#include "OcctBoundaryInternal.hpp"
 #include "paacs/algo/ConvexToTetMesher.hpp"
 #include "paacs/algo/LayeredPatchMesher.hpp"
 #include <BRepAdaptor_Surface.hxx>
@@ -33,6 +34,7 @@
 #include <ostream>
 #include <set>
 #include <streambuf>
+#include <string_view>
 
 namespace paacs::geo::detail {
 namespace {
@@ -374,9 +376,12 @@ OcctNativeSweepOutcome buildOcctNativeSweepVolume(const OcctModel &model, int bo
                                                   mesh::Mesh &destination) noexcept {
     const auto start = Clock::now();
     OcctNativeSweepOutcome out;
+    out.requestedCapSize=options.maximumCapSize;
+    if(options.maximumCapSize>0){out.capSourceProvider="regular_chart";out.capSizingDiagnostic="not_attempted";}
     Context context{options, out};
     try {
         need(model.solid(body) && options.layers >= 1 && options.layers <= 4096 &&
+                 std::isfinite(options.maximumCapSize) && options.maximumCapSize >= 0 &&
                  std::isfinite(options.maximumLayerThickness) &&
                  options.maximumLayerThickness >= 0 &&
                  std::isfinite(options.maximumRelativeRecognitionError) &&
@@ -397,6 +402,8 @@ OcctNativeSweepOutcome buildOcctNativeSweepVolume(const OcctModel &model, int bo
                  options.maximumSnapshotBytes,
              Reason::BudgetExceeded, "zero-admission-budget");
         context.check();
+        need(options.maximumCapSize==0||model.solids().size()==1,Reason::UnsupportedGeometry,
+             "regular-cap-source-requires-single-body");
         need(options.maximumSnapshotBytes <= options.maximumWorkingBytes / 8,
              Reason::BudgetExceeded, "source-snapshot-working-admission");
         context.tick(1, out.recognitionWork);
@@ -517,10 +524,25 @@ OcctNativeSweepOutcome buildOcctNativeSweepVolume(const OcctModel &model, int bo
         OcctBoundaryOutcome br;
         {
             Timer timer{out.surfaceSeconds};
-            br = buildOcctBoundary(model, body, bo, boundary);
+            if(options.maximumCapSize>0){
+                const auto sourceWorking=(options.maximumWorkingBytes-topologyWorking)/3;
+                context.working(add(topologyWorking,add(sourceWorking,bo.maximumOutputBytes)));
+                OcctBoundaryAliasReceipt receipt;
+                br=buildSpacedOcctBoundary(model,body,bo,options.maximumCapSize,sourceWorking,
+                    boundary,receipt,true,false);
+                const auto detail=std::string_view(receipt.witness.detail);
+                out.capSizingDiagnostic=br.published?"regular_cap_source_prepared":
+                    detail!="not_reported"?receipt.witness.detail:occtBoundaryReasonName(br.reason);
+                out.capSizingWork=br.work;
+            }else br = buildOcctBoundary(model, body, bo, boundary);
         }
+        if(options.maximumCapSize>0)out.capSizingSeconds=out.surfaceSeconds;
         out.boundaryReason = br.reason;
         context.collect(br.work, out.surfaceWork);
+        if(options.maximumCapSize>0&&br.reason==OcctBoundaryReason::SourceChanged)
+            throw Stop{Reason::SourceMutation,"regular-cap-source-mutated"};
+        if(options.maximumCapSize>0&&br.reason==OcctBoundaryReason::InternalError)
+            throw Stop{Reason::InternalError,"regular-cap-source-internal-error"};
         if (!br.published)
             childBoundary(br.reason);
         need(br.sourceModelUnmodified, Reason::SourceMutation, "surface-source-audit-missing");
@@ -559,6 +581,15 @@ OcctNativeSweepOutcome buildOcctNativeSweepVolume(const OcctModel &model, int bo
                  "empty-native-cap-triangulation");
             out.capNodes = patch.nodeCount();
             out.capTriangles = patch.cellCount();
+            if(options.maximumCapSize>0){
+                for(Index i=0;i<patch.cellCount();++i){
+                    context.tick(3,out.sweepWork);const auto* ids=patch.cellNodes(i);
+                    for(unsigned edge=0;edge<3;++edge)
+                        out.maximumCapEdgeLength=std::max(out.maximumCapEdgeLength,
+                            (patch.node(ids[edge])-patch.node(ids[(edge+1)%3])).norm());
+                }
+                out.capSizingApplied=true;out.capSizingDiagnostic="regular_cap_source_applied";
+            }
         }
         std::map<Pair, unsigned> incidence;
         for (Index i = 0; i < patch.cellCount(); ++i) {

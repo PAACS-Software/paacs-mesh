@@ -413,6 +413,11 @@ struct NativeCadBodyMeshReport {
     std::uint64_t liveMaterialInitialRejects=0,liveMaterialRemainingRejects=0,liveMaterialPatches=0;
     std::uint64_t localDelaunaySupportNodes=0,localDelaunayRefinementNodes=0;
     unsigned localDelaunayQualityEdits=0;
+    double nativeCapRequestedSize=0,nativeCapSizingSeconds=0,nativeCapMaximumEdgeLength=0;
+    bool nativeCapSizingApplied=false;
+    const char* nativeCapSizingDiagnostic="not_attempted";
+    std::uint64_t nativeCapSizingAttempts=0,nativeCapSizingWork=0;
+    std::uint64_t nativeCapNodes=0,nativeCapTriangles=0;
     NativeCadInitialFrontReport initialFront;
     NativeCadInitialTopologyQualityReport initialTopologyQuality;
     NativeCadInitialFrontFallbackReport initialFrontFallback;

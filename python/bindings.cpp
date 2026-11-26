@@ -695,6 +695,20 @@ struct MeshResult {
             b["surface_chord_error_limit"] = finiteValue(body.surfaceChordErrorLimit);
             b["source_shell"] = sourceShellReport(body.sourceShell);
             b["initial_topology_quality"]=initialTopologyQualityReport(body.initialTopologyQuality);
+            b["local_delaunay_quality_edits"]=body.localDelaunayQualityEdits;
+            py::dict capSizing;
+            capSizing["requested_size"]=finiteValue(body.nativeCapRequestedSize);
+            capSizing["applied"]=body.nativeCapSizingApplied;
+            capSizing["diagnostic"]=body.nativeCapSizingDiagnostic;
+            capSizing["attempts"]=body.nativeCapSizingAttempts;
+            capSizing["work"]=body.nativeCapSizingWork;
+            capSizing["seconds"]=finiteValue(body.nativeCapSizingSeconds);
+            capSizing["cap_nodes"]=body.nativeCapNodes;
+            capSizing["cap_triangles"]=body.nativeCapTriangles;
+            capSizing["maximum_cap_edge_length"]=body.nativeCapMaximumEdgeLength>0?
+                finiteValue(body.nativeCapMaximumEdgeLength):py::none();
+            capSizing["scope"]="Cap source sizing; separate from thin-region phase ordering. All attempted cap routes counted.";
+            b["native_cap_sizing"]=std::move(capSizing);
             b["route_resolution"]=routeResolutionReport(body.routeResolution);
             py::dict bodyFidelity;
             bodyFidelity["effective_max_chord_error"]=body.effectiveMaximumChordError?
