@@ -13,6 +13,7 @@
 #include "paacs/geometry/OcctBoundary.hpp"
 #include "paacs/geometry/OcctBodyRelations.hpp"
 #include "paacs/geometry/OcctMesher.hpp"
+#include "paacs/geometry/ExperimentalCadVolume.hpp"
 #include "paacs/geometry/OcctPreview.hpp"
 #include "paacs/sdk/MeshArchive.hpp"
 #include "paacs/sdk/Version.hpp"
@@ -21,6 +22,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <bit>
 #include <chrono>
 #include <cctype>
 #include <cmath>
@@ -497,9 +499,16 @@ py::dict planarReport(const geo::NativeCadBodyMeshReport& body) {
     return r;
 }
 
+py::dict experimentalVolumeReport(const geo::ExperimentalCadVolumeReport&);
+
 struct MeshResult {
     mesh::Mesh value;
     geo::NativeCadMeshOutcome outcome;
+    std::optional<geo::ExperimentalCadVolumeReport> experimentalVolume;
+    std::string experimentalBoundarySha256, experimentalPointsSha256;
+    std::optional<std::string> experimentalSuppliedInputSha256;
+    std::optional<std::string> experimentalExtensionSha256;
+    std::optional<double> experimentalPythonSeconds, experimentalPackingSeconds;
     fs::path source;
     std::string sourceSha256;
     double importSeconds = 0;
@@ -543,6 +552,17 @@ struct MeshResult {
         r["source_sha256"] = sourceSha256;
         r["kernel_version"] = geo::occtKernelVersion();
         r["units"] = "mm";
+        if (experimentalVolume) {
+            auto experimental = experimentalVolumeReport(*experimentalVolume);
+            experimental["boundary_sha256"] = experimentalBoundarySha256;
+            experimental["initial_points_sha256"] = experimentalPointsSha256;
+            experimental["supplied_input_sha256"] = py::cast(experimentalSuppliedInputSha256);
+            experimental["native_extension_sha256"] = py::cast(experimentalExtensionSha256);
+            experimental["python_total_seconds"] = py::cast(experimentalPythonSeconds);
+            experimental["point_packing_seconds"] = py::cast(experimentalPackingSeconds);
+            experimental["python_timing_scope"] = "Python replay snapshot includes point packing, native gate wait/call and post-call binding hashes; precedes final timing attachment and return. Native phase clocks are separate incomplete spans, not this call total.";
+            r["experimental_boundary_volume"] = std::move(experimental);
+        }
         r["requested_size"] = requestedSize;
         r["recovery"] = recovery;
         r["requested_assembly"] = requestedAssembly;
@@ -1333,11 +1353,23 @@ py::dict faceDistances(const CadModel& holder, const py::object& pointValues,
     return result;
 }
 
+#include "ExperimentalBoundary.hpp"
+
 } // namespace
 
 PYBIND11_MODULE(_native, m) {
     m.doc() = "Owned Python interface to the native PAACS STEP/Tet4 engine.";
     m.attr("engine_version") = paacs::sdk::kApiVersion;
+#if defined(PAACS_PYTHON_SOURCE_REVISION)
+    m.attr("source_revision") = PAACS_PYTHON_SOURCE_REVISION;
+#else
+    m.attr("source_revision") = "unversioned";
+#endif
+#if defined(PAACS_PYTHON_SOURCE_DIRTY)
+    m.attr("source_dirty") = bool(PAACS_PYTHON_SOURCE_DIRTY);
+#else
+    m.attr("source_dirty") = true;
+#endif
     importError = PyErr_NewException("paacs_mesh.CadImportError", PyExc_RuntimeError, nullptr);
     meshingError = PyErr_NewException("paacs_mesh.MeshingError", PyExc_RuntimeError, nullptr);
     exportError = PyErr_NewException("paacs_mesh.ExportError", PyExc_OSError, nullptr);
@@ -1362,6 +1394,25 @@ PYBIND11_MODULE(_native, m) {
         .def_readonly("size", &BoxSize::size)
         .def_readonly("growth", &BoxSize::growth);
     py::class_<MeshResult>(m, "Mesh")
+        .def("_experimental_set_python_timing",[](MeshResult& mesh,double elapsed,double packing,const std::string& extensionHash){
+            if(!mesh.experimentalVolume||!std::isfinite(elapsed)||!std::isfinite(packing)||packing<0||elapsed<packing)
+                throw py::value_error("Invalid experimental Python timing snapshot");
+            if(extensionHash.size()!=64||extensionHash.find_first_not_of("0123456789abcdef")!=std::string::npos)
+                throw py::value_error("Invalid experimental native extension digest");
+            mesh.experimentalPythonSeconds=elapsed;mesh.experimentalPackingSeconds=packing;
+            mesh.experimentalExtensionSha256=extensionHash;
+        })
+        .def("initial_points", [](const MeshResult& mesh, const py::object& maxBytes) {
+            if(!mesh.experimentalVolume)throw py::value_error("Initial point snapshots require experimental boundary replay");
+            if(!mesh.experimentalVolume->initialPointsAvailable)throw py::value_error("Initial point snapshot was not captured");
+            const auto limit=positiveInteger(maxBytes,"max_bytes");
+            const auto count=mesh.experimentalVolume?mesh.experimentalVolume->initialPoints.size():0;
+            if(limit<65536||count>(limit-65536)/256)
+                throw py::value_error("initial point copy exceeds max_bytes (includes conservative Python tuple storage)");
+            py::tuple result(count);
+            for(std::size_t i=0;i<count;++i){const auto p=mesh.experimentalVolume->initialPoints[i];result[i]=py::make_tuple(p.x,p.y,p.z);}
+            return result;
+        },py::kw_only(),py::arg("max_bytes")=py::int_(16*1024*1024))
         .def_property_readonly("node_count", [](const MeshResult& mesh) { return mesh.value.nodeCount(); })
         .def_property_readonly("cell_count", [](const MeshResult& mesh) { return mesh.value.cellCount(); })
         .def_property_readonly("tetrahedron_count", [](const MeshResult& mesh) { return mesh.outcome.quality.tet4; })
@@ -1439,4 +1490,5 @@ PYBIND11_MODULE(_native, m) {
              py::arg("trimmed_ray_witnesses") = py::bool_(false),
              py::arg("thin_region_ordering") = py::bool_(false));
     m.def("read_step", &readStep, py::arg("path"), py::kw_only(), py::arg("max_file_bytes") = py::none(), py::arg("names") = true, py::arg("retain_source") = false);
+    bindExperimentalBoundary(m);
 }
