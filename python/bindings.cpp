@@ -14,6 +14,7 @@
 #include "paacs/geometry/OcctBodyRelations.hpp"
 #include "paacs/geometry/OcctMesher.hpp"
 #include "paacs/geometry/ExperimentalCadVolume.hpp"
+#include "paacs/geometry/CadBoundaryExport.hpp"
 #include "paacs/geometry/OcctPreview.hpp"
 #include "paacs/sdk/MeshArchive.hpp"
 #include "paacs/sdk/Version.hpp"
@@ -510,6 +511,9 @@ struct MeshResult {
     std::optional<std::string> experimentalExtensionSha256;
     std::optional<double> experimentalPythonSeconds, experimentalPackingSeconds;
     fs::path source;
+    // Staged replay retains its saved-input paths in addition to the imported
+    // CAD path (which can refer to a temporary import snapshot after reload).
+    std::vector<fs::path> protectedInputs;
     std::string sourceSha256;
     double importSeconds = 0;
     double requestedSize = 0;
@@ -914,6 +918,12 @@ struct MeshResult {
         if (fs::equivalent(source, destination, error) ||
             fs::weakly_canonical(source) == fs::weakly_canonical(destination))
             throw py::value_error("CAD input and mesh output must be different files");
+        for (const auto& input : protectedInputs) {
+            error.clear();
+            if (fs::equivalent(input, destination, error) ||
+                fs::weakly_canonical(input) == fs::weakly_canonical(destination))
+                throw py::value_error("Mesh output must not overwrite a staged meshing input");
+        }
         return destination;
     }
 

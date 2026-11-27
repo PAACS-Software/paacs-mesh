@@ -1246,6 +1246,49 @@ ExperimentalCadBoundaryOutcome prepareExperimentalCadBoundaryImpl(const OcctMode
     result.work=work.count;result.seconds=elapsed(started);return result;
 }
 
+ExperimentalCadInitialPointsOutcome generateExperimentalCadInitialPointsImpl(const OcctModel& model,
+    const ExperimentalCadBoundary& snapshot,const NativeCadMeshOptions& input) noexcept {
+    ExperimentalCadInitialPointsOutcome result;const auto started=Clock::now();NativeCadMeshOptions o;Work work{o};
+    auto& extra=result.stages;
+    try {
+        o=experimentalOptions(input);
+        experimentalRequest(model,input);work.tick();
+        need(snapshot.solidTag==model.solids().front()->tag()&&finite(snapshot.maximumChordError)&&snapshot.maximumChordError>0&&
+             snapshot.targetSize==o.geometry.targetSize&&snapshot.maximumRelativeVolumeError==o.maximumRelativeVolumeError&&
+             (o.maximumChordError==0||o.maximumChordError==snapshot.maximumChordError),NativeCadMeshReason::InvalidRequest);
+        o.maximumChordError=snapshot.maximumChordError;
+        NativeCadBodyMeshReport checked;
+        {PhaseTimer sourceTimer(extra.sourceSeconds);ExperimentalWorkClock sourceWork(extra.sourceWork,work);
+         experimentalShellNodes(model,snapshot.boundary,checked,work);}
+        mesh::Mesh unused;OcctFrontReplayContext context;context.replayBoundary=&snapshot.boundary;
+        context.initialPointsOnly=true;context.report=&extra;
+        const auto built=buildOcctFrontVolume(model,snapshot.solidTag,o,
+            std::min(o.maximumValidationWork-work.count,o.geometry.maximumMeshingWork),unused,0,
+            OcctFrontSurface::SpatialSizing,false,&context);
+        result.reason=built.reason;result.diagnostic=built.diagnostic;result.sourceShell=built.sourceShell;
+        result.initialFront=built.initialFront;result.initialTopologyQuality=built.initialTopologyQuality;
+        work.tick(built.workUsed);
+        need(context.initialPointsPrepared&&extra.initialPointsAvailable&&extra.boundaryRevalidated&&extra.boundaryUnchanged,
+             built.reason==NativeCadMeshReason::None?NativeCadMeshReason::InternalError:built.reason);
+        // This result has no mesh destination, volume audit or publication
+        // state. Only the immutable source and ordered placement are admitted.
+        need(!built.published&&unused.nodeCount()==0&&unused.cellCount()==0&&
+             extra.recoveryWork==0&&extra.recoverySeconds==0&&extra.fillSeconds==0&&extra.validationSeconds==0,
+             NativeCadMeshReason::InternalError);
+        need(extra.initialPoints.size()<=o.geometry.maximumOutputBytes/24,NativeCadMeshReason::BudgetExceeded);
+        work.tick();result.generated=true;result.reason=NativeCadMeshReason::None;
+    }catch(const Stop& stopped){result.reason=stopped.reason;
+        if(std::string_view(result.diagnostic)=="not_started"||std::string_view(result.diagnostic)=="initial_points_generated")
+            result.diagnostic=nativeCadMeshReasonName(stopped.reason);}
+     catch(const Standard_OutOfMemory&){result.reason=NativeCadMeshReason::AllocationFailed;result.diagnostic="allocation_failed";}
+     catch(const std::bad_alloc&){result.reason=NativeCadMeshReason::AllocationFailed;result.diagnostic="allocation_failed";}
+     catch(const Standard_Failure&){result.reason=NativeCadMeshReason::GeometryError;result.diagnostic="experimental_initial_points_native_query_failed";}
+     catch(...){result.reason=NativeCadMeshReason::InternalError;result.diagnostic="experimental_initial_points_internal_error";}
+    if(!result.generated){std::vector<Vec3>().swap(extra.initialPoints);extra.initialPointsAvailable=false;}
+    extra.diagnostic=result.diagnostic;result.work=work.count;
+    result.seconds=elapsed(started);extra.totalSeconds=result.seconds;return result;
+}
+
 ExperimentalCadVolumeOutcome replayExperimentalCadVolumeImpl(const OcctModel& model,const ExperimentalCadBoundary& snapshot,
     const NativeCadMeshOptions& input,ExperimentalInteriorMode mode,std::span<const Vec3> points,mesh::Mesh& destination) noexcept {
     ExperimentalCadVolumeOutcome result;const auto started=Clock::now();NativeCadMeshOptions o;Work work{o};

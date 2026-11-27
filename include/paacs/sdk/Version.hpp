@@ -9,8 +9,8 @@
 
 namespace paacs::sdk {
 inline constexpr std::uint32_t kApiMajor = 1;
-inline constexpr std::uint32_t kApiMinor = 3;
-inline constexpr std::uint32_t kApiPatch = 0;
-inline constexpr const char *kApiVersion = "1.3.0-dev.0";
+inline constexpr std::uint32_t kApiMinor = 2;
+inline constexpr std::uint32_t kApiPatch = 1;
+inline constexpr const char *kApiVersion = "1.2.1";
 inline constexpr std::uint32_t kMeshArchiveVersion = 1;
 } // namespace paacs::sdk

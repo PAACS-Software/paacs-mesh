@@ -1,10 +1,11 @@
 # Frozen-boundary volume experiments
 
-This opt-in interface belongs to the unpublished 1.3 development line. Published
-PAACS Mesh 1.2.0 remains an immutable reference and does not provide these calls.
-An experiment must pin its development source revision and wheel hash; matching
-the package version alone does not identify an experimental build. No learned
-interior model is included in this interface.
+The staged Python interface is included in **1.2.1** under
+[`paacs_mesh.pipeline`](PIPELINE.md). `paacs_mesh.experimental` retains the same
+class and function identities for earlier development scripts. Published PAACS
+Mesh 1.2.0 remains an immutable reference and does not provide these calls.
+Pin the package version and wheel hash when reproducing an experiment. No learned
+interior model, optimizer or training dependency is included in the engine.
 
 The first Python scope is one imported solid, uniform sizing, conforming Tet4, Standard
 recovery and the Normal advancing interior constructor. Assemblies, local face
@@ -13,16 +14,17 @@ The normal `CadModel.mesh()` entry point and its routing defaults are unchanged.
 
 ```python
 import paacs_mesh as pm
-from paacs_mesh import experimental
+from paacs_mesh import pipeline
 
 model = pm.read_step("part.step", retain_source=True)
-boundary = experimental.prepare_boundary(model, size=0.7, max_seconds=300)
+boundary = pipeline.prepare_boundary(model, size=0.7, max_seconds=300)
 boundary.save("saved-boundary")  # Save before attempting any volume fill.
 
-loaded = experimental.load_boundary("saved-boundary")
-classical = loaded.mesh()
-points = experimental.initial_points(classical, max_bytes=16 * 1024**2)
-supplied = loaded.mesh(points)
+loaded = pipeline.load_boundary("saved-boundary")
+cloud = loaded.generate_initial_points()  # Stops before recovery/volume fill.
+cloud.save("saved-points")
+supplied = loaded.mesh(pipeline.load_initial_points("saved-points"))
+classical = loaded.mesh()  # Independent ordinary placement comparison.
 
 classical.write_archive("classical.paacsmesh")
 supplied.write_archive("supplied.paacsmesh")
@@ -37,6 +39,21 @@ coordinates, connectivity and classifications use the existing mesh archive.
 Process-local model tokens and tessellation ordinals are not portable authority.
 This first bundle version requires the same native-extension binary hash when
 reloaded. Its portable archive encoding does not imply cross-build replay.
+
+`generate_initial_points()` runs the classical placement and its auxiliary
+topology finalization on the qualified boundary, then returns an immutable
+`InitialPointCloud`. It does not run constraint recovery or volume filling and
+does not require a previously successful volume mesh. Its report is a generation
+receipt, not a volume-validity or solver-quality certificate. Preparation, point
+generation and every subsequent reconstruction still have separate costs.
+
+Use `cloud.points(max_bytes=...)` for bounded tuple copies or
+`cloud.to_numpy(max_bytes=...)` for optional owned, initially read-only arrays.
+`loaded.mesh(cloud)` uses its owned encoded points directly and requires exact
+source, boundary, build and option identity. A point bundle contains CAD-derived
+coordinates and must be handled as private geometry data. Saved claims are
+checked against payload hashes; Native still admits every supplied point before
+publishing a mesh.
 
 Preparation stops after native CAD surface construction, source error/volume
 checks and exact shell certification, before interior point placement or volume
@@ -75,7 +92,7 @@ except pm.MeshingError as error:
     # An unavailable cloud is distinct from an intentionally empty cloud.
     if getattr(error, "initial_points_bytes", None) is not None:
         try:
-            failed_points = experimental.initial_points(error, max_bytes=16 * 1024**2)
+            failed_points = pipeline.initial_points(error, max_bytes=16 * 1024**2)
         except ValueError as copy_limit:
             print("Initial cloud copy refused:", copy_limit)
 ```

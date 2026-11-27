@@ -13,6 +13,8 @@ import unittest
 
 import paacs_mesh as pm
 from paacs_mesh import experimental
+from paacs_mesh import pipeline
+from sizing_data import read_archive
 
 
 class ExperimentalBoundaryTests(unittest.TestCase):
@@ -97,6 +99,164 @@ class ExperimentalBoundaryTests(unittest.TestCase):
             with self.assertRaises(pm.MeshingError) as refusal:
                 experimental.load_boundary(path)
             self.assertEqual(refusal.exception.stage, "boundary_rebind")
+
+    def test_public_facade_and_standalone_generation_precede_volume(self):
+        self.assertIs(pipeline.PreparedBoundary, experimental.PreparedBoundary)
+        self.assertIs(pipeline.prepare_boundary, experimental.prepare_boundary)
+        before = self.boundary.boundary_sha256
+        cloud = self.boundary.generate_initial_points()
+        self.assertIsInstance(cloud, pipeline.InitialPointCloud)
+        report = cloud.report
+        self.assertTrue(report["generated"])
+        self.assertTrue(report["initial_points_available"])
+        self.assertTrue(report["boundary_unchanged"])
+        self.assertFalse(report["recovery_performed"])
+        self.assertFalse(report["volume_construction_performed"])
+        self.assertFalse(report.get("mesh_published", False))
+        self.assertNotIn("audit", report)
+        self.assertEqual(cloud.source_sha256, self.boundary.source_sha256)
+        self.assertEqual(cloud.boundary_sha256, before)
+        self.assertEqual(cloud.sha256, report["initial_points_sha256"])
+        points = cloud.points(max_bytes=32*1024**2)
+        self.assertEqual(len(points), cloud.point_count)
+        classical = self.boundary.mesh()
+        self.assertEqual(points, classical.initial_points(max_bytes=32*1024**2))
+        supplied = self.boundary.mesh(cloud)
+        self.assert_qualified(supplied)
+        self.assertEqual(supplied.report["experimental_boundary_volume"]["supplied_input_sha256"], cloud.sha256)
+        self.assertEqual(self.boundary.boundary_sha256, before)
+
+    def test_generated_point_bundle_roundtrip_and_immutable_copies(self):
+        cloud = self.boundary.generate_initial_points()
+        with tempfile.TemporaryDirectory() as temporary:
+            path = cloud.save(Path(temporary)/"points")
+            loaded = pipeline.load_initial_points(path)
+            self.assertEqual(loaded.sha256, cloud.sha256)
+            self.assertEqual(loaded.points(max_bytes=32*1024**2), cloud.points(max_bytes=32*1024**2))
+            self.assert_qualified(self.boundary.mesh(loaded))
+            with self.assertRaises(FileExistsError):cloud.save(path)
+        with self.assertRaises(AttributeError):cloud._payload = b""
+        copy = cloud.report;copy["generated"] = False
+        self.assertTrue(cloud.report["generated"])
+        with self.assertRaises(ValueError):cloud.points(max_bytes=1)
+
+    def test_cloud_identity_and_malformed_requests_refuse_without_replacement(self):
+        cloud = self.boundary.generate_initial_points()
+        other = pipeline.prepare_boundary(self.model, size=.9, max_seconds=60)
+        with self.assertRaisesRegex(ValueError, "source/boundary/build/options"):
+            other.mesh(cloud)
+        for points in ([(True, 0., 0.)], [(float("nan"), 0., 0.)], [(0., 0.)]):
+            with self.assertRaises(ValueError):self.boundary.mesh(points)
+        point = cloud.points(max_bytes=32*1024**2)
+        if point:
+            with self.assertRaises(pm.MeshingError) as refusal:
+                self.boundary.mesh([point[0], point[0]])
+            self.assertFalse(refusal.exception.report["mesh_published"])
+
+    def test_box_and_through_hole_stage_replay_preserve_boundary_and_tags(self):
+        fixtures = Path(__file__).resolve().parents[2]/"tests/fixtures/cad"
+        for name in ("box.step", "through_hole.step"):
+            with self.subTest(fixture=name):
+                model = pm.read_step(fixtures/name, retain_source=True)
+                boundary = pipeline.prepare_boundary(model, size=.4, max_seconds=60)
+                cloud = boundary.generate_initial_points()
+                mesh = boundary.mesh(cloud)
+                report = mesh.report
+                self.assertTrue(report["mesh_published"])
+                self.assertTrue(report["audit"]["valid"])
+                self.assertTrue(report["quality"]["valid"])
+                self.assertTrue(report["experimental_boundary_volume"]["boundary_unchanged"])
+                self.assertEqual(report["experimental_boundary_volume"]["boundary_sha256"], boundary.boundary_sha256)
+                self.assertEqual(set(mesh.face_tags), set(model.face_tags))
+                self.assertEqual(set(mesh.body_tags), set(model.body_tags))
+                self.assertEqual(report["experimental_boundary_volume"]["admitted_points"], cloud.point_count)
+
+    def test_unsupported_assembly_and_controls_do_not_enter_pipeline(self):
+        fixture = Path(__file__).resolve().parents[2]/"tests/fixtures/cad/assembly.step"
+        assembly = pm.read_step(fixture, retain_source=True)
+        with self.assertRaisesRegex(ValueError, "one original solid"):
+            pipeline.prepare_boundary(assembly, size=.8)
+        for options in ({"face_sizes": []}, {"growth": 1.3}, {"workers": 2}, {"max_nodes": True}):
+            with self.subTest(options=options), self.assertRaises(ValueError):
+                pipeline.prepare_boundary(self.model, size=.8, **options)
+
+    def test_real_box_and_cylinder_surface_edge_exports_keep_native_ids_and_metadata(self):
+        fixture = Path(__file__).resolve().parents[2]/"tests/fixtures/cad/box.step"
+        for name, model in (("cylinder", self.model), ("box", pm.read_step(fixture, retain_source=True))):
+            with self.subTest(fixture=name), tempfile.TemporaryDirectory() as temporary:
+                boundary = pipeline.prepare_boundary(model, size=.8, max_seconds=60)
+                surface, edges = boundary.surface(), boundary.edges()
+                directory = Path(temporary)
+                surface_path = surface.save(directory/"surface")
+                edge_path = edges.save(directory/"edges")
+                for kind, path, artifact in (("surface", surface_path, surface), ("cad_edges", edge_path, edges)):
+                    manifest = json.loads((path/"manifest.json").read_text())
+                    self.assertEqual(manifest["kind"], kind)
+                    self.assertFalse(manifest["volume_qualified"])
+                    self.assertEqual(manifest["source_sha256"], model.source_sha256)
+                    self.assertEqual(manifest["boundary_sha256"], boundary.boundary_sha256)
+                    for member, receipt in manifest["files"].items():
+                        data = (path/member).read_bytes()
+                        self.assertEqual(receipt["bytes"], len(data))
+                        self.assertEqual(receipt["sha256"], hashlib.sha256(data).hexdigest())
+                    metadata = json.loads((path/"metadata.json").read_text())
+                    self.assertEqual(metadata["cad_topology"], boundary.cad_topology())
+                    self.assertEqual(artifact.source_sha256, model.source_sha256)
+                    self.assertTrue((path/"mesh.vtk").read_bytes().startswith(b"# vtk"))
+                surface_archive = read_archive(surface_path/"mesh.paacsmesh")
+                edge_archive = read_archive(edge_path/"mesh.paacsmesh")
+                self.assertTrue(surface_archive.cells);self.assertTrue(edge_archive.cells)
+                self.assertEqual({cell.kind for cell in surface_archive.cells}, {2})
+                self.assertEqual({cell.kind for cell in edge_archive.cells}, {0})
+                self.assertEqual(surface_archive.points, edge_archive.points)
+                self.assertEqual(surface_archive.node_tags, edge_archive.node_tags)
+                self.assertEqual({cell.tag for cell in surface_archive.cells}, set(model.face_tags))
+                expected_edges = {edge["edge_tag"] for edge in edges.report["edges"] if edge["natural_line_order"]}
+                self.assertEqual({cell.tag for cell in edge_archive.cells}, expected_edges)
+                self.assertEqual(hashlib.sha256((surface_path/"mesh.paacsmesh").read_bytes()).hexdigest(), boundary.boundary_sha256)
+                self.assertEqual(edges.report["node_id_space"], "qualified_boundary")
+
+
+    def test_reloaded_surface_edges_and_volume_cannot_overwrite_input_bundle_or_hardlinks(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary);bundle = self.boundary.save(folder/"boundary")
+            inputs = {name: (bundle/name).read_bytes() for name in
+                      ("source.step", "boundary.paacsmesh", "boundary-report.json", "manifest.json")}
+            loaded = pipeline.load_boundary(bundle)
+            point_bundle = loaded.generate_initial_points().save(folder/"points")
+            point_inputs = {name: (point_bundle/name).read_bytes() for name in
+                            ("points.bin", "point-report.json", "manifest.json")}
+            mesh = loaded.mesh(pipeline.load_initial_points(point_bundle))
+            self.assert_qualified(mesh)
+            exports = (("surface", loaded.surface().write, ".paacsmesh"),
+                       ("edges", loaded.edges().write, ".paacsmesh"),
+                       ("volume-archive", mesh.write_archive, ".paacsmesh"),
+                       ("volume-vtk", mesh.write_vtk, ".vtk"))
+            for name, writer, suffix in exports:
+                with self.subTest(writer=name):
+                    with self.assertRaises(ValueError):writer(bundle/"boundary.paacsmesh")
+                    alias = folder/(name+"-input-alias.paacsmesh")
+                    os.link(bundle/"boundary.paacsmesh", alias)
+                    with self.assertRaises(ValueError):writer(alias)
+                    outside = folder/(name+"-outside"+suffix)
+                    writer(outside)
+                    self.assertTrue(outside.is_file());self.assertGreater(outside.stat().st_size, 0)
+            # Explicit archive/VTK writers permit arbitrary suffixes, so every
+            # saved input is protected, including STEP and JSON members.
+            for name in inputs:
+                for writer in (mesh.write_archive, mesh.write_vtk):
+                    with self.subTest(input=name, writer=writer), self.assertRaises(ValueError):
+                        writer(bundle/name)
+            self.assertEqual(inputs, {name: (bundle/name).read_bytes() for name in inputs})
+            for name in point_inputs:
+                for writer in (mesh.write_archive, mesh.write_vtk):
+                    with self.subTest(point_input=name, writer=writer), self.assertRaises(ValueError):
+                        writer(point_bundle/name)
+            for name, writer in (("archive", mesh.write_archive), ("vtk", mesh.write_vtk)):
+                alias = folder/("point-input-"+name+"-alias.paacsmesh")
+                os.link(point_bundle/"points.bin", alias)
+                with self.assertRaises(ValueError):writer(alias)
+            self.assertEqual(point_inputs, {name: (point_bundle/name).read_bytes() for name in point_inputs})
 
 
 if __name__ == "__main__":

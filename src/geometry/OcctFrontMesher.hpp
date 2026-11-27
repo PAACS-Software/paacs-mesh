@@ -12,6 +12,7 @@ namespace paacs::geo::detail {
 enum class OcctFrontSurface { Standard, Spaced, Regular, RegularQuality, Curvature, SpatialSizing };
 struct OcctFrontReplayContext {
     bool prepareOnly=false, prepared=false, supplied=false;
+    bool initialPointsOnly=false, initialPointsPrepared=false;
     const mesh::Mesh* replayBoundary=nullptr;
     mesh::Mesh* capturedBoundary=nullptr;
     std::span<const Vec3> initialPoints;
@@ -63,4 +64,6 @@ ExperimentalCadBoundaryOutcome prepareExperimentalCadBoundaryImpl(
 ExperimentalCadVolumeOutcome replayExperimentalCadVolumeImpl(
     const OcctModel&,const ExperimentalCadBoundary&,const NativeCadMeshOptions&,
     ExperimentalInteriorMode,std::span<const Vec3>,mesh::Mesh&) noexcept;
+ExperimentalCadInitialPointsOutcome generateExperimentalCadInitialPointsImpl(
+    const OcctModel&,const ExperimentalCadBoundary&,const NativeCadMeshOptions&) noexcept;
 }

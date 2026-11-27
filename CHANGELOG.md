@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## 1.2.1
+
+- Add an opt-in Python pipeline for preparing, saving and revalidating a tagged
+  CAD boundary, generating classical interior points before recovery/fill, and
+  constructing Tet4 meshes from classical or prescribed points.
+- Export the qualified Tri3 surface and ordered CAD-edge chains with source,
+  boundary and CAD classification metadata. Keep display previews distinct from
+  qualified meshing artifacts.
+- Save and reload bounded, ordered initial-point clouds with exact source,
+  boundary, build and sizing identities. An empty generated cloud differs from
+  an unavailable one; supplied points cannot silently fall back to a new cloud.
+- Retain the single-original-solid, uniform-size pipeline scope, explicit
+  resources and native publication checks. Ordinary meshing algorithms,
+  defaults, archive format v1 and C bridge ABI v1 are unchanged. No learned model
+  or training dependency is included.
+- Require fresh native, wheel and independent installation qualification from
+  the 1.2.1 source. Published 1.2.0 files and tags remain immutable; prior private
+  development artifacts are separate evidence.
+
 ## 1.2.0
 
 - Promote the RC4 engine and Python interfaces to the 1.2.0 release line without

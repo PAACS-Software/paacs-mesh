@@ -133,6 +133,19 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(result["step_volume_cell_families"], ["Tet4"])
         self.assertEqual(result["assemblies"]["default"], "preserve_parts")
         self.assertIn("diagnose", result["cli_commands"])
+        staged = result["pipeline"]
+        self.assertEqual(staged["module"], "paacs_mesh.pipeline")
+        self.assertTrue(staged["scope"]["single_original_solid"])
+        self.assertTrue(staged["scope"]["uniform_sizing"])
+        self.assertEqual(staged["scope"]["recovery"], "standard")
+        self.assertIn("generate_initial_points", staged["boundary_methods"])
+        self.assertIn("load_initial_points", staged["functions"])
+        self.assertTrue(staged["initial_points"]["before_constraint_recovery_and_volume_fill"])
+        self.assertFalse(staged["initial_points"]["volume_certified"])
+        self.assertFalse(staged["numpy_required"])
+        self.assertFalse(staged["changes_default_meshing"])
+        self.assertFalse(staged["includes_AI_or_training"])
+        self.assertIn("native_extension_sha256", staged["identity"])
         json.dumps(result, allow_nan=False)
 
     def test_nested_cli_workflow_failure_keeps_final_native_identity_and_failure(self):
