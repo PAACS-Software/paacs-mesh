@@ -4,7 +4,7 @@ PAACS Mesh imports STEP geometry, builds audited Tet4 volume meshes and exports
 tagged VTK or native mesh archives. The Python package calls the C++ engine in
 process and bundles its CAD runtime.
 
-Version **1.2.0** targets regular, **64-bit CPython 3.12–3.15**
+Version **1.2.1** targets regular, **64-bit CPython 3.12–3.15**
 on Windows x64 and Windows 11 ARM64, Linux x64/ARM64 with glibc 2.28 or newer,
 and macOS ARM64 with a minimum of macOS 15. The macOS wheels must pass
 installation on macOS 15, 26 and 27.
@@ -18,17 +18,17 @@ and the native regression jobs in
 The [compatibility guide](https://github.com/PAACS-Software/paacs-mesh/blob/main/docs/PYTHON_COMPATIBILITY.md)
 records that evidence and the required release checks. Official releases are
 built and qualified from their own immutable tagged source before publication.
-Stable 1.2.0 requires its own complete qualification; the matching GitHub release
-carries the publication receipts. Historical PR or release-candidate results do
-not substitute for the final versioned release checks.
+Version 1.2.1 requires fresh qualification from its own source; the matching
+GitHub release carries the publication receipts. Historical PR or earlier
+release results do not substitute for the versioned release checks.
 
 Install the pinned release:
 
 ```sh
-python -m pip install paacs-mesh==1.2.0
+python -m pip install paacs-mesh==1.2.1
 ```
 
-Published release-candidate files and tags remain immutable. The earlier
+Published 1.2.0 and release-candidate files and tags remain immutable. The earlier
 `1.2.0rc2` release supports CPython 3.12 on Windows x64,
 macOS ARM64 and Linux x64 only; its files remain unchanged. Use
 `python -m pip install --pre paacs-mesh` to allow prereleases when selecting a version.
@@ -54,7 +54,7 @@ The same operation is available from a terminal:
 paacs-mesh part.step part.vtk --size 0.7
 ```
 
-Version 1.2.0 includes bounded mesh quality inspection, SVG views, comparisons, Normal
+The package includes bounded mesh quality inspection, SVG views, comparisons, Normal
 resource admission and default-off experimental thin-region ordering. The
 [release notes](https://github.com/PAACS-Software/paacs-mesh/blob/main/RELEASE_NOTES.md)
 record their scope and the required qualification. Capability discovery and
@@ -64,6 +64,36 @@ CAD inspection are available before selecting controls:
 paacs-mesh capabilities --json
 paacs-mesh inspect part.step --topology --json
 ```
+
+Version 1.2.1 adds optional explicit boundary, point-generation and volume stages:
+
+```python
+from paacs_mesh import pipeline
+
+boundary = pipeline.prepare_boundary(model, size=0.7)
+boundary.save("saved-boundary")
+boundary.surface().write("surface.vtk")
+boundary.edges().save("cad-edges")
+cloud = boundary.generate_initial_points()
+cloud.save("initial-points")
+mesh = boundary.mesh(cloud)
+mesh.write("replayed.vtk")
+```
+
+Use new output directories. The initial scope is one original solid with uniform
+sizing, native Tet4 construction and the documented recovery route. Surface
+artifacts retain the qualified Tri3 boundary; edge artifacts contain retained
+ordered CAD-edge chains, with ambiguous extraction reported explicitly. Display
+previews are separate from qualified meshing artifacts.
+
+Saved boundaries and clouds carry exact source, boundary, build and sizing
+identities. Generating points stops before constraint recovery and volume fill,
+but includes the classical placement's auxiliary tetrahedral work. A cloud is
+not a valid volume mesh; final construction retains native publication checks.
+No learned model or training dependency is included. See the
+[pipeline guide](https://github.com/PAACS-Software/paacs-mesh/blob/main/docs/PIPELINE.md)
+for resource limits, saved-cloud replay and NumPy copies. Ordinary `model.mesh()`
+algorithms and defaults are unchanged.
 
 Saved recipes, readable diagnostics and the complete inspect/select/mesh/compare
 example are covered in the

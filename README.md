@@ -9,13 +9,14 @@ Applications can link the core library directly through `PAACS::mesh`. It uses
 the C++ standard library and platform threads. The STEP adapter, CLI tools and
 debug UI bridge are optional.
 
-**Release line** · [1.2.0](RELEASE_NOTES.md) ·
-[Release qualification](docs/STABLE_1.2.0_QUALIFICATION.md) · [Roadmap](docs/ROADMAP.md)
+**Release line** · [1.2.1](RELEASE_NOTES.md) ·
+[Publication gates](docs/PYPI_RELEASE.md) · [Roadmap](docs/ROADMAP.md)
 
-The source tree is on the unpublished 1.3 development line. Its opt-in
-[boundary-to-volume research interface](docs/EXPERIMENTAL_VOLUME.md) saves a
-checked CAD boundary before filling and accepts prescribed interior points.
-Published 1.2.0 wheels remain the released reference.
+Version 1.2.1 adds an optional [staged Python pipeline](docs/PIPELINE.md) for
+qualified CAD surfaces, CAD-edge exports, classical initial-point clouds and
+prescribed-point volume construction. Its first scope is one original solid
+with uniform sizing and Tet4 elements. Meshing algorithms and ordinary call
+defaults are unchanged. Published 1.2.0 remains an immutable reference.
 
 ## Build a first mesh
 
@@ -36,7 +37,7 @@ Set `PAACS_BUILD_CLI=OFF` and `PAACS_BUILD_TESTS=OFF` for a library-only build.
 An application can then use the installed package:
 
 ```cmake
-find_package(PAACSMesh 1.2.0 EXACT CONFIG REQUIRED)
+find_package(PAACSMesh 1.2.1 EXACT CONFIG REQUIRED)
 target_link_libraries(my_target PRIVATE PAACS::mesh)
 ```
 
@@ -77,7 +78,7 @@ box.
 ## Python
 
 The [Python STEP interface](docs/PYTHON.md) imports STEP, generates audited Tet4
-meshes and exports tagged VTK or native archives. Version **1.2.0**
+meshes and exports tagged VTK or native archives. Version **1.2.1**
 targets regular, 64-bit CPython 3.12–3.15 on Windows x64/ARM64, Linux x64/ARM64
 with glibc 2.28 or newer, and macOS ARM64 with a minimum of macOS 15. The same
 macOS wheels must pass installation on macOS 15, 26 and 27. CAD libraries are
@@ -87,7 +88,7 @@ The expanded implementation passed its
 [20-wheel and 28-consumer qualification](docs/PYTHON_COMPATIBILITY.md#qualification-evidence).
 Official releases pass the [publication gates](docs/PYPI_RELEASE.md) from their
 own immutable tagged source. The matching GitHub release carries its publication
-receipts. Install the exact release with `python -m pip install paacs-mesh==1.2.0`.
+receipts. Install the exact release with `python -m pip install paacs-mesh==1.2.1`.
 Published release-candidate files and tags remain immutable. The earlier
 `1.2.0rc2` release supports CPython 3.12 on Windows x64, Linux x64 and macOS ARM64 only.
 
@@ -99,6 +100,29 @@ typed connectivity and CAD classifications for solver and analysis workflows.
 support geometric predicates, representation names and guarded saved groups.
 Headless selection previews and [bounded recipes](docs/PYTHON.md#reproducible-bounded-meshing-workflows)
 support automated callers, with explicit recovery choices and recorded audits.
+
+The optional pipeline separates boundary preparation from initial point
+generation and volume construction:
+
+```python
+import paacs_mesh as pm
+from paacs_mesh import pipeline
+
+model = pm.read_step("part.step", retain_source=True)
+boundary = pipeline.prepare_boundary(model, size=0.7)
+boundary.save("saved-boundary")
+boundary.surface().write("surface.vtk")
+cloud = boundary.generate_initial_points()
+mesh = boundary.mesh(cloud)
+mesh.write("part.vtk")
+```
+
+Use fresh output paths. A prepared surface or point cloud does not certify a
+volume mesh. Point generation includes the classical constructor's auxiliary
+tetrahedral work, then stops before constraint recovery and volume fill. The
+[pipeline guide](docs/PIPELINE.md) covers CAD-edge artifacts, saved clouds,
+fixed-boundary replay, native checks and resource limits. No learned model or
+training dependency is included in the engine.
 
 ## Citation
 
