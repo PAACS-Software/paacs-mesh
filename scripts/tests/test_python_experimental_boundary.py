@@ -75,7 +75,8 @@ class ExperimentalBoundaryTests(unittest.TestCase):
             __file__=str(Path(__file__).resolve()),
             source_dirty=False, _experimental_prepare_boundary=Mock(side_effect=lambda model, options: Boundary(options)),
             _experimental_rebind_boundary=Mock(side_effect=lambda model, archive, options: Boundary(options)),
-            _experimental_mesh_boundary=Mock(return_value=self.mesh))
+            _experimental_mesh_boundary=Mock(return_value=self.mesh),
+            _experimental_generate_initial_points=Mock(side_effect=self.generated))
         self.patcher = patch.object(experimental, "_native", self.native)
         self.patcher.start()
         self.addCleanup(self.patcher.stop)
@@ -86,6 +87,15 @@ class ExperimentalBoundaryTests(unittest.TestCase):
     def read_model(self, path, **kwargs):
         self.assertTrue(kwargs["retain_source"])
         return Model(Path(path).read_bytes())
+
+    @staticmethod
+    def generated(model, boundary, options):
+        payload = struct.pack("<3d", .1, -.0, .3)
+        return {"points": payload, "report": {
+            "schema": "paacs-experimental-initial-points-report-v1", "generated": True,
+            "reason": "none", "initial_points_available": True, "initial_points": 1,
+            "initial_points_sha256": hashlib.sha256(payload).hexdigest(), "boundary_unchanged": True,
+            "recovery_performed": False, "volume_construction_performed": False}}
 
     def test_source_fingerprint_and_archive_identity_before_volume(self):
         boundary = self.prepared()
@@ -263,6 +273,179 @@ class ExperimentalBoundaryTests(unittest.TestCase):
         self.assertEqual(boundary.to_numpy(max_bytes=12345),"owned optional arrays")
         boundary._boundary.to_numpy.assert_called_once_with(max_bytes=12345)
         with self.assertRaises(ValueError):boundary.to_numpy(max_bytes=True)
+
+    def test_public_pipeline_facade_retains_experimental_class_identities(self):
+        spec = importlib.util.spec_from_file_location(PACKAGE+".pipeline", SOURCE/"pipeline.py")
+        facade = importlib.util.module_from_spec(spec);spec.loader.exec_module(facade)
+        for name in facade.__all__:
+            self.assertIs(getattr(facade, name), getattr(experimental, name))
+
+    def test_capability_pipeline_discovery_is_additive_and_stdlib_only(self):
+        spec = importlib.util.spec_from_file_location(PACKAGE+".diagnostics", SOURCE/"diagnostics.py")
+        diagnostics = importlib.util.module_from_spec(spec);spec.loader.exec_module(diagnostics)
+        with patch.object(package, "__version__", "1.2.1", create=True), \
+                patch.object(package, "native_version", "1.2.1", create=True), \
+                patch.object(cad, "_DEFAULT_RESOURCE_POLICY", "normal", create=True), \
+                patch.object(cad, "_RESOURCE_POLICIES", ["normal", "bounded"], create=True):
+            result = diagnostics.capabilities()
+        self.assertEqual(result["schema"], "paacs-mesh-capabilities-v1")
+        self.assertEqual(result["pipeline"]["module"], "paacs_mesh.pipeline")
+        self.assertFalse(result["pipeline"]["numpy_required"])
+        self.assertFalse(result["pipeline"]["initial_points"]["volume_certified"])
+        self.assertFalse(result["pipeline"]["changes_default_meshing"])
+        self.assertFalse(result["pipeline"]["includes_AI_or_training"])
+        json.dumps(result, allow_nan=False)
+
+    def test_generation_stops_before_any_volume_and_passes_owned_bytes_without_repacking(self):
+        boundary = self.prepared();cloud = boundary.generate_initial_points()
+        self.native._experimental_mesh_boundary.assert_not_called()
+        self.assertEqual(cloud.points(), ((.1, -.0, .3),))
+        self.assertEqual(experimental.initial_points(cloud), cloud.points())
+        self.assertEqual(cloud.point_count, 1);self.assertEqual(cloud.units, "mm")
+        self.assertFalse(cloud.report["recovery_performed"])
+        self.assertFalse(cloud.report["volume_construction_performed"])
+        self.assertNotIn("audit", cloud.report);self.assertFalse(cloud.report.get("mesh_published", False))
+        with patch.object(experimental, "_point_bytes", side_effect=AssertionError("Do not repack an owned cloud")):
+            boundary.mesh(cloud)
+        self.assertIs(self.native._experimental_mesh_boundary.call_args.args[-1], cloud._payload)
+        with self.assertRaises(AttributeError):cloud._payload = b""
+        with self.assertRaises(AttributeError):del cloud._payload
+        copy = cloud.report;copy["generated"] = False
+        self.assertTrue(cloud.report["generated"])
+        options = cloud.options;options["size"] = 100
+        self.assertEqual(cloud.options["size"], .2)
+
+    def test_cloud_save_reload_is_hash_bound_and_does_not_import_cad_or_call_volume(self):
+        boundary = self.prepared();cloud = boundary.generate_initial_points()
+        with tempfile.TemporaryDirectory() as temporary:
+            path = cloud.save(Path(temporary)/"points")
+            with patch.object(experimental, "read_step") as read:
+                loaded = experimental.load_initial_points(path)
+            read.assert_not_called()
+            self.assertEqual(loaded.points(), cloud.points())
+            self.assertEqual(loaded.sha256, cloud.sha256)
+            self.assertEqual(loaded.provenance, cloud.provenance)
+            self.assertEqual(set(p.name for p in path.iterdir()), {"points.bin", "point-report.json", "manifest.json"})
+            with self.assertRaises(FileExistsError):cloud.save(path)
+        self.native._experimental_mesh_boundary.assert_not_called()
+
+    def test_generated_empty_cloud_is_available_and_roundtrips_as_empty_supplied(self):
+        def empty(*args):
+            result = self.generated(*args);result["points"] = b""
+            result["report"].update(initial_points=0, initial_points_sha256=hashlib.sha256(b"").hexdigest())
+            return result
+        self.native._experimental_generate_initial_points.side_effect = empty
+        boundary = self.prepared();cloud = boundary.generate_initial_points()
+        self.assertEqual(cloud.points(), ());self.assertEqual(cloud.point_count, 0)
+        self.assertTrue(cloud.report["initial_points_available"])
+        with tempfile.TemporaryDirectory() as temporary:
+            loaded = experimental.load_initial_points(cloud.save(Path(temporary)/"empty"))
+        boundary.mesh(loaded)
+        self.assertEqual(self.native._experimental_mesh_boundary.call_args.args[-1], b"")
+
+    def test_cloud_source_boundary_build_and_options_identity_refuse_before_native(self):
+        boundary = self.prepared();cloud = boundary.generate_initial_points()
+        others = [experimental.prepare_boundary(Model(source=b"different CAD"), size=.2),
+                  experimental.prepare_boundary(Model(), size=.3)]
+        for other in others:
+            with self.assertRaisesRegex(ValueError, "source/boundary/build/options"):
+                other.mesh(cloud)
+        self.native.source_revision = "b"*40
+        with self.assertRaisesRegex(ValueError, "source/boundary/build/options"):
+            boundary.mesh(cloud)
+        self.native._experimental_mesh_boundary.assert_not_called()
+
+    def test_cloud_build_identity_does_not_use_bool_integer_equality(self):
+        boundary = self.prepared();cloud = boundary.generate_initial_points()
+        metadata = cloud.provenance;metadata["build"]["source_dirty"] = 0
+        report = cloud.report;report["provenance"] = metadata
+        forged = experimental.InitialPointCloud(cloud._payload, cloud.options, metadata, report)
+        with self.assertRaisesRegex(ValueError, "source/boundary/build/options"):
+            boundary.mesh(forged)
+        self.native._experimental_mesh_boundary.assert_not_called()
+
+    def test_cloud_manifest_report_and_payload_tampering_refuse_without_native(self):
+        mutations = (lambda m: m.update(point_count=True), lambda m: m.update(units="m"),
+                     lambda m: m["build"].update(source_revision="b"*40),
+                     lambda m: m["files"].update({"../points.bin": m["files"].pop("points.bin")}),
+                     lambda m: m["files"]["points.bin"].update(bytes=10**12))
+        cloud = self.prepared().generate_initial_points()
+        for mutate in mutations:
+            with tempfile.TemporaryDirectory() as temporary:
+                path = cloud.save(Path(temporary)/"cloud");manifest = json.loads((path/"manifest.json").read_text())
+                mutate(manifest);(path/"manifest.json").write_text(json.dumps(manifest))
+                with self.assertRaises(ValueError):experimental.load_initial_points(path)
+        with tempfile.TemporaryDirectory() as temporary:
+            path = cloud.save(Path(temporary)/"cloud")
+            (path/"points.bin").write_bytes(struct.pack("<3d", .4, .5, .6))
+            with self.assertRaisesRegex(ValueError, "hash/length"):experimental.load_initial_points(path)
+        self.native._experimental_mesh_boundary.assert_not_called()
+
+    def test_generation_refusal_or_malformed_native_receipt_never_yields_partial_cloud(self):
+        boundary = self.prepared()
+        for field, value in (("generated", False), ("initial_points_available", False),
+                             ("initial_points", True), ("recovery_performed", True),
+                             ("volume_construction_performed", True), ("mesh_published", True),
+                             ("units", "m"),
+                             ("initial_points_sha256", "0"*64)):
+            result = self.generated(None, None, None);result["report"][field] = value
+            self.native._experimental_generate_initial_points.side_effect = None
+            self.native._experimental_generate_initial_points.return_value = result
+            with self.assertRaises(ValueError):boundary.generate_initial_points()
+        failure = ValueError("Stage refused");failure.report = {"generated": False, "reason": "work_budget"}
+        self.native._experimental_generate_initial_points.side_effect = failure
+        with self.assertRaises(ValueError) as caught:boundary.generate_initial_points()
+        self.assertFalse(caught.exception.report["generated"])
+        self.assertTrue(caught.exception.report["native_binding_called"])
+        self.assertGreaterEqual(caught.exception.report["python_generation_seconds"], 0.)
+        self.native._experimental_mesh_boundary.assert_not_called()
+
+    def test_cloud_copy_and_encoded_read_budgets_are_explicit(self):
+        cloud = self.prepared().generate_initial_points()
+        for value in (True, 0, 65536):
+            with self.assertRaises(ValueError):cloud.points(max_bytes=value)
+        with self.assertRaises(ValueError):cloud.to_numpy(max_bytes=65536)
+        with tempfile.TemporaryDirectory() as temporary:
+            path = cloud.save(Path(temporary)/"cloud")
+            with self.assertRaises(ValueError):experimental.load_initial_points(path, max_bytes=23)
+        payload = struct.pack("<3d", math.nan, 0., 0.)
+        with self.assertRaisesRegex(ValueError, "nonfinite"):
+            experimental._point_payload(payload, cloud.options)
+
+    def test_cad_incidence_records_are_bounded_copied_and_frozen_hash_checked(self):
+        boundary = self.prepared();records = boundary.cad_topology()
+        self.assertEqual(records["faces"][0]["owners"], [{"body_tag": 1, "sense": 1}])
+        self.assertEqual(records["bodies"][0]["face_uses"][0]["face_tag"], 2)
+        records["faces"][0]["owners"][0]["sense"] = -1
+        self.assertEqual(boundary.cad_topology()["faces"][0]["owners"][0]["sense"], 1)
+        with self.assertRaisesRegex(ValueError, "max_bytes"):boundary.cad_topology(max_bytes=1)
+
+    def test_cloud_save_failure_rolls_back_before_manifest_publication(self):
+        cloud = self.prepared().generate_initial_points();original = Path.open
+        def fail_report(path, *args, **kwargs):
+            if path.name == "point-report.json":
+                raise OSError("Injected report write failure")
+            return original(path, *args, **kwargs)
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary)/"cloud"
+            with patch.object(Path, "open", new=fail_report), self.assertRaises(OSError):
+                cloud.save(destination)
+            self.assertFalse(destination.exists())
+            self.assertEqual(list(Path(temporary).iterdir()), [])
+
+    def test_cloud_directory_publish_failure_cleans_staging_and_preserves_existing_destination(self):
+        cloud = self.prepared().generate_initial_points()
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary)/"cloud"
+            with patch.object(experimental.os, "rename", side_effect=OSError("Injected rename failure")), self.assertRaises(OSError):
+                cloud.save(destination)
+            self.assertFalse(destination.exists())
+            self.assertEqual(list(Path(temporary).iterdir()), [])
+            destination.mkdir();marker = destination/"keep.txt";marker.write_bytes(b"existing user data")
+            with self.assertRaises(FileExistsError):cloud.save(destination)
+            self.assertEqual(marker.read_bytes(), b"existing user data")
+            self.assertEqual(list(destination.iterdir()), [marker])
+            self.assertEqual(list(Path(temporary).iterdir()), [destination])
 
 
 if __name__ == "__main__":unittest.main()

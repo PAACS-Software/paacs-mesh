@@ -15,6 +15,7 @@ import tempfile
 import unittest
 
 import paacs_mesh as pm
+from paacs_mesh import pipeline
 
 from sizing_data import read_archive
 from test_native import fixture_path
@@ -63,6 +64,7 @@ class NoNumPy(importlib.abc.MetaPathFinder):
 
 sys.meta_path.insert(0, NoNumPy())
 import paacs_mesh as pm
+from paacs_mesh import pipeline
 model = pm.read_step(Path(sys.argv[1]))
 mesh = model.mesh(.3)
 assert mesh.report["audit"]["valid"]
@@ -76,6 +78,18 @@ except ImportError as error:
     assert "numpy" in message and "install" in message, str(error)
 else:
     raise AssertionError("Array extraction succeeded with NumPy unavailable")
+boundary = pipeline.prepare_boundary(model, size=.8, max_seconds=60)
+cloud = boundary.generate_initial_points()
+assert cloud.report["generated"] and not cloud.report["volume_construction_performed"]
+assert isinstance(cloud.points(), tuple)
+assert boundary.mesh(cloud).report["audit"]["valid"]
+try:
+    cloud.to_numpy()
+except ImportError as error:
+    assert "numpy" in str(error).lower() and "install" in str(error).lower()
+else:
+    raise AssertionError("Point arrays succeeded with NumPy unavailable")
+assert not any(name == "numpy" or name.startswith("numpy.") for name in sys.modules)
 '''
         with tempfile.TemporaryDirectory(prefix="paacs-without-numpy-") as directory:
             archive = Path(directory) / "without-numpy.paacsmesh"
@@ -225,6 +239,63 @@ class NumPySnapshotTests(unittest.TestCase):
         for budget in (False, True, 0, -1, 1.5, None, "1024", 2 ** 65):
             with self.subTest(max_bytes=budget), self.assertRaises((TypeError, ValueError, OverflowError)):
                 self.mesh.to_numpy(max_bytes=budget)
+
+
+@unittest.skipIf(np is None, "NumPy extra is not installed")
+class PipelineNumPyTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.model = pm.read_step(fixture_path(), retain_source=True)
+        cls.boundary = pipeline.prepare_boundary(cls.model, size=.8, max_seconds=60)
+        cls.cloud = cls.boundary.generate_initial_points()
+        cls.temporary = tempfile.TemporaryDirectory(prefix="paacs-pipeline-numpy-")
+        cls.addClassCleanup(cls.temporary.cleanup)
+        cls.bundle = cls.boundary.save(Path(cls.temporary.name)/"boundary")
+        cls.archive = read_archive(cls.bundle/"boundary.paacsmesh")
+
+    def test_boundary_snapshot_is_exact_tagged_oriented_tri3_and_owned(self):
+        snapshot = self.boundary.to_numpy()
+        NumPySnapshotTests.assert_snapshot_matches_archive(self, snapshot, self.archive)
+        self.assertEqual(set(snapshot["cells"]), {"tri3"})
+        tri = snapshot["cells"]["tri3"]
+        self.assertEqual(set(tri["entity_tags"].tolist()), set(self.model.face_tags))
+        vertices = snapshot["points"][tri["connectivity"]]
+        areas = np.linalg.norm(np.cross(vertices[:, 1]-vertices[:, 0], vertices[:, 2]-vertices[:, 0]), axis=1)/2
+        self.assertTrue(np.all(np.isfinite(areas)));self.assertTrue(np.all(areas > 0))
+        volume = np.einsum("ij,ij->i", vertices[:, 0], np.cross(vertices[:, 1], vertices[:, 2])).sum()/6
+        self.assertGreater(volume, 0)
+        self.assertLess(abs(float(volume)/self.model.info["cad_volume"]-1), .01)
+
+    def test_boundary_copy_edits_and_copy_budget_cannot_change_frozen_native_data(self):
+        before = (self.bundle/"boundary.paacsmesh").read_bytes();snapshot = self.boundary.to_numpy()
+        for array in numerical_arrays(snapshot):
+            with self.assertRaises(ValueError):array.flat[0] = 0
+            array.setflags(write=True);array.fill(-999)
+        NumPySnapshotTests.assert_snapshot_matches_archive(self, self.boundary.to_numpy(), self.archive)
+        with self.assertRaises(MemoryError):self.boundary.to_numpy(max_bytes=1)
+        path = self.boundary.save(Path(self.temporary.name)/"boundary-after-copy-edits")
+        self.assertEqual((path/"boundary.paacsmesh").read_bytes(), before)
+
+    def test_cloud_arrays_are_bounded_independent_readonly_float64_copies(self):
+        cloud = self.cloud;array = cloud.to_numpy();other = cloud.to_numpy();digest = cloud.sha256
+        self.assertEqual(array.shape, (cloud.point_count, 3));self.assertEqual(array.dtype, np.dtype("float64"))
+        self.assertTrue(array.flags.owndata);self.assertTrue(array.flags.c_contiguous)
+        self.assertFalse(array.flags.writeable);self.assertFalse(np.shares_memory(array, other))
+        np.testing.assert_array_equal(array, np.asarray(cloud.points(max_bytes=32*1024**2)).reshape((-1, 3)))
+        if array.size:
+            with self.assertRaises(ValueError):array.flat[0] = 0
+            array.setflags(write=True);array.fill(-999)
+        self.assertEqual(cloud.sha256, digest)
+        np.testing.assert_array_equal(cloud.to_numpy(), other)
+        with self.assertRaises(ValueError):cloud.to_numpy(max_bytes=1)
+        with self.assertRaises(ValueError):cloud.to_numpy(max_bytes=True)
+
+    def test_generated_cloud_array_is_accepted_as_explicit_points_without_mutation(self):
+        array = self.cloud.to_numpy();before = array.tobytes()
+        mesh = self.boundary.mesh(array)
+        self.assertTrue(mesh.report["mesh_published"])
+        self.assertEqual(mesh.report["experimental_boundary_volume"]["supplied_input_sha256"], self.cloud.sha256)
+        self.assertEqual(array.tobytes(), before)
 
 
 if __name__ == "__main__":

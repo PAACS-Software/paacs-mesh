@@ -14,6 +14,7 @@
 #include "paacs/geometry/OcctBodyRelations.hpp"
 #include "paacs/geometry/OcctMesher.hpp"
 #include "paacs/geometry/ExperimentalCadVolume.hpp"
+#include "paacs/geometry/CadBoundaryExport.hpp"
 #include "paacs/geometry/OcctPreview.hpp"
 #include "paacs/sdk/MeshArchive.hpp"
 #include "paacs/sdk/Version.hpp"
