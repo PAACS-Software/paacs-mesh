@@ -61,7 +61,7 @@ if(WIN32)
 endif()
 
 enable_testing()
-foreach(name IN ITEMS delaunay_cavity delaunay_quality delaunay_recone interior_sites interior_front initial_point_front native_sweep thin_region_ordering tet_candidate_limits experimental_volume)
+foreach(name IN ITEMS delaunay_cavity delaunay_quality delaunay_recone interior_sites interior_front initial_point_front native_sweep thin_region_ordering tet_candidate_limits experimental_volume boundary_export)
     if(name STREQUAL "tet_candidate_limits")
         add_executable(${name} "${paacs_source}/tests/${name}.cpp")
     else()
