@@ -15,6 +15,10 @@ ExperimentalCadBoundaryOutcome rebindExperimentalCadBoundary(const OcctModel& mo
     ExperimentalCadBoundary& destination) noexcept {
     return detail::prepareExperimentalCadBoundaryImpl(model,&boundary,options,destination);
 }
+ExperimentalCadInitialPointsOutcome generateExperimentalCadInitialPoints(const OcctModel& model,
+    const ExperimentalCadBoundary& boundary,const NativeCadMeshOptions& options) noexcept {
+    return detail::generateExperimentalCadInitialPointsImpl(model,boundary,options);
+}
 ExperimentalCadVolumeOutcome replayExperimentalCadVolume(const OcctModel& model,
     const ExperimentalCadBoundary& boundary,const NativeCadMeshOptions& options,
     ExperimentalInteriorMode mode,std::span<const Vec3> points,mesh::Mesh& destination) noexcept {

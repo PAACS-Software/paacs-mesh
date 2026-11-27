@@ -99,6 +99,10 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
     const auto remaining=[&](){tick(0);need(out.workUsed<maximumWork,NativeCadMeshReason::BudgetExceeded,"native-plc-work-budget");return maximumWork-out.workUsed;};
     try {
         stop=std::stop_source{};
+        if(experimental&&experimental->initialPointsOnly)
+            need(experimental->report&&experimental->replayBoundary&&!experimental->supplied&&
+                 advancingInteriorFront&&spatialSizing&&!boundaryFirst,
+                 NativeCadMeshReason::InvalidRequest,"experimental-initial-point-stage-invalid");
         tick();need(model.solid(tag)&&maximumWork>0&&options.maximumRecoveryRandomRetries<=4&&options.maximumRecoveryPatchStates<=65536,NativeCadMeshReason::InvalidRequest,"native-plc-invalid-request");Vec3 lo,hi;model.solid(tag)->bbox(lo,hi);
         std::optional<OcctSpatialSizing> sizeField;
         if(spatialSizing){
@@ -755,6 +759,36 @@ OcctFrontOutcome buildOcctFrontVolume(const OcctModel& model,int tag,
                     initialTopology.originalCoordinateRetryUsed});
             }
             captureInitialPoints(sites.nodeCount()?sites:boundary);
+            if(experimental&&experimental->initialPointsOnly){
+                auto& checkpoint=*experimental->report;
+                need(checkpoint.initialPointsAvailable,
+                     NativeCadMeshReason::InternalError,"experimental-initial-point-capture-unavailable");
+                need(checkpoint.initialPoints.size()<=o.maximumOutputBytes/24,
+                     NativeCadMeshReason::BudgetExceeded,"experimental-initial-point-output-budget");
+                // The checkpoint certifies the same tagged source complex,
+                // without treating an auxiliary topology as a volume result.
+                const auto& saved=*experimental->replayBoundary;
+                bool identical=saved.nodeCount()==boundary.nodeCount()&&saved.cellCount()==boundary.cellCount();
+                const auto pointBits=[](Vec3 p){return std::array{
+                    std::bit_cast<std::uint64_t>(p.x),std::bit_cast<std::uint64_t>(p.y),
+                    std::bit_cast<std::uint64_t>(p.z)};};
+                for(Index i=0;i<boundary.nodeCount()&&identical;++i){
+                    tick();identical=pointBits(saved.node(i))==pointBits(boundary.node(i))&&
+                        saved.nodeClass(i)==boundary.nodeClass(i);
+                }
+                for(Index i=0;i<boundary.cellCount()&&identical;++i){
+                    tick();const auto& cell=boundary.cell(i);
+                    identical=cell.type==mesh::CellType::Tri3&&saved.cell(i).type==cell.type&&
+                        saved.cell(i).onEntity==cell.onEntity&&
+                        std::equal(saved.cellNodes(i),saved.cellNodes(i)+3,boundary.cellNodes(i));
+                }
+                checkpoint.boundaryUnchanged=identical;
+                need(identical,NativeCadMeshReason::GeometryError,"experimental-initial-point-boundary-changed");
+                tick(0);experimental->initialPointsPrepared=true;
+                out.reason=NativeCadMeshReason::None;out.diagnostic="initial_points_generated";
+                out.volumeSeconds=std::max(0.,std::chrono::duration<double>(Clock::now()-began).count()-out.surfaceSeconds);
+                trace.finish(out.diagnostic);return out;
+            }
             if(sites.nodeCount()>ns){
                 const auto siteBytes=std::uint64_t(sites.nodeCount())*nodeBytes+
                     std::uint64_t(nf)*(sizeof(mesh::Cell)+3*sizeof(Index));

@@ -57,6 +57,22 @@ struct ExperimentalCadVolumeOutcome {
     ExperimentalCadVolumeReport experimental;
 };
 
+// A bounded placement checkpoint, not a qualified volume mesh. Its owned
+// ordered cloud excludes boundary nodes; a generated empty cloud is distinct
+// from an unavailable/refused checkpoint. Placement includes its auxiliary
+// tetrahedral construction and topology finalization, but no recovery/fill.
+struct ExperimentalCadInitialPointsOutcome {
+    bool generated = false;
+    NativeCadMeshReason reason = NativeCadMeshReason::InternalError;
+    const char* diagnostic = "not_started";
+    std::uint64_t work = 0;
+    double seconds = 0;
+    ExperimentalCadVolumeReport stages;
+    NativeCadSourceShellReport sourceShell;
+    NativeCadInitialFrontReport initialFront;
+    NativeCadInitialTopologyQualityReport initialTopologyQuality;
+};
+
 // Preparation publishes only an exact-certified tagged Tri3 shell, never a
 // volume mesh. Every failure preserves the caller's previous snapshot.
 ExperimentalCadBoundaryOutcome prepareExperimentalCadBoundary(
@@ -68,6 +84,14 @@ ExperimentalCadBoundaryOutcome prepareExperimentalCadBoundary(
 ExperimentalCadBoundaryOutcome rebindExperimentalCadBoundary(
     const OcctModel&, const mesh::Mesh& boundary, const NativeCadMeshOptions&,
     ExperimentalCadBoundary&) noexcept;
+
+// Run the ordinary initial placement against the exact revalidated snapshot
+// and stop before constraint recovery/material fill. The request uses the same
+// frozen uniform sizing/fidelity and explicit resource contract as replay.
+// A generated cloud does not certify any volume connectivity or solver quality.
+// Failure never publishes a partial cloud or changes the prepared boundary.
+ExperimentalCadInitialPointsOutcome generateExperimentalCadInitialPoints(
+    const OcctModel&, const ExperimentalCadBoundary&, const NativeCadMeshOptions&) noexcept;
 
 // Uniform sizing/fidelity options must match the prepared snapshot. Supplied
 // sites are admitted all-or-nothing against original material, without an

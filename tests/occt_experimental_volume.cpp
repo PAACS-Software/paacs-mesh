@@ -11,6 +11,7 @@
 #include <gp_Pnt.hxx>
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <bit>
 #include <cmath>
 #include <iostream>
@@ -49,6 +50,22 @@ void qualified(const geo::ExperimentalCadVolumeOutcome& out) {
         "boundary not revalidated and preserved");
     require(std::abs(out.native.quality.totalVolume - 1.) < 1e-8, "independent box volume mismatch");
 }
+void placed(const geo::ExperimentalCadInitialPointsOutcome& out) {
+    require(out.generated && out.reason == geo::NativeCadMeshReason::None,
+        "initial placement checkpoint refused");
+    require(out.stages.initialPointsAvailable && out.stages.boundaryRevalidated && out.stages.boundaryUnchanged,
+        "initial placement did not revalidate and preserve its boundary");
+    require(out.stages.recoveryWork == 0 && out.stages.recoverySeconds == 0 &&
+        out.stages.fillSeconds == 0 && out.stages.validationSeconds == 0,
+        "point generation invoked downstream volume stages");
+    require(out.work >= out.stages.sourceWork + out.stages.placementWork &&
+        out.seconds >= out.stages.placementSeconds && out.stages.totalSeconds == out.seconds,
+        "point generation cost scopes are inconsistent");
+    for (const auto point : out.stages.initialPoints)
+        require(std::isfinite(point.x) && std::isfinite(point.y) && std::isfinite(point.z) &&
+            point.x > 0 && point.x < 1 && point.y > 0 && point.y < 1 && point.z > 0 && point.z < 1,
+            "generated box point is nonfinite or not strictly inside");
+}
 }
 int main() {
     try {
@@ -69,10 +86,35 @@ int main() {
         require(prepared.nodes > 0 && prepared.triangles > 0, "empty prepared shell");
         const auto frozen = boundary.boundary;
 
+        const auto generated = geo::generateExperimentalCadInitialPoints(*imported.model, boundary, options);
+        placed(generated);
+        require(!generated.stages.initialPoints.empty(), "ordinary owned placement unexpectedly empty");
+        sameMesh(frozen, boundary.boundary);
+
         mesh::Mesh classical;
         auto reference = geo::replayExperimentalCadVolume(*imported.model, boundary, options,
             geo::ExperimentalInteriorMode::Classical, {}, classical);
         qualified(reference);
+        require(reference.experimental.initialPointsAvailable && reference.experimental.initialPoints.size() ==
+            generated.stages.initialPoints.size(), "early checkpoint differs from classical cloud count");
+        for (std::size_t i = 0; i < generated.stages.initialPoints.size(); ++i)
+            require(key(generated.stages.initialPoints[i]) == key(reference.experimental.initialPoints[i]),
+                "early checkpoint changed classical point bits or ordering");
+        sameMesh(frozen, boundary.boundary);
+
+        mesh::Mesh generatedReplay;
+        const auto reconstructed = geo::replayExperimentalCadVolume(*imported.model, boundary, options,
+            geo::ExperimentalInteriorMode::Supplied, generated.stages.initialPoints, generatedReplay);
+        qualified(reconstructed);
+        require(reconstructed.experimental.allSuppliedPointsRetained && reconstructed.experimental.retainedPoints ==
+            generated.stages.initialPoints.size(), "generated cloud cannot replay with all points retained");
+        sameMesh(frozen, boundary.boundary);
+
+        auto boundaryOnly = options;
+        boundaryOnly.geometry.maximumNodes = prepared.nodes;
+        const auto empty = geo::generateExperimentalCadInitialPoints(*imported.model, boundary, boundaryOnly);
+        placed(empty);
+        require(empty.stages.initialPoints.empty(), "zero available interior capacity did not return an explicit empty cloud");
         sameMesh(frozen, boundary.boundary);
 
         const std::array<Vec3, 1> center{{{.5, .5, .5}}};
@@ -124,6 +166,27 @@ int main() {
         require(!rejected.prepared, "exhausted preparation budget accepted");
         sameMesh(frozen, boundary.boundary);
 
+        auto declined = geo::generateExperimentalCadInitialPoints(*imported.model, boundary, tiny);
+        require(!declined.generated && !declined.stages.initialPointsAvailable && declined.stages.initialPoints.empty() &&
+            declined.reason == geo::NativeCadMeshReason::BudgetExceeded, "exhausted point stage published a cloud");
+        sameMesh(frozen, boundary.boundary);
+        auto mismatched = options;
+        mismatched.geometry.targetSize = .41;
+        declined = geo::generateExperimentalCadInitialPoints(*imported.model, boundary, mismatched);
+        require(!declined.generated && !declined.stages.initialPointsAvailable && declined.stages.initialPoints.empty(),
+            "point generator changed the frozen sizing contract");
+        std::atomic_bool cancelled{true};
+        auto interrupted = options;
+        interrupted.geometry.cancellation = &cancelled;
+        declined = geo::generateExperimentalCadInitialPoints(*imported.model, boundary, interrupted);
+        require(!declined.generated && declined.reason == geo::NativeCadMeshReason::Cancelled &&
+            !declined.stages.initialPointsAvailable && declined.stages.initialPoints.empty(),
+            "cancelled point generator published a partial cloud");
+        declined = geo::generateExperimentalCadInitialPoints(*altered.model, boundary, options);
+        require(!declined.generated && !declined.stages.initialPointsAvailable,
+            "point generator admitted a shell from incompatible CAD");
+        sameMesh(frozen, boundary.boundary);
+
         // Reversing a tiny cavity changes volume by only .2%, below the 1%
         // acceptance bound. CAD face-use orientation must reject it directly.
         const auto cavityShape = BRepAlgoAPI_Cut(BRepPrimAPI_MakeBox(1., 1., 1.).Shape(),
@@ -157,7 +220,7 @@ int main() {
         rejected = geo::rebindExperimentalCadBoundary(*cavity.model, reversedCavity, options, cavitySnapshot);
         require(!rejected.prepared, "reversed cavity hidden by small relative volume was accepted");
         sameMesh(cavityBefore, cavitySnapshot.boundary);
-        std::cout << "Experimental boundary capture, fresh rebind, classical/supplied volume, "
+        std::cout << "Experimental boundary capture, early ordered point checkpoint, fresh rebind, classical/supplied volume, "
                      "original CAD volume, fixed boundary and transactional refusals passed\n";
         return 0;
     } catch (const std::exception& e) {
