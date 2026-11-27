@@ -217,5 +217,47 @@ class ExperimentalBoundaryTests(unittest.TestCase):
                 self.assertEqual(edges.report["node_id_space"], "qualified_boundary")
 
 
+    def test_reloaded_surface_edges_and_volume_cannot_overwrite_input_bundle_or_hardlinks(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary);bundle = self.boundary.save(folder/"boundary")
+            inputs = {name: (bundle/name).read_bytes() for name in
+                      ("source.step", "boundary.paacsmesh", "boundary-report.json", "manifest.json")}
+            loaded = pipeline.load_boundary(bundle)
+            point_bundle = loaded.generate_initial_points().save(folder/"points")
+            point_inputs = {name: (point_bundle/name).read_bytes() for name in
+                            ("points.bin", "point-report.json", "manifest.json")}
+            mesh = loaded.mesh(pipeline.load_initial_points(point_bundle))
+            self.assert_qualified(mesh)
+            exports = (("surface", loaded.surface().write, ".paacsmesh"),
+                       ("edges", loaded.edges().write, ".paacsmesh"),
+                       ("volume-archive", mesh.write_archive, ".paacsmesh"),
+                       ("volume-vtk", mesh.write_vtk, ".vtk"))
+            for name, writer, suffix in exports:
+                with self.subTest(writer=name):
+                    with self.assertRaises(ValueError):writer(bundle/"boundary.paacsmesh")
+                    alias = folder/(name+"-input-alias.paacsmesh")
+                    os.link(bundle/"boundary.paacsmesh", alias)
+                    with self.assertRaises(ValueError):writer(alias)
+                    outside = folder/(name+"-outside"+suffix)
+                    writer(outside)
+                    self.assertTrue(outside.is_file());self.assertGreater(outside.stat().st_size, 0)
+            # Explicit archive/VTK writers permit arbitrary suffixes, so every
+            # saved input is protected, including STEP and JSON members.
+            for name in inputs:
+                for writer in (mesh.write_archive, mesh.write_vtk):
+                    with self.subTest(input=name, writer=writer), self.assertRaises(ValueError):
+                        writer(bundle/name)
+            self.assertEqual(inputs, {name: (bundle/name).read_bytes() for name in inputs})
+            for name in point_inputs:
+                for writer in (mesh.write_archive, mesh.write_vtk):
+                    with self.subTest(point_input=name, writer=writer), self.assertRaises(ValueError):
+                        writer(point_bundle/name)
+            for name, writer in (("archive", mesh.write_archive), ("vtk", mesh.write_vtk)):
+                alias = folder/("point-input-"+name+"-alias.paacsmesh")
+                os.link(point_bundle/"points.bin", alias)
+                with self.assertRaises(ValueError):writer(alias)
+            self.assertEqual(point_inputs, {name: (point_bundle/name).read_bytes() for name in point_inputs})
+
+
 if __name__ == "__main__":
     unittest.main()

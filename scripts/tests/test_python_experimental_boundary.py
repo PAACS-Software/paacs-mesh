@@ -7,6 +7,7 @@ import hashlib
 import importlib.util
 import json
 import math
+import os
 from pathlib import Path
 import struct
 import sys
@@ -120,12 +121,12 @@ class ExperimentalBoundaryTests(unittest.TestCase):
     def test_none_and_empty_supplied_are_distinct_and_cloud_is_owned_ieee64(self):
         boundary = self.prepared()
         boundary.mesh()
-        self.assertIsNone(self.native._experimental_mesh_boundary.call_args.args[-1])
+        self.assertIsNone(self.native._experimental_mesh_boundary.call_args.args[3])
         boundary.mesh([])
-        self.assertEqual(self.native._experimental_mesh_boundary.call_args.args[-1], b"")
+        self.assertEqual(self.native._experimental_mesh_boundary.call_args.args[3], b"")
         cloud = [[.1, -.0, .3]]
         boundary.mesh(cloud)
-        copied = self.native._experimental_mesh_boundary.call_args.args[-1]
+        copied = self.native._experimental_mesh_boundary.call_args.args[3]
         cloud[0][0] = 999
         self.assertEqual(copied, struct.pack("<3d", .1, -.0, .3))
 
@@ -307,7 +308,7 @@ class ExperimentalBoundaryTests(unittest.TestCase):
         self.assertNotIn("audit", cloud.report);self.assertFalse(cloud.report.get("mesh_published", False))
         with patch.object(experimental, "_point_bytes", side_effect=AssertionError("Do not repack an owned cloud")):
             boundary.mesh(cloud)
-        self.assertIs(self.native._experimental_mesh_boundary.call_args.args[-1], cloud._payload)
+        self.assertIs(self.native._experimental_mesh_boundary.call_args.args[3], cloud._payload)
         with self.assertRaises(AttributeError):cloud._payload = b""
         with self.assertRaises(AttributeError):del cloud._payload
         copy = cloud.report;copy["generated"] = False
@@ -341,7 +342,7 @@ class ExperimentalBoundaryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             loaded = experimental.load_initial_points(cloud.save(Path(temporary)/"empty"))
         boundary.mesh(loaded)
-        self.assertEqual(self.native._experimental_mesh_boundary.call_args.args[-1], b"")
+        self.assertEqual(self.native._experimental_mesh_boundary.call_args.args[3], b"")
 
     def test_cloud_source_boundary_build_and_options_identity_refuse_before_native(self):
         boundary = self.prepared();cloud = boundary.generate_initial_points()
@@ -446,6 +447,68 @@ class ExperimentalBoundaryTests(unittest.TestCase):
             self.assertEqual(marker.read_bytes(), b"existing user data")
             self.assertEqual(list(destination.iterdir()), [marker])
             self.assertEqual(list(Path(temporary).iterdir()), [destination])
+
+
+    def test_loaded_boundary_protects_all_bundle_inputs_and_hardlinks_on_exports(self):
+        spec = importlib.util.spec_from_file_location(PACKAGE+".pipeline_export", SOURCE/"pipeline_export.py")
+        exported = importlib.util.module_from_spec(spec);spec.loader.exec_module(exported)
+        with patch.dict(sys.modules, {PACKAGE+".pipeline_export": exported}), tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary);bundle = self.prepared().save(folder/"boundary")
+            before = {name: (bundle/name).read_bytes() for name in (*experimental._FILES, "manifest.json")}
+            with patch.object(experimental, "read_step", side_effect=self.read_model):
+                loaded = experimental.load_boundary(bundle)
+            expected = {bundle/name for name in (*experimental._FILES, "manifest.json")}
+            self.assertTrue(expected <= set(loaded._protected_paths))
+            calls = []
+            def write(path, maximum):
+                calls.append(Path(path));Path(path).write_bytes(b"mock stage export")
+            loaded._boundary.write = write
+            edge = types.SimpleNamespace(report={"complete": True}, write=write)
+            with patch.object(self.native, "_experimental_cad_edges", return_value=edge, create=True), \
+                    patch.object(exported.GeometryArtifact, "_snapshot", return_value=b"mock stage archive"):
+                for name, artifact in (("surface", loaded.surface()), ("edges", loaded.edges())):
+                    with self.assertRaises(ValueError):artifact.write(bundle/"boundary.paacsmesh")
+                    alias = folder/(name+"-input-alias.paacsmesh")
+                    alias.write_bytes(before["boundary.paacsmesh"])
+                    original_samefile = os.path.samefile
+                    def samefile(left, right):
+                        if {Path(left).absolute(), Path(right).absolute()} == {alias, bundle/"boundary.paacsmesh"}:
+                            return True
+                        return original_samefile(left, right)
+                    # Pure guard test only; real filesystem hardlinks are
+                    # separately exercised in the installed Native suite.
+                    with patch.object(os.path, "samefile", side_effect=samefile):
+                        with self.assertRaises(ValueError):artifact.write(alias)
+                    outside = folder/(name+"-outside.paacsmesh")
+                    artifact.write(outside)
+                    self.assertEqual(outside.read_bytes(), b"mock stage export")
+            self.assertEqual(len(calls), 2)
+            self.assertEqual(before, {name: (bundle/name).read_bytes() for name in before})
+            loaded.mesh([])
+            self.assertTrue(expected <= set(self.native._experimental_mesh_boundary.call_args.args[4]))
+
+    def test_loaded_cloud_guards_are_joined_without_changing_bytes_or_metadata(self):
+        boundary = self.prepared();cloud = boundary.generate_initial_points()
+        self.assertEqual(cloud._protected_paths, ())
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary);boundary_bundle = boundary.save(folder/"boundary")
+            point_bundle = cloud.save(folder/"points")
+            with patch.object(experimental, "read_step", side_effect=self.read_model):
+                loaded_boundary = experimental.load_boundary(boundary_bundle)
+            loaded_cloud = experimental.load_initial_points(point_bundle)
+            loaded_boundary.mesh(loaded_cloud)
+            arguments = self.native._experimental_mesh_boundary.call_args.args
+            self.assertEqual(arguments[3], cloud._payload)
+            expected = {boundary_bundle/name for name in (*experimental._FILES, "manifest.json")}
+            expected |= {point_bundle/name for name in (*experimental._POINT_FILES, "manifest.json")}
+            self.assertTrue(expected <= set(arguments[4]))
+            self.assertEqual(len(arguments[4]), len(set(arguments[4])))
+            self.assertLessEqual(len(arguments[4]), 16)
+            self.assertEqual(loaded_cloud.sha256, cloud.sha256)
+            self.assertEqual(loaded_cloud.provenance, cloud.provenance)
+            again = loaded_cloud.save(folder/"points-copy")
+            for name in (*experimental._POINT_FILES, "manifest.json"):
+                self.assertEqual((again/name).read_bytes(), (point_bundle/name).read_bytes())
 
 
 if __name__ == "__main__":unittest.main()

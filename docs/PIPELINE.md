@@ -85,6 +85,10 @@ point bytes, count, report and hashes; no CAD or volume operation is performed b
 point loading. Passing a loaded cloud to a boundary then checks its exact source,
 boundary, build and normalized sizing/resource options before Native admission.
 Changing a report or matching its checksum cannot bypass geometric checks.
+
+Exports from reloaded boundaries and point clouds protect their saved
+input members and their file aliases, including completed volume mesh writers.
+Write results to separate output files or new artifact directories.
 Hashes identify artifact bytes and do not attest who executed a recorded
 generation; benchmark provenance must also retain its controlled execution.
 

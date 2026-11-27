@@ -252,8 +252,21 @@ std::unique_ptr<ExperimentalEdgesHandle> experimentalEdges(CadModel& model,const
     return result;
 }
 
-std::unique_ptr<MeshResult> experimentalReplay(CadModel& model,const ExperimentalBoundaryHandle& boundary,const py::dict& values,const py::object& cloud) {
+std::unique_ptr<MeshResult> experimentalReplay(CadModel& model,const ExperimentalBoundaryHandle& boundary,const py::dict& values,const py::object& cloud,const py::tuple& protectedPaths) {
     auto options=experimentalOptions(values);const auto seconds=positiveNumber(values["max_seconds"],"max_seconds");std::vector<Vec3> points;
+    if(protectedPaths.size()>16)throw py::value_error("Staged input path count exceeds allowance");
+    std::vector<fs::path> protectedInputs;protectedInputs.reserve(protectedPaths.size());
+    std::size_t pathBytes=0;
+    for(const auto item:protectedPaths){
+        auto raw=py::reinterpret_steal<py::object>(PyOS_FSPath(item.ptr()));
+        if(!raw)throw py::error_already_set();
+        const auto length=PyUnicode_Check(raw.ptr())?PyUnicode_GetLength(raw.ptr()):PyBytes_Size(raw.ptr());
+        if(length<0)throw py::error_already_set();
+        if(length>32768)throw py::value_error("Staged input path exceeds character allowance");
+        const auto path=checkedPath(py::cast<fs::path>(raw));const auto encoded=utf8(path);
+        if(encoded.size()>32768||pathBytes>65536-encoded.size())throw py::value_error("Staged input paths exceed byte allowance");
+        pathBytes+=encoded.size();protectedInputs.push_back(path);
+    }
     std::optional<std::string> suppliedInputHash;
     const auto mode=cloud.is_none()?geo::ExperimentalInteriorMode::Classical:geo::ExperimentalInteriorMode::Supplied;
     if(!cloud.is_none()){
@@ -266,6 +279,7 @@ std::unique_ptr<MeshResult> experimentalReplay(CadModel& model,const Experimenta
         for(Py_ssize_t i=0;i<size;i+=24){std::array<double,3> p;for(unsigned axis=0;axis<3;++axis){std::uint64_t bits=0;for(unsigned byte=0;byte<8;++byte)bits|=std::uint64_t(static_cast<unsigned char>(bytes[i+8*axis+byte]))<<(8*byte);p[axis]=std::bit_cast<double>(bits);if(!std::isfinite(p[axis]))throw py::value_error("Initial point must be finite");}points.push_back({p[0],p[1],p[2]});}
     }
     auto result=std::make_unique<MeshResult>();result->source=model.source;result->sourceSha256=model.sourceSha256;result->importSeconds=model.importSeconds;
+    result->protectedInputs=std::move(protectedInputs);
     result->experimentalSuppliedInputSha256=std::move(suppliedInputHash);
     result->requestedSize=options.geometry.targetSize;result->recovery="standard";result->requestedAssembly="conforming";result->sizing.native=true;
     result->construction=options.construction;result->requestedWork=options.maximumValidationWork;result->effectiveWork=options.maximumValidationWork;result->workingBytes=options.maximumPrimitiveWorkingBytes;
@@ -321,5 +335,5 @@ void bindExperimentalBoundary(py::module_& m) {
         },py::arg("path"),py::arg("max_bytes"));
     m.def("_experimental_generate_initial_points",&experimentalGeneratePoints,py::arg("model"),py::arg("boundary"),py::arg("options"));
     m.def("_experimental_cad_edges",&experimentalEdges,py::arg("model"),py::arg("boundary"),py::arg("options"));
-    m.def("_experimental_mesh_boundary",&experimentalReplay,py::arg("model"),py::arg("boundary"),py::arg("options"),py::arg("points")=py::none());
+    m.def("_experimental_mesh_boundary",&experimentalReplay,py::arg("model"),py::arg("boundary"),py::arg("options"),py::arg("points")=py::none(),py::arg("protected_paths")=py::tuple());
 }

@@ -264,9 +264,9 @@ class InitialPointCloud:
     copies explicitly under a decoded-storage allowance. Saved clouds bind to
     the exact source, frozen boundary, build and resource/sizing contract.
     """
-    __slots__ = ("_payload", "_options", "_metadata", "_report", "_sealed")
+    __slots__ = ("_payload", "_options", "_metadata", "_report", "_protected_paths", "_sealed")
 
-    def __init__(self, payload, options, metadata, report):
+    def __init__(self, payload, options, metadata, report, *, protected_paths=()):
         options = _options(**options)
         _point_payload(payload, options)
         _generated_report(payload, report)
@@ -281,6 +281,9 @@ class InitialPointCloud:
             raise ValueError("Initial cloud receipt provenance differs")
         self._payload, self._options = payload, _json_bytes(options)
         self._metadata, self._report = _json_bytes(metadata), _json_bytes(report)
+        if not isinstance(protected_paths, (tuple, list)) or len(protected_paths) > 15:
+            raise ValueError("Initial cloud accepts at most 15 protected inputs")
+        self._protected_paths = tuple(dict.fromkeys(Path(path).absolute() for path in protected_paths))
         self._sealed = True
 
     def __setattr__(self, key, value):
@@ -364,12 +367,17 @@ class PreparedBoundary:
     solver adequacy. Saving includes source CAD. Resource limits are modeled
     Native/encoded-buffer allowances, not a process RSS/hard timeout guarantee.
     """
-    __slots__ = ("_model", "_boundary", "_source", "_archive", "_options", "_metadata", "_report")
+    __slots__ = ("_model", "_boundary", "_source", "_archive", "_options", "_metadata", "_report", "_protected_paths")
 
-    def __init__(self, model, boundary, source, archive, options, metadata, report):
+    def __init__(self, model, boundary, source, archive, options, metadata, report, *, protected_paths=()):
         self._model, self._boundary = model, boundary
         self._source, self._archive = bytes(source), bytes(archive)
         self._options, self._metadata, self._report = _json_bytes(options), _json_bytes(metadata), _json_bytes(report)
+        if not isinstance(protected_paths, (tuple, list)) or len(protected_paths) > 15:
+            raise ValueError("Prepared boundary accepts at most 15 additional protected inputs")
+        original = model.info.get("source_path")
+        paths = ((original,) if original else ()) + tuple(protected_paths)
+        self._protected_paths = tuple(dict.fromkeys(Path(path).absolute() for path in paths))
 
     @property
     def report(self):
@@ -411,18 +419,15 @@ class PreparedBoundary:
     def surface(self):
         """Return the qualified tagged Tri3 surface as an exportable artifact."""
         from .pipeline_export import GeometryArtifact
-        source = self._model.info.get("source_path")
         return GeometryArtifact(self._boundary, self._artifact_metadata("surface"),
-                                protected_paths=(source,) if source else ())
+                                protected_paths=self._protected_paths)
 
     def edges(self):
         """Return retained ordered CAD-edge chains, never all triangle edges."""
         from .pipeline_export import GeometryArtifact
-        source = self._model.info.get("source_path")
         metadata = self._artifact_metadata("cad_edges")
         handle = _native._experimental_cad_edges(self._model._native, self._boundary, _json(self._options))
-        return GeometryArtifact(handle, metadata,
-                                protected_paths=(source,) if source else ())
+        return GeometryArtifact(handle, metadata, protected_paths=self._protected_paths)
 
     def _artifact_metadata(self, kind):
         return {"kind": kind, "units": "mm", "source_sha256": self.source_sha256,
@@ -476,11 +481,18 @@ class PreparedBoundary:
             build = _build()
             extension_hash = build["native_extension_sha256"]
             options = _json(self._options)
-            payload = points._for_boundary(self, build, options) if isinstance(points, InitialPointCloud) else _point_bytes(points, options)
+            protected_paths = self._protected_paths
+            if isinstance(points, InitialPointCloud):
+                payload = points._for_boundary(self, build, options)
+                protected_paths = tuple(dict.fromkeys((*protected_paths, *points._protected_paths)))
+            else:
+                payload = _point_bytes(points, options)
+            if len(protected_paths) > 16:
+                raise ValueError("Boundary and cloud exceed the protected-input path allowance")
             supplied_hash = None if payload is None else _hash(payload)
             packing = time.perf_counter() - began
             called = True
-            mesh = _native._experimental_mesh_boundary(self._model._native, self._boundary, options, payload)
+            mesh = _native._experimental_mesh_boundary(self._model._native, self._boundary, options, payload, protected_paths)
             mesh._experimental_set_python_timing(time.perf_counter() - began, packing, extension_hash)
             return mesh
         except BaseException as error:
@@ -581,7 +593,8 @@ def load_initial_points(directory, *, max_bytes=32*1024**2):
     report = _json(payloads["point-report.json"])
     if _json_bytes(report.get("provenance")) != _json_bytes(metadata):
         raise ValueError("Initial cloud receipt provenance differs")
-    return InitialPointCloud(payloads["points.bin"], options, metadata, report)
+    return InitialPointCloud(payloads["points.bin"], options, metadata, report,
+                             protected_paths=(directory/"manifest.json", *(directory/name for name in _POINT_FILES)))
 
 
 def prepare_boundary(model, *, size, max_chord_error=None, max_relative_volume_error=.01, **limits):
@@ -703,4 +716,5 @@ def load_boundary(directory, *, max_source_bytes=_SOURCE_LIMIT, max_archive_byte
     report["provenance"] = metadata
     report["python_load_seconds"] = time.perf_counter() - began
     report["timing_scope"] = "Load snapshot includes file admission/hashing, fresh STEP import, fingerprint and Native boundary revalidation; precedes final metadata encoding/return; no volume call"
-    return PreparedBoundary(model, boundary, source, archive, options, metadata, report)
+    return PreparedBoundary(model, boundary, source, archive, options, metadata, report,
+                            protected_paths=(directory/"manifest.json", *(directory/name for name in _FILES)))
